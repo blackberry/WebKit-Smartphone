@@ -1,0 +1,6 @@
+#!/bin/bash
+
+echo "WARNING: ob-lynx-clean removes all files that are ignored by git, which should be build products.  It may leave files behind if .gitignore is not up to date.  You can check for this with git status."
+pushd $OLYMPIAJAVA/Lynx
+git-ls-ignored.py -0|xargs -0 rm
+popd

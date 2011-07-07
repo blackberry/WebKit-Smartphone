@@ -1,0 +1,60 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x575
+      RenderBlock {P} at (0,0) size 784x36
+        RenderText {#text} at (0,0) size 68x18
+          text run at (0,0) width 68: "Test for "
+        RenderInline {I} at (0,0) size 750x36
+          RenderInline {A} at (0,0) size 406x18 [color=#0000EE]
+            RenderText {#text} at (68,0) size 406x18
+              text run at (68,0) width 406: "http://bugs.webkit.org/show_bug.cgi?id=15259"
+          RenderText {#text} at (474,0) size 750x36
+            text run at (474,0) width 5: " "
+            text run at (479,0) width 271: "REGRESSION:Text overflows if a"
+            text run at (0,18) width 435: "empty &lttd> is followed by a <td align=\"center\">"
+        RenderText {#text} at (435,18) size 5x18
+          text run at (435,18) width 5: "."
+      RenderBlock {P} at (0,53) size 784x18
+        RenderText {#text} at (0,0) size 352x18
+          text run at (0,0) width 352: "The next 7 lines should all look the same."
+      RenderBlock (floating) {DIV} at (0,88) size 130x24 [border: (3px solid #000000)]
+        RenderText {#text} at (3,3) size 74x18
+          text run at (3,3) width 74: "A B"
+      RenderBlock (floating) {DIV} at (0,112) size 130x24 [border: (3px solid #000000)]
+        RenderText {#text} at (3,3) size 74x18
+          text run at (3,3) width 74: "A B"
+      RenderBlock (floating) {DIV} at (0,136) size 130x24 [border: (3px solid #000000)]
+        RenderInline {SPAN} at (0,0) size 12x18
+          RenderText {#text} at (3,3) size 12x18
+            text run at (3,3) width 12: "A"
+        RenderText {#text} at (65,3) size 62x18
+          text run at (65,3) width 62: " B"
+      RenderBlock (floating) {DIV} at (0,160) size 130x24 [border: (3px solid #000000)]
+        RenderInline {SPAN} at (0,0) size 12x18
+          RenderText {#text} at (3,3) size 12x18
+            text run at (3,3) width 12: "A"
+        RenderText {#text} at (65,3) size 62x18
+          text run at (65,3) width 62: " B"
+      RenderBlock (floating) {DIV} at (0,184) size 130x24 [border: (3px solid #000000)]
+        RenderInline {SPAN} at (0,0) size 12x18
+          RenderText {#text} at (3,3) size 12x18
+            text run at (3,3) width 12: "A"
+        RenderText {#text} at (65,3) size 62x18
+          text run at (65,3) width 62: " B"
+      RenderBlock (floating) {DIV} at (0,208) size 130x24 [border: (3px solid #000000)]
+        RenderInline {SPAN} at (0,0) size 12x18
+          RenderText {#text} at (3,3) size 12x18
+            text run at (3,3) width 12: "A"
+        RenderText {#text} at (65,3) size 50x18
+          text run at (65,3) width 50: " "
+        RenderInline {SPAN} at (0,0) size 12x18
+          RenderText {#text} at (115,3) size 12x18
+            text run at (115,3) width 12: "B"
+      RenderBlock (floating) {DIV} at (0,232) size 130x24 [border: (3px solid #000000)]
+        RenderInline {SPAN} at (0,0) size 12x18
+          RenderText {#text} at (3,3) size 12x18
+            text run at (3,3) width 12: "A"
+        RenderText {#text} at (65,3) size 62x18
+          text run at (65,3) width 62: " B"

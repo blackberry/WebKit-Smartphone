@@ -1,0 +1,8 @@
+#!/bin/bash
+
+device=$1
+if [ -z $device ] ; then
+    device="talladega";
+fi
+
+rm $OLYMPIAJAVA/lynx/Debug/$device*.dmp

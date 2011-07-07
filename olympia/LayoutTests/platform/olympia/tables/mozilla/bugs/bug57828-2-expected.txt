@@ -1,0 +1,61 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {P} at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 540x18
+          text run at (0,0) width 540: "The table below takes out the nowrap with the cell of 1% width."
+      RenderTable {TABLE} at (0,35) size 675x71
+        RenderTableSection {TBODY} at (0,0) size 675x71
+          RenderTableRow {TR} at (0,0) size 675x71 [bgcolor=#9999CC]
+            RenderTableCell {TD} at (0,21) size 624x28 [r=0 c=0 rs=1 cs=1]
+              RenderInline {FONT} at (0,0) size 168x24
+                RenderInline {B} at (0,0) size 168x24
+                  RenderText {#text} at (2,2) size 168x24
+                    text run at (2,2) width 168: "Technology News"
+              RenderInline {FONT} at (0,0) size 203x18
+                RenderText {#text} at (170,7) size 203x18
+                  text run at (170,7) width 69: " - updated "
+                  text run at (239,7) width 134: "12:15 PM ET Oct 24"
+              RenderText {#text} at (0,0) size 0x0
+            RenderTableCell {TD} at (624,0) size 51x71 [r=0 c=1 rs=1 cs=1]
+              RenderTable {TABLE} at (2,2) size 47x67
+                RenderTableSection {TBODY} at (0,0) size 47x67
+                  RenderTableRow {TR} at (0,0) size 47x67
+                    RenderTableCell {TD} at (0,0) size 47x67 [bgcolor=#CCCCFF] [r=0 c=0 rs=1 cs=1]
+                      RenderImage {IMG} at (3,3) size 16x16
+                      RenderInline {FONT} at (0,0) size 41x45
+                        RenderInline {A} at (0,0) size 41x45 [color=#0000EE]
+                          RenderText {#text} at (3,19) size 41x45
+                            text run at (3,19) width 39: "Add to"
+                            text run at (3,34) width 18: "My"
+                            text run at (3,49) width 41: "Yahoo!"
+                      RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,123) size 784x18
+        RenderText {#text} at (0,0) size 636x18
+          text run at (0,0) width 636: "The table below leaves in the nowrap but take out the 1% width in the cell."
+      RenderTable {TABLE} at (0,158) size 675x28
+        RenderTableSection {TBODY} at (0,0) size 675x28
+          RenderTableRow {TR} at (0,0) size 675x28 [bgcolor=#9999CC]
+            RenderTableCell {TD} at (0,0) size 496x28 [r=0 c=0 rs=1 cs=1]
+              RenderInline {FONT} at (0,0) size 168x24
+                RenderInline {B} at (0,0) size 168x24
+                  RenderText {#text} at (2,2) size 168x24
+                    text run at (2,2) width 168: "Technology News"
+              RenderInline {FONT} at (0,0) size 203x18
+                RenderText {#text} at (170,7) size 203x18
+                  text run at (170,7) width 69: " - updated "
+                  text run at (239,7) width 134: "12:15 PM ET Oct 24"
+              RenderText {#text} at (0,0) size 0x0
+            RenderTableCell {TD} at (496,1) size 179x26 [r=0 c=1 rs=1 cs=1]
+              RenderTable {TABLE} at (2,2) size 131x22
+                RenderTableSection {TBODY} at (0,0) size 131x22
+                  RenderTableRow {TR} at (0,0) size 131x22
+                    RenderTableCell {TD} at (0,0) size 131x22 [bgcolor=#CCCCFF] [r=0 c=0 rs=1 cs=1]
+                      RenderImage {IMG} at (3,3) size 16x16
+                      RenderInline {FONT} at (0,0) size 106x15
+                        RenderInline {A} at (0,0) size 106x15 [color=#0000EE]
+                          RenderText {#text} at (22,3) size 106x15
+                            text run at (22,3) width 106: "Add to My Yahoo!"
+                      RenderText {#text} at (0,0) size 0x0

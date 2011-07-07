@@ -1,0 +1,14 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x133
+  RenderBlock {HTML} at (0,0) size 800x133
+    RenderBody {BODY} at (8,8) size 784x117
+      RenderBlock {UL} at (0,0) size 784x117 [color=#FF0000]
+        RenderListItem {LI} at (51,51) size 682x15
+          RenderListMarker at (-22,0) size 15x15
+          RenderImage {IMG} at (15,0) size 15x15
+          RenderText {#text} at (30,2) size 5x18
+            text run at (30,2) width 5: " "
+          RenderInline {SPAN} at (0,0) size 476x18 [color=#000000]
+            RenderText {#text} at (35,2) size 476x18
+              text run at (35,2) width 476: "\x{21E6} There should be a green square to the left, and no red."

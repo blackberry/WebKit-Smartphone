@@ -1,0 +1,11 @@
+<html>
+<head>
+</head>
+<body>
+<p>This test can be used to verify that navigating to a non-file URL B from a file URL A then navigating back returns to A. This test assumes that you loaded this page from your local filesystem (i.e. via a file URL).</p>
+<ol>
+    <li><a href="data:text/html,<script>history.back();</script><p>FAILED.</p>">Click here to navigate to a non-file URL.</a>
+    <li>If you return to this page then this test PASSED. Otherwise, it FAILED.</li>
+</ol>
+</body>
+</html>

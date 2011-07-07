@@ -1,0 +1,17 @@
+#!/bin/bash
+
+if [ ! -z $1 ] ; then
+    if [ "$1" = "l" ] ; then
+        cd $OLYMPIAJAVA/p4/lynx
+    elif [ "$1" = "j" ] ; then
+        cd $OLYMPIAJAVA/p4/JavaApplications
+    elif [ "$1" = "o" ] ; then
+        cd $OLYMPIAROOT/olympia
+    elif [ "$1" = "t" ] ; then
+        cd $OLYMPIAROOT/olympiabuildtools
+    else
+        cd $OLYMPIAROOT/$1
+    fi
+else
+    cd $OLYMPIAROOT
+fi

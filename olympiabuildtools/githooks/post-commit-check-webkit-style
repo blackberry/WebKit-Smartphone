@@ -1,0 +1,3 @@
+#!/bin/sh
+
+check-webkit-style --git-commit HEAD

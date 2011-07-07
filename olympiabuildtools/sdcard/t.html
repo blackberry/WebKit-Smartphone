@@ -1,0 +1,103 @@
+<html>
+<head>
+<title>TorchTest</title>
+</head>
+<body>
+<h2>Test Suites</h2>
+<b>SunSpider</b> JS benchmark<br>
+<a href="SunSpider/hosted/sunspider.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="http://www2.webkit.org/perf/sunspider-0.9/sunspider.html">External</a><br>
+<b>V8</b> JS benchmark<br>
+<a href="v8/index.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="http://v8.googlecode.com/svn/data/benchmarks/v5/run.html">External</a><br>
+<b>Dromaeo</b> JS benchmark<br>
+<a href="dromaeo/dep/web/index.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="http://dromaeo.com/">External</a><br>
+<b>Acid2</b> CSS<br>
+<a href="acid2/index.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="http://acid2.acidtests.org">External</a><br>
+<b>Acid3</b> Standards compliance<br>
+<a href="acid3/index.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="http://acid3.acidtests.org">External</a><br>
+<b>W3C CSS</b> CSS<br>
+<a href="w3ccss/index.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="http://www.w3.org/Style/CSS/Test/CSS2.1/20061011/">External</a><br>
+<b>W3C Mobile Test</b> Misc<br>
+<a href="w3cmobile/index.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="http://www.w3.org/2008/06/mobile-test/">External</a><br>
+<b>Pocket full of Canvas</b> Standards Compliance<br>
+<a href="canvas/index.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="http://www.nihilogic.dk/labs/pocket_full_of_canvas/#presets/spasticsquared.js">External</a><br>
+<b>JQuery</b> <br>
+<a href="jquery/index.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="http://jquery.com/test">External</a><br>
+<b>Prototype</b> JS Framework Primary<br>
+<a href="prototype/index.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="http://www.prototypejs.org/">External</a><br>
+<b>Script Aculous</b> JS Framework Primary - not done yet<br>
+<a href="scriptAculo/index.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="">External</a><br>
+<b>Dojo</b> <br>
+<a href="dojo/index.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="http://archive.dojotoolkit.org/nightly/dojotoolkit/util/doh/runner.html?testModule=dojo.tests.module">External</a><br>
+<b>Sputnik</b> JS conformance<br>
+<a href="sputnik/index.html">Internal</a>&nbsp;&nbsp;&nbsp;<a href="http://sputnik.googlelabs.com/">External</a><br>
+<b>IExploder</b> Security and robustness test<br>
+External&nbsp;&nbsp;&nbsp;<a href="http://code.google.com/p/iexploder/">External</a><br>
+<b>IE9 Test Suite</b> <br>
+External&nbsp;&nbsp;&nbsp;<a href="http://samples.msdn.microsoft.com/ietestcenter/">External</a><br>
+
+<!-- Please turn this into something JS that is more sane to edit -->
+<h3>Expected results</h3>
+<table>
+<th><td>Test</td><td>Talladega</td><td>Onyx</td><td>Essex</td><td>Oxford</td></th>
+<tr><td>SunSpider</td><td>26.5s</td><td>26.5s</td><td></td><td></td></tr>
+<tr><td>Acid3 100/100</td><td>6.5s</td><td>6.5s</td><td></td><td></td></tr>
+<tr><td>Dojo</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>W3C Mobile Test</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>V8</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>JQuery</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Sputnik</td><td></td><td></td><td></td><td></td></tr>
+</table>
+
+
+<h2>Feature Tests</h2>
+<ul>
+<li><a href="features/orient.html">Orientation Events</a>
+<li><a href="features/touchevents.html">Touch Events</a>
+<li><a href="features/bgbox/bgbox.html">Background Image Box Border</a>
+<li><a href="features/bgbox2/index.html">Background Image Box</a>
+<li><a href="features/formcontrols.html">Form Controls</a>
+<li><a href="features/html5controls.html">HTML5 Form Controls</a>
+<li>viewport tag
+<li><a href="features/fonts.html">Fonts</a>
+<li><a href="features/ce.html">Content Editable</a>
+<li>geolocation: <a href="features/geoMap.html">Map</a>  <a href="features/geoPos.html">LatLng</a>
+<li>new window opening
+<li><a href="features/frameset.html">framesets</a>
+<li><a href="features/iframe.html">iframe</a>
+<li><a href="features/mobilelinks.html">Mobile Links</a>
+<li><a href="features/deviceobj.html">Device Object</a>
+<li><a href="features/navigator.html">Navigator Object</a>
+<li><a href="features/alert.html">Window.alert behavior</a>
+<li>...
+</ul>
+
+<h2>Media Tests</h2>
+<ul>
+<li><a href="media/audio.html">Audio object</a>
+<li><a href="media/audiotag.htm">&lt;audio&gt; tag</a>
+<li><a href="media/videotag.htm">&lt;video&gt; tag</a>
+<li><a href="media/embed.htm">&lt;embed&gt; tag</a>
+</ul>
+
+<h2>Canvas Tests</h2>
+<ul>
+<li>External: <a href="http://www.benjoffe.com/code/demos/canvascape/">Canvascape</a> <a href="http://www.benjoffe.com/code/demos/canvascape/textures">(textured)</a>
+<li>External: <a href="http://www.canvaspaint.org/">Canvas Paint</a>
+<li>Internal: <a href="features/canvas/simple.html">Basic Demo</a>
+<li>Internal: <a href="features/canvas/drawimage.html">Draw Image</a>
+<li>External: <a href="http://philip.html5.org/tests/canvas/suite/tests/">philip.html5.org canvas test suite</a>
+</ul>
+
+<h2>SVG Tests</h2>
+<ul>
+<li><a href="svg/quadbezier1.svg">Quadratic</a>
+<li><a href="svg/tiger.svg">Tiger</a>
+<li><a href="svg/butterfly.svg">Butterfly</a>
+<li><a href="svg/svgtetris.svg">Tetris</a>
+<li><a href="svg/invaders.svg">Space Invaders</a>
+<li><a href="svg/sizebox.html">SVG in HTML Embed</a>
+</ul>
+
+</body>
+</html>
+

@@ -1,0 +1,21 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {P} at (0,0) size 784x36
+        RenderText {#text} at (0,0) size 235x18
+          text run at (0,0) width 235: "This is a regression test for "
+        RenderInline {I} at (0,0) size 699x36
+          RenderInline {A} at (0,0) size 464x18 [color=#0000EE]
+            RenderText {#text} at (235,0) size 464x18
+              text run at (235,0) width 464: "http://bugzilla.opendarwin.org/show_bug.cgi?id=8485"
+          RenderText {#text} at (0,18) size 440x18
+            text run at (0,18) width 440: "iExploder(#11705): Freeze in RenderBlock::layout()"
+        RenderText {#text} at (440,18) size 5x18
+          text run at (440,18) width 5: "."
+      RenderBlock {HR} at (0,53) size 784x2 [border: (1px inset #000000)]
+      RenderBlock {DIV} at (0,63) size 30x242
+        RenderText {#text} at (0,0) size 82x242
+          text run at (0,0) width 0: " "
+          text run at (0,121) width 82: "A"

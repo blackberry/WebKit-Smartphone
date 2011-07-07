@@ -1,0 +1,25 @@
+<html>
+<head><title>Invalidate History Test</title></head>
+<body>
+<script>
+function redirect() {
+    document.location = "http://www.google.com";
+}
+
+function scheduleRedirect() {
+    setTimeout(redirect, 5000);
+}
+</script>
+
+<ul>
+<li> Click the following button, and then immediately open the Recent Pages dialog.
+<li> After 5 seconds the page will redirect to google.com.
+<li> Wait long enough to be sure the page has changed, and then choose a link.
+</ul>
+
+<form>
+<input type="button" value="Redirect" onclick="scheduleRedirect()"/>
+</form>
+
+</body>
+</html>

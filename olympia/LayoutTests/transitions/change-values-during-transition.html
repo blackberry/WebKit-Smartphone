@@ -1,0 +1,93 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+   "http://www.w3.org/TR/html4/loose.dtd">
+
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>Changing transition values during transition should not affect it</title>
+  <style type="text/css" media="screen">
+    #box {
+      height: 100px;
+      width: 100px;
+      background-color: blue;
+      -webkit-transition-duration: 1s;
+      -webkit-transition-timing-function: linear;
+      -webkit-transition-property: -webkit-transform;
+    }
+  </style>
+  <script type="text/javascript" charset="utf-8">
+    if (window.layoutTestController) {
+      layoutTestController.dumpAsText();
+      layoutTestController.waitUntilDone();
+    }
+    
+    var result = "PASS";
+    const defaultTolerance = 10;
+    
+    function isCloseEnough(actual, desired)
+    {
+        var diff = Math.abs(actual - desired);
+        return diff < defaultTolerance;
+    }
+    
+    function changeValues()
+    {
+        var box = document.getElementById('box');
+        box.style.webkitTransitionDuration = "0.1s";
+    }
+    
+    function getXPosition()
+    {
+        var t = window.getComputedStyle(document.getElementById('box')).webkitTransform;
+        t = t.split("(");
+        t = t[1].split(",");
+        return t[4];
+    }
+    
+    function check1()
+    {
+        var xPos = getXPosition();
+        if (!isCloseEnough(xPos, 50))
+            result = "FAIL(was:"+xPos+", s/b:50)";
+    }
+
+    function check2()
+    {
+        var xPos = getXPosition();
+        if (!isCloseEnough(xPos, 0))
+            result += "FAIL(was:"+xPos+", s/b:0)";
+            
+        document.getElementById('result').innerText = result;
+        if (window.layoutTestController)
+            layoutTestController.notifyDone();
+    }
+    
+    function goBack()
+    {
+        var box = document.getElementById('box');
+        box.style.webkitTransform = 'translateX(0)';
+    }
+
+    function start()
+    {
+        var box = document.getElementById('box');
+        setTimeout("changeValues()", 100);
+        setTimeout("check1()", 500);
+        setTimeout("check2()", 1300);
+        box.style.webkitTransform = 'translateX(100px)';
+    }
+    
+    window.addEventListener('load', start, false);
+    document.addEventListener('webkitTransitionEnd', goBack, false);
+    
+  </script>
+</head>
+<body>
+
+<p>Test changes -webkit-transition-duration while the transition is running to ensure that the running transition is not affected</p>
+<div id="box">
+</div>
+<div id="result">
+</div>
+</body>
+</html>

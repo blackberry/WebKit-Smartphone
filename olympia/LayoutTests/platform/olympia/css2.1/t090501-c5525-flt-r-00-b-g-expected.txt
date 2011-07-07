@@ -1,0 +1,48 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x376
+  RenderBlock {HTML} at (0,0) size 800x376
+    RenderBody {BODY} at (8,17) size 784x342
+      RenderBlock {P} at (0,0) size 784x342 [color=#000080]
+        RenderImage {IMG} at (734,0) size 50x50
+        RenderText {#text} at (0,0) size 439x18
+          text run at (0,0) width 439: "This text should flow around the box on the right. \x{21E8} "
+        RenderInline {SPAN} at (0,0) size 765x342 [color=#C0C0C0]
+          RenderText {#text} at (439,0) size 765x342
+            text run at (439,0) width 286: "dummy text dummy text dummy"
+            text run at (0,18) width 330: "text dummy text dummy text dummy "
+            text run at (330,18) width 364: "text dummy text dummy text dummy text"
+            text run at (0,36) width 291: "dummy text dummy text dummy "
+            text run at (291,36) width 435: "text dummy text dummy text dummy text dummy"
+            text run at (0,54) width 220: "text dummy text dummy "
+            text run at (220,54) width 545: "text dummy text dummy text dummy text dummy text dummy"
+            text run at (0,72) width 110: "text dummy "
+            text run at (110,72) width 655: "text dummy text dummy text dummy text dummy text dummy text dummy"
+            text run at (0,90) width 660: "text dummy text dummy text dummy text dummy text dummy text dummy "
+            text run at (660,90) width 105: "text dummy"
+            text run at (0,108) width 550: "text dummy text dummy text dummy text dummy text dummy "
+            text run at (550,108) width 215: "text dummy text dummy"
+            text run at (0,126) width 440: "text dummy text dummy text dummy text dummy "
+            text run at (440,126) width 325: "text dummy text dummy text dummy"
+            text run at (0,144) width 330: "text dummy text dummy text dummy "
+            text run at (330,144) width 435: "text dummy text dummy text dummy text dummy"
+            text run at (0,162) width 220: "text dummy text dummy "
+            text run at (220,162) width 545: "text dummy text dummy text dummy text dummy text dummy"
+            text run at (0,180) width 110: "text dummy "
+            text run at (110,180) width 655: "text dummy text dummy text dummy text dummy text dummy text dummy"
+            text run at (0,198) width 660: "text dummy text dummy text dummy text dummy text dummy text dummy "
+            text run at (660,198) width 105: "text dummy"
+            text run at (0,216) width 550: "text dummy text dummy text dummy text dummy text dummy "
+            text run at (550,216) width 215: "text dummy text dummy"
+            text run at (0,234) width 440: "text dummy text dummy text dummy text dummy "
+            text run at (440,234) width 325: "text dummy text dummy text dummy"
+            text run at (0,252) width 330: "text dummy text dummy text dummy "
+            text run at (330,252) width 435: "text dummy text dummy text dummy text dummy"
+            text run at (0,270) width 220: "text dummy text dummy "
+            text run at (220,270) width 545: "text dummy text dummy text dummy text dummy text dummy"
+            text run at (0,288) width 110: "text dummy "
+            text run at (110,288) width 655: "text dummy text dummy text dummy text dummy text dummy text dummy"
+            text run at (0,306) width 660: "text dummy text dummy text dummy text dummy text dummy text dummy "
+            text run at (660,306) width 105: "text dummy"
+            text run at (0,324) width 474: "text dummy text dummy text dummy text dummy text"
+        RenderText {#text} at (0,0) size 0x0

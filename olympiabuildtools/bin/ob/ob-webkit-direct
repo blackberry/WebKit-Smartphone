@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# Look for mkspecs in OLYMPIATOOLS
+export QMAKEPATH=$OLYMPIATOOLS
+export QTDIR=$OLYMPIATOOLS
+
+if [ -z $NUMBER_OF_PROCESSORS ] ; then
+    MAKECMD="make"
+else
+    MAKECMD="make -j"$NUMBER_OF_PROCESSORS
+fi
+
+# Note: this variable is used in olympia/WebKitTools/webkitdirs.pm,
+# which is called by build-webkit Perl script below.
+export WEBKITOUTPUTDIR="$OLYMPIAROOT/olympia/WebKitBuild/$CPUNAME"
+
+if [ ! -f "$WEBKITOUTPUTDIR/$OLYMPIABUILDCONFIG/Makefile" ] ; then
+    pushd $OLYMPIAROOT/olympia
+
+    export WKXMLARGS="--xslt --xpath"
+    export WKMOBILEARGS="--xhtmlmp --wcss"
+    export WKSVGARGS="--svg --svg-animation --svg-as-image --svg-foreign-object --svg-use --svg-fonts"
+    export WKFEATURES="--geolocation --channel-messaging --datagrid --eventsource --database --dom-storage --offline-web-applications --icon-database --web-sockets --orientation-events --touch-events --video --workers --shared-workers"
+
+    export WKBUILDARGS="$WKXMLARGS $WKMOBILEARGS $WKSVGARGS $WKFEATURES"
+
+
+    MAKE=$MAKECMD \
+    perl ./WebKitTools/Scripts/build-webkit \
+    --$OLYMPIABUILDCONFIGL \
+    --qt --minimal $WKBUILDARGS \
+    --makeargs="$MAKE_FLAGS"
+    RETURNCODE=$?
+    popd
+else
+    pushd "$WEBKITOUTPUTDIR/$OLYMPIABUILDCONFIG"
+    MAKE=$MAKECMD make
+    RETURNCODE=$?
+    popd
+fi
+
+if [ $RETURNCODE -ne 0 ] ; then
+    echo "Error:  Build Failure occurred in ob-webkit!"
+fi
+
+$(exit $RETURNCODE)

@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+# Check that the code uses Unix line endings
+#
+
+for file in `git diff-index --name-only HEAD | grep *.cpp` ; do
+    checkedfile=`egrep -l $'\r\n' $file`
+    if [ "$checkedfile" = "" ] ; then
+        echo "File $checkedfile has DOS style line endings. Please fix before committing"
+        exit 1
+    fi
+done

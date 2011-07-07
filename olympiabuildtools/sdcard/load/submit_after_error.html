@@ -1,0 +1,13 @@
+<html>
+<body>
+
+This form points to a nonexistant file.  Hitting SUBMIT should give a file not found error.  Hitting it again should give the error again.<p>
+
+(Tests <a href="https://bugs.webkit.org/show_bug.cgi?id=37236">https://bugs.webkit.org/show_bug.cgi?id=37236</a>: hitting submit after receiving an error does nothing.)<p>
+
+<form action="filenotfound.html" method="GET">
+<input type="hidden" name="key" value="value">
+<input type="submit">
+</form>
+</body>
+</html>

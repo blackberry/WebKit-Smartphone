@@ -1,0 +1,32 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x98
+  RenderBlock {HTML} at (0,0) size 800x98
+    RenderBody {BODY} at (8,8) size 784x82 [color=#0000FF]
+      RenderTable {TABLE} at (0,0) size 784x82
+        RenderTableSection {TBODY} at (0,0) size 784x82
+          RenderTableRow {TR} at (0,2) size 784x24
+            RenderTableCell {TD} at (2,2) size 780x24 [border: (2px solid #0000FF)] [r=0 c=0 rs=1 cs=2]
+              RenderText {#text} at (3,3) size 444x18
+                text run at (3,3) width 444: "There should be a blue border around this sentence."
+          RenderTableRow {TR} at (0,28) size 784x52
+            RenderTableCell {TD} at (2,33) size 365x42 [border: (2px solid #0000FF)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (3,3) size 357x36
+                text run at (3,3) width 357: "There should be a blue border around this"
+                text run at (3,21) width 82: "sentence."
+            RenderTableCell {TD} at (369,28) size 413x52 [border: (2px solid #0000FF)] [r=1 c=1 rs=1 cs=1]
+              RenderTable {TABLE} at (3,3) size 407x46
+                RenderTableSection {TBODY} at (0,0) size 407x46
+                  RenderTableRow {TR} at (0,2) size 407x42
+                    RenderTableCell {TD} at (2,2) size 403x42 [border: (2px solid #0000FF)] [r=0 c=0 rs=1 cs=1]
+                      RenderText {#text} at (3,3) size 142x18
+                        text run at (3,3) width 142: "There should be "
+                      RenderInline {STRONG} at (0,0) size 162x18
+                        RenderInline {EM} at (0,0) size 34x18
+                          RenderText {#text} at (145,3) size 34x18
+                            text run at (145,3) width 34: "two"
+                        RenderText {#text} at (179,3) size 128x18
+                          text run at (179,3) width 128: " blue borders"
+                      RenderText {#text} at (307,3) size 369x36
+                        text run at (307,3) width 65: " around"
+                        text run at (3,21) width 119: "this sentence."

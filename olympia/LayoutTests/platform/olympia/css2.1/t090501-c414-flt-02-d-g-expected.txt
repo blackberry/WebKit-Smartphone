@@ -1,0 +1,22 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x248
+  RenderBlock {HTML} at (0,0) size 800x211
+    RenderBody {BODY} at (8,17) size 784x177
+      RenderBlock {P} at (0,0) size 784x36 [color=#000080]
+        RenderText {#text} at (0,0) size 732x36
+          text run at (0,0) width 522: "In the following test, the teal squares must be just inside the "
+          text run at (522,0) width 210: "top and sides of the blue"
+          text run at (0,18) width 85: "rectangle."
+      RenderBlock {DIV} at (0,53) size 784x124
+        RenderBlock {DIV} at (17,0) size 750x124 [color=#0000FF] [bgcolor=#000080] [border: (8px solid #0000FF) none (8px solid #0000FF)]
+          RenderImage {IMG} at (8,8) size 170x170 [color=#FFFF00] [bgcolor=#FF0000]
+          RenderImage {IMG} at (572,8) size 170x170 [color=#FFFF00] [bgcolor=#FF0000]
+          RenderText {#text} at (178,8) size 394x108
+            text run at (178,8) width 394: "Blue rectangle. Blue rectangle. Blue rectangle."
+            text run at (178,26) width 394: "Blue rectangle. Blue rectangle. Blue rectangle."
+            text run at (178,44) width 266: "Blue rectangle. Blue rectangle. "
+            text run at (444,44) width 128: "Blue rectangle."
+            text run at (178,62) width 394: "Blue rectangle. Blue rectangle. Blue rectangle."
+            text run at (178,80) width 394: "Blue rectangle. Blue rectangle. Blue rectangle."
+            text run at (178,98) width 128: "Blue rectangle."

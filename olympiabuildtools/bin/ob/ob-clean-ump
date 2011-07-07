@@ -1,0 +1,4 @@
+#!/bin/bash
+
+rm -rf "$OLYMPIAROOT/olympia/WebKitBuild" "$BBNSLDIR/build" "$BBNSLDIR/players/build"
+

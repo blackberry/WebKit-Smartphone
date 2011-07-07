@@ -1,0 +1,7 @@
+#!/bin/bash
+
+ob-lynx && \
+ob-bbnsl && \
+ob-webkit && \
+ob-player && \
+ob-lynx-link

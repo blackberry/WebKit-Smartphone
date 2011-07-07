@@ -1,0 +1,28 @@
+#!/bin/bash
+
+validate_OSDIR
+validate_TIDDIR
+
+RETURNCODE=0
+
+pushd "$OLYMPIAJAVA/JavaApplications"
+cmd.exe //c buildWithLynx.bat $OLYMPIABUILDCHOICE
+if [ -f "$OLYMPIAJAVA/JavaApplications/failed.bld" ] ; then
+    RETURNCODE=1
+fi
+if [ "x$OLYMPIABUILDCHOICE" = "xfledge" ] ;then
+    OBJFILE="$OLYMPIAJAVA/lynx/Debug/JvmFledgeSimulator.dll"
+else
+    OBJFILE="$OLYMPIAJAVA/Lynx/jvm/arm/ReleaseARM/$SFINAME"
+fi
+if [ ! -f "$OBJFILE" ] ; then
+    echo "SFI file $OBJFILE was not found; ob-lynx failed"
+    RETURNCODE=1
+fi
+popd
+
+if [ $RETURNCODE -ne 0 ] ; then
+    echo "Error:  Build Failure occurred in ob-lynx!"
+fi
+
+$(exit $RETURNCODE)

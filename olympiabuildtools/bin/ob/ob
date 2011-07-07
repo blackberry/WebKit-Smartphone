@@ -1,0 +1,24 @@
+#!/bin/bash
+
+if [ ! -z "$1" ] ; then
+    device=$1
+        
+    if [ -d $OLYMPIATOOLS/devices/$device ] ; then
+        source $OLYMPIATOOLS/devices/$device/profile.env
+    else
+        echo "Error: Unknown platform: [$device]" 2>&1
+        echo -e "   Known Devices are:\n  `find $OLYMPIATOOLS/devices/ -maxdepth 1 -printf "%f " |sed -e 's/common //g'`\n"
+        $(exit 1);
+        return;
+    fi
+
+    export OLYMPIABUILDCHOICE=$device
+
+    if [ ! -z $2 ] ; then
+        obc $2
+    else
+        obc $DEFAULTCONFIG
+    fi
+fi
+echo "Using: $OLYMPIABUILDCHOICE"
+$(exit 0)

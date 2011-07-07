@@ -1,0 +1,15 @@
+<html>
+<head>
+<meta name="viewport" content="height=device-width, width=0"/>
+<style>
+body { margin: 0; padding: 0; }
+#test-container { background-color: red; height: 320px; width: 100%; }
+#square { background-color: green; height: 320px; width: 450px; }
+</style>
+<body>
+<!-- This tests that the width of the viewport is the width in portrait orientation when the width property == 0. This test FAILED if you see any red on this page for any orientation. -->
+<div id="test-container">
+    <div id="square"></div>
+</div>
+</body>
+</html>

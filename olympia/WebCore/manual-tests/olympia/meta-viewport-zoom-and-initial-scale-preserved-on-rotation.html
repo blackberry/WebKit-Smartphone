@@ -1,0 +1,27 @@
+<html>
+<head>
+<meta name="viewport" content="initial-scale=1.0">
+<script>
+function updateDisplay() {
+    var square = document.getElementById("square");
+    square.innerHTML = "window.innerWidth: " + window.innerWidth;
+    setTimeout(updateDisplay, 500);
+}
+window.onload = updateDisplay;
+</script>
+<style>
+#square { display: table-cell; vertical-align: middle; text-align: center; background-color: blue; height: 100px; width: 100px; color: white; font-size: x-small;}
+</style>
+</head>
+<body>
+<p>This test can be used to verify that we preserve zoom with respect to the specified viewport initial-scale on rotation.<p>
+<p>Note, this test is expected to fail on a RIM device since it does not zoom on rotate. See RIM Bug #252.</p>
+<ol>
+    <li>Zoom in on the page.</li>
+    <li>This test PASSED if the text in the blue square stays relatively constant (*) as you rotate the device between portrait- and landscape- orientation and vice versa.</li>
+</ol>
+(*) The difference should not exceed 1.
+<hr/>
+<div id="square"></div>
+</body>
+</html>

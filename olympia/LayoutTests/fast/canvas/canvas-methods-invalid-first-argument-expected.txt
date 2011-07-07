@@ -1,0 +1,11 @@
+This test checks that createPattern, putImageData, and drawImage throw a TYPE_MISMATCH_ERR exception if their first argument is an invalid JavaScript object, as per the HTML Canvas 2D Context specification.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+PASS context.createPattern(null, 'no-repeat') threw exception Error: TYPE_MISMATCH_ERR: DOM Exception 17.
+PASS context.putImageData(null, 0, 0) threw exception Error: TYPE_MISMATCH_ERR: DOM Exception 17.
+PASS context.drawImage(null, 0, 0) threw exception Error: TYPE_MISMATCH_ERR: DOM Exception 17.
+
+TEST COMPLETE
+

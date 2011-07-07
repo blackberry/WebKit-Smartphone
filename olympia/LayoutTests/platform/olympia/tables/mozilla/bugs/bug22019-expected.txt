@@ -1,0 +1,96 @@
+layer at (0,0) size 828x803
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 828x803
+  RenderBlock {HTML} at (0,0) size 800x803
+    RenderBody {BODY} at (8,8) size 784x787
+      RenderBlock {PRE} at (0,0) size 784x294
+        RenderText {#text} at (0,0) size 820x252
+          text run at (0,0) width 460: "These tables below all have the HTML + CSS ..."
+          text run at (460,0) width 0: " "
+          text run at (0,21) width 0: " "
+          text run at (0,42) width 600: "<TABLE><tr>                                          table {"
+          text run at (600,42) width 0: " "
+          text run at (0,63) width 680: "  <td><TABLE style='margin: 20px; padding: 19px;'>     width: 600px;"
+          text run at (680,63) width 0: " "
+          text run at (0,84) width 770: "       <tr><td></td></tr>                              border: 1px solid red;"
+          text run at (770,84) width 0: " "
+          text run at (0,105) width 740: "       </TABLE></td>                                   empty-cells: show;}"
+          text run at (740,105) width 0: " "
+          text run at (0,126) width 570: "</tr></TABLE>                                        td {"
+          text run at (570,126) width 0: " "
+          text run at (0,147) width 800: "                                                       border: 1px solid green;}"
+          text run at (800,147) width 0: " "
+          text run at (0,168) width 820: "                                                     table.inner {margin: 20px;}  "
+          text run at (820,168) width 0: " "
+          text run at (0,189) width 0: " "
+          text run at (0,210) width 650: "... and differ only in the value of 'padding:'. From top table to"
+          text run at (650,210) width 0: " "
+          text run at (0,231) width 530: "bottom: 0px, 10px, 19px, 20px, 25px. Note that for a "
+        RenderInline {U} at (0,0) size 760x42
+          RenderInline {I} at (0,0) size 760x42
+            RenderText {#text} at (530,231) size 760x42
+              text run at (530,231) width 230: "table over-constrained "
+              text run at (760,231) width 0: " "
+              text run at (0,252) width 200: "within another table"
+        RenderText {#text} at (200,252) size 20x21
+          text run at (200,252) width 20: ", "
+        RenderInline {I} at (0,0) size 230x21
+          RenderInline {U} at (0,0) size 230x21
+            RenderText {#text} at (220,252) size 230x21
+              text run at (220,252) width 230: "when (padding >=margin)"
+        RenderText {#text} at (450,252) size 160x21
+          text run at (450,252) width 160: ", the margin is "
+        RenderInline {I} at (0,0) size 750x42
+          RenderInline {U} at (0,0) size 750x42
+            RenderText {#text} at (610,252) size 750x42
+              text run at (610,252) width 140: "all allocated "
+              text run at (750,252) width 0: " "
+              text run at (0,273) width 220: "to the right hand side"
+        RenderText {#text} at (220,273) size 520x21
+          text run at (220,273) width 520: " of the table (and to the left if 'direction: rtl;'."
+      RenderTable {TABLE} at (0,311) size 600x28 [border: (1px dotted #0000FF)]
+        RenderTableSection {TBODY} at (1,1) size 598x26
+          RenderTableRow {TR} at (0,2) size 598x22
+            RenderTableCell {TD} at (2,2) size 594x22 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 287x18
+                text run at (2,2) width 287: "600px table for width comparison"
+      RenderTable {TABLE} at (0,339) size 650x60 [border: (1px solid #FF0000)]
+        RenderTableSection {TBODY} at (1,1) size 648x58
+          RenderTableRow {TR} at (0,2) size 648x54
+            RenderTableCell {TD} at (2,2) size 644x54 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+              RenderTable {TABLE} at (22,22) size 600x10 [border: (1px solid #FF0000)]
+                RenderTableSection {TBODY} at (1,1) size 598x8
+                  RenderTableRow {TR} at (0,2) size 598x4
+                    RenderTableCell {TD} at (2,2) size 594x4 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+      RenderTable {TABLE} at (0,399) size 650x80 [border: (1px solid #FF0000)]
+        RenderTableSection {TBODY} at (1,1) size 648x78
+          RenderTableRow {TR} at (0,2) size 648x74
+            RenderTableCell {TD} at (2,2) size 644x74 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+              RenderTable {TABLE} at (22,22) size 600x30 [border: (1px solid #FF0000)]
+                RenderTableSection {TBODY} at (11,11) size 578x8
+                  RenderTableRow {TR} at (0,2) size 578x4
+                    RenderTableCell {TD} at (2,2) size 574x4 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+      RenderTable {TABLE} at (0,479) size 650x98 [border: (1px solid #FF0000)]
+        RenderTableSection {TBODY} at (1,1) size 648x96
+          RenderTableRow {TR} at (0,2) size 648x92
+            RenderTableCell {TD} at (2,2) size 644x92 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+              RenderTable {TABLE} at (22,22) size 600x48 [border: (1px solid #FF0000)]
+                RenderTableSection {TBODY} at (20,20) size 560x8
+                  RenderTableRow {TR} at (0,2) size 560x4
+                    RenderTableCell {TD} at (2,2) size 556x4 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+      RenderTable {TABLE} at (0,577) size 650x100 [border: (1px solid #FF0000)]
+        RenderTableSection {TBODY} at (1,1) size 648x98
+          RenderTableRow {TR} at (0,2) size 648x94
+            RenderTableCell {TD} at (2,2) size 644x94 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+              RenderTable {TABLE} at (22,22) size 600x50 [border: (1px solid #FF0000)]
+                RenderTableSection {TBODY} at (21,21) size 558x8
+                  RenderTableRow {TR} at (0,2) size 558x4
+                    RenderTableCell {TD} at (2,2) size 554x4 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+      RenderTable {TABLE} at (0,677) size 650x110 [border: (1px solid #FF0000)]
+        RenderTableSection {TBODY} at (1,1) size 648x108
+          RenderTableRow {TR} at (0,2) size 648x104
+            RenderTableCell {TD} at (2,2) size 644x104 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+              RenderTable {TABLE} at (22,22) size 600x60 [border: (1px solid #FF0000)]
+                RenderTableSection {TBODY} at (26,26) size 548x8
+                  RenderTableRow {TR} at (0,2) size 548x4
+                    RenderTableCell {TD} at (2,2) size 544x4 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]

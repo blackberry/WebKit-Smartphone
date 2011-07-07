@@ -1,0 +1,60 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584 [bgcolor=#CCCCCC]
+      RenderBlock {P} at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 481x18
+          text run at (0,0) width 481: "The style declarations which apply to the text below are:"
+      RenderBlock {PRE} at (0,35) size 784x105
+        RenderText {#text} at (0,0) size 280x105
+          text run at (0,0) width 240: ".one {text-align: left;}"
+          text run at (240,0) width 0: " "
+          text run at (0,21) width 250: ".two {text-align: right;}"
+          text run at (250,21) width 0: " "
+          text run at (0,42) width 280: ".three {text-align: center;}"
+          text run at (280,42) width 0: " "
+          text run at (0,63) width 280: ".four {text-align: justify;}"
+          text run at (280,63) width 0: " "
+          text run at (0,84) width 0: " "
+      RenderBlock {HR} at (0,157) size 784x2 [border: (1px inset #000000)]
+      RenderBlock {P} at (0,176) size 784x18
+        RenderText {#text} at (0,0) size 319x18
+          text run at (0,0) width 319: "This sentence should be left-justified."
+      RenderBlock {P} at (0,211) size 784x18
+        RenderText {#text} at (452,0) size 332x18
+          text run at (452,0) width 332: "This sentence should be right-justified."
+      RenderBlock {P} at (0,246) size 784x18
+        RenderText {#text} at (246,0) size 291x18
+          text run at (246,0) width 291: "This sentence should be centered."
+      RenderBlock {P} at (0,281) size 784x54
+        RenderText {#text} at (0,0) size 784x54
+          text run at (0,0) width 784: "This sentence should be fully justified, which means that the right and left margins of this"
+          text run at (0,18) width 784: "paragraph should line up, no matter how long the paragraph becomes; the exception, of"
+          text run at (0,36) width 635: "course, is the last line, which should be left-justified in Western languages."
+      RenderTable {TABLE} at (0,352) size 784x195 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 782x193
+          RenderTableRow {TR} at (0,0) size 782x26
+            RenderTableCell {TD} at (0,0) size 782x26 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderInline {STRONG} at (0,0) size 214x18
+                RenderText {#text} at (4,4) size 214x18
+                  text run at (4,4) width 214: "TABLE Testing Section"
+          RenderTableRow {TR} at (0,26) size 782x167
+            RenderTableCell {TD} at (0,96) size 13x26 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,4) size 5x18
+                text run at (4,4) width 5: " "
+            RenderTableCell {TD} at (13,26) size 769x167 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderBlock {P} at (4,4) size 761x18
+                RenderText {#text} at (0,0) size 319x18
+                  text run at (0,0) width 319: "This sentence should be left-justified."
+              RenderBlock {P} at (4,39) size 761x18
+                RenderText {#text} at (429,0) size 332x18
+                  text run at (429,0) width 332: "This sentence should be right-justified."
+              RenderBlock {P} at (4,74) size 761x18
+                RenderText {#text} at (235,0) size 291x18
+                  text run at (235,0) width 291: "This sentence should be centered."
+              RenderBlock {P} at (4,109) size 761x54
+                RenderText {#text} at (0,0) size 761x54
+                  text run at (0,0) width 761: "This sentence should be fully justified, which means that the right and left margins of"
+                  text run at (0,18) width 761: "this paragraph should line up, no matter how long the paragraph becomes; the"
+                  text run at (0,36) width 749: "exception, of course, is the last line, which should be left-justified in Western languages."

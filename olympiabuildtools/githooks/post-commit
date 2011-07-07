@@ -1,0 +1,5 @@
+#!/bin/sh -e
+
+for check in `ls -1 $GIT_DIR/hooks/post-commit-*` ; do
+    $check
+done

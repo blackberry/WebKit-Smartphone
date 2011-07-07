@@ -1,0 +1,7 @@
+#!/bin/bash
+
+echo "WARNING: ob-lynx-cleanvm uses build.bat clean_vm, which does not do a full clean.  ob-lynx-clean and ob-javaapplications-clean are probably what you want."
+pushd $OLYMPIAJAVA/lynx
+
+cmd.exe //c build.bat $OLYMPIABUILDCHOICE clean_vm
+popd

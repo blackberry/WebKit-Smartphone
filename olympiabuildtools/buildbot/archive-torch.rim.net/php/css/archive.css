@@ -1,0 +1,40 @@
+span.link {
+    position: relative;
+}
+
+span.link a span {
+    display: none;
+}
+
+span.link a:link {
+    font-family: Verdana, Sans-serif;
+    color:#A00000;
+    text-decoration:none;
+    font-size:12pt
+}
+span.link a:hover {
+    font-family: Verdana, Sans-serif;
+    color:#A00000;
+    text-decoration:none;
+    font-size:12pt
+}
+span.link a:visited {
+    font-family: Verdana, Sans-serif;
+    color:#A00000;
+    text-decoration:none;
+    font-size:12pt
+}
+
+span.link a:hover span {
+    display: block;
+    position: absolute;
+    margin-top: 10px;
+    margin-left: -10px;
+    width: 195px; padding: 5px;
+    z-index: 100;
+    color: #000000;
+    background: #FFFFAA;
+    font: 12px "Arial", sans-serif;
+    text-align: left;
+    text-decoration: none;
+}

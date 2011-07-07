@@ -1,0 +1,40 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x219
+  RenderBlock {HTML} at (0,0) size 800x219
+    RenderBody {BODY} at (8,17) size 784x194
+      RenderBlock {P} at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 428x18
+          text run at (0,0) width 428: "There should be no red borders on the table below"
+      RenderTable {TABLE} at (0,35) size 183x159
+        RenderTableSection {TBODY} at (0,0) size 183x159
+          RenderTableRow {TR} at (0,0) size 183x53
+            RenderTableCell {TD} at (0,16) size 61x20 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 59x18
+                text run at (1,1) width 59: "hidden"
+            RenderTableCell {TD} at (61,16) size 61x20 [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 59x18
+                text run at (1,1) width 59: "hidden"
+            RenderTableCell {TD} at (122,16) size 61x20 [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 59x18
+                text run at (1,1) width 59: "hidden"
+          RenderTableRow {TR} at (0,53) size 183x53
+            RenderTableCell {TD} at (0,69) size 61x20 [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 59x18
+                text run at (1,1) width 59: "hidden"
+            RenderTableCell {TD} at (61,69) size 61x20 [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 40x18
+                text run at (1,1) width 40: "solid"
+            RenderTableCell {TD} at (122,69) size 61x20 [r=1 c=2 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 59x18
+                text run at (1,1) width 59: "hidden"
+          RenderTableRow {TR} at (0,106) size 183x53
+            RenderTableCell {TD} at (0,122) size 61x20 [r=2 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 59x18
+                text run at (1,1) width 59: "hidden"
+            RenderTableCell {TD} at (61,122) size 61x20 [r=2 c=1 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 59x18
+                text run at (1,1) width 59: "hidden"
+            RenderTableCell {TD} at (122,122) size 61x20 [r=2 c=2 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 59x18
+                text run at (1,1) width 59: "hidden"

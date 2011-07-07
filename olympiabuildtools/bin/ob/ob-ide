@@ -1,0 +1,5 @@
+#!/bin/bash
+
+pushd $OLYMPIAJAVA/lynx/bin
+cmd.exe //c ide.bat
+popd

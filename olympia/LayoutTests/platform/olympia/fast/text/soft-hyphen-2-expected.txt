@@ -1,0 +1,17 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {DIV} at (0,0) size 100x21 [color=#008000] [bgcolor=#FF0000]
+        RenderText {#text} at (0,0) size 95x21
+          text run at (0,0) width 38: "hen"
+          text run at (38,0) width 12: "a"
+          text run at (50,0) width 45: "tion."
+      RenderBlock {DIV} at (0,21) size 100x21 [color=#008000] [bgcolor=#FF0000]
+        RenderText {#text} at (0,0) size 95x21
+          text run at (0,0) width 50: "hena"
+          text run at (50,0) width 45: "tion."
+      RenderBlock {DIV} at (0,42) size 100x21 [color=#008000] [bgcolor=#FF0000]
+        RenderText {#text} at (0,0) size 61x21
+          text run at (0,0) width 61: "5x5sq"

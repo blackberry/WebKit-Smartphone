@@ -1,0 +1,14 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x134
+  RenderBlock {HTML} at (0,0) size 800x134
+    RenderBody {BODY} at (8,17) size 784x100
+      RenderBlock {P} at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 399x18
+          text run at (0,0) width 399: "The next two paragraphs should look identical:"
+      RenderBlock {P} at (0,35) size 176x24 [border: (3px solid #000000)]
+        RenderText {#text} at (3,3) size 40x18
+          text run at (3,3) width 40: "Test."
+      RenderBlock {P} at (0,76) size 176x24 [border: (3px solid #000000)]
+        RenderText {#text} at (3,3) size 40x18
+          text run at (3,3) width 40: "Test."

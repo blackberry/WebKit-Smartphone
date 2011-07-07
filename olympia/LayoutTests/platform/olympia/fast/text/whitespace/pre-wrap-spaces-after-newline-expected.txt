@@ -1,0 +1,102 @@
+layer at (0,0) size 800x805
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x805
+  RenderBlock {HTML} at (0,0) size 800x805
+    RenderBody {BODY} at (8,8) size 784x780
+      RenderBlock {P} at (0,0) size 784x36
+        RenderText {#text} at (0,0) size 68x18
+          text run at (0,0) width 68: "Test for "
+        RenderInline {I} at (0,0) size 725x36
+          RenderInline {A} at (0,0) size 463x18 [color=#0000EE]
+            RenderText {#text} at (68,0) size 463x18
+              text run at (68,0) width 463: "http://bugzilla.opendarwin.org/show_bug.cgi?id=7216"
+          RenderText {#text} at (531,0) size 725x36
+            text run at (531,0) width 5: " "
+            text run at (536,0) width 189: "white-space: pre-wrap"
+            text run at (0,18) width 415: "collapses leading whitespace following a newline"
+        RenderText {#text} at (415,18) size 5x18
+          text run at (415,18) width 5: "."
+      RenderBlock {HR} at (0,53) size 784x2 [border: (1px inset #000000)]
+      RenderBlock {P} at (0,72) size 784x21
+        RenderText {#text} at (0,3) size 45x18
+          text run at (0,3) width 45: "Here "
+        RenderInline {CODE} at (0,0) size 30x21
+          RenderText {#text} at (45,0) size 30x21
+            text run at (45,0) width 30: "bar"
+        RenderText {#text} at (75,3) size 194x18
+          text run at (75,3) width 194: " should be right under "
+        RenderInline {CODE} at (0,0) size 30x21
+          RenderText {#text} at (269,0) size 30x21
+            text run at (269,0) width 30: "foo"
+        RenderText {#text} at (299,3) size 6x18
+          text run at (299,3) width 6: ":"
+      RenderBlock {PRE} at (0,110) size 70x42 [bgcolor=#C0C0C0]
+        RenderText {#text} at (0,0) size 70x42
+          text run at (0,0) width 30: "foo"
+          text run at (30,0) width 40: "      "
+          text run at (0,21) width 30: "bar"
+      RenderBlock {P} at (0,169) size 784x21
+        RenderText {#text} at (0,3) size 45x18
+          text run at (0,3) width 45: "Here "
+        RenderInline {CODE} at (0,0) size 30x21
+          RenderText {#text} at (45,0) size 30x21
+            text run at (45,0) width 30: "bar"
+        RenderText {#text} at (75,3) size 442x18
+          text run at (75,3) width 442: " should be on the right hand side of the second line:"
+      RenderBlock {PRE} at (0,207) size 70x42 [bgcolor=#C0C0C0]
+        RenderText {#text} at (0,0) size 30x21
+          text run at (0,0) width 30: "foo"
+        RenderBR {BR} at (30,16) size 0x0
+        RenderText {#text} at (0,21) size 60x21
+          text run at (0,21) width 60: "   bar"
+      RenderBlock {PRE} at (0,266) size 70x42 [bgcolor=#C0C0C0]
+        RenderText {#text} at (0,0) size 70x21
+          text run at (0,0) width 70: "foo    "
+        RenderBR {BR} at (70,16) size 0x0
+        RenderText {#text} at (0,21) size 60x21
+          text run at (0,21) width 60: "   bar"
+      RenderBlock {PRE} at (0,325) size 70x42 [bgcolor=#C0C0C0]
+        RenderText {#text} at (0,0) size 60x42
+          text run at (0,0) width 30: "foo"
+          text run at (30,0) width 0: " "
+          text run at (0,21) width 60: "   bar"
+      RenderBlock {PRE} at (0,384) size 70x42 [bgcolor=#C0C0C0]
+        RenderText {#text} at (0,0) size 60x42
+          text run at (0,0) width 40: "foo "
+          text run at (40,0) width 0: " "
+          text run at (0,21) width 60: "   bar"
+      RenderBlock {PRE} at (0,443) size 70x42 [bgcolor=#C0C0C0]
+        RenderText {#text} at (0,0) size 60x42
+          text run at (0,0) width 50: "foo  "
+          text run at (50,0) width 0: " "
+          text run at (0,21) width 60: "   bar"
+      RenderBlock {PRE} at (0,502) size 70x42 [bgcolor=#C0C0C0]
+        RenderText {#text} at (0,0) size 60x42
+          text run at (0,0) width 60: "foo   "
+          text run at (60,0) width 0: " "
+          text run at (0,21) width 60: "   bar"
+      RenderBlock {PRE} at (0,561) size 70x42 [bgcolor=#C0C0C0]
+        RenderText {#text} at (0,0) size 70x42
+          text run at (0,0) width 70: "foo    "
+          text run at (70,0) width 0: " "
+          text run at (0,21) width 60: "   bar"
+      RenderBlock {P} at (0,620) size 784x21
+        RenderText {#text} at (0,3) size 45x18
+          text run at (0,3) width 45: "Here "
+        RenderInline {CODE} at (0,0) size 30x21
+          RenderText {#text} at (45,0) size 30x21
+            text run at (45,0) width 30: "bar"
+        RenderText {#text} at (75,3) size 423x18
+          text run at (75,3) width 423: " should be on the right hand side of the third line:"
+      RenderBlock {PRE} at (0,658) size 70x63 [bgcolor=#C0C0C0]
+        RenderText {#text} at (0,0) size 30x21
+          text run at (0,0) width 30: "foo"
+        RenderBR {BR} at (30,16) size 0x0
+        RenderText {#text} at (0,21) size 60x42
+          text run at (0,21) width 0: " "
+          text run at (0,42) width 60: "   bar"
+      RenderBlock {PRE} at (0,738) size 70x42 [bgcolor=#C0C0C0]
+        RenderText {#text} at (0,0) size 70x42
+          text run at (0,0) width 70: "foo baz"
+          text run at (70,0) width 0: " "
+          text run at (0,21) width 60: "   bar"

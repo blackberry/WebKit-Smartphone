@@ -1,0 +1,39 @@
+<html>
+<head>
+<link rel="stylesheet" href="../js/resources/js-test-style.css">
+<script src="../js/resources/js-test-pre.js"></script>
+<script>
+if (window.layoutTestController)
+    layoutTestController.dumpAsText();
+
+var context;
+function runTest()
+{
+    context = document.getElementById('canvas').getContext('2d');
+    shouldThrow("context.createRadialGradient(0, 0, -1.0, 0, 0, 1.0)", "'Error: INDEX_SIZE_ERR: DOM Exception 1'");
+    shouldThrow("context.createRadialGradient(0, 0, 1.0, 0, 0, -1.0)", "'Error: INDEX_SIZE_ERR: DOM Exception 1'");
+    shouldThrow("context.createRadialGradient(0, 0, -1.0, 0, 0, -1.0)", "'Error: INDEX_SIZE_ERR: DOM Exception 1'");
+    var testContainer = document.getElementById("test-container");
+    if (testContainer)
+        document.body.removeChild(testContainer);
+    debug('<br /><span class="pass">TEST COMPLETE</span>');
+}
+
+window.onload = runTest;
+</script>
+</head>
+<body>
+<p id="description"></p>
+<div id="test-container">
+    <canvas id="canvas"></canvas>
+</div>
+<hr/>
+<div id="console"></div>
+<script>
+    description("This test checks that createRadialGradient throws an INDEX_SIZE_ERR exception if either of " +
+                "the specified radii (or both) are negative, as per <a href=\"http://www.w3.org/TR/2dcontext/#dom-context-2d-createradialgradient\">" + 
+                "section 5 of the HTML Canvas 2D Context specification.</a>");
+    var successfullyParsed = true;
+</script>
+</body>
+</html>

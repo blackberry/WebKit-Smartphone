@@ -1,0 +1,305 @@
+#
+# Copyright (C) 2008 Apple Inc. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1.  Redistributions of source code must retain the above copyright
+#     notice, this list of conditions and the following disclaimer. 
+# 2.  Redistributions in binary form must reproduce the above copyright
+#     notice, this list of conditions and the following disclaimer in the
+#     documentation and/or other materials provided with the distribution. 
+# 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of
+#     its contributors may be used to endorse or promote products derived
+#     from this software without specific prior written permission. 
+#
+# THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL APPLE OR ITS CONTRIBUTORS BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+
+# <rdar://problem/5647952> fast/events/mouseout-on-window.html needs mac DRT to issue mouse out events
+fast/events/mouseout-on-window.html
+
+# <rdar://problem/5643675> window.scrollTo scrolls a window with no scrollbars
+fast/events/attempt-scroll-with-no-scrollbars.html
+
+# see bug <rdar://problem/5646437> REGRESSION (r28015): svg/batik/text/smallFonts fails
+svg/batik/text/smallFonts.svg
+
+# see bug https://bugs.webkit.org/show_bug.cgi?id=20011 -- Printing tests should use ImageDiff
+printing/compositing-layer-printing.html
+
+# Skip because fix for https://bugs.webkit.org/show_bug.cgi?id=26770 was reverted
+compositing/animation/animated-composited-inside-hidden.html
+
+# Tests are flakey: https://bugs.webkit.org/show_bug.cgi?id=38888
+compositing/iframes/iframe-resize.html
+compositing/iframes/overlapped-iframe.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=20342 REGRESSION: fast/dom/cssTarget-crash.html fails
+fast/dom/cssTarget-crash.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=21916 Pixel test doesn't repaint entire view so result is corrupted by previous test
+tables/mozilla_expected_failures/bugs/bug178855.xml
+
+# https://bugs.webkit.org/show_bug.cgi?id=21913 Repaint pixel test failure
+fast/repaint/body-background-image.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=23927 LayoutTests for svg fail after TransformationMatrix changes
+svg/W3C-SVG-1.1/animate-elem-82-t.svg
+svg/W3C-SVG-1.1/coords-trans-01-b.svg
+svg/hixie/perf/001.xml
+svg/hixie/perf/002.xml
+
+# <rdar://problem/6710625> Test media/video-error-abort.html doesn't work
+http/tests/media/video-error-abort.html
+
+# MediaPlayerPrivateQTKit doesn't return to NETWORK_IDLE and hence doesn't fire a suspend event
+# https://bugs.webkit.org/show_bug.cgi?id=37036
+http/tests/media/video-play-suspend.html
+
+# This port doesn't support Notifications.
+fast/notifications
+
+# Skipped while Eric Carlson works on a fix.
+# https://bugs.webkit.org/show_bug.cgi?id=28221
+fast/layers/video-layer.html
+media/audio-delete-while-step-button-clicked.html
+media/video-controls-transformed.html
+media/video-controls-zoomed.html
+
+# This test requires media controls has a volume slider.
+media/video-volume-slider.html
+
+# This port doesn't support detecting slow unload handlers.
+fast/dom/Window/slow-unload-handler.html
+fast/dom/Window/slow-unload-handler-only-frame-is-stopped.html
+
+# Skipped until we have a fix for <rdar://problem/6563117> WebKit should tell QuickTime to exclude the text importer
+media/video-empty-source.html
+
+# Accessibility tests without results
+accessibility/document-attributes.html
+
+# Accessibility tests with missing AccessibilityController functionality.
+accessibility/selection-states.html
+
+# Need to add functionality to DumpRenderTree to handle error pages
+fast/history/back-forward-reset-after-error-handling.html
+
+# Need to implement this in plugins code in WebKit
+plugins/reloadplugins-and-pages.html
+
+# This test requires ogg codecs
+media/media-can-play-ogg.html
+
+# These tests require touch support
+fast/events/touch
+
+# Skipped until https://bugs.webkit.org/show_bug.cgi?id=33923 is resolved.
+platform/mac/accessibility/change-notification-on-scroll.html
+
+# Skip Geolocation until https://bugs.webkit.org/show_bug.cgi?id=34025 is landed
+fast/dom/Window/window-properties-geolocation.html
+
+# Fails on Mac for some reason; being investigates.
+# See https://bugs.webkit.org/show_bug.cgi?id=34287
+http/tests/media/video-cookie.html
+
+# Fails on Mac
+# https://bugs.webkit.org/show_bug.cgi?id=34331
+http/tests/media/video-referer.html
+
+# Fails intermittently on Leopard and Tiger.
+# https://bugs.webkit.org/show_bug.cgi?id=29154
+storage/database-lock-after-reload.html
+
+# Accept header is handled by the browser
+http/tests/misc/image-checks-for-accept.html
+
+# Crashes in debug
+# https://bugs.webkit.org/show_bug.cgi?id=35631
+svg/custom/tiling-regular-hexagonal-crash.svg
+
+# Need to add functionality to DumpRenderTree to handle enable/disable Spatial Navigation
+fast/events/spatial-navigation
+
+# For some reason crashes when run with all tests. Passes individually.
+fast/forms/multiple-form-submission-protection-mouse.html
+
+# The animation causes the result of this test to depend on the speed of executing it, and that will cause it to be flaky
+fast/dom/HTMLProgressElement/progress-element.html
+
+# meter element is not supported
+fast/dom/HTMLMeterElement/meter-element.html
+fast/dom/HTMLMeterElement/set-meter-properties.html
+
+# event.dataTransfer.setData('text/uri-list') not correctly implemented on Mac
+editing/pasteboard/dataTransfer-setData-getData.html
+
+# eventSender needs to propagate the event to the calling window, not the main frame always.
+http/tests/plugins/plugin-document-has-focus.html
+
+# Misses setMediaType() and implementation
+fast/media/print-restores-previous-mediatype.html
+
+# No Widgets 1.0 support
+fast/media/media-feature-wgt-view-mode.html
+
+# Test is flaky and thus not useful until fixed.
+# https://bugs.webkit.org/show_bug.cgi?id=36642
+fast/replaced/border-radius-clip.html
+
+# Need to add functionality to DumpRenderTree to handle scrollbar police changes
+fast/overflow/scrollbar-restored-and-then-locked.html
+
+# Mac port doesn't put text/html on the pasteboard for app compatibility: https://bugs.webkit.org/show_bug.cgi?id=19893
+editing/pasteboard/onpaste-text-html.html
+fast/events/ondrop-text-html.html
+
+# Missing an implementation of LayoutTestController::markerTextForListItem()
+fast/lists/ol-nested-items-dynamic-insert.html
+fast/lists/ol-nested-items-dynamic-remove.html
+fast/lists/ol-nested-items.html
+fast/lists/ol-nested-list-dynamic-insert.html
+fast/lists/ol-nested-list-dynamic-remove.html
+fast/lists/ol-nested-list.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=33812
+fast/dom/icon-url-property.html
+
+# Doesn't support WOFF yet.
+fast/css/font-face-woff.html
+
+# EventSendingController does not send events on areas outside the WebView.
+scrollbars/scrollbar-click-does-not-blur-content.html
+
+# Failing canvas test cases from http://philip.html5.org/tests/canvas/suite/tests/
+canvas/philip/tests/2d.drawImage.broken.html
+canvas/philip/tests/2d.path.arcTo.ensuresubpath.1.html
+canvas/philip/tests/2d.path.arcTo.ensuresubpath.2.html
+canvas/philip/tests/2d.path.clip.empty.html
+canvas/philip/tests/2d.clearRect.shadow.html
+canvas/philip/tests/2d.composite.operation.clear.html
+canvas/philip/tests/2d.composite.operation.darker.html
+canvas/philip/tests/2d.composite.operation.highlight.html
+canvas/philip/tests/2d.composite.uncovered.fill.copy.html
+canvas/philip/tests/2d.composite.uncovered.fill.destination-atop.html
+canvas/philip/tests/2d.composite.uncovered.fill.destination-in.html
+canvas/philip/tests/2d.composite.uncovered.fill.source-in.html
+canvas/philip/tests/2d.composite.uncovered.fill.source-out.html
+canvas/philip/tests/2d.composite.uncovered.image.copy.html
+canvas/philip/tests/2d.composite.uncovered.image.destination-atop.html
+canvas/philip/tests/2d.composite.uncovered.image.destination-in.html
+canvas/philip/tests/2d.composite.uncovered.image.source-in.html
+canvas/philip/tests/2d.composite.uncovered.image.source-out.html
+canvas/philip/tests/2d.composite.uncovered.pattern.copy.html
+canvas/philip/tests/2d.composite.uncovered.pattern.destination-atop.html
+canvas/philip/tests/2d.composite.uncovered.pattern.destination-in.html
+canvas/philip/tests/2d.composite.uncovered.pattern.source-in.html
+canvas/philip/tests/2d.composite.uncovered.pattern.source-out.html
+canvas/philip/tests/2d.drawImage.broken.html
+canvas/philip/tests/2d.drawImage.incomplete.html
+canvas/philip/tests/2d.drawImage.null.html
+canvas/philip/tests/2d.drawImage.wrongtype.html
+canvas/philip/tests/2d.drawImage.zerocanvas.html
+canvas/philip/tests/2d.fillStyle.parse.current.basic.html
+canvas/philip/tests/2d.fillStyle.parse.current.changed.html
+canvas/philip/tests/2d.fillStyle.parse.current.removed.html
+canvas/philip/tests/2d.fillStyle.parse.rgb-clamp-3.html
+canvas/philip/tests/2d.fillStyle.parse.rgb-clamp-4.html
+canvas/philip/tests/2d.fillStyle.parse.rgb-clamp-5.html
+canvas/philip/tests/2d.fillStyle.parse.system.html
+canvas/philip/tests/2d.gradient.interpolate.zerosize.html
+canvas/philip/tests/2d.gradient.radial.cone.front.html
+canvas/philip/tests/2d.gradient.radial.cone.top.html
+canvas/philip/tests/2d.gradient.radial.inside2.html
+canvas/philip/tests/2d.gradient.radial.inside3.html
+canvas/philip/tests/2d.gradient.radial.negative.html
+canvas/philip/tests/2d.gradient.radial.outside1.html
+canvas/philip/tests/2d.imageData.create1.type.html
+canvas/philip/tests/2d.imageData.create2.type.html
+canvas/philip/tests/2d.imageData.get.source.negative.html
+canvas/philip/tests/2d.imageData.get.source.outside.html
+canvas/philip/tests/2d.imageData.get.type.html
+canvas/philip/tests/2d.imageData.object.round.html
+canvas/philip/tests/2d.imageData.object.wrap.html
+canvas/philip/tests/2d.line.cap.closed.html
+canvas/philip/tests/2d.line.join.parallel.html
+canvas/philip/tests/2d.line.miter.lineedge.html
+canvas/philip/tests/2d.missingargs.html
+canvas/philip/tests/2d.path.arcTo.ensuresubpath.2.html
+canvas/philip/tests/2d.path.bezierCurveTo.ensuresubpath.2.html
+canvas/philip/tests/2d.path.clip.empty.html
+canvas/philip/tests/2d.path.quadraticCurveTo.ensuresubpath.2.html
+canvas/philip/tests/2d.path.rect.winding.html
+canvas/philip/tests/2d.path.rect.zero.4.html
+canvas/philip/tests/2d.path.stroke.prune.arc.html
+canvas/philip/tests/2d.path.stroke.prune.closed.html
+canvas/philip/tests/2d.path.stroke.prune.curve.html
+canvas/philip/tests/2d.path.stroke.prune.line.html
+canvas/philip/tests/2d.pattern.basic.type.html
+canvas/philip/tests/2d.pattern.image.broken.html
+canvas/philip/tests/2d.pattern.image.incomplete.html
+canvas/philip/tests/2d.pattern.image.null.html
+canvas/philip/tests/2d.pattern.image.string.html
+canvas/philip/tests/2d.pattern.image.undefined.html
+canvas/philip/tests/2d.shadow.enable.blur.html
+canvas/philip/tests/2d.shadow.enable.x.html
+canvas/philip/tests/2d.shadow.enable.y.html
+canvas/philip/tests/2d.shadow.gradient.alpha.html
+canvas/philip/tests/2d.shadow.gradient.basic.html
+canvas/philip/tests/2d.shadow.gradient.transparent.2.html
+canvas/philip/tests/2d.strokeRect.zero.4.html
+canvas/philip/tests/2d.text.draw.baseline.bottom.html
+canvas/philip/tests/2d.text.draw.baseline.hanging.html
+canvas/philip/tests/2d.text.draw.baseline.ideographic.html
+canvas/philip/tests/2d.text.draw.baseline.middle.html
+canvas/philip/tests/2d.text.draw.baseline.top.html
+canvas/philip/tests/2d.text.draw.fill.maxWidth.fontface.html
+canvas/philip/tests/2d.text.draw.space.collapse.end.html
+canvas/philip/tests/2d.text.draw.space.collapse.nonspace.html
+canvas/philip/tests/2d.text.draw.space.collapse.other.html
+canvas/philip/tests/2d.text.draw.space.collapse.space.html
+canvas/philip/tests/2d.text.draw.space.collapse.start.html
+canvas/philip/tests/2d.text.font.parse.basic.html
+canvas/philip/tests/2d.text.font.parse.complex.html
+canvas/philip/tests/2d.text.font.parse.invalid.html
+canvas/philip/tests/2d.text.font.parse.size.percentage.html
+canvas/philip/tests/2d.text.font.parse.size.percentage.default.html
+canvas/philip/tests/2d.text.font.parse.system.html
+canvas/philip/tests/2d.text.measure.width.space.html
+canvas/philip/tests/security.drawImage.canvas.html
+canvas/philip/tests/security.drawImage.image.html
+canvas/philip/tests/security.pattern.canvas.fillStyle.html
+canvas/philip/tests/security.pattern.canvas.strokeStyle.html
+canvas/philip/tests/security.pattern.cross.html
+canvas/philip/tests/security.pattern.image.fillStyle.html
+canvas/philip/tests/security.pattern.image.strokeStyle.html
+canvas/philip/tests/security.reset.html
+canvas/philip/tests/size.attributes.parse.minus.html
+canvas/philip/tests/size.attributes.setAttribute.minus.html
+canvas/philip/tests/toDataURL.jpeg.alpha.html
+canvas/philip/tests/toDataURL.jpeg.quality.basic.html
+canvas/philip/tests/type.prototype.html
+
+# IndexedDB is not yet enabled.
+storage/indexeddb
+
+# This port doesn't support DeviceOrientation.
+fast/dom/DeviceOrientation
+fast/dom/Window/window-properties-on-device-orientation.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=39908
+fast/dom/Geolocation/maximum-age.html
+fast/dom/Geolocation/reentrant-error.html
+fast/dom/Geolocation/reentrant-success.html

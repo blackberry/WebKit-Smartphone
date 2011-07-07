@@ -1,0 +1,261 @@
+layer at (0,0) size 800x2722
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x2722
+  RenderBlock {HTML} at (0,0) size 800x2722
+    RenderBody {BODY} at (8,8) size 784x2706
+      RenderBlock (anonymous) at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 442x18
+          text run at (0,0) width 442: "fixed width table with 100px width image in 1st cell"
+      RenderTable {TABLE} at (0,18) size 500x110 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 498x108
+          RenderTableRow {TR} at (0,2) size 498x104
+            RenderTableCell {TD} at (2,2) size 104x104 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderImage {IMG} at (2,2) size 100x100
+            RenderTableCell {TD} at (108,25) size 388x58 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 383x54
+                text run at (2,2) width 365: "a bunch of text, a bunch of text, a bunch of"
+                text run at (2,20) width 177: "text, a bunch of text "
+                text run at (179,20) width 206: "a bunch of text, a bunch"
+                text run at (2,38) width 331: "of text, a bunch of text, a bunch of text"
+      RenderBlock (anonymous) at (0,128) size 784x36
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 432x18
+          text run at (0,18) width 432: "fixed width table with 100px width table in 1st cell"
+      RenderTable {TABLE} at (0,164) size 500x64 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 498x62
+          RenderTableRow {TR} at (0,2) size 498x58
+            RenderTableCell {TD} at (2,17) size 104x28 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderTable {TABLE} at (2,2) size 100x24
+                RenderTableSection {TBODY} at (0,0) size 100x24
+                  RenderTableRow {TR} at (0,2) size 100x20
+                    RenderTableCell {TD} at (2,2) size 96x20 [r=0 c=0 rs=1 cs=1]
+                      RenderText {#text} at (1,1) size 26x18
+                        text run at (1,1) width 26: "foo"
+            RenderTableCell {TD} at (108,2) size 388x58 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 383x54
+                text run at (2,2) width 365: "a bunch of text, a bunch of text, a bunch of"
+                text run at (2,20) width 177: "text, a bunch of text "
+                text run at (179,20) width 206: "a bunch of text, a bunch"
+                text run at (2,38) width 331: "of text, a bunch of text, a bunch of text"
+      RenderBlock (anonymous) at (0,228) size 784x36
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 438x18
+          text run at (0,18) width 438: "auto width table with 100px width image in 1st cell"
+      RenderTable {TABLE} at (0,264) size 784x110 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 782x108
+          RenderTableRow {TR} at (0,2) size 782x104
+            RenderTableCell {TD} at (2,2) size 104x104 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderImage {IMG} at (2,2) size 100x100
+            RenderTableCell {TD} at (108,34) size 672x40 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 636x36
+                text run at (2,2) width 547: "a bunch of text, a bunch of text, a bunch of text, a bunch of text "
+                text run at (549,2) width 89: "a bunch of"
+                text run at (2,20) width 448: "text, a bunch of text, a bunch of text, a bunch of text"
+      RenderBlock (anonymous) at (0,374) size 784x36
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 516x18
+          text run at (0,18) width 516: "fixed width table with 100px width 1st cell containing image"
+      RenderTable {TABLE} at (0,410) size 500x110 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 498x108
+          RenderTableRow {TR} at (0,2) size 498x104
+            RenderTableCell {TD} at (2,2) size 104x104 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderImage {IMG} at (2,2) size 100x100
+            RenderTableCell {TD} at (108,25) size 388x58 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 383x54
+                text run at (2,2) width 365: "a bunch of text, a bunch of text, a bunch of"
+                text run at (2,20) width 177: "text, a bunch of text "
+                text run at (179,20) width 206: "a bunch of text, a bunch"
+                text run at (2,38) width 331: "of text, a bunch of text, a bunch of text"
+      RenderBlock (anonymous) at (0,520) size 784x36
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 512x18
+          text run at (0,18) width 512: "auto width table with 100px width 1st cell containing image"
+      RenderTable {TABLE} at (0,556) size 784x110 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 782x108
+          RenderTableRow {TR} at (0,2) size 782x104
+            RenderTableCell {TD} at (2,2) size 104x104 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderImage {IMG} at (2,2) size 100x100
+            RenderTableCell {TD} at (108,34) size 672x40 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 636x36
+                text run at (2,2) width 547: "a bunch of text, a bunch of text, a bunch of text, a bunch of text "
+                text run at (549,2) width 89: "a bunch of"
+                text run at (2,20) width 448: "text, a bunch of text, a bunch of text, a bunch of text"
+      RenderBlock (anonymous) at (0,666) size 784x36
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 440x18
+          text run at (0,18) width 440: "small fixed width table with 100px image in 1st cell"
+      RenderTable {TABLE} at (0,702) size 169x568 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 167x566
+          RenderTableRow {TR} at (0,2) size 167x562
+            RenderTableCell {TD} at (2,231) size 104x104 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderImage {IMG} at (2,2) size 100x100
+            RenderTableCell {TD} at (108,2) size 57x562 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 53x558
+                text run at (2,2) width 10: "a"
+                text run at (2,20) width 53: "bunch"
+                text run at (2,38) width 16: "of"
+                text run at (2,56) width 39: "text,"
+                text run at (2,74) width 10: "a"
+                text run at (2,92) width 53: "bunch"
+                text run at (2,110) width 16: "of"
+                text run at (2,128) width 39: "text,"
+                text run at (2,146) width 10: "a"
+                text run at (2,164) width 53: "bunch"
+                text run at (2,182) width 16: "of"
+                text run at (2,200) width 39: "text,"
+                text run at (2,218) width 10: "a"
+                text run at (2,236) width 53: "bunch"
+                text run at (2,254) width 16: "of"
+                text run at (2,272) width 39: "text "
+                text run at (41,272) width 10: "a"
+                text run at (2,290) width 53: "bunch"
+                text run at (2,308) width 16: "of"
+                text run at (2,326) width 39: "text,"
+                text run at (2,344) width 10: "a"
+                text run at (2,362) width 53: "bunch"
+                text run at (2,380) width 16: "of"
+                text run at (2,398) width 39: "text,"
+                text run at (2,416) width 10: "a"
+                text run at (2,434) width 53: "bunch"
+                text run at (2,452) width 16: "of"
+                text run at (2,470) width 39: "text,"
+                text run at (2,488) width 10: "a"
+                text run at (2,506) width 53: "bunch"
+                text run at (2,524) width 16: "of"
+                text run at (2,542) width 34: "text"
+      RenderBlock (anonymous) at (0,1270) size 784x36
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 659x18
+          text run at (0,18) width 659: "fixed width table with 100px image in 1st cell, 100px 2nd cell containing text"
+      RenderTable {TABLE} at (0,1306) size 500x298 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 498x296
+          RenderTableRow {TR} at (0,2) size 498x292
+            RenderTableCell {TD} at (2,96) size 388x104 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderImage {IMG} at (2,2) size 100x100
+            RenderTableCell {TD} at (392,2) size 104x292 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 89x288
+                text run at (2,2) width 89: "a bunch of"
+                text run at (2,20) width 54: "text, a"
+                text run at (2,38) width 74: "bunch of"
+                text run at (2,56) width 54: "text, a"
+                text run at (2,74) width 74: "bunch of"
+                text run at (2,92) width 54: "text, a"
+                text run at (2,110) width 74: "bunch of"
+                text run at (2,128) width 39: "text "
+                text run at (41,128) width 10: "a"
+                text run at (2,146) width 74: "bunch of"
+                text run at (2,164) width 54: "text, a"
+                text run at (2,182) width 74: "bunch of"
+                text run at (2,200) width 54: "text, a"
+                text run at (2,218) width 74: "bunch of"
+                text run at (2,236) width 54: "text, a"
+                text run at (2,254) width 74: "bunch of"
+                text run at (2,272) width 34: "text"
+      RenderBlock (anonymous) at (0,1604) size 784x54
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 759x36
+          text run at (0,18) width 759: "auto width table with 100px image in 1st cell, 100px 2nd cell containing text. This differs"
+          text run at (0,36) width 275: "from Nav4.5 but is similar to IE5"
+      RenderTable {TABLE} at (0,1658) size 216x298 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 214x296
+          RenderTableRow {TR} at (0,2) size 214x292
+            RenderTableCell {TD} at (2,96) size 104x104 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderImage {IMG} at (2,2) size 100x100
+            RenderTableCell {TD} at (108,2) size 104x292 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 89x288
+                text run at (2,2) width 89: "a bunch of"
+                text run at (2,20) width 54: "text, a"
+                text run at (2,38) width 74: "bunch of"
+                text run at (2,56) width 54: "text, a"
+                text run at (2,74) width 74: "bunch of"
+                text run at (2,92) width 54: "text, a"
+                text run at (2,110) width 74: "bunch of"
+                text run at (2,128) width 39: "text "
+                text run at (41,128) width 10: "a"
+                text run at (2,146) width 74: "bunch of"
+                text run at (2,164) width 54: "text, a"
+                text run at (2,182) width 74: "bunch of"
+                text run at (2,200) width 54: "text, a"
+                text run at (2,218) width 74: "bunch of"
+                text run at (2,236) width 54: "text, a"
+                text run at (2,254) width 74: "bunch of"
+                text run at (2,272) width 34: "text"
+      RenderBlock (anonymous) at (0,1956) size 784x36
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 707x18
+          text run at (0,18) width 707: "Fixed width table with colspan=2 in 1st row, 2nd row containing 100px image, text"
+      RenderTable {TABLE} at (0,1992) size 500x152 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 498x150
+          RenderTableRow {TR} at (0,2) size 498x40
+            RenderTableCell {TD} at (2,2) size 494x40 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderText {#text} at (2,2) size 455x36
+                text run at (2,2) width 455: "hello hello hello hello hello hello hello hello hello hello"
+                text run at (2,20) width 41: "hello"
+          RenderTableRow {TR} at (0,44) size 498x104
+            RenderTableCell {TD} at (2,44) size 104x104 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderImage {IMG} at (2,2) size 100x100
+            RenderTableCell {TD} at (108,76) size 388x40 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 345x36
+                text run at (2,2) width 345: "there there there there there there there"
+                text run at (2,20) width 245: "there there there there there"
+      RenderBlock (anonymous) at (0,2144) size 784x36
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 702x18
+          text run at (0,18) width 702: "Auto width table with colspan=2 in 1st row, 2nd row containing 100px image, text"
+      RenderTable {TABLE} at (0,2180) size 711x134 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 709x132
+          RenderTableRow {TR} at (0,2) size 709x22
+            RenderTableCell {TD} at (2,2) size 705x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderText {#text} at (2,2) size 501x18
+                text run at (2,2) width 501: "hello hello hello hello hello hello hello hello hello hello hello"
+          RenderTableRow {TR} at (0,26) size 709x104
+            RenderTableCell {TD} at (2,26) size 104x104 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderImage {IMG} at (2,2) size 100x100
+            RenderTableCell {TD} at (108,67) size 599x22 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 595x18
+                text run at (2,2) width 595: "there there there there there there there there there there there there"
+      RenderBlock (anonymous) at (0,2314) size 784x36
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 761x18
+          text run at (0,18) width 761: "Fixed width table with colspan=2 in 1st row, 2nd row containing 100px image, 100px cell"
+      RenderTable {TABLE} at (0,2350) size 500x160 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 498x158
+          RenderTableRow {TR} at (0,2) size 498x40
+            RenderTableCell {TD} at (2,2) size 494x40 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderText {#text} at (2,2) size 455x36
+                text run at (2,2) width 455: "hello hello hello hello hello hello hello hello hello hello"
+                text run at (2,20) width 41: "hello"
+          RenderTableRow {TR} at (0,44) size 498x112
+            RenderTableCell {TD} at (2,48) size 388x104 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderImage {IMG} at (2,2) size 100x100
+            RenderTableCell {TD} at (392,44) size 104x112 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 95x108
+                text run at (2,2) width 95: "there there"
+                text run at (2,20) width 95: "there there"
+                text run at (2,38) width 95: "there there"
+                text run at (2,56) width 95: "there there"
+                text run at (2,74) width 95: "there there"
+                text run at (2,92) width 95: "there there"
+      RenderBlock (anonymous) at (0,2510) size 784x36
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 756x18
+          text run at (0,18) width 756: "Auto width table with colspan=2 in 1st row, 2nd row containing 100px image, 100px cell"
+      RenderTable {TABLE} at (0,2546) size 511x142 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 509x140
+          RenderTableRow {TR} at (0,2) size 509x22
+            RenderTableCell {TD} at (2,2) size 505x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderText {#text} at (2,2) size 501x18
+                text run at (2,2) width 501: "hello hello hello hello hello hello hello hello hello hello hello"
+          RenderTableRow {TR} at (0,26) size 509x112
+            RenderTableCell {TD} at (2,30) size 399x104 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderImage {IMG} at (2,2) size 100x100
+            RenderTableCell {TD} at (403,26) size 104x112 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 95x108
+                text run at (2,2) width 95: "there there"
+                text run at (2,20) width 95: "there there"
+                text run at (2,38) width 95: "there there"
+                text run at (2,56) width 95: "there there"
+                text run at (2,74) width 95: "there there"
+                text run at (2,92) width 95: "there there"
+      RenderBlock (anonymous) at (0,2688) size 784x18
+        RenderBR {BR} at (0,0) size 0x18

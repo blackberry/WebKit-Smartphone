@@ -1,0 +1,58 @@
+#!/bin/bash
+
+export BUILD_WEBKIT_DYNAMIC_FLEDGE=Yes
+
+CONFIGUREFLAGS=""
+
+if [ "$FEATURE_OLYMPIA_DEBUG_MEMORY" = "Yes" ] ; then
+    CONFIGUREFLAGS="$CONFIGUREFLAGS --enable-debug-memory"
+fi
+
+if [ "$OLYMPIABUILDCHOICE" = "fledge" ] ; then
+    if [ ! "$BUILD_WEBKIT_DYNAMIC_FLEDGE" = "Yes" ] ; then
+        echo "Passing --disable-webkit-dynamic to configure"
+        CONFIGUREFLAGS="$CONFIGUREFLAGS --disable-webkit-dynamic"
+    fi
+
+    if [ "$DISABLE_WEBKIT_MONOLITHIC_FLEDGE" = "Yes" ] ; then
+        echo "Passing --disable-webkit-monolithic to configure"
+        CONFIGUREFLAGS="$CONFIGUREFLAGS --disable-webkit-monolithic"
+    fi
+fi
+
+pushd $BBNSLDIR/players
+
+RETURNCODE=0
+
+if [ -d $PLAYERBUILDROOT/$CPUNAME-$OLYMPIABUILDCONFIGL ] ; then
+    pushd $PLAYERBUILDROOT/$CPUNAME-$OLYMPIABUILDCONFIGL
+    $BBNSLDIR/tools/win32/bin/make
+    let RETURNCODE+=$?
+    $BBNSLDIR/tools/win32/bin/make install
+    let RETURNCODE+=$?
+    popd
+else
+    mkdir -p $PLAYERBUILDROOT
+    pushd $PLAYERBUILDROOT
+    # Change to configure option
+    export LYNXDIR=$OLYMPIAJAVA/lynx
+    ../configure --arch=$CPUNAME --config=$OLYMPIABUILDCONFIGL --prefix=$PLAYERINSTALLPREFIX $CONFIGUREFLAGS
+    let RETURNCODE+=$?
+    pushd $CPUNAME-$OLYMPIABUILDCONFIGL
+    $BBNSLDIR/tools/win32/bin/make
+    let RETURNCODE+=$?
+    $BBNSLDIR/tools/win32/bin/make install
+    let RETURNCODE+=$?
+    popd
+    popd
+fi
+
+ob-copyWebkitToLynx
+
+popd
+
+if [ $RETURNCODE -ne 0 ] ; then
+    echo "Error:  Build Failure occurred in ob-player!"
+fi
+
+$(exit $RETURNCODE)

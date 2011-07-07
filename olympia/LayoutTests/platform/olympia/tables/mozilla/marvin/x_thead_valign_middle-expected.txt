@@ -1,0 +1,33 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x327
+  RenderBlock {html} at (0,0) size 800x327
+    RenderBody {body} at (8,17) size 784x302
+      RenderBlock {p} at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 208x18
+          text run at (0,0) width 208: "THEAD VALIGN=MIDDLE"
+      RenderTable {table} at (0,35) size 761x267 [border: (1px outset #808080)]
+        RenderTableSection {thead} at (1,1) size 759x213
+          RenderTableRow {tr} at (0,2) size 759x209
+            RenderTableCell {td} at (2,2) size 204x209 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderImage {img} at (2,2) size 200x200
+            RenderTableCell {td} at (208,95) size 549x22 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 545x18
+                text run at (2,2) width 492: "This text should be vertically aligned to the middle of the "
+                text run at (494,2) width 53: "image"
+        RenderTableSection {tfoot} at (1,240) size 759x26
+          RenderTableRow {tr} at (0,2) size 759x22
+            RenderTableCell {td} at (2,2) size 204x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 57x18
+                text run at (2,2) width 57: "TFOOT"
+            RenderTableCell {td} at (208,2) size 549x22 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 57x18
+                text run at (2,2) width 57: "TFOOT"
+        RenderTableSection {tbody} at (1,214) size 759x26
+          RenderTableRow {tr} at (0,2) size 759x22
+            RenderTableCell {td} at (2,2) size 204x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 58x18
+                text run at (2,2) width 58: "TBODY"
+            RenderTableCell {td} at (208,2) size 549x22 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 58x18
+                text run at (2,2) width 58: "TBODY"

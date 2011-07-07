@@ -1,0 +1,22 @@
+#!/bin/bash
+
+RETURNCODE=0
+
+pushd $OLYMPIAJAVA/JavaApplications
+if [ ! $OLYMPIABUILDCHOICE = "fledge" ] ; then
+    BC=$OLYMPIABUILDCHOICE
+    if [ "x$OLYMPIABUILDCHOICE" = "xboldr020" ] ; then
+        BC=onyx;
+    fi
+    cmd.exe //c link.bat $BC
+    OBJFILE=$OLYMPIAJAVA/JavaApplications/FSLinked.dmp
+    
+    if [ ! -f $OBJFILE ] ; then
+        RETURNCODE=1
+    fi
+fi
+
+popd
+
+$(exit $RETURNCODE)
+

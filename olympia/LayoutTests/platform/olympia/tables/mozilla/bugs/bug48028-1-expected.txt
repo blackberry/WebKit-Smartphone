@@ -1,0 +1,36 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock (anonymous) at (0,0) size 784x0
+        RenderInline {FONT} at (0,0) size 0x0
+      RenderTable {TABLE} at (0,0) size 124x48 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,19) size 122x2
+        RenderBlock {CAPTION} at (0,0) size 122x18
+          RenderText {#text} at (34,0) size 54x18
+            text run at (34,0) width 54: "TEST1"
+        RenderTableSection {TBODY} at (1,21) size 122x26
+          RenderTableRow {TR} at (0,2) size 122x22
+            RenderTableCell {TD} at (2,2) size 118x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 114x18
+                text run at (2,2) width 114: "TABLE TEXT1"
+      RenderBlock (anonymous) at (0,48) size 784x18
+        RenderInline {FONT} at (0,0) size 54x18
+          RenderText {#text} at (0,0) size 54x18
+            text run at (0,0) width 54: "TEST2"
+      RenderTable {TABLE} at (0,66) size 124x28 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 122x26
+          RenderTableRow {TR} at (0,2) size 122x22
+            RenderTableCell {TD} at (2,2) size 118x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 114x18
+                text run at (2,2) width 114: "TABLE TEXT2"
+      RenderTable {TABLE} at (0,94) size 124x46 [border: (1px outset #808080)]
+        RenderBlock {CAPTION} at (0,0) size 122x18
+          RenderText {#text} at (34,0) size 54x18
+            text run at (34,0) width 54: "TEST3"
+        RenderTableSection {TBODY} at (1,19) size 122x26
+          RenderTableRow {TR} at (0,2) size 122x22
+            RenderTableCell {TD} at (2,2) size 118x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 114x18
+                text run at (2,2) width 114: "TABLE TEXT3"

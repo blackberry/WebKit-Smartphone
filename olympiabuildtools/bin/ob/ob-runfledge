@@ -1,0 +1,17 @@
+#!/bin/bash
+
+device=$1
+if [ -z $device ] ; then
+    device="talladega";
+fi
+
+pushd $OLYMPIAJAVA/lynx/Debug
+
+grep NoFileIndexing $device.bat
+if [ "$?" = "1" ] ; then
+    cat $device.bat | sed -e 's/fledge\.exe/fledge\.exe \/app\-param\=NoFileIndexing/' > $device-2.bat
+    mv $device-2.bat $device.bat
+fi
+
+cmd.exe //c $device.bat
+popd

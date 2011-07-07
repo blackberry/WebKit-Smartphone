@@ -1,0 +1,81 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderTable {TABLE} at (0,0) size 391x200 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 389x198
+          RenderTableRow {TR} at (0,2) size 389x46
+            RenderTableCell {TD} at (2,14) size 385x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 377x18
+                text run at (2,2) width 377: "This is the first cell in a 200 pixel high table."
+          RenderTableRow {TR} at (0,50) size 389x97
+            RenderTableCell {TD} at (2,87) size 385x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 239x18
+                text run at (2,2) width 239: "This is the second cell, with "
+              RenderInline {B} at (0,0) size 34x18
+                RenderText {#text} at (241,2) size 34x18
+                  text run at (241,2) width 34: "cell"
+              RenderText {#text} at (275,2) size 108x18
+                text run at (275,2) width 108: " height 50%."
+          RenderTableRow {TR} at (0,149) size 389x47
+            RenderTableCell {TD} at (2,161) size 385x22 [border: (1px inset #808080)] [r=2 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 173x18
+                text run at (2,2) width 173: "This is the third cell."
+      RenderTable {TABLE} at (0,200) size 391x76 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 389x74
+          RenderTableRow {TR} at (0,2) size 389x22
+            RenderTableCell {TD} at (2,2) size 385x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 365x18
+                text run at (2,2) width 365: "This is the first cell in an auto-height table."
+          RenderTableRow {TR} at (0,26) size 389x22
+            RenderTableCell {TD} at (2,26) size 385x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 239x18
+                text run at (2,2) width 239: "This is the second cell, with "
+              RenderInline {B} at (0,0) size 34x18
+                RenderText {#text} at (241,2) size 34x18
+                  text run at (241,2) width 34: "cell"
+              RenderText {#text} at (275,2) size 108x18
+                text run at (275,2) width 108: " height 50%."
+          RenderTableRow {TR} at (0,50) size 389x22
+            RenderTableCell {TD} at (2,50) size 385x22 [border: (1px inset #808080)] [r=2 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 173x18
+                text run at (2,2) width 173: "This is the third cell."
+      RenderTable {TABLE} at (0,276) size 393x200 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 391x198
+          RenderTableRow {TR} at (0,2) size 391x46
+            RenderTableCell {TD} at (2,14) size 387x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 377x18
+                text run at (2,2) width 377: "This is the first cell in a 200 pixel high table."
+          RenderTableRow {TR} at (0,50) size 391x97
+            RenderTableCell {TD} at (2,87) size 387x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 239x18
+                text run at (2,2) width 239: "This is the second cell, with "
+              RenderInline {B} at (0,0) size 36x18
+                RenderText {#text} at (241,2) size 36x18
+                  text run at (241,2) width 36: "row"
+              RenderText {#text} at (277,2) size 108x18
+                text run at (277,2) width 108: " height 50%."
+          RenderTableRow {TR} at (0,149) size 391x47
+            RenderTableCell {TD} at (2,161) size 387x22 [border: (1px inset #808080)] [r=2 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 173x18
+                text run at (2,2) width 173: "This is the third cell."
+      RenderTable {TABLE} at (0,476) size 393x76 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 391x74
+          RenderTableRow {TR} at (0,2) size 391x22
+            RenderTableCell {TD} at (2,2) size 387x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 365x18
+                text run at (2,2) width 365: "This is the first cell in an auto-height table."
+          RenderTableRow {TR} at (0,26) size 391x22
+            RenderTableCell {TD} at (2,26) size 387x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 239x18
+                text run at (2,2) width 239: "This is the second cell, with "
+              RenderInline {B} at (0,0) size 36x18
+                RenderText {#text} at (241,2) size 36x18
+                  text run at (241,2) width 36: "row"
+              RenderText {#text} at (277,2) size 108x18
+                text run at (277,2) width 108: " height 50%."
+          RenderTableRow {TR} at (0,50) size 391x22
+            RenderTableCell {TD} at (2,50) size 387x22 [border: (1px inset #808080)] [r=2 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 173x18
+                text run at (2,2) width 173: "This is the third cell."

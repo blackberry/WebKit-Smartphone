@@ -1,0 +1,7 @@
+#!/bin/bash
+
+validate_OSDIR
+validate_TIDDIR
+
+ob-player-direct
+

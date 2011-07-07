@@ -1,0 +1,19 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock (anonymous) at (0,0) size 784x36
+        RenderText {#text} at (0,0) size 672x36
+          text run at (0,0) width 672: "The TD tag uses the ALIGN attribute. The contents in the first TD tag (Netscape"
+          text run at (0,18) width 352: "Communicator) should be aligned center."
+      RenderTable {TABLE} at (0,36) size 360x52 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 358x50
+          RenderTableRow {TR} at (0,2) size 358x22
+            RenderTableCell {TD} at (2,2) size 354x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (72,2) size 210x18
+                text run at (72,2) width 210: "Netscape Communicator"
+          RenderTableRow {TR} at (0,26) size 358x22
+            RenderTableCell {TD} at (2,26) size 354x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 350x18
+                text run at (2,2) width 350: "Available on the Mac/PC/UNIX platforms !"

@@ -1,0 +1,43 @@
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="resources/elements-panel-styles.css">
+<script src="../http/tests/inspector/inspector-test.js"></script>
+<script src="elements-tests.js"></script>
+<script>
+
+function doit()
+{
+    function callback(result)
+    {
+        dumpArray(result);
+        notifyDone();
+    }
+    evaluateInWebInspector("frontend_dumpStyles", callback);
+}
+
+// Frontend functions.
+
+function frontend_dumpStyles(testController)
+{
+    testController.waitUntilDone();
+    frontend_expandDOMSubtreeAndRun(testController, null, frontend_selectElementContinuation);
+}
+
+function frontend_selectElementContinuation(testController)
+{
+    frontend_selectElementAndRun(testController, "foo", frontend_dumpSelectedElementStyles);
+}
+</script>
+</head>
+
+<body onload="onload()">
+<p>
+Tests that elements panel shows proper styles in the sidebar panel.
+</p>
+
+<div id="container">
+    <div id="foo" class="foo" style="display:none">Foo</div>
+</div>
+
+</body>
+</html>

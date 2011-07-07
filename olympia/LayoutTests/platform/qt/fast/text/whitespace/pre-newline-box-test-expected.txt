@@ -1,0 +1,12 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x578
+      RenderBlock {PRE} at (0,0) size 784x182
+        RenderText {#text} at (0,55) size 27x19
+          text run at (0,55) width 27: "One"
+        RenderInline {SPAN} at (0,0) size 136x182
+          RenderText {#text} at (27,0) size 136x182
+            text run at (27,0) width 0: " "
+            text run at (0,91) width 136: "Two"

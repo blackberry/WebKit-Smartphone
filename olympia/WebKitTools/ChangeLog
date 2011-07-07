@@ -1,0 +1,550 @@
+2010-06-07  Nikolas Zimmermann  <nzimmermann@rim.com>
+
+        Reviewed by Sam Weinig.
+
+        Add CPP bindings generator
+        https://bugs.webkit.org/show_bug.cgi?id=38279
+
+        Integrate CPP bindings in run-bindings-tests.
+
+        * Scripts/run-bindings-tests:
+
+2010-06-01  Martin Robinson  <mrobinson@igalia.com>
+
+        Reviewed by Xan Lopez.
+
+        [GTK] Double clicks cause three button press events
+        https://bugs.webkit.org/show_bug.cgi?id=38853
+
+        WebKit now filters the extra GDK_BUTTON_PRESS before GDK_2BUTTON_PRESS
+        and GDK_3BUTTON_PRESS via gdk_event_peek(). Since EventSender bypasses
+        the GDK event queue entirely, we simply do not send the extra event.
+
+        * DumpRenderTree/gtk/EventSender.cpp:
+        (mouseDownCallback): Do not send extra event. Send GDK_3BUTTON_PRESS appropriately.
+        (dispatchEvent): Properly handle GDK_3BUTTON_PRESS.
+
+2010-06-01  Martin Robinson  <mrobinson@igalia.com>
+
+        Not reviewed. Build fix.
+
+        Fix GTK+ build caused by a bad merge.
+
+        * DumpRenderTree/gtk/EventSender.cpp: 
+        (prepareMouseButtonEvent): Use the GdkEvent union as a pointer here.
+
+2010-06-01  Martin Robinson  <mrobinson@webkit.org>
+
+        Reviewed by Xan Lopez.
+
+        [GTK] Double clicks cause three button press events
+        https://bugs.webkit.org/show_bug.cgi?id=38853
+
+        Small EventSender cleanups. Consolidate some common code. Style fixes.
+
+        * DumpRenderTree/gtk/EventSender.cpp:
+        (prepareMouseButtonEvent): Added.
+        (contextClickCallback): Use prepareMouseButtonEvent.
+        (mouseDownCallback): Use prepareMouseButtonEvent.
+        (mouseUpCallback): Use prepareMouseButtonEvent.
+        (mouseMoveToCallback): Small style fix.
+
+2010-06-01  Martin Robinson  <mrobinson@igalia.com>
+
+        Reviewed by Xan Lopez.
+
+        [GTK] Double clicks cause three button press events
+        https://bugs.webkit.org/show_bug.cgi?id=38853
+
+        Add rudimentary leapForward support to the GTK+ DRT. leapForward allows a test
+        to pause for a specified amount of time. It is used in the processing of drag-
+        -and-drop data as well as to separate distinct mouse double-clicks in some tests.
+        This patch enables tests that rely on the latter behavior to pass.
+
+        * DumpRenderTree/gtk/DumpRenderTree.cpp:
+        (webViewWindowObjectCleared): Only initialize the EventSender when loading the top frame.
+        * DumpRenderTree/gtk/EventSender.cpp:
+        (leapForwardCallback): Add support for adjusting the time offset on leapForward().
+        (contextClickCallback): Use sendOrQueueEvent.
+        (updateClickCount): Take the time offset into account when counting clicks.
+        (mouseDownCallback): Use sendOrQueueEvent.
+        (getStateFlags): Change down/currentEventButton into buttonCurrentlyDown/lastClickButton.
+        (mouseUpCallback): Use sendOrQueueEvent.
+        (mouseMoveToCallback): Ditto.
+        (mouseWheelToCallback): Ditto.
+        (sendOrQueueEvent): Added.
+        (dispatchEvent): Added.
+        (replaySavedEvents): Pause when an event has a delay and defer to dispatchEvent.
+        (makeEventSender): Only initialize the EventSender when loading the top frame.
+        * DumpRenderTree/gtk/EventSender.h: Ditto.
+
+2010-06-01  Martin Robinson  <mrobinson@igalia.com>
+
+        Reviewed by Xan Lopez.
+
+        [GTK] css1/color_and_background/background_attachment.html fails on the 32-bit debug bot
+        https://bugs.webkit.org/show_bug.cgi?id=39101
+
+        Work around timing issues for render tree dumps by pumping the
+        main loop before doing the dump. Resize events are asynchronous
+        in GTK+, so sometimes resize requests are still pending when DRT
+        dumps the tree.
+
+        * DumpRenderTree/gtk/DumpRenderTree.cpp:
+        (dump): Pump the main loop before dumping the render tree.
+
+2010-05-31  Kent Tamura  <tkent@chromium.org>
+
+        Reviewed by Dimitri Glazkov.
+
+        [DRT/Chromium] Fix crash of a test after another test with multiple windows
+        https://bugs.webkit.org/show_bug.cgi?id=39942
+
+        If a test opens multiple windows, focuses on non-main window, and
+        the focused window is closed, TestShell::m_focusedWidget points a
+        deleted object.
+
+        * DumpRenderTree/chromium/TestShell.cpp:
+        (TestShell::closeWindow): Clear m_focusedWidget.
+
+2010-05-30  Kent Tamura  <tkent@chromium.org>
+
+        Reviewed by Dimitri Glazkov.
+
+        new-run-webkit-tests: Support DRT on Chromium-win
+        https://bugs.webkit.org/show_bug.cgi?id=39810
+
+        Add --test-shell flag to DRT/Chromium, and it changes DRT so that
+        it behaves like test_shell about command analysis, printing
+        format, pixel dumping, and timeout handling.
+
+        chromium.py and chromium_win.py supports the --test-shell flag and
+        DRT/Chromium-win binary names.
+        
+        * DumpRenderTree/DumpRenderTree.gypi: Add new files.
+        * DumpRenderTree/chromium/DumpRenderTree.cpp:
+        (runTest): Support for test_shell-style command.
+        (main): Introduce --test-shell.
+        * DumpRenderTree/chromium/TestEventPrinter.cpp: Added.
+        * DumpRenderTree/chromium/TestEventPrinter.h: Added.
+          TestEventPrinter class manages stdio output and image output.
+          TestEventPrinter.cpp has two implementations; DRTPrinter and
+          TestShellPrinter.
+        * DumpRenderTree/chromium/TestShell.cpp:
+          Some changes for TestEventPrinter.
+        (TestShell::TestShell):
+        (TestShell::runFileTest):
+        (TestShell::testTimedOut):
+        (TestShell::dump):
+        (TestShell::dumpImage):
+        * DumpRenderTree/chromium/TestShell.h:
+        (TestShell::printer):
+        (TestShell::layoutTestTimeout):
+        (TestShell::layoutTestTimeoutForWatchDog):
+        (TestShell::setLayoutTestTimeout):
+        * DumpRenderTree/chromium/TestShellWin.cpp:
+        (watchDogThread): Use TestShell::layoutTestTimeoutForWatchDog().
+        * Scripts/webkitpy/layout_tests/port/chromium.py:
+        * Scripts/webkitpy/layout_tests/port/chromium_win.py:
+
+2010-05-30  Robert Hogan  <robert@webkit.org>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        [Qt] Enhance Qt DRT implementation to support platform scroll wheel events.
+
+        https://bugs.webkit.org/show_bug.cgi?id=36004
+
+        * DumpRenderTree/qt/EventSenderQt.cpp:
+        (EventSender::EventSender): QApplication::setWheelScrollLines(2) in order to match
+                                    Scrollbar::pixelsPerLineStep() for DRT testing.
+        (EventSender::mouseScrollBy): Added
+        (EventSender::continuousMouseScrollBy): Added
+        * DumpRenderTree/qt/EventSenderQt.h:
+
+2010-05-28  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by David Levin.
+
+        webkit-patch should support CHANGE_LOG_EDIT_APPLICATION
+        https://bugs.webkit.org/show_bug.cgi?id=39546
+
+        One sublty is that we want to wait for the user to finish editing the
+        ChangeLog before moving on to the next step.  That means we want to pass
+        -W to open.  However, if the user is using Xcode to edit the ChangeLog,
+        we don't want them to have to exit the Xcode application.  For this reason,
+        we create a new instance of the application with -n.
+        
+        Overall, xed seems like a better solution, so we recommend that too.
+
+        * Scripts/webkitpy/common/system/user.py:
+        * Scripts/webkitpy/tool/mocktool.py:
+        * Scripts/webkitpy/tool/steps/editchangelog.py:
+
+2010-05-21  Dirk Pranke  <dpranke@chromium.org>
+
+        Reviewed by Ojan Vafai.
+
+        new-run-webkit-tests: fix handling of Ctrl-C to exit even if some
+        threads are wedged. Also, the script will print the results of the
+        tests completed when the interrupt occurs.
+
+        https://bugs.webkit.org/show_bug.cgi?id=33238
+
+        * Scripts/webkitpy/layout_tests/layout_package/dump_render_tree_thread.py:
+        * Scripts/webkitpy/layout_tests/layout_package/printing.py:
+        * Scripts/webkitpy/layout_tests/layout_package/printing_unittest.py:
+        * Scripts/webkitpy/layout_tests/run_webkit_tests.py:
+
+2010-05-28  Darin Adler  <darin@apple.com>
+
+        Ignore more Python messiness.
+
+        * Scripts/webkitpy/layout_tests/data/platform/test: Added property svn:ignore.
+        * Scripts/webkitpy/layout_tests/layout_package: Added property svn:ignore.
+        * Scripts/webkitpy/layout_tests/test_types: Added property svn:ignore.
+        * Scripts/webkitpy/test: Added property svn:ignore.
+        * Scripts/webkitpy/thirdparty/simplejson: Added property svn:ignore.
+
+2010-05-28  Chris Fleizach  <cfleizach@apple.com>
+
+        Reviewed by Beth Dakin.
+
+        Adding myself as a reviewer.
+
+        * Scripts/webkitpy/common/config/committers.py:
+
+2010-05-28  Chris Fleizach  <cfleizach@apple.com>
+
+        Build fix. No review.
+
+        AX: need to catch NSAccessibilityExceptions in DRT
+        https://bugs.webkit.org/show_bug.cgi?id=39881
+
+        It looks like Tiger doesn't like seeing a NSMakeRange inside a @try.
+
+        * DumpRenderTree/mac/AccessibilityUIElementMac.mm:
+        (AccessibilityUIElement::rowIndexRange):
+        (AccessibilityUIElement::columnIndexRange):
+        (AccessibilityUIElement::selectedTextRange):
+
+2010-05-28  Chris Fleizach  <cfleizach@apple.com>
+
+        Reviewed by Darin Adler.
+
+        AX: need to catch NSAccessibilityExceptions in DRT
+        https://bugs.webkit.org/show_bug.cgi?id=39881
+
+        Normally, accessibility exceptions are caught in the AX Runtime on the Mac, but 
+        because DRT is its own AX client, no one is there to catch these otherwise innocuous exceptions.
+  
+        So DRT should wrap exception handlers around its AX related calls.
+
+        * DumpRenderTree/mac/AccessibilityUIElementMac.mm:
+        (attributesOfElement):
+        (AccessibilityUIElement::getLinkedUIElements):
+        (AccessibilityUIElement::getDocumentLinks):
+        (AccessibilityUIElement::getChildren):
+        (AccessibilityUIElement::getChildrenWithRange):
+        (AccessibilityUIElement::ariaOwnsElementAtIndex):
+        (AccessibilityUIElement::ariaFlowToElementAtIndex):
+        (AccessibilityUIElement::disclosedRowAtIndex):
+        (AccessibilityUIElement::selectedRowAtIndex):
+        (AccessibilityUIElement::titleUIElement):
+        (AccessibilityUIElement::parentElement):
+        (AccessibilityUIElement::disclosedByRow):
+        (AccessibilityUIElement::stringAttributeValue):
+        (AccessibilityUIElement::boolAttributeValue):
+        (AccessibilityUIElement::isAttributeSettable):
+        (AccessibilityUIElement::isAttributeSupported):
+        (AccessibilityUIElement::role):
+        (AccessibilityUIElement::subrole):
+        (AccessibilityUIElement::roleDescription):
+        (AccessibilityUIElement::title):
+        (AccessibilityUIElement::description):
+        (AccessibilityUIElement::orientation):
+        (AccessibilityUIElement::stringValue):
+        (AccessibilityUIElement::language):
+        (AccessibilityUIElement::helpText):
+        (AccessibilityUIElement::x):
+        (AccessibilityUIElement::y):
+        (AccessibilityUIElement::width):
+        (AccessibilityUIElement::height):
+        (AccessibilityUIElement::clickPointX):
+        (AccessibilityUIElement::clickPointY):
+        (AccessibilityUIElement::intValue):
+        (AccessibilityUIElement::minValue):
+        (AccessibilityUIElement::maxValue):
+        (AccessibilityUIElement::valueDescription):
+        (AccessibilityUIElement::insertionPointLineNumber):
+        (AccessibilityUIElement::isActionSupported):
+        (AccessibilityUIElement::isEnabled):
+        (AccessibilityUIElement::isRequired):
+        (AccessibilityUIElement::isSelected):
+        (AccessibilityUIElement::isExpanded):
+        (AccessibilityUIElement::hierarchicalLevel):
+        (AccessibilityUIElement::ariaIsGrabbed):
+        (AccessibilityUIElement::ariaDropEffects):
+        (AccessibilityUIElement::lineForIndex):
+        (AccessibilityUIElement::boundsForRange):
+        (AccessibilityUIElement::stringForRange):
+        (AccessibilityUIElement::attributesOfColumnHeaders):
+        (AccessibilityUIElement::attributesOfRowHeaders):
+        (AccessibilityUIElement::attributesOfColumns):
+        (AccessibilityUIElement::attributesOfRows):
+        (AccessibilityUIElement::attributesOfVisibleCells):
+        (AccessibilityUIElement::attributesOfHeader):
+        (AccessibilityUIElement::rowCount):
+        (AccessibilityUIElement::columnCount):
+        (AccessibilityUIElement::indexInTable):
+        (AccessibilityUIElement::rowIndexRange):
+        (AccessibilityUIElement::columnIndexRange):
+        (AccessibilityUIElement::cellForColumnAndRow):
+        (AccessibilityUIElement::selectedTextRange):
+        (AccessibilityUIElement::setSelectedTextRange):
+        (AccessibilityUIElement::increment):
+        (AccessibilityUIElement::decrement):
+        (AccessibilityUIElement::showMenu):
+        (AccessibilityUIElement::press):
+        (AccessibilityUIElement::url):
+        (AccessibilityUIElement::hasPopup):
+
+2010-05-28  Yael Aharon  <yael.aharon@nokia.com>
+
+        Reviewed by Laszlo Gombos.
+
+        [Qt] Pass all web notification layout tests
+        https://bugs.webkit.org/show_bug.cgi?id=39146
+
+        Mimic Chromium's test_shell security model in Qt's DRT.
+        It makes a list of origins which were granted permission to display
+        notifications, and only those origins can display notifications.
+
+        * DumpRenderTree/qt/DumpRenderTreeQt.cpp:
+        (WebCore::checkPermissionCallback):
+        (WebCore::requestPermissionCallback):
+        (WebCore::WebPage::WebPage):
+        (WebCore::DumpRenderTree::checkPermission):
+        (WebCore::DumpRenderTree::requestPermission):
+        * DumpRenderTree/qt/DumpRenderTreeQt.h:
+        * DumpRenderTree/qt/LayoutTestControllerQt.cpp:
+        (LayoutTestController::reset):
+        (LayoutTestController::grantDesktopNotificationPermission):
+        (LayoutTestController::checkDesktopNotificationPermission):
+        * DumpRenderTree/qt/LayoutTestControllerQt.h:
+
+2010-05-27  Philippe Normand  <pnormand@igalia.com>
+
+        Reviewed by Shinichiro Hamaji.
+
+        check-webkit-style complains about use of NULL in GTK function calls that require sentinels
+        https://bugs.webkit.org/show_bug.cgi?id=39372
+
+        Don't warn about NULL in g_*() calls. Zero can't be used instead
+        for calls like g_build_filename and g_object_get/set.
+
+        * Scripts/webkitpy/style/checkers/cpp.py:
+        * Scripts/webkitpy/style/checkers/cpp_unittest.py:
+
+2010-05-27  Luiz Agostini  <luiz.agostini@openbossa.org>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        [Qt] Platform plugin example
+        https://bugs.webkit.org/show_bug.cgi?id=39489
+
+        Exempting directory WebKit/qt/examples/ from style guide.
+
+        * Scripts/webkitpy/style/checker.py:
+
+2010-05-26  Philippe Normand  <pnormand@igalia.com>
+
+        Reviewed by David Levin.
+
+        [style] Allow usage of NULL in gst_*_many()
+        https://bugs.webkit.org/show_bug.cgi?id=39740
+
+        Don't warn if NULL is used by gst_*_many() functions. Zero can't
+        be used for the reason explained in Bug 32858.
+
+        * Scripts/webkitpy/style/checkers/cpp.py:
+        * Scripts/webkitpy/style/checkers/cpp_unittest.py:
+
+2010-05-27  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Eric Seidel.
+
+        Update script to run the normal version of the parser tests.
+
+        * Scripts/test-html5-parser:
+
+2010-05-27  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Eric Seidel.
+
+        Add HTML5 parser support to run-webkit-tests
+        https://bugs.webkit.org/show_bug.cgi?id=39815
+
+        * Scripts/old-run-webkit-tests:
+
+2010-05-26  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Eric Seidel.
+
+        Make HTML5 lexer not ASSERT when resuming partial parses
+        https://bugs.webkit.org/show_bug.cgi?id=39755
+
+        Add webkit-resumer.html to the HTML5 parser test suite.
+
+        * Scripts/test-html5-parser:
+
+2010-05-24  Tony Chang  <tony@chromium.org>
+
+        Reviewed by Kent Tamura.
+
+        [chromium] setup fonts on chromium linux DRT
+        https://bugs.webkit.org/show_bug.cgi?id=39644
+
+        * DumpRenderTree/chromium/TestShellGtk.cpp:
+        (setupFontconfig):
+        (platformInit):
+        * DumpRenderTree/chromium/WebViewHost.cpp:
+        (WebViewHost::paintRect):  Fix a bug where in release builds, we didn't initialize m_canvas.
+        * DumpRenderTree/chromium/fonts.conf: Added.
+
+2010-05-24  Dirk Pranke  <dpranke@chromium.org>
+
+        Reviewed by Dimitri Glazkov.
+
+        Re-commit r58765 - it had been rolled out to see if it was causing
+        a perf regression (in r59787 and r59789), but that does not seem to
+        have been the case.
+
+        https://bugs.webkit.org/show_bug.cgi?id=39605
+
+        * DumpRenderTree/chromium/NotificationPresenter.cpp:
+        (NotificationPresenter::show):
+
+2010-05-25  Ojan Vafai  <ojan@chromium.org>
+
+        Reviewed by Chris Jerdonek.
+
+        remove suppression of rietveld logging
+        https://bugs.webkit.org/show_bug.cgi?id=39693
+
+        Now that we only upload to rietveld explicitly, e.g. on the bot
+        or via webkit-patch post-attachment-to-rietveld, we should print
+        all the rietveld logging. It was suppressed before to avoid making
+        webkit-patch upload too noisy.
+
+        * Scripts/webkitpy/common/net/rietveld.py:
+
+2010-05-25  Antonio Gomes  <tonikitoo@webkit.org>
+
+        Reviewed by Ojan Vafai.
+
+        [Qt] Expose the editing behavior setting in DRT to test all editing code paths
+        https://bugs.webkit.org/show_bug.cgi?id=39680
+
+        Implement LayoutTestController::setEditingBehavior in Qt's DRT.
+
+        * DumpRenderTree/qt/DumpRenderTreeQt.cpp:
+        (WebCore::DumpRenderTree::resetToConsistentStateBeforeTesting):
+        * DumpRenderTree/qt/LayoutTestControllerQt.cpp:
+        (LayoutTestController::setEditingBehavior):
+
+2010-05-25  Kevin Ollivier  <kevino@theolliviers.com>
+
+        [wx] Build fix after API change and addition of WebCore/platform/text/transcoder dir. 
+
+        * DumpRenderTree/wx/LayoutTestControllerWx.cpp:
+        (LayoutTestController::setEditingBehavior):
+        * wx/build/settings.py:
+
+2010-05-24  Antonio Gomes  <tonikitoo@webkit.org>
+
+        Reviewed by Eric Seidel and Kent Tamura (for the Chromium part).
+
+        editingBehavior settings needs to be set back to a reasonable default between tests
+        https://bugs.webkit.org/show_bug.cgi?id=39433
+
+        Similarly to r59861, hard code the default setting during reset for Gtk and Chromium,
+        so that the serialized version of the setting stays in sync with expectations.
+
+        * DumpRenderTree/chromium/TestShell.cpp:
+        (TestShell::resetWebSettings):
+        * DumpRenderTree/gtk/DumpRenderTree.cpp:
+        (resetDefaultsToConsistentValues):
+
+2010-05-24  Eric Seidel  <eric@webkit.org>
+
+        Reviewed by Adam Barth.
+
+        webkit-patch land calls scm.changed_files 4 times!
+        https://bugs.webkit.org/show_bug.cgi?id=39584
+
+        * Scripts/webkitpy/tool/commands/download_unittest.py:
+         - Assert that we don't call modified_changelogs too often.
+        * Scripts/webkitpy/tool/steps/updatechangelogswithreviewer.py:
+         - Use cached changelogs list instead of calling modified_changelogs directly.
+        * Scripts/webkitpy/tool/steps/validatereviewer.py:
+         - ditto.
+
+2010-05-24  Kent Tamura  <tkent@chromium.org>
+
+        Reviewed by Dimitri Glazkov.
+
+        [DRT/Chromium] Import layout_test_helper for Windows
+        https://bugs.webkit.org/show_bug.cgi?id=39581
+
+        Import Chromium win/layout_test_helper.cc as LayoutTestHelperWin.cpp.
+        http://src.chromium.org/viewvc/chrome/trunk/src/webkit/tools/test_shell/win/layout_test_helper.cc
+
+        * DumpRenderTree/chromium/LayoutTestHelperWin.cpp: Added.
+
+2010-05-24  Kent Tamura  <tkent@chromium.org>
+
+        Reviewed by Dimitri Glazkov.
+
+        [DRT/Chromium] Reset frame name
+        https://bugs.webkit.org/show_bug.cgi?id=39586
+
+        This change fixes about 70 unexpected results.
+
+        * DumpRenderTree/chromium/WebViewHost.cpp:
+        (WebViewHost::reset):
+
+2010-05-24  Marcus Bulach  <bulach@chromium.org>
+
+        Reviewed by Kent Tamura.
+
+        [chromium] Adds WebGeolocationServiceMockImpl to remove public dependency on wtf/HashMap.h
+        https://bugs.webkit.org/show_bug.cgi?id=39587
+
+        * DumpRenderTree/chromium/WebViewHost.cpp:
+        (WebViewHost::geolocationService):
+
+2010-05-24  Robert Hogan  <robert@webkit.org>
+
+        Reviewed by Laszlo Gombos.
+
+        [Qt] DRT Support for removeOriginAccessWhitelistEntry
+
+        Unskips http/tests/xmlhttprequest/origin-whitelisting-removal.html
+
+        [Qt] DRT Support for removeOriginAccessWhitelistEntry
+        https://bugs.webkit.org/show_bug.cgi?id=39565
+
+        * DumpRenderTree/qt/LayoutTestControllerQt.cpp:
+        (LayoutTestController::removeOriginAccessWhitelistEntry):
+
+2010-05-24  Marcus Bulach  <bulach@google.com>
+
+        Reviewed by Ojan Vafai.
+
+        _svn_branch_has_extra_commits needs to check for ^HEAD instead of ^head.
+        https://bugs.webkit.org/show_bug.cgi?id=39603
+
+        * Scripts/webkitpy/common/checkout/scm.py:
+
+== Rolled over to ChangeLog-2010-05-24 ==

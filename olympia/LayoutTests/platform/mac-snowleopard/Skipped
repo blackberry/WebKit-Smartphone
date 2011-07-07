@@ -1,0 +1,139 @@
+# <rdar://problem/7091352> Some plug-in tests show missing NPP_Destroy call
+plugins/netscape-destroy-plugin-script-objects.html
+plugins/open-and-close-window-with-plugin.html
+plugins/geturlnotify-during-document-teardown.html
+
+# These tests fail on the SnowLeopard bot from time to time (https://bugs.webkit.org/show_bug.cgi?id=32229)
+plugins/document-open.html
+plugins/mouse-events.html
+
+# These need a newer version of Safari.
+plugins/private-browsing-mode.html
+plugins/private-browsing-mode-2.html
+plugins/netscape-plugin-property-access-exception.html
+plugins/netscape-throw-exception.html
+plugins/netscape-dom-access.html
+plugins/netscape-browser-object-identity.html
+plugins/destroy-plugin-from-callback.html
+# Intermittent failures, requiring a newer version of Safari:
+# https://bugs.webkit.org/show_bug.cgi?id=36462
+plugins/keyboard-events.html
+plugins/mouse-events-fixedpos.html
+plugins/netscape-construct.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=30528 - test started failing
+# immediately on Snow Leopard due to the expected exception not being
+# thrown
+plugins/netscape-invoke-failure.html
+
+# Radar bugs needed for these
+fast/canvas/set-colors.html
+svg/W3C-SVG-1.1/coords-viewattr-02-b.svg
+svg/W3C-SVG-1.1/render-elems-03-t.svg
+svg/batik/paints/patternRegionA.svg
+svg/custom/path-bad-data.svg
+svg/custom/pattern-deep-referencing.svg
+svg/custom/preserve-aspect-ratio-syntax.svg
+svg/custom/viewbox-syntax.svg
+svg/hixie/perf/007.xml
+svg/transforms/text-with-pattern-inside-transformed-html.xhtml
+svg/transforms/text-with-pattern-with-svg-transform.svg
+
+# https://bugs.webkit.org/show_bug.cgi?id=35012 (SVG entity parsing broken on SnowLeopard/Windows)
+svg/W3C-SVG-1.1/coords-viewattr-01-b.svg
+svg/zoom/page/zoom-coords-viewattr-01-b.svg
+svg/zoom/text/zoom-coords-viewattr-01-b.svg
+
+# Disable media tests that depend on controller size/position until
+# <rdar://problem/6502936> Update run-webkit-tests to deal with new media controller look
+# has been fixed
+media/audio-delete-while-slider-thumb-clicked.html
+media/audio-delete-while-step-button-clicked.html
+media/controls-strict.html
+media/video-controls-rendering.html
+media/video-controls-transformed.html
+media/video-controls-visible-audio-only.html
+media/video-controls-zoomed.html
+media/video-display-toggle.html
+
+#<rdar://problem/7135864> - Intermittent failure
+fast/dom/frame-loading-via-document-write.html
+
+#<rdar://problem/7144385> - media/controls-drag-timebar.html fails
+media/controls-drag-timebar.html
+
+#<rdar://problem/7144583> - Intermittent failure
+svg/css/glyph-orientation-rounding-test.xhtml
+
+# This test requires ogg codecs
+media/media-can-play-ogg.html
+
+# Media tests that keep failing on SnowLeopard for a while
+# https://bugs.webkit.org/show_bug.cgi?id=32270
+http/tests/media/video-play-stall-seek.html
+http/tests/media/video-play-stall.html
+http/tests/media/video-seekable-stall.html
+media/media-fullscreen-not-in-document.html
+media/unsupported-rtsp.html
+media/video-no-audio.html
+media/video-size-intrinsic-scale.html
+media/video-source-error.html
+
+# These are occasionally timing out on SnowLeopard
+# https://bugs.webkit.org/show_bug.cgi?id=32339
+media/unsupported-tracks.html
+# https://bugs.webkit.org/show_bug.cgi?id=33434
+media/video-error-does-not-exist.html
+
+#  Test times out due to CoreGraphics bug
+# <rdar://problem/7499927>
+fast/images/size-failure.html
+
+# FIXME: The result of this test appears to be affected by other tests, so skip it for now.
+# See https://bugs.webkit.org/show_bug.cgi?id=33372
+platform/mac/editing/input/devanagari-ligature.html
+
+# Occasionally fails on bot for unknown reasons, unclear when it started.
+# https://bugs.webkit.org/show_bug.cgi?id=33742
+http/tests/xmlhttprequest/cross-origin-cookie-storage.html
+
+# Fails on Mac
+# https://bugs.webkit.org/show_bug.cgi?id=34331
+http/tests/media/video-referer.html
+
+# Timeout - https://bugs.webkit.org/show_bug.cgi?id=32270
+media/video-load-networkState.html
+
+# Fails on Mac
+# https://bugs.webkit.org/show_bug.cgi?id=34933
+media/video-display-aspect-ratio.html
+
+# Flakey on Snow Leopard Debug builds, skip it until it can be made non-flakey:
+# https://bugs.webkit.org/show_bug.cgi?id=33543
+fast/forms/search-event-delay.html
+
+# Color bitmap fonts not supported on Snow Leopard
+platform/mac/fonts/color-bitmap.html
+
+# Snow Leopard bot does not support EXT_packed_depth_stencil, which is required by WebGL.
+# https://bugs.webkit.org/show_bug.cgi?id=36925
+fast/canvas/webgl/framebuffer-object-attachment.html
+
+# This test asserts: https://bugs.webkit.org/show_bug.cgi?id=37932
+transitions/transition-end-event-destroy-iframe.html
+
+# These tests fail in 64 bit
+# https://bugs.webkit.org/show_bug.cgi?id=38356
+fast/js/sputnik/Conformance/11_Expressions/11.5_Multiplicative_Operators/11.5.3_Applying_the_percent_Operator/S11.5.3_A4_T2.html
+fast/js/sputnik/Conformance/15_Native_Objects/15.4_Array/15.4.4/15.4.4.12_Array_prototype_splice/S15.4.4.12_A2.1_T3.html
+
+# Test fails on Snow Leopard in DRT but passes when run manually and passes on Leopard. The test itself might need
+# tweaking to deal with scrolling differences between Leopard and SL. https://bugs.webkit.org/show_bug.cgi?id=38416
+fast/repaint/fixed-move-after-keyboard-scroll.html
+
+# IndexedDB is not yet enabled.
+storage/indexeddb
+
+# Philip's canvas tests that fail on SnowLeopard only
+canvas/philip/tests/2d.gradient.interpolate.overlap.html
+canvas/philip/tests/2d.gradient.interpolate.overlap2.html

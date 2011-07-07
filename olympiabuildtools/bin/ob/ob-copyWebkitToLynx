@@ -1,0 +1,24 @@
+#!/bin/bash
+
+if [ $OLYMPIABUILDCHOICE = "fledge" ] ; then
+
+    if [ "$BUILD_WEBKIT_DYNAMIC_FLEDGE" = "Yes" ]; then
+        PLAYERDLLFILE="$PLAYERINSTALLPREFIX/win32-$OLYMPIABUILDCONFIGL/lib/OlympiaWebKitLEXE.dll"
+        WEBKITDLLFILE="$PLAYERINSTALLPREFIX/win32-$OLYMPIABUILDCONFIGL/lib/OlympiaWebKitLDLL.dll"
+    else
+        PLAYERDLLFILE="$PLAYERINSTALLPREFIX/win32-$OLYMPIABUILDCONFIGL/lib/OlympiaWebKit.dll"
+        WEBKITDLLFILE=""
+    fi
+
+    if [ -f "$PLAYERDLLFILE" ] && ( [ -z "$WEBKITDLLFILE" ] || [ -f "$WEBKITDLLFILE" ]); then
+        if [ ! -f "$OLYMPIAJAVA/lynx/Debug/" ]; then
+            mkdir -p "$OLYMPIAJAVA/lynx/Debug/"
+        fi
+        
+        cp "$PLAYERDLLFILE" "$OLYMPIAJAVA/lynx/Debug/OlympiaWebKit.dll"
+    
+        if ([ ! -z "$WEBKITDLLFILE" ] && [ -f "$WEBKITDLLFILE" ]); then
+            cp "$WEBKITDLLFILE" "$OLYMPIAJAVA/lynx/Debug/"
+        fi
+    fi
+fi

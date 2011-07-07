@@ -1,0 +1,20 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x104
+  RenderBlock {HTML} at (0,0) size 800x104
+    RenderBody {BODY} at (8,8) size 784x88
+      RenderTable {TABLE} at (0,0) size 784x88
+        RenderTableCol {COL} at (0,0) size 0x0
+        RenderTableCol {COL} at (0,0) size 0x0
+        RenderTableCol {COL} at (0,0) size 0x0
+        RenderTableCol {COL} at (0,0) size 0x0
+        RenderTableCol {COL} at (0,0) size 0x0
+        RenderTableSection {TBODY} at (0,0) size 784x88
+          RenderTableRow {TR} at (0,0) size 784x88
+            RenderTableCell {TD} at (0,44) size 26x0 [r=0 c=0 rs=1 cs=1]
+            RenderTableCell {TD} at (26,0) size 758x88 [r=0 c=1 rs=1 cs=2]
+              RenderBlock {P} at (0,17) size 758x54
+                RenderText {#text} at (0,0) size 699x54
+                  text run at (0,0) width 699: "Nach der Pruefung der Daten, (Normalerweise benoetigen wir f\x{FC}r die Pruefung nur"
+                  text run at (0,18) width 690: "wenige Minuten, aber wenn einmal besonders viel los ist, kann es auch ein wenig"
+                  text run at (0,36) width 141: "laenger dauern.)"

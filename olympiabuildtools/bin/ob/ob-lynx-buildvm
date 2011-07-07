@@ -1,0 +1,21 @@
+#!/bin/bash
+
+pushd $OLYMPIAJAVA/lynx
+
+cmd.exe //c build.bat $OLYMPIABUILDCHOICE build_vm
+if [ $OLYMPIABUILDCHOICE = "fledge" ] ;then
+    OBJFILE=$OLYMPIAJAVA/lynx/Debug/JvmFledgeSimulator.dll
+else
+    OBJFILE=$OLYMPIAJAVA/lynx/jvm/arm/ReleaseARM/$SFINAME
+fi
+
+if [ -f $OBJFILE ] ; then
+    RETURNCODE=0
+else
+    RETURNCODE=1
+fi
+
+popd
+
+$(exit $RETURNCODE)
+

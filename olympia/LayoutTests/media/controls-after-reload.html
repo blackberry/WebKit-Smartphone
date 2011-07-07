@@ -1,0 +1,38 @@
+<html>
+<head>
+    <script src=media-file.js></script>
+    <script>
+    var video;
+    var loadedCount = 0;
+
+    if (window.layoutTestController)
+        layoutTestController.waitUntilDone();
+
+    function canplaythrough()
+    {
+        loadedCount++;
+        if (loadedCount == 2) {
+            if (window.layoutTestController)
+                layoutTestController.notifyDone();
+            return;
+        }
+        
+        video.src = findMediaFile("video", "content/test");
+        video.load();
+    }
+
+    function test()
+    {
+        video = document.getElementsByTagName('video')[0];
+        video.addEventListener("canplaythrough", canplaythrough);
+        
+        video.src = findMediaFile("video", "content/counting");
+        video.load();
+    }
+    </script>
+</head>
+<body onload="test()">
+<p>Making sure the controller looks ok after a second load().</p>
+<video controls></video>
+</body>
+</html>

@@ -1,0 +1,45 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {P} at (0,0) size 784x36
+        RenderText {#text} at (0,0) size 776x18
+          text run at (0,0) width 776: "This tests that bidirectional text is correctly rendered when using ATSUI in list box controls."
+        RenderBR {BR} at (776,13) size 0x0
+        RenderText {#text} at (0,18) size 772x18
+          text run at (0,18) width 772: "The order of the text below each list box should match the order of the select's option text."
+      RenderBlock (anonymous) at (0,53) size 784x109
+        RenderText {#text} at (0,0) size 134x18
+          text run at (0,0) width 134: "1) direction: rtl;"
+        RenderBR {BR} at (134,13) size 0x0
+        RenderListBox {SELECT} at (2,20) size 100x87 [bgcolor=#FFFFFF] [border: (1px solid #8B8B8B)]
+        RenderBR {BR} at (104,102) size 0x0
+      RenderBlock {DIV} at (0,162) size 100x18
+        RenderText {#text} at (14,0) size 86x18
+          text run at (14,0) width 56 RTL: "\x{5D0}\x{5E4}\x{5E8}\x{5E1}\x{5DE}\x{5D5}\x{5DF}"
+          text run at (70,0) width 30: "a\x{300}bc"
+      RenderBlock (anonymous) at (0,180) size 784x127
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 134x18
+          text run at (0,18) width 134: "2) direction: ltr;"
+        RenderBR {BR} at (134,31) size 0x0
+        RenderListBox {SELECT} at (2,38) size 100x87 [bgcolor=#FFFFFF] [border: (1px solid #8B8B8B)]
+        RenderBR {BR} at (104,120) size 0x0
+      RenderBlock {DIV} at (0,307) size 100x18
+        RenderText {#text} at (0,0) size 86x18
+          text run at (0,0) width 30: "a\x{300}bc"
+          text run at (30,0) width 56 RTL: "\x{5D0}\x{5E4}\x{5E8}\x{5E1}\x{5DE}\x{5D5}\x{5DF}"
+      RenderBlock (anonymous) at (0,325) size 784x127
+        RenderBR {BR} at (0,0) size 0x18
+        RenderText {#text} at (0,18) size 92x18
+          text run at (0,18) width 92: "3) No style"
+        RenderBR {BR} at (92,31) size 0x0
+        RenderListBox {SELECT} at (2,38) size 100x87 [bgcolor=#FFFFFF] [border: (1px solid #8B8B8B)]
+        RenderBR {BR} at (104,120) size 0x0
+      RenderBlock {DIV} at (0,452) size 100x18
+        RenderText {#text} at (0,0) size 86x18
+          text run at (0,0) width 30: "a\x{300}bc"
+          text run at (30,0) width 56 RTL: "\x{5D0}\x{5E4}\x{5E8}\x{5E1}\x{5DE}\x{5D5}\x{5DF}"
+      RenderBlock (anonymous) at (0,470) size 784x18
+        RenderBR {BR} at (0,0) size 0x18

@@ -1,0 +1,67 @@
+<html>
+<head>
+<meta name="viewport" content="width = device-width, height = device-height">
+<title>RIM Bug #450</title>
+<style>
+#first-page-rectangle {
+    width: 360px;
+    height: 100px /* Explicitly chosen so that the content height of the page is < the meta viewport height. */;
+    background-color: blue;
+}
+#second-page-rectangle {
+    width: 360px;
+    height: 480px /* Explicitly chosen so that the content height of this page is > the content height of page with the first-page-rectangle. */;
+    background-color: red;
+}
+</style>
+<script>
+var firstPageContent;
+var secondPageContent = '<a href="#first-page" id="second-page-link">Click here to return to the previous page.</a><div id="second-page-rectangle"></div>';
+
+function setUp()
+{
+    firstPageContent = document.getElementById("test-container").innerHTML;
+    window.onclick = function(e)
+    {
+        if (e.srcElement && (e.srcElement.id == "first-page-link" || e.srcElement.id == "second-page-link")) {
+            if (e.srcElement.hash === "#first-page")
+                replaceTestContainerContent(firstPageContent);
+            else if (e.srcElement.hash === "#second-page")
+                replaceTestContainerContent(secondPageContent);
+            preventDefaultEventHandling(e);
+        }
+    }
+}
+
+function replaceTestContainerContent(newContent)
+{
+    var testContainer = document.getElementById("test-container");
+    testContainer.innerHTML = newContent;
+}
+
+function preventDefaultEventHandling(e)
+{
+    if (e.preventDefault)
+        e.preventDefault();
+    else {
+        // Assume this script is executing within Internet Explorer.
+        e.returnValue = false;
+    }
+}
+
+window.onload = setUp;
+</script>
+</head>
+<body>
+<div id="test-container">
+    <p>This test can be used to verify that we repaint the entire viewport.</p>
+    <!-- In particular, that we repaint the entire viewport on programmatic content replacement. -->
+    <ol>
+        <li>Open this page in portrait orientation.</li>
+        <li>Click <a id="first-page-link" href="#second-page">this link</a> then follow the instructions on the next screen.</li>
+        <li>On returning to this screen, if you see any red on this screen (or some or all of the contents of the linked screen you visited above) then this test FAILED.</li>
+    </ol>
+    <div id="first-page-rectangle"></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,5 @@
+#!/bin/sh -e
+
+for hook in `ls -1 $GIT_DIR/hooks/commit-msg-*` ; do
+    $hook $1
+done

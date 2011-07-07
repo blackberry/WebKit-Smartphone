@@ -1,0 +1,51 @@
+#!/bin/bash
+
+if [ -z "$OSNDKDIR" ] || [ ! -d "$OSNDKDIR" ] || [ ! -d "$OSNDKDIR/inc" ]; then
+    echo "Invalid or missing OSNDKDIR environment variable."
+    RETURNCODE=1
+    $(exit $RETURNCODE)
+fi
+
+if [ -z "$TIDDIR" ] || [ ! -d "$TIDDIR" ] ; then
+    echo "Invalid or missing TIDDIR environment variable."
+    RETURNCODE=1
+    $(exit $RETURNCODE)
+fi
+
+if [ "$FEATURE_OLYMPIA_DEBUG_MEMORY" = "Yes" ] ; then
+    CONFIGUREFLAGS="$CONFIGUREFLAGS --enable-debug-memory"
+fi
+
+pushd $BBNSLDIR
+
+RETURNCODE=0
+if [ -f $BBNSLBUILDROOT/$CPUNAME-$OLYMPIABUILDCONFIGL/Makefile ] ; then
+    pushd $BBNSLBUILDROOT/$CPUNAME-$OLYMPIABUILDCONFIGL
+    $BBNSLDIR/tools/win32/bin/make
+    let RETURNCODE+=$?
+    $BBNSLDIR/tools/win32/bin/make install
+    let RETURNCODE+=$?
+    popd
+else
+    mkdir -p $BBNSLBUILDROOT
+    pushd $BBNSLBUILDROOT
+    # Change to configure option
+    export LYNXDIR=$OLYMPIAJAVA/lynx
+    ../configure --with-webkit --arch=$CPUNAME --config=$OLYMPIABUILDCONFIGL --prefix=$BBNSLINSTALLPREFIX --nocache-osndk --nocache-tid $CONFIGUREFLAGS
+    let RETURNCODE+=$?
+    pushd $CPUNAME-$OLYMPIABUILDCONFIGL
+    $BBNSLDIR/tools/win32/bin/make
+    let RETURNCODE+=$?
+    $BBNSLDIR/tools/win32/bin/make install
+    let RETURNCODE+=$?
+    popd
+    popd
+fi
+
+popd
+
+if [ $RETURNCODE -ne 0 ] ; then
+    echo "Error:  Build Failure occurred in ob-bbnsl!"
+fi
+
+$(exit $RETURNCODE)

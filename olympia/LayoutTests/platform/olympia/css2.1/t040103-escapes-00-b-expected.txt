@@ -1,0 +1,23 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x157
+  RenderBlock {HTML} at (0,0) size 800x157
+    RenderBody {BODY} at (8,17) size 784x123
+      RenderBlock {P} at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 452x18
+          text run at (0,0) width 452: "The following three paragraphs should look identical:"
+      RenderBlock {P} at (0,35) size 784x18
+        RenderText {#text} at (0,0) size 206x18
+          text run at (0,0) width 206: "This is a test paragraph."
+      RenderBlock {P} at (0,70) size 784x18
+        RenderInline (generated) at (0,0) size 41x18
+          RenderText at (0,0) size 41x18
+            text run at (0,0) width 41: "This "
+        RenderText {#text} at (41,0) size 165x18
+          text run at (41,0) width 165: "is a test paragraph."
+      RenderBlock {P} at (0,105) size 784x18
+        RenderInline (generated) at (0,0) size 41x18
+          RenderText at (0,0) size 41x18
+            text run at (0,0) width 41: "This "
+        RenderText {#text} at (41,0) size 165x18
+          text run at (41,0) width 165: "is a test paragraph."

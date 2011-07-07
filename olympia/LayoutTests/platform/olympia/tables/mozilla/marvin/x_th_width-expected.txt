@@ -1,0 +1,51 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x372
+  RenderBlock {html} at (0,0) size 800x372
+    RenderBody {body} at (8,8) size 784x356
+      RenderTable {table} at (0,0) size 110x100 [border: (1px outset #808080)]
+        RenderTableSection (anonymous) at (1,1) size 108x98
+          RenderTableRow {tr} at (0,2) size 108x94
+            RenderTableCell {th} at (2,2) size 104x94 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,2) size 99x90
+                text run at (4,2) width 96: "The width"
+                text run at (21,20) width 61: "of this"
+                text run at (35,38) width 34: "cell"
+                text run at (5,56) width 94: "should be"
+                text run at (2,74) width 99: "100 pixels"
+      RenderBlock (anonymous) at (0,100) size 784x18
+        RenderBR {br} at (0,0) size 0x18
+      RenderTable {table} at (0,118) size 210x64 [border: (1px outset #808080)]
+        RenderTableSection (anonymous) at (1,1) size 208x62
+          RenderTableRow {tr} at (0,2) size 208x58
+            RenderTableCell {th} at (2,2) size 204x58 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (20,2) size 176x54
+                text run at (20,2) width 163: "The width of this"
+                text run at (14,20) width 176: "cell should be 200"
+                text run at (73,38) width 57: "pixels"
+      RenderBlock (anonymous) at (0,182) size 784x18
+        RenderBR {br} at (0,0) size 0x18
+      RenderTable {table} at (0,200) size 310x46 [border: (1px outset #808080)]
+        RenderTableSection (anonymous) at (1,1) size 308x44
+          RenderTableRow {tr} at (0,2) size 308x40
+            RenderTableCell {th} at (2,2) size 304x40 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (15,2) size 273x36
+                text run at (15,2) width 273: "The width of this cell should"
+                text run at (87,20) width 129: "be 300 pixels"
+      RenderBlock (anonymous) at (0,246) size 784x18
+        RenderBR {br} at (0,0) size 0x18
+      RenderTable {table} at (0,264) size 410x46 [border: (1px outset #808080)]
+        RenderTableSection (anonymous) at (1,1) size 408x44
+          RenderTableRow {tr} at (0,2) size 408x40
+            RenderTableCell {th} at (2,2) size 404x40 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (29,2) size 345x36
+                text run at (29,2) width 345: "The width of this cell should be 400"
+                text run at (173,20) width 57: "pixels"
+      RenderBlock (anonymous) at (0,310) size 784x18
+        RenderBR {br} at (0,0) size 0x18
+      RenderTable {table} at (0,328) size 510x28 [border: (1px outset #808080)]
+        RenderTableSection (anonymous) at (1,1) size 508x26
+          RenderTableRow {tr} at (0,2) size 508x22
+            RenderTableCell {th} at (2,2) size 504x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (48,2) size 408x18
+                text run at (48,2) width 408: "The width of this cell should be 500 pixels"

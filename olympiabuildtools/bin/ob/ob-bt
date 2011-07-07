@@ -1,0 +1,87 @@
+#!/bin/bash
+
+FAIL=1
+
+function _ob_bt_matches()
+{
+    "$OLYMPIATOOLS/bin/coresfi.exe" "$1" "$2" | grep "matches with" > /dev/null
+    if [ "$?" == "0" ] ; then
+        return 0
+    fi
+    return 1
+}
+
+function _ob_bt_match_lexe()
+{
+    _ob_bt_matches "$1" "$2/OlympiaWebKitLEXE-injected.sfi"
+    if [ "$?" == "0" ] ; then
+        "$OLYMPIATOOLS/bin/elfmerge.exe" "$2/OlympiaWebKitLEXE-injected.gdb.lexe" "$2/OlympiaWebKitLDLL.gdb.ldll" /tmp/ob-bt-merged.elf
+        return 0
+    fi
+    return 2
+}
+
+function _ob_bt_match_monolithic()
+{
+    _ob_bt_matches "$1" "$2/OlympiaWebKit.sfi"
+    if [ "$?" == "0" ] ; then
+        cp "$2/OlympiaWebKit.gdb.elf" /tmp/ob-bt-merged.elf
+        return 0
+    fi
+    return 3
+}
+
+function _ob_bt_match_published()
+{
+    _ob_bt_match_lexe "$1" "$2"
+    if [ "$?" == "0" ] ; then
+        return 0
+    fi
+    _ob_bt_match_monolithic "$1" "$2"
+    if [ "$?" == "0" ] ; then
+        return 0
+    fi
+    return 4
+}
+
+if [ -z "$1" ] ; then
+    echo.
+    echo "Usage: ob-bt <corefile> [published-build-dir-from-components.txt]"
+    echo " e.g.: ob-bt core.0"
+    echo "       ob-bt core.0 //rim.net/Software/Tachyon/BuildFarm/PublishRoot/athensJulyXR_webkit/jun20_2927916_2010"
+    echo.
+    return 1
+fi
+
+if [ "$OLYMPIABUILDCHOICE" == "fledge" ] ; then
+    echo.
+    echo Your build target is set to fledge. Please make sure it is set to the device whose coredump you are testing.
+    echo e.g.: ob talladega
+    echo.
+    return 1
+fi
+
+COREFILE="$1"
+
+if [ ! -z "$2" ] ; then
+    _ob_bt_match_published "$COREFILE" "$2/unsigned/$OLYMPIABUILDCHOICE/lib"
+    FAIL=$?
+fi
+
+if [ "$FAIL" -ne "0" ] ; then
+    _ob_bt_match_published "$COREFILE" "$PLAYERINSTALLPREFIX/$CPUNAME-$OLYMPIABUILDCONFIGL/lib"
+    FAIL=$?
+fi
+
+echo.
+if [ "$FAIL" == "0" ] ; then
+    "$OLYMPIATOOLS/bin/gdb70/coredump.exe" "$COREFILE" /tmp/ob-bt-dumped.elf
+    "$OLYMPIATOOLS/bin/gdb70/arm-elf-gdb" --eval-command=bt --eval-command=q /tmp/ob-bt-merged.elf /tmp/ob-bt-dumped.elf
+    echo.
+    echo See backtrace above. To continue debugging, run "arm-elf-gdb /tmp/ob-bt-merged.elf /tmp/ob-bt-dumped.elf"
+else
+    echo Unable to find matching GDB binaries for core dump. Please verify the build directory provided.
+fi
+echo.
+
+$(exit $FAIL)

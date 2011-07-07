@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Quickly build and run the specified simulator after a webkit change.
+if [ $OLYMPIABUILDCHOICE = "fledge" ] ; then
+    ob-bbnsl && \
+    ob-webkit && \
+    ob-player && \
+    ob-runfledge $1
+else
+    ob-bbnsl && \
+    ob-webkit && \
+    ob-player
+fi

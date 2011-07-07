@@ -1,0 +1,174 @@
+layer at (0,0) size 800x1021
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x1021
+  RenderBlock {HTML} at (0,0) size 800x1021
+    RenderBody {BODY} at (8,17) size 784x987
+      RenderBlock {P} at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 573x18
+          text run at (0,0) width 573: "In all of the following, there should not be a hyphen before \x{201C}lorem\x{201D}."
+      RenderBlock {P} at (0,35) size 784x18
+        RenderText {#text} at (0,0) size 23x18
+          text run at (0,0) width 23: "Do"
+        RenderBlock (floating) {SPAN} at (770,0) size 14x20 [border: (1px solid #FF0000)]
+          RenderText {#text} at (1,1) size 12x18
+            text run at (1,1) width 12: "X"
+        RenderText {#text} at (23,0) size 107x18
+          text run at (23,0) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,70) size 784x18
+        RenderBlock (floating) {SPAN} at (770,0) size 14x20 [border: (1px solid #FF0000)]
+          RenderText {#text} at (1,1) size 12x18
+            text run at (1,1) width 12: "X"
+        RenderText {#text} at (0,0) size 107x18
+          text run at (0,0) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,105) size 784x20
+        RenderText {#text} at (0,1) size 23x18
+          text run at (0,1) width 23: "Do"
+        RenderText {#text} at (37,1) size 107x18
+          text run at (37,1) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,142) size 784x18
+        RenderText {#text} at (0,0) size 23x18
+          text run at (0,0) width 23: "Do"
+        RenderText {#text} at (23,0) size 107x18
+          text run at (23,0) width 107: "lorem ipsum"
+      RenderBlock (anonymous) at (0,177) size 784x18
+        RenderText {#text} at (0,0) size 23x18
+          text run at (0,0) width 23: "Do"
+      RenderBlock {P} at (0,212) size 784x18
+        RenderText {#text} at (0,0) size 107x18
+          text run at (0,0) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,247) size 784x36
+        RenderText {#text} at (0,0) size 23x18
+          text run at (0,0) width 23: "Do"
+        RenderBR {BR} at (23,13) size 0x0
+        RenderText {#text} at (0,18) size 107x18
+          text run at (0,18) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,300) size 784x18
+        RenderText {#text} at (0,0) size 23x18
+          text run at (0,0) width 23: "Do"
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderText {#text} at (23,0) size 49x18
+            text run at (23,0) width 49: "lorem"
+        RenderText {#text} at (72,0) size 58x18
+          text run at (72,0) width 58: " ipsum"
+      RenderBlock {P} at (0,335) size 784x18
+        RenderText {#text} at (0,0) size 13x18
+          text run at (0,0) width 13: "D"
+        RenderInline {SPAN} at (0,0) size 10x18
+          RenderText {#text} at (13,0) size 10x18
+            text run at (13,0) width 10: "o"
+        RenderText {#text} at (23,0) size 107x18
+          text run at (23,0) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,370) size 784x18
+        RenderText {#text} at (0,0) size 28x18
+          text run at (0,0) width 28: "Do "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderText {#text} at (28,0) size 49x18
+            text run at (28,0) width 49: "lorem"
+        RenderText {#text} at (77,0) size 58x18
+          text run at (77,0) width 58: " ipsum"
+      RenderBlock {P} at (0,405) size 784x18
+        RenderText {#text} at (0,0) size 13x18
+          text run at (0,0) width 13: "D"
+        RenderInline {SPAN} at (0,0) size 15x18
+          RenderText {#text} at (13,0) size 15x18
+            text run at (13,0) width 15: "o "
+        RenderText {#text} at (28,0) size 107x18
+          text run at (28,0) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,440) size 784x18
+        RenderText {#text} at (0,0) size 28x18
+          text run at (0,0) width 28: "Do "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderText {#text} at (28,0) size 49x18
+            text run at (28,0) width 49: "lorem"
+        RenderText {#text} at (77,0) size 58x18
+          text run at (77,0) width 58: " ipsum"
+      RenderBlock {P} at (0,475) size 784x18
+        RenderText {#text} at (0,0) size 13x18
+          text run at (0,0) width 13: "D"
+        RenderInline {SPAN} at (0,0) size 15x18
+          RenderText {#text} at (13,0) size 15x18
+            text run at (13,0) width 15: "o "
+        RenderText {#text} at (28,0) size 107x18
+          text run at (28,0) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,510) size 784x18
+        RenderText {#text} at (0,0) size 82x18
+          text run at (0,0) width 28: "Do "
+          text run at (28,0) width 54: " lorem"
+      RenderBlock {P} at (0,545) size 784x18
+        RenderText {#text} at (0,0) size 77x18
+          text run at (0,0) width 23: "Do"
+          text run at (23,0) width 5: " "
+          text run at (28,0) width 49: "lorem"
+      RenderBlock {P} at (0,580) size 784x18
+        RenderText {#text} at (0,0) size 77x18
+          text run at (0,0) width 28: "Do "
+          text run at (28,0) width 49: "lorem"
+      RenderBlock {P} at (0,615) size 784x18
+        RenderText {#text} at (0,0) size 77x18
+          text run at (0,0) width 23: "Do"
+          text run at (23,0) width 5: " "
+          text run at (28,0) width 49: "lorem"
+      RenderBlock {P} at (0,650) size 784x18
+        RenderText {#text} at (0,0) size 82x18
+          text run at (0,0) width 28: "Do "
+          text run at (28,0) width 5: " "
+          text run at (33,0) width 49: "lorem"
+      RenderBlock {P} at (0,685) size 784x18
+        RenderText {#text} at (0,0) size 77x18
+          text run at (0,0) width 28: "Do "
+          text run at (28,0) width 49: "lorem"
+      RenderBlock {P} at (0,720) size 784x18
+        RenderText {#text} at (0,0) size 23x18
+          text run at (0,0) width 23: "Do"
+        RenderInline {SPAN} at (0,0) size 0x18
+        RenderText {#text} at (23,0) size 107x18
+          text run at (23,0) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,755) size 784x18
+        RenderText {#text} at (0,0) size 130x18
+          text run at (0,0) width 23: "Do"
+          text run at (23,0) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,790) size 784x18
+        RenderInline {SPAN} at (0,0) size 23x18
+          RenderText {#text} at (0,0) size 23x18
+            text run at (0,0) width 23: "Do"
+        RenderText {#text} at (23,0) size 107x18
+          text run at (23,0) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,825) size 784x18
+        RenderText {#text} at (0,0) size 23x18
+          text run at (0,0) width 23: "Do"
+        RenderInline {SPAN} at (0,0) size 107x18
+          RenderText {#text} at (23,0) size 107x18
+            text run at (23,0) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,860) size 784x18
+        RenderInline {SPAN} at (0,0) size 23x18
+          RenderText {#text} at (0,0) size 23x18
+            text run at (0,0) width 23: "Do"
+        RenderText {#text} at (23,0) size 107x18
+          text run at (23,0) width 107: "lorem ipsum"
+      RenderBlock {P} at (0,895) size 784x18
+        RenderText {#text} at (0,0) size 330x18
+          text run at (0,0) width 330: "The following pair should be the same:"
+      RenderBlock {P} at (0,930) size 784x20
+        RenderText {#text} at (0,1) size 17x18
+          text run at (0,1) width 17: "W"
+        RenderBlock {SPAN} at (17,0) size 14x20 [border: (1px solid #FF0000)]
+          RenderText {#text} at (1,1) size 12x18
+            text run at (1,1) width 12: "X"
+        RenderText {#text} at (31,1) size 11x18
+          text run at (31,1) width 11: "Y"
+      RenderBlock {P} at (0,967) size 784x20
+        RenderText {#text} at (0,1) size 17x18
+          text run at (0,1) width 17: "W"
+        RenderBlock {SPAN} at (17,0) size 14x20 [border: (1px solid #FF0000)]
+          RenderText {#text} at (1,1) size 12x18
+            text run at (1,1) width 12: "X"
+        RenderText {#text} at (31,1) size 11x18
+          text run at (31,1) width 11: "Y"
+layer at (31,122) size 14x20
+  RenderBlock (relative positioned) {SPAN} at (23,0) size 14x20 [border: (1px solid #FF0000)]
+    RenderText {#text} at (1,1) size 12x18
+      text run at (1,1) width 12: "X"
+layer at (786,159) size 14x20
+  RenderBlock (positioned) {SPAN} at (786,159) size 14x20 [border: (1px solid #FF0000)]
+    RenderText {#text} at (1,1) size 12x18
+      text run at (1,1) width 12: "X"

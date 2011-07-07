@@ -1,0 +1,26 @@
+<style type="text/css">
+#c { border: 2px solid black; overflow: hidden; position: absolute; left: 20; top: 20; width: 400px; height: 300px; }
+#d { border: 2px solid black; overflow: hidden; position: absolute; left: 40; top: 350; width: 400px; height: 300px; }
+#e { border: 2px solid black; overflow: hidden; position: absolute; left: 60; top: 700; width: 400px; height: 300px; }
+#f { border: 2px solid black; overflow: hidden; position: absolute; left: 80; top: 1100; width: 500px; height: 400px; }
+body { width: 1000px; height: 1600px; }
+</style>
+
+<canvas id="c" width="400" height="300"></canvas>
+<canvas id="d" width="400" height="300"></canvas>
+<canvas id="e" width="400" height="300"></canvas>
+<canvas id="f" width="500" height="400"></canvas>
+<script type="text/javascript">
+var c = document.getElementById('c').getContext('2d');
+var d = document.getElementById('d').getContext('2d');
+var e = document.getElementById('e').getContext('2d');
+var f = document.getElementById('f').getContext('2d');
+var img = new Image();
+img.src = "nicholas.jpg";
+img.onload = function() {
+     c.drawImage(img, 10, 10);
+     d.drawImage(img, 10, 10, 300, 220);
+     e.drawImage(img, 0, 0, 320, 240, 10, 10, 300, 220);
+     f.drawImage(img, 0, 0, 320, 240, 10, 10, 440, 320); };
+</script>
+

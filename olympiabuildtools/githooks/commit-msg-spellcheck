@@ -1,0 +1,17 @@
+#!/bin/sh
+#
+# Run aspell on the commit message to check for spelling mistakes
+#
+
+which aspell > /dev/null
+if [ ! $? -eq 0 ] ; then
+    echo "Install aspell and a dictionary from http://aspell.net/ to spellcheck the commit messages"
+else
+    errors=`cat $1 | grep -v '^#.*' | aspell -l`;
+    if [ ! -z "${errors}" ] ; then
+        echo "Possible spelling errors in the commit message:";
+	echo "Use commit --amend to change them";
+        echo "${errors}";
+    fi
+fi
+exit 0;

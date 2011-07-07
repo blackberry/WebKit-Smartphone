@@ -1,0 +1,83 @@
+@echo off&setlocal
+rem ++++++++++++++++++++++++++++++++=
+rem This script will install blackberry SW files onto your device
+rem ++++++++++++++++++++++++++++++++=
+rem Author: sccameron@rim.com
+rem ++++++++++++++++++++++++++++++++=
+
+rem ++++++++++++++++++++++++++
+rem  TOOLS:
+rem ++++++++++++++++++++++++++
+rem  Check if %TEMP%\cfp.exe exists.
+rem  if not, copy it from the network
+rem ++++++++++++++++++++++++++
+
+set CFPPATH=\\rim.net\software\indy\Tools\cfp
+if not exist %TEMP%\cfp.exe (
+
+    rem FIXME: Check to see if cfp.exe is in the path
+    rem cfp.exe > nul
+    rem IF %ERRORLEVEL% == 0 IF NOT %ERRORLEVEL% == 1  goto cfp_end
+
+    echo Copying cfp.exe from %CFPPATH% ...
+    xcopy %CFPPATH%\cfp.exe %TEMP%
+    if errorlevel 0 if not errorlevel 1 goto cfp_end
+
+    echo Error copying cfp.exe to [%TEMP%].
+    echo Please make this file available and try again.
+    pause
+    exit
+
+)
+:cfp_end
+
+path %path%;%TEMP%
+
+SET ALLOWED_EXTENTIONS="sfi,dmp"
+SET PASSWD=""
+SET CFP_CMD=cfp -W%%PASSWD%%
+
+rem Ask user for the device password
+ECHO Warning!  All data will be removed from your device if you contine.
+SET /P PASSWD=Please give device passwd:
+IF /I %PASSWD%=="" (
+    SET CFP_CMD=cfp
+)
+GOTO :CFP_Start
+
+
+rem ++++++++++++++++++++++++++
+rem  END
+rem ++++++++++++++++++++++++++
+:End
+    echo "Finished installing SW on device."
+    PAUSE
+    EXIT
+
+
+rem ++++++++++++++++++++++++++
+rem  Run_File
+rem ++++++++++++++++++++++++++
+rem Check_File will return 0 if the given files' extention matches
+rem anything from the %ALLOWED_EXTENTIONS% variable
+rem ++++++++++++++++++++++++++
+:Run_File %1 result
+setlocal ENABLEEXTENSIONS
+set ext=%1_
+set ext=%ext:~-4,-1%
+
+@echo %ALLOWED_EXTENTIONS% | find "%ext%" > NUL
+if %ERRORLEVEL% EQU 0 (
+    echo\Installing: [%1]...
+    %CFP_CMD% load %1
+) else (
+    echo\Skipping: [%1]
+)
+endlocal&goto :EOF
+
+rem ++++++++++++++++++++++++++
+rem  CFP_Start (populated dynamically)
+rem ++++++++++++++++++++++++++
+:CFP_Start
+
+%CFP_CMD% wipe

@@ -1,0 +1,24 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock (anonymous) at (0,0) size 784x36
+        RenderInline {FONT} at (0,0) size 739x36
+          RenderText {#text} at (0,0) size 0x0
+          RenderText {#text} at (0,0) size 739x36
+            text run at (0,0) width 368: "This text node only exists once in the original document! "
+            text run at (368,0) width 339: "If it were a large collection of inlines, the page would "
+            text run at (707,0) width 32: "hang"
+            text run at (0,18) width 50: "forever."
+          RenderInline {A} at (0,0) size 0x0
+      RenderBlock (anonymous) at (0,54) size 784x48
+        RenderBlock {H2} at (0,0) size 784x26
+          RenderInline {A} at (0,0) size 193x26
+            RenderText {#text} at (0,0) size 193x26
+              text run at (0,0) width 193: "Table of Contents"
+        RenderTable {TABLE} at (0,44) size 4x4
+          RenderTableSection {TBODY} at (0,0) size 4x4
+            RenderTableRow {TR} at (0,2) size 4x0
+      RenderBlock (anonymous) at (0,102) size 784x0
+        RenderInline {FONT} at (0,0) size 0x0

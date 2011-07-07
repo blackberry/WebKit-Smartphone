@@ -1,0 +1,44 @@
+<html>
+<head>
+</head>
+<form method="post" action="test2.php">
+First Name:<input type="text" name="Fname" value="Gen"><br />
+Last Name:<input type="text" name="Lname" value="Mak"><br />
+Male:<input type="radio" value="Male" name="gender"><br />
+Female:<input type="radio" value="Female" name="gender"><br />
+Steak:<input type="checkbox" value="Steak" name="food[]"><br />
+Pizza:<input type="checkbox" value="Pizza" name="food[]"><br />
+Chicken:<input type="checkbox" value="Chicken" name="food[]"><br />
+<textarea rows="5" cols="20" name="quote" wrap="physical" value="People and pork everywhere"></textarea><br />
+Select a Level of Education:<br />
+<select name="education">
+<option value="Jr.High">Jr.High</option>
+<option value="HighSchool">HighSchool</option>
+<option value="College">College</option></select><br />
+<br>
+Select your favorite time of day:<br />
+<select name="TofD" size="3" multiple>
+<option selected value="Morning">Morning</option>
+<option value="Day">Day</option>
+<option value="Evening">Evening</option>
+<option value="Night">Night</option></select><br />
+<br>
+<p>Menu with single select and pre-selected option:</p> 
+<p><select size="4" name="menu_single_select_pre_selection"> 
+<option>Option 1</option> 
+<option selected value="Option_1_a">Option 2</option> 
+<option>Option 3</option> 
+<option>Option 4</option> 
+<option>Option 5</option> 
+<option>Option 6</option> 
+<option>Option 7</option> 
+<option>Option 8</option> 
+<option>Option 9</option> 
+<option>Option 10</option> 
+</select></p> 
+
+<br>
+<input type="submit" value="Test Button" name="submit" >
+</form>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<script type="text/javascript">
+document.open();
+var n = window.navigator;
+document.write("<br>appCodeName = " + n.appCodeName);
+document.write("<br>appName = " + n.appName);
+document.write("<br>appVersion = " + n.appVersion);
+document.write("<br>cookieEnabled = " + n.cookieEnabled);
+document.write("<br>language = " + n.language);
+document.write("<br>systemLanguage = " + n.systemLanguage);
+document.write("<br>userLanguage = " + n.userLanguage);
+document.write("<br>userAgent = " + n.userAgent);
+document.write("<br>platform = " + n.platform);
+document.write("<br>mimeTypes = " + n.mimeTypes + " #" + n.mimeTypes.length);
+for (i = 0; i < n.mimeTypes.length; ++i)
+    document.write("<br>    mimeTypes[" + i + "] = " + n.mimeTypes[i].type);
+document.write("<br>plugins = " + n.plugins + " #" + n.plugins.length);
+for (i = 0; i < n.plugins.length; ++i)
+    document.write("<br>    plugins[" + i + "] = " + n.plugins[i].name);
+</script>
+

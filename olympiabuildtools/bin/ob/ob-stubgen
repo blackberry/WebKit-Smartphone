@@ -1,0 +1,5 @@
+#!/bin/bash
+
+pushd $BBNSLDIR/players/webkit/idl > /dev/null
+PATH=$OLYMPIAJAVA/lynx/tools/j2sdk/bin:$OLYMPIAJAVA/lynx/tools/ant/bin:$PATH ant olympia-git
+popd > /dev/null

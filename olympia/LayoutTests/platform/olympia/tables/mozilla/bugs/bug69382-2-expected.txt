@@ -1,0 +1,48 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x575
+      RenderBlock {FORM} at (0,0) size 784x100
+        RenderTable {TABLE} at (0,0) size 236x100 [border: (1px outset #808080)]
+          RenderTableSection {TBODY} at (1,1) size 234x98
+            RenderTableRow {TR} at (0,2) size 234x22
+              RenderTableCell {TD} at (2,14) size 15x22 [border: (1px inset #808080)] [r=0 c=0 rs=2 cs=1]
+                RenderText {#text} at (2,2) size 11x18
+                  text run at (2,2) width 11: "5"
+              RenderTableCell {TD} at (19,14) size 22x22 [border: (1px inset #808080)] [r=0 c=1 rs=2 cs=1]
+                RenderText {#text} at (2,2) size 18x18
+                  text run at (2,2) width 18: "**"
+              RenderTableCell {TD} at (43,2) size 123x22 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
+                RenderText {#text} at (2,2) size 114x18
+                  text run at (2,2) width 114: "Text text text"
+              RenderTableCell {TD} at (168,2) size 9x22 [border: (1px inset #808080)] [r=0 c=3 rs=1 cs=1]
+                RenderText {#text} at (2,2) size 5x18
+                  text run at (2,2) width 5: " "
+              RenderTableCell {TD} at (179,2) size 51x22 [border: (1px inset #808080)] [r=0 c=4 rs=1 cs=1]
+                RenderText {#text} at (2,2) size 44x18
+                  text run at (2,2) width 44: "1970"
+            RenderTableRow {TR} at (0,26) size 234x22
+              RenderTableCell {TD} at (43,26) size 189x22 [border: (1px inset #808080)] [r=1 c=2 rs=1 cs=4]
+                RenderText {#text} at (2,2) size 185x18
+                  text run at (2,2) width 185: "No Holdings Available"
+            RenderTableRow {TR} at (0,50) size 234x22
+              RenderTableCell {TD} at (2,62) size 15x22 [border: (1px inset #808080)] [r=2 c=0 rs=2 cs=1]
+                RenderText {#text} at (2,2) size 11x18
+                  text run at (2,2) width 11: "6"
+              RenderTableCell {TD} at (19,62) size 22x22 [border: (1px inset #808080)] [r=2 c=1 rs=2 cs=1]
+                RenderText {#text} at (2,2) size 18x18
+                  text run at (2,2) width 18: "**"
+              RenderTableCell {TD} at (43,50) size 123x22 [border: (1px inset #808080)] [r=2 c=2 rs=1 cs=1]
+                RenderText {#text} at (2,2) size 114x18
+                  text run at (2,2) width 114: "Text text text"
+              RenderTableCell {TD} at (168,50) size 9x22 [border: (1px inset #808080)] [r=2 c=3 rs=1 cs=1]
+                RenderText {#text} at (2,2) size 5x18
+                  text run at (2,2) width 5: " "
+              RenderTableCell {TD} at (179,50) size 51x22 [border: (1px inset #808080)] [r=2 c=4 rs=1 cs=1]
+                RenderText {#text} at (2,2) size 44x18
+                  text run at (2,2) width 44: "1970"
+            RenderTableRow {TR} at (0,74) size 234x22
+              RenderTableCell {TD} at (43,74) size 189x22 [border: (1px inset #808080)] [r=3 c=2 rs=1 cs=4]
+                RenderText {#text} at (2,2) size 185x18
+                  text run at (2,2) width 185: "No Holdings Available"

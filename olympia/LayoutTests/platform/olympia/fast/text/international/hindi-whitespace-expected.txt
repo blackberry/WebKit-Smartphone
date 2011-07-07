@@ -1,0 +1,29 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x575
+      RenderBlock {P} at (0,0) size 784x36
+        RenderText {#text} at (0,0) size 771x36
+          text run at (0,0) width 771: "This HTML tests if the 'while-space' property controls the behavors of line-break characters"
+          text run at (0,18) width 420: "(U+000A and U+000D) in a complex text (Hindi)."
+      RenderBlock {P} at (0,53) size 784x54
+        RenderText {#text} at (0,0) size 782x54
+          text run at (0,0) width 782: "If this test succeeds, you can see this Hindi word \"\x{935}\x{93F}\x{937}\x{92F}\x{94B}\x{902}\" repeated three times separated by"
+          text run at (0,18) width 749: "a space in the first two paragraphs. In the third paragraphs, it'll be shown three times in"
+          text run at (0,36) width 124: "separate lines."
+      RenderBlock {P} at (0,124) size 784x18
+        RenderText {#text} at (0,0) size 175x18
+          text run at (0,0) width 175: "1. \x{935}\x{93F}\x{937}\x{92F}\x{94B}\x{902} \x{935}\x{93F}\x{937}\x{92F}\x{94B}\x{902} \x{935}\x{93F}\x{937}\x{92F}\x{94B}\x{902}"
+      RenderBlock {P} at (0,159) size 784x18
+        RenderText {#text} at (0,0) size 175x18
+          text run at (0,0) width 175: "2. \x{935}\x{93F}\x{937}\x{92F}\x{94B}\x{902} \x{935}\x{93F}\x{937}\x{92F}\x{94B}\x{902} \x{935}\x{93F}\x{937}\x{92F}\x{94B}\x{902}"
+      RenderBlock {P} at (0,194) size 784x72
+        RenderText {#text} at (0,0) size 48x72
+          text run at (0,0) width 16: "3."
+          text run at (16,0) width 0: " "
+          text run at (0,18) width 48: "\x{935}\x{93F}\x{937}\x{92F}\x{94B}\x{902}"
+          text run at (48,18) width 0: " "
+          text run at (0,36) width 48: "\x{935}\x{93F}\x{937}\x{92F}\x{94B}\x{902}"
+          text run at (48,36) width 0: " "
+          text run at (0,54) width 48: "\x{935}\x{93F}\x{937}\x{92F}\x{94B}\x{902}"

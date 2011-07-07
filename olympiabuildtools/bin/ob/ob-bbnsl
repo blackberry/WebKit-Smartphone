@@ -1,0 +1,5 @@
+#!/bin/bash
+
+validate_OSDIR
+validate_TIDDIR
+ob-bbnsl-direct

@@ -1,0 +1,856 @@
+commit 300acd177add2e6f81f931b51a7bedc18d03091c
+Author: George Staikos <gstaikos@rim.com>
+Date:   Tue Jun 29 18:31:30 2010 -0400
+
+    Revert "2010-06-29  Adam Treat  <atreat@rim.com>"
+    
+    This reverts commit 974d4307b1125c18bc90b30ba5a7423aaeca5b96.
+
+diff --git a/WebKit/olympia/Api/BackingStore.cpp b/WebKit/olympia/Api/BackingStore.cpp
+index 0f1efa5..5422eca 100644
+--- a/WebKit/olympia/Api/BackingStore.cpp
++++ b/WebKit/olympia/Api/BackingStore.cpp
+@@ -56,16 +56,12 @@ static DivisorList divisors(int n)
+ }
+ 
+ /* Compute best divisor given the ratio determined by size */
+-static Divisor bestDivisor(WebCore::IntSize size, int tileWidth, int tileHeight,
+-                           int minimumNumberOfTilesWide, int minimumNumberOfTilesHigh,
+-                           BackingStorePrivate::TileMatrixDirection direction)
++static Divisor bestDivisor(WebCore::IntSize size, int tileWidth, int tileHeight, int minimumNumberOfTilesWide, int minimumNumberOfTilesHigh)
+ {
+     // The point of this function is to determine the number of tiles in each
+     // dimension.  We do this by looking to match the tile matrix width/height
+     // ratio as closely as possible with the width/height ratio of the contents.
+-    // We also look at the direction passed to give preference to one dimension
+-    // over another. This method could probably be made faster, but it gets the
+-    // job done.
++    // This method could probably be made faster, but it gets the job done.
+ 
+     SurfacePool* surfacePool = SurfacePool::globalSurfacePool();
+     ASSERT(!surfacePool->isEmpty());
+@@ -87,12 +83,6 @@ static Divisor bestDivisor(WebCore::IntSize size, int tileWidth, int tileHeight,
+         if (!divisorWidthIsValid || !divisorHeightIsValid)
+             continue;
+ 
+-        if (divisor.first > divisor.second && direction == BackingStorePrivate::Vertical && !divisorHeightIsPerfect)
+-            continue;
+-
+-        if (divisor.second > divisor.first && direction == BackingStorePrivate::Horizontal && !divisorWidthIsPerfect)
+-            continue;
+-
+         if (divisorWidthIsPerfect || divisorHeightIsPerfect) {
+             bestDivisor = divisor; // Found a perfect fit!
+ #if DEBUG_TILEMATRIX
+@@ -127,7 +117,6 @@ BackingStorePrivate::BackingStorePrivate()
+     , m_eglDisplay(EGL_NO_DISPLAY)
+     , m_numberOfTilesWide(0)
+     , m_numberOfTilesHigh(0)
+-    , m_preferredTileMatrixDimension(Vertical)
+ {
+ #if ENABLE_SCROLLBARS
+     m_autoHideScrollbarsTimer = new Timer<BackingStorePrivate>(this, &BackingStorePrivate::autoHideScrollbars);
+@@ -387,47 +376,47 @@ WebCore::IntRect BackingStorePrivate::backingStoreRect() const
+     return IntRect(m_backingStoreOffset, backingStoreSize());
+ }
+ 
+-bool BackingStorePrivate::shouldMoveLeft(const WebCore::IntRect& backingStoreRect) const
++bool BackingStorePrivate::shouldMoveLeft() const
+ {
+-    return canMoveX(backingStoreRect)
+-            && backingStoreRect.x() > visibleContentsRect().x()
+-            && backingStoreRect.x() > expandedContentsRect().x();
++    return canMoveX()
++            && backingStoreRect().x() > visibleContentsRect().x()
++            && backingStoreRect().x() > expandedContentsRect().x();
+ }
+ 
+-bool BackingStorePrivate::shouldMoveRight(const WebCore::IntRect& backingStoreRect) const
++bool BackingStorePrivate::shouldMoveRight() const
+ {
+-    return canMoveX(backingStoreRect)
+-            && backingStoreRect.right() < visibleContentsRect().right()
+-            && backingStoreRect.right() < expandedContentsRect().right();
++    return canMoveX()
++            && backingStoreRect().right() < visibleContentsRect().right()
++            && backingStoreRect().right() < expandedContentsRect().right();
+ }
+ 
+-bool BackingStorePrivate::shouldMoveUp(const WebCore::IntRect& backingStoreRect) const
++bool BackingStorePrivate::shouldMoveUp() const
+ {
+-    return canMoveY(backingStoreRect)
+-            && backingStoreRect.y() > visibleContentsRect().y()
+-            && backingStoreRect.y() > expandedContentsRect().y();
++    return canMoveY()
++            && backingStoreRect().y() > visibleContentsRect().y()
++            && backingStoreRect().y() > expandedContentsRect().y();
+ }
+ 
+-bool BackingStorePrivate::shouldMoveDown(const WebCore::IntRect& backingStoreRect) const
++bool BackingStorePrivate::shouldMoveDown() const
+ {
+-    return canMoveY(backingStoreRect)
+-            && backingStoreRect.bottom() < visibleContentsRect().bottom()
+-            && backingStoreRect.bottom() < expandedContentsRect().bottom();
++    return canMoveY()
++            && backingStoreRect().bottom() < visibleContentsRect().bottom()
++            && backingStoreRect().bottom() < expandedContentsRect().bottom();
+ }
+ 
+-bool BackingStorePrivate::canMoveX(const WebCore::IntRect& backingStoreRect) const
++bool BackingStorePrivate::canMoveX() const
+ {
+-    return backingStoreRect.width() > visibleContentsRect().width();
++    return backingStoreRect().width() > visibleContentsRect().width();
+ }
+ 
+-bool BackingStorePrivate::canMoveY(const WebCore::IntRect& backingStoreRect) const
++bool BackingStorePrivate::canMoveY() const
+ {
+-    return backingStoreRect.height() > visibleContentsRect().height();
++    return backingStoreRect().height() > visibleContentsRect().height();
+ }
+ 
+-bool BackingStorePrivate::canMoveLeft(const WebCore::IntRect& rect) const
++bool BackingStorePrivate::canMoveLeft() const
+ {
+-    IntRect backingStoreRect = rect;
++    IntRect backingStoreRect = this->backingStoreRect();
+     IntRect visibleContentsRect = this->visibleContentsRect();
+     IntRect contentsRect = this->expandedContentsRect();
+     backingStoreRect.move(-tileWidth(), 0);
+@@ -435,9 +424,9 @@ bool BackingStorePrivate::canMoveLeft(const WebCore::IntRect& rect) const
+             && backingStoreRect.x() >= contentsRect.x();
+ }
+ 
+-bool BackingStorePrivate::canMoveRight(const WebCore::IntRect& rect) const
++bool BackingStorePrivate::canMoveRight() const
+ {
+-    IntRect backingStoreRect = rect;
++    IntRect backingStoreRect = this->backingStoreRect();
+     IntRect visibleContentsRect = this->visibleContentsRect();
+     IntRect contentsRect = this->expandedContentsRect();
+     backingStoreRect.move(tileWidth(), 0);
+@@ -446,9 +435,9 @@ bool BackingStorePrivate::canMoveRight(const WebCore::IntRect& rect) const
+             || (backingStoreRect.right() - contentsRect.right()) < tileWidth());
+ }
+ 
+-bool BackingStorePrivate::canMoveUp(const WebCore::IntRect& rect) const
++bool BackingStorePrivate::canMoveUp() const
+ {
+-    IntRect backingStoreRect = rect;
++    IntRect backingStoreRect = this->backingStoreRect();
+     IntRect visibleContentsRect = this->visibleContentsRect();
+     IntRect contentsRect = this->expandedContentsRect();
+     backingStoreRect.move(0, -tileHeight());
+@@ -456,9 +445,9 @@ bool BackingStorePrivate::canMoveUp(const WebCore::IntRect& rect) const
+             && backingStoreRect.y() >= contentsRect.y();
+ }
+ 
+-bool BackingStorePrivate::canMoveDown(const WebCore::IntRect& rect) const
++bool BackingStorePrivate::canMoveDown() const
+ {
+-    IntRect backingStoreRect = rect;
++    IntRect backingStoreRect = this->backingStoreRect();
+     IntRect visibleContentsRect = this->visibleContentsRect();
+     IntRect contentsRect = this->expandedContentsRect();
+     backingStoreRect.move(0, tileHeight());
+@@ -467,212 +456,46 @@ bool BackingStorePrivate::canMoveDown(const WebCore::IntRect& rect) const
+             || (backingStoreRect.bottom() - contentsRect.bottom()) < tileHeight());
+ }
+ 
+-IntRect BackingStorePrivate::backingStoreRectForScroll(int deltaX, int deltaY, const IntRect& rect) const
+-{
+-    // The current rect
+-    IntRect backingStoreRect = rect;
+-
+-    // Return to origin if need be
+-    if (!canMoveX(backingStoreRect) && backingStoreRect.x())
+-        backingStoreRect.setX(0);
+-
+-    if (!canMoveY(backingStoreRect) && backingStoreRect.y())
+-        backingStoreRect.setY(0);
+-
+-    // Move the rect left
+-    while (shouldMoveLeft(backingStoreRect) || (deltaX > 0 && canMoveLeft(backingStoreRect)))
+-        backingStoreRect.move(-tileWidth(), 0);
+-
+-    // Move the rect right
+-    while (shouldMoveRight(backingStoreRect) || (deltaX < 0 && canMoveRight(backingStoreRect)))
+-        backingStoreRect.move(tileWidth(), 0);
+-
+-    // Move the rect up
+-    while (shouldMoveUp(backingStoreRect) || (deltaY > 0 && canMoveUp(backingStoreRect)))
+-        backingStoreRect.move(0, -tileHeight());
+-
+-    // Move the rect down
+-    while (shouldMoveDown(backingStoreRect) || (deltaY < 0 && canMoveDown(backingStoreRect)))
+-        backingStoreRect.move(0, tileHeight());
+-
+-    return backingStoreRect;
+-}
+-
+-void BackingStorePrivate::setBackingStoreRect(const WebCore::IntRect& backingStoreRect)
++void BackingStorePrivate::scrollBackingStore(int deltaX, int deltaY)
+ {
+-    if (!m_webPage->isVisible())
+-        return;
+-
+-    // Record the current backingstore rect
+-    IntRect currentBackingStoreRect = this->backingStoreRect();
+-
+-    if (backingStoreRect == currentBackingStoreRect)
+-        return;
+-
+-#if DEBUG_TILEMATRIX
+-    Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "BackingStorePrivate::setBackingStoreRect changed from (%d,%d %dx%d) to (%d,%d %dx%d)",
+-                           currentBackingStoreRect.x(),
+-                           currentBackingStoreRect.y(),
+-                           currentBackingStoreRect.width(),
+-                           currentBackingStoreRect.height(),
+-                           backingStoreRect.x(),
+-                           backingStoreRect.y(),
+-                           backingStoreRect.width(),
+-                           backingStoreRect.height());
+-#endif
+-
+-    // The list of indexes we need to fill
+-    TileIndexList indexesToFill = indexesForBackingStoreRect(backingStoreRect);
+-
+-    ASSERT(indexesToFill.size() == m_tileMap.size());
+-
+-    TileMap tiles; // our new tile map
+-    TileMap leftOverTiles; // tiles that are left over
+-
+-    // Iterate through our current tile map and add tiles that are rendered with
+-    // our new backingstore rect
+-    TileMap::const_iterator end = m_tileMap.end();
+-    TileMap::const_iterator it = m_tileMap.begin();
+-    while (it != end) {
+-        TileIndex oldIndex = it->first;
+-        RefPtr<BackingStoreTile> tile = it->second;
+-
+-        // Reset the old index
+-        resetTile(oldIndex, tile.get(), false /*resetBackground*/);
++    // Return to origin of backingstore offset if need be
++    if (!canMoveX() && m_backingStoreOffset.x())
++        m_backingStoreOffset.setX(0);
+ 
+-        // Origin of last committed render for tile in transformed content coordinates
+-        IntPoint origin = originOfLastRenderForTile(oldIndex, tile.get(), currentBackingStoreRect);
++    if (!canMoveY() && m_backingStoreOffset.y())
++        m_backingStoreOffset.setY(0);
+ 
+-        // If the new backing store rect contains this origin, then insert the tile there
+-        // and mark it as no longer shifted.  Note: IntRect::contains checks for a 1x1 rect
+-        // below and to the right of the origin so it is correct usage here.
+-        if (backingStoreRect.contains(origin)) {
+-            TileIndex newIndex = indexOfTile(origin, backingStoreRect);
+-
+-            // Mark as needing update
+-            if (!tile->isCompletelyRendered())
+-                updateTile(origin, false /*immediate*/);
+-
+-            // Do some bookkeeping with shifting tiles...
+-            tile->clearShift();
+-            tile->setCommitted(true);
+-            size_t i = indexesToFill.find(newIndex);
+-            ASSERT(i != WTF::notFound);
+-            indexesToFill.remove(i);
+-            tiles.add(newIndex, tile);
+-        } else {
+-            // Store this tile and index so we can add it to the remaining left over spots...
+-            leftOverTiles.add(oldIndex, tile);
++    // Move the backingstore left
++    if (shouldMoveLeft() || deltaX > 0) {
++        while (canMoveLeft()) {
++            m_backingStoreOffset.move(-tileWidth(), 0);
++            shiftTileIndexRight();
+         }
+-
+-        ++it;
+     }
+ 
+-    ASSERT(indexesToFill.size() == leftOverTiles.size());
+-    TileMap::const_iterator leftOverTilesIterator = leftOverTiles.begin();
+-
+-    // Iterate through the remaining indexes and fill them in with left over tiles
+-    for (size_t i = 0; i < indexesToFill.size(); ++i) {
+-        TileIndex oldIndex = leftOverTilesIterator->first;
+-        TileIndex newIndex = indexesToFill.at(i);
+-        RefPtr<BackingStoreTile> tile = leftOverTilesIterator->second;
+-
+-        // Origin of last committed render for tile in transformed content coordinates
+-        IntPoint originOfOld = originOfLastRenderForTile(oldIndex, tile.get(), currentBackingStoreRect);
+-        // Origin of the new index for the new backingstore rect
+-        IntPoint originOfNew = originOfTile(newIndex, backingStoreRect);
+-
+-        // Mark as needing update
+-        updateTile(originOfNew, false /*immediate*/);
+-
+-        // Do some bookkeeping with shifting tiles...
+-        tile->clearShift();
+-        tile->setCommitted(false);
+-        tile->setHorizontalShift((originOfOld.x() - originOfNew.x()) / tileWidth());
+-        tile->setVerticalShift((originOfOld.y() - originOfNew.y()) / tileHeight());
+-
+-        tiles.add(newIndex, tile);
+-
+-        ++leftOverTilesIterator;
++    // Move the backingstore right
++    if (shouldMoveRight() || deltaX < 0) {
++        while (canMoveRight()) {
++            m_backingStoreOffset.move(tileWidth(), 0);
++            shiftTileIndexLeft();
++        }
+     }
+ 
+-    // Actually set state
+-    m_numberOfTilesWide = backingStoreRect.width() / tileWidth();
+-    m_numberOfTilesHigh = backingStoreRect.height() / tileHeight();
+-    m_backingStoreOffset = backingStoreRect.location();
+-    ASSERT(m_tileMap.size() == tiles.size());
+-    m_tileMap = tiles;
+-}
+-
+-BackingStorePrivate::TileIndexList BackingStorePrivate::indexesForBackingStoreRect(const WebCore::IntRect& backingStoreRect) const
+-{
+-    TileIndexList indexes;
+-    int numberOfTilesWide = backingStoreRect.width() / tileWidth();
+-    int numberOfTilesHigh = backingStoreRect.height() / tileHeight();
+-    for (int y = 0; y < numberOfTilesHigh; ++y) {
+-        for (int x = 0; x < numberOfTilesWide; ++x) {
+-            TileIndex index(x, y);
+-            indexes.append(index);
++    // Move the backingstore up
++    if (shouldMoveUp() || deltaY > 0) {
++        while (canMoveUp()) {
++            m_backingStoreOffset.move(0, -tileHeight());
++            shiftTileIndexDown();
+         }
+     }
+-    return indexes;
+-}
+-
+-WebCore::IntPoint BackingStorePrivate::originOfLastRenderForTile(const TileIndex& index,
+-                                                                 BackingStoreTile* tile,
+-                                                                 const WebCore::IntRect& backingStoreRect) const
+-{
+-    return originOfTile(indexOfLastRenderForTile(index, tile), backingStoreRect);
+-}
+ 
+-TileIndex BackingStorePrivate::indexOfLastRenderForTile(const TileIndex& index, BackingStoreTile* tile) const
+-{
+-    return TileIndex(index.i() + tile->horizontalShift(), index.j() + tile->verticalShift());
+-}
+-
+-TileIndex BackingStorePrivate::indexOfTile(const WebCore::IntPoint& origin,
+-                                           const WebCore::IntRect& backingStoreRect) const
+-{
+-    int offsetX = origin.x() - backingStoreRect.x();
+-    int offsetY = origin.y() - backingStoreRect.y();
+-    if (offsetX)
+-        offsetX = offsetX / tileWidth();
+-    if (offsetY)
+-        offsetY = offsetY / tileHeight();
+-    return TileIndex(offsetX, offsetY);
+-}
+-
+-void BackingStorePrivate::scrollBackingStore(int deltaX, int deltaY)
+-{
+-    if (!m_webPage->isVisible())
+-        return;
+-
+-    // Calculate our new preferred matrix dimension
+-    if (deltaX || deltaY)
+-        m_preferredTileMatrixDimension = abs(deltaX) > abs(deltaY) ? Horizontal : Vertical;
+-
+-    // Calculate our preferred matrix geometry
+-    Divisor divisor = bestDivisor(expandedContentsSize(),
+-                                  tileWidth(), tileHeight(),
+-                                  minimumNumberOfTilesWide(), minimumNumberOfTilesHigh(),
+-                                  m_preferredTileMatrixDimension);
+-
+-#if DEBUG_TILEMATRIX
+-    Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "BackingStorePrivate::scrollBackingStore divisor %dx%d",
+-                           divisor.first,
+-                           divisor.second);
+-#endif
+-
+-    // Initialize a rect with that new geometry
+-    IntRect backingStoreRect(0, 0, divisor.first * tileWidth(), divisor.second * tileHeight());
+-
+-    // Scroll that rect so that it fits our contents and viewport and scroll delta
+-    backingStoreRect = backingStoreRectForScroll(deltaX, deltaY, backingStoreRect);
+-
+-    ASSERT(!backingStoreRect.isEmpty());
+-
+-    // Set the state
+-    setBackingStoreRect(backingStoreRect);
++    // Move the backingstore down
++    if (shouldMoveDown() || deltaY < 0) {
++        while (canMoveDown()) {
++            m_backingStoreOffset.move(0, tileHeight());
++            shiftTileIndexUp();
++        }
++    }
+ }
+ 
+ void BackingStorePrivate::render(const WebCore::IntRectList& rectList, bool renderContentOnly)
+@@ -1207,11 +1030,6 @@ bool BackingStorePrivate::isTileVisible(const TileIndex& index) const
+     return mapFromTilesToTransformedContents(tileRect).intersects(visibleContentsRect());
+ }
+ 
+-bool BackingStorePrivate::isTileVisible(const WebCore::IntPoint& origin) const
+-{
+-    return IntRect(origin, tileSize()).intersects(visibleContentsRect());
+-}
+-
+ WebCore::IntRect BackingStorePrivate::visibleTilesRect() const
+ {
+     IntRect rect;
+@@ -1310,14 +1128,156 @@ void BackingStorePrivate::updateTile(const TileIndex& index, bool immediate)
+         m_renderQueue->addToQueue(jobType, updateRect, true /*renderContentOnly*/);
+ }
+ 
+-void BackingStorePrivate::updateTile(const WebCore::IntPoint& origin, bool immediate)
++void BackingStorePrivate::shiftTileIndexLeft()
+ {
+-    IntRect updateRect = IntRect(origin, tileSize());
+-    RenderQueue::JobType jobType = isTileVisible(origin) ? RenderQueue::VisibleScroll : RenderQueue::NonVisibleScroll;
+-    if (immediate)
+-        render(updateRect, true /*renderContentOnly*/);
+-    else
+-        m_renderQueue->addToQueue(jobType, updateRect, true /*renderContentOnly*/);
++    if (!m_webPage->isVisible()) {
++        ASSERT_NOT_REACHED();
++        return;
++    }
++
++    TileMap tiles;
++    TileMap::const_iterator end = m_tileMap.end();
++    TileMap::const_iterator it = m_tileMap.begin();
++    while (it != end) {
++        TileIndex index = it->first;
++        RefPtr<BackingStoreTile> tile = it->second;
++        if (index.i() != 0) {
++            index.setIndex(index.i() - 1, index.j());
++        } else {
++            TileIndex oldIndex(index.i() - 1, index.j());
++            TileIndex newIndex(numberOfTilesWide() - 1, index.j());
++
++            // Shift the tile
++            tile->shiftLeft();
++
++            shiftTileHelper(tile.get(), oldIndex, newIndex);
++
++            index = newIndex;
++        }
++        tiles.add(index, tile);
++        ++it;
++    }
++    m_tileMap = tiles;
++}
++
++void BackingStorePrivate::shiftTileIndexRight()
++{
++    if (!m_webPage->isVisible()) {
++        ASSERT_NOT_REACHED();
++        return;
++    }
++
++    TileMap tiles;
++    TileMap::const_iterator end = m_tileMap.end();
++    TileMap::const_iterator it = m_tileMap.begin();
++    while (it != end) {
++        TileIndex index = it->first;
++        RefPtr<BackingStoreTile> tile = it->second;
++        if (index.i() != numberOfTilesWide() - 1) {
++            index.setIndex(index.i() + 1, index.j());
++        } else {
++            TileIndex oldIndex(index.i() + 1, index.j());
++            TileIndex newIndex(0, index.j());
++
++            // Shift the tile
++            tile->shiftRight();
++
++            shiftTileHelper(tile.get(), oldIndex, newIndex);
++
++            index = newIndex;
++        }
++        tiles.add(index, tile);
++        ++it;
++    }
++    m_tileMap = tiles;
++}
++
++void BackingStorePrivate::shiftTileIndexUp()
++{
++    if (!m_webPage->isVisible()) {
++        ASSERT_NOT_REACHED();
++        return;
++    }
++
++    TileMap tiles;
++    TileMap::const_iterator end = m_tileMap.end();
++    TileMap::const_iterator it = m_tileMap.begin();
++    while (it != end) {
++        TileIndex index = it->first;
++        RefPtr<BackingStoreTile> tile = it->second;
++        if (index.j() != 0) {
++            index.setIndex(index.i(), index.j() - 1);
++        } else {
++            TileIndex oldIndex(index.i(), index.j() - 1);
++            TileIndex newIndex(index.i(), numberOfTilesHigh() - 1);
++
++            // Shift the tile
++            tile->shiftUp();
++
++            shiftTileHelper(tile.get(), oldIndex, newIndex);
++
++            index = newIndex;
++        }
++        tiles.add(index, tile);
++        ++it;
++    }
++    m_tileMap = tiles;
++}
++
++void BackingStorePrivate::shiftTileIndexDown()
++{
++    if (!m_webPage->isVisible()) {
++        ASSERT_NOT_REACHED();
++        return;
++    }
++
++    TileMap tiles;
++    TileMap::const_iterator end = m_tileMap.end();
++    TileMap::const_iterator it = m_tileMap.begin();
++    while (it != end) {
++        TileIndex index = it->first;
++        RefPtr<BackingStoreTile> tile = it->second;
++        if (index.j() != numberOfTilesHigh() - 1) {
++            index.setIndex(index.i(), index.j() + 1);
++        } else {
++            TileIndex oldIndex(index.i(), index.j() + 1);
++            TileIndex newIndex(index.i(), 0);
++
++            // Shift the tile
++            tile->shiftDown();
++
++            shiftTileHelper(tile.get(), oldIndex, newIndex);
++
++            index = newIndex;
++        }
++        tiles.add(index, tile);
++        ++it;
++    }
++    m_tileMap = tiles;
++}
++
++void BackingStorePrivate::shiftTileHelper(BackingStoreTile* tile, const TileIndex& oldIndex, const TileIndex& newIndex)
++{
++    if (!m_webPage->isVisible())
++        return;
++
++    // Clear any pending updates for the old tile
++    resetTile(oldIndex, tile, false /*resetBackground*/);
++
++    // We've shifted above and if we're back to where we began, then
++    // we don't need to re-render
++    if (!tile->isShifted()) {
++        // Mark that the tile is once again committed
++        tile->setCommitted(true);
++        // Queue any non-rendered parts for an update
++        if (!tile->isCompletelyRendered())
++            updateTile(newIndex, false /*immediate*/);
++    } else {
++        // Mark that the tile is no longer committed
++        tile->setCommitted(false);
++        // Queue the new area for an update
++        updateTile(newIndex, false /*immediate*/);
++    }
+ }
+ 
+ WebCore::IntRect BackingStorePrivate::mapFromTilesToTransformedContents(const BackingStorePrivate::TileRect& tileRect) const
+@@ -1370,9 +1330,34 @@ WebCore::IntRectList BackingStorePrivate::mapFromTransformedContentsToRenderRect
+     return m_renderQueue->convertToRenderRectList(rect);
+ }
+ 
++bool BackingStorePrivate::possiblyChangeTileMatrix()
++{
++    const int currentNumberOfTilesWide = numberOfTilesWide();
++    const int currentNumberOfTilesHigh = numberOfTilesHigh();
++    const Divisor divisor = bestDivisor(expandedContentsSize(), tileWidth(), tileHeight(), minimumNumberOfTilesWide(), minimumNumberOfTilesHigh());
++
++    // Find out if our number of tiles in each dimension should change and if not
++    // return early.
++    if (divisor.first == currentNumberOfTilesWide && divisor.second == currentNumberOfTilesHigh)
++        return false;
++
++#if DEBUG_TILEMATRIX
++    Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "GeometryOfTileMatrix changed from %dx%d to %dx%d",
++                           currentNumberOfTilesWide, currentNumberOfTilesHigh, divisor.first, divisor.second);
++#endif
++
++    // Re-arranges the tiles given the new divisor
++    setGeometryOfTileMatrix(divisor.first, divisor.second);
++    return true;
++}
++
+ void BackingStorePrivate::updateTileMatrixIfNeeded()
+ {
+-    // This will update the tile matrix
++    if (possiblyChangeTileMatrix())
++        return;
++
++    // Even if we did not change the tile matrix, we should scroll the backingstore
++    // to ensure that the backingstore is still in a valid position.
+     scrollBackingStore(0, 0);
+ }
+ 
+@@ -1458,6 +1443,99 @@ void BackingStorePrivate::actualVisibleSizeChanged(const WebCore::IntSize& size)
+ #endif
+ }
+ 
++void BackingStorePrivate::setGeometryOfTileMatrix(int numberOfTilesWide, int numberOfTilesHigh)
++{
++    if (!m_webPage->isVisible())
++        return;
++
++    // The tiles in current viewport can't be moved so get the list
++    // of tile indexes that makeup the visible content
++    int startVisibleIndexI = -1;
++    int startVisibleIndexJ = -1;
++    ListHashSet<int> visibleColumns;
++    ListHashSet<int> visibleRows;
++    TileRectList tileRectList = mapFromTransformedContentsToTiles(visibleContentsRect());
++    for (size_t i = 0; i < tileRectList.size(); ++i) {
++        TileRect tileRect = tileRectList[i];
++        TileIndex index = tileRect.first;
++
++        if (startVisibleIndexI < 0 || startVisibleIndexI > index.i())
++            startVisibleIndexI = index.i();
++
++        if (startVisibleIndexJ < 0 || startVisibleIndexJ > index.j())
++            startVisibleIndexJ = index.j();
++
++        visibleColumns.add(index.i());
++        visibleRows.add(index.j());
++    }
++
++    int numberOfVisibleTilesWide = visibleColumns.size();
++    int numberOfVisibleTilesHigh = visibleRows.size();
++
++    int diffWide = numberOfTilesWide - numberOfVisibleTilesWide;
++    int diffHigh = numberOfTilesHigh - numberOfVisibleTilesHigh;
++    ASSERT(diffWide >= 0 && diffHigh >= 0);
++    if (diffWide < 0 || diffHigh <0) {
++        Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "ASSERT: diffWide=%i, diffHigh=%i", diffWide, diffHigh);
++        return;
++    }
++
++    IntPoint backingStoreOffsetOfVisible = originOfTile(TileIndex(startVisibleIndexI, startVisibleIndexJ));
++
++    // Add the visible tiles at new indexes
++    TileMap tiles;
++    for (int i = startVisibleIndexI; i < startVisibleIndexI + numberOfVisibleTilesWide; ++i) {
++        for (int j = startVisibleIndexJ; j < startVisibleIndexJ + numberOfVisibleTilesHigh; ++j) {
++            RefPtr<BackingStoreTile> tile = m_tileMap.take(TileIndex(i, j));
++            ASSERT(tile);
++            TileIndex index(i - startVisibleIndexI, j - startVisibleIndexJ);
++            tiles.add(index, tile);
++        }
++    }
++
++    TileMap::const_iterator cTile = m_tileMap.begin();
++
++    // Now add the left over tiles according to the new geometry columns wide and reset them
++    for (int i = 0; i < diffWide; ++i) {
++        for (int j = 0; j < numberOfVisibleTilesHigh; ++j) {
++            RefPtr<BackingStoreTile> tile = cTile->second;
++            ++cTile;
++            ASSERT(tile);
++            TileIndex index(numberOfVisibleTilesWide + i, j);
++            resetTile(index, tile.get(), true /*resetBackground*/);
++            tiles.add(index, tile);
++        }
++
++    }
++
++    // Now add the left over tiles according to the new geometry rows high and reset them
++    for (int j = 0; j < diffHigh; ++j) {
++        for (int i = 0; i < numberOfTilesWide; ++i) {
++            RefPtr<BackingStoreTile> tile = cTile->second;
++            ++cTile;
++            ASSERT(tile);
++            TileIndex index(i, numberOfVisibleTilesHigh + j);
++            resetTile(index, tile.get(), true /*resetBackground*/);
++            tiles.add(index, tile);
++        }
++    }
++
++    // We should have no more tiles
++    // FIXME: MSVC blows up on this.  Find another way.
++    //ASSERT(cTile == m_tileMap.end());
++
++    // Set the new geometry
++    m_numberOfTilesWide = numberOfTilesWide;
++    m_numberOfTilesHigh = numberOfTilesHigh;
++    m_backingStoreOffset = backingStoreOffsetOfVisible;
++    m_tileMap = tiles;
++
++    // Reposition our backingstore accordingly
++    // FIXME: Move the backingstore so that the visible tiles are in the center
++    // of the new geometric tile matrix.
++    scrollBackingStore(0, 0);
++}
++
+ void BackingStorePrivate::createSurfaces()
+ {
+     ASSERT(m_tileMap.isEmpty());
+@@ -1471,7 +1549,7 @@ void BackingStorePrivate::createSurfaces()
+     if (surfacePool->isEmpty())
+         surfacePool->initialize(tileSize());
+ 
+-    const Divisor divisor = bestDivisor(expandedContentsSize(), tileWidth(), tileHeight(), minimumNumberOfTilesWide(), minimumNumberOfTilesHigh(), m_preferredTileMatrixDimension);
++    const Divisor divisor = bestDivisor(expandedContentsSize(), tileWidth(), tileHeight(), minimumNumberOfTilesWide(), minimumNumberOfTilesHigh());
+     m_numberOfTilesWide = divisor.first;
+     m_numberOfTilesHigh = divisor.second;
+ 
+@@ -1517,13 +1595,8 @@ void BackingStorePrivate::createScrollbars()
+ 
+ WebCore::IntPoint BackingStorePrivate::originOfTile(const TileIndex& index) const
+ {
+-    return originOfTile(index, backingStoreRect());
+-}
+-
+-WebCore::IntPoint BackingStorePrivate::originOfTile(const TileIndex& index, const WebCore::IntRect& backingStoreRect) const
+-{
+-    return IntPoint(backingStoreRect.x() + (index.i() * tileWidth()),
+-                    backingStoreRect.y() + (index.j() * tileHeight()));
++    return IntPoint(m_backingStoreOffset.x() + (index.i() * tileWidth()),
++                    m_backingStoreOffset.y() + (index.j() * tileHeight()));
+ }
+ 
+ int BackingStorePrivate::numberOfTilesWide() const
+diff --git a/WebKit/olympia/Api/BackingStore_p.h b/WebKit/olympia/Api/BackingStore_p.h
+index 944ee68..ed8bc23 100644
+--- a/WebKit/olympia/Api/BackingStore_p.h
++++ b/WebKit/olympia/Api/BackingStore_p.h
+@@ -31,7 +31,6 @@ namespace Olympia {
+ 
+         class BackingStorePrivate {
+         public:
+-            enum TileMatrixDirection { Horizontal, Vertical };
+             enum ResumeUpdateOperation { None, Render, Blit, RenderAndBlit };
+             BackingStorePrivate();
+             ~BackingStorePrivate();
+@@ -69,32 +68,18 @@ namespace Olympia {
+             WebCore::IntRect expandedContentsRect() const;
+             WebCore::IntRect visibleContentsRect() const;
+             WebCore::IntRect backingStoreRect() const;
+-            bool shouldMoveLeft(const WebCore::IntRect&) const;
+-            bool shouldMoveRight(const WebCore::IntRect&) const;
+-            bool shouldMoveUp(const WebCore::IntRect&) const;
+-            bool shouldMoveDown(const WebCore::IntRect&) const;
+-            bool canMoveX(const WebCore::IntRect&) const;
+-            bool canMoveY(const WebCore::IntRect&) const;
+-            bool canMoveLeft(const WebCore::IntRect&) const;
+-            bool canMoveRight(const WebCore::IntRect&) const;
+-            bool canMoveUp(const WebCore::IntRect&) const;
+-            bool canMoveDown(const WebCore::IntRect&) const;
+-
+-            WebCore::IntRect backingStoreRectForScroll(int deltaX, int deltaY, const WebCore::IntRect&) const;
+-            void setBackingStoreRect(const WebCore::IntRect&);
+-
+-            typedef WTF::Vector<TileIndex> TileIndexList;
+-            TileIndexList indexesForBackingStoreRect(const WebCore::IntRect&) const;
+-
+-            WebCore::IntPoint originOfLastRenderForTile(const TileIndex& index,
+-                                                        BackingStoreTile* tile,
+-                                                        const WebCore::IntRect& backingStoreRect) const;
+-
+-            TileIndex indexOfLastRenderForTile(const TileIndex& index, BackingStoreTile* tile) const;
+-            TileIndex indexOfTile(const WebCore::IntPoint& origin,
+-                                  const WebCore::IntRect& backingStoreRect) const;
+-
+-            /* Responsible for scrolling the backingstore and updating the tile matrix geometry */
++            bool shouldMoveLeft() const;
++            bool shouldMoveRight() const;
++            bool shouldMoveUp() const;
++            bool shouldMoveDown() const;
++            bool canMoveX() const;
++            bool canMoveY() const;
++            bool canMoveLeft() const;
++            bool canMoveRight() const;
++            bool canMoveUp() const;
++            bool canMoveDown() const;
++
++            /* Called by above and setGeometryOfTileMatrix */
+             void scrollBackingStore(int deltaX, int deltaY);
+ 
+             /* Render the tiles dirty rects and blit to the screen */
+@@ -121,7 +106,6 @@ namespace Olympia {
+ 
+             /* Returns whether the tile index is currently visible or not */
+             bool isTileVisible(const TileIndex&) const;
+-            bool isTileVisible(const WebCore::IntPoint&) const;
+ 
+             /* Returns a rect that is the union of all tiles that are visible */
+             WebCore::IntRect visibleTilesRect() const;
+@@ -148,7 +132,13 @@ namespace Olympia {
+ 
+             /* Update an individual tile */
+             void updateTile(const TileIndex&, bool immediate);
+-            void updateTile(const WebCore::IntPoint&, bool immediate);
++
++            /* Moves the indexes when the backingstore is moved */
++            void shiftTileIndexLeft();
++            void shiftTileIndexRight();
++            void shiftTileIndexUp();
++            void shiftTileIndexDown();
++            void shiftTileHelper(BackingStoreTile*, const TileIndex&, const TileIndex&);
+ 
+             WebCore::IntRect mapFromTilesToTransformedContents(const TileRect&) const;
+ 
+@@ -156,6 +146,7 @@ namespace Olympia {
+             TileRectList mapFromTransformedContentsToTiles(const WebCore::IntRect&) const;
+             WebCore::IntRectList mapFromTransformedContentsToRenderRectList(const WebCore::IntRect&) const;
+ 
++            bool possiblyChangeTileMatrix();
+             void updateTileMatrixIfNeeded();
+ 
+             /* Called by WebPagePrivate::notifyTransformedContentsSizeChanged */
+@@ -183,7 +174,6 @@ namespace Olympia {
+ 
+             /* Various calculations of quantities relevant to backingstore */
+             WebCore::IntPoint originOfTile(const TileIndex&) const;
+-            WebCore::IntPoint originOfTile(const TileIndex&, const WebCore::IntRect&) const;
+             int numberOfTilesWide() const;
+             int numberOfTilesHigh() const;
+             int minimumNumberOfTilesWide() const;
+@@ -204,7 +194,6 @@ namespace Olympia {
+ 
+             int m_numberOfTilesWide;
+             int m_numberOfTilesHigh;
+-            TileMatrixDirection m_preferredTileMatrixDimension;
+ 
+             WebCore::IntRect m_visibleTileBufferRect;
+ 
+diff --git a/WebKit/olympia/WebKitSupport/BackingStoreTile.h b/WebKit/olympia/WebKitSupport/BackingStoreTile.h
+index e0657b4..2770cc4 100644
+--- a/WebKit/olympia/WebKitSupport/BackingStoreTile.h
++++ b/WebKit/olympia/WebKitSupport/BackingStoreTile.h
+@@ -62,10 +62,6 @@ namespace Olympia {
+             void shiftRight() { m_horizontalShift++; }
+             void shiftUp() { m_verticalShift--; }
+             void shiftDown() { m_verticalShift++; }
+-            int horizontalShift() const { return m_horizontalShift; }
+-            void setHorizontalShift(int shift) { m_horizontalShift = shift; }
+-            int verticalShift() const { return m_verticalShift; }
+-            void setVerticalShift(int shift) { m_verticalShift = shift; }
+ 
+         private:
+             BackingStoreTile(const WebCore::IntSize&, bool checkered);

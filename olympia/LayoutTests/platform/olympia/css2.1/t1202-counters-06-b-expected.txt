@@ -1,0 +1,115 @@
+layer at (0,0) size 835x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 835x96
+  RenderBlock {HTML} at (0,0) size 800x96
+    RenderBody {BODY} at (8,17) size 784x71
+      RenderBlock {P} at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 387x18
+          text run at (0,0) width 387: "The following two lines should look the same:"
+      RenderBlock {DIV} at (0,35) size 784x18
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (0,0) size 49x18
+              text run at (0,0) width 49: "01.01"
+        RenderText {#text} at (49,0) size 5x18
+          text run at (49,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (54,0) size 49x18
+              text run at (54,0) width 49: "01.02"
+        RenderText {#text} at (103,0) size 5x18
+          text run at (103,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (108,0) size 49x18
+              text run at (108,0) width 49: "01.03"
+        RenderText {#text} at (157,0) size 5x18
+          text run at (157,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (162,0) size 49x18
+              text run at (162,0) width 49: "01.04"
+        RenderText {#text} at (211,0) size 5x18
+          text run at (211,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (216,0) size 49x18
+              text run at (216,0) width 49: "01.05"
+        RenderText {#text} at (265,0) size 5x18
+          text run at (265,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (270,0) size 49x18
+              text run at (270,0) width 49: "01.06"
+        RenderText {#text} at (319,0) size 5x18
+          text run at (319,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (324,0) size 49x18
+              text run at (324,0) width 49: "01.07"
+        RenderText {#text} at (373,0) size 5x18
+          text run at (373,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (378,0) size 49x18
+              text run at (378,0) width 49: "01.08"
+        RenderText {#text} at (427,0) size 5x18
+          text run at (427,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (432,0) size 49x18
+              text run at (432,0) width 49: "01.09"
+        RenderText {#text} at (481,0) size 5x18
+          text run at (481,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (486,0) size 49x18
+              text run at (486,0) width 49: "01.10"
+        RenderText {#text} at (535,0) size 5x18
+          text run at (535,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (540,0) size 49x18
+              text run at (540,0) width 49: "01.11"
+        RenderText {#text} at (589,0) size 5x18
+          text run at (589,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (594,0) size 49x18
+              text run at (594,0) width 49: "01.12"
+        RenderText {#text} at (643,0) size 5x18
+          text run at (643,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 49x18
+          RenderInline (generated) at (0,0) size 49x18
+            RenderCounter at (648,0) size 49x18
+              text run at (648,0) width 49: "01.99"
+        RenderText {#text} at (697,0) size 5x18
+          text run at (697,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 60x18
+          RenderInline (generated) at (0,0) size 60x18
+            RenderCounter at (702,0) size 60x18
+              text run at (702,0) width 60: "01.100"
+        RenderText {#text} at (762,0) size 5x18
+          text run at (762,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 60x18
+          RenderInline (generated) at (0,0) size 60x18
+            RenderCounter at (767,0) size 60x18
+              text run at (767,0) width 60: "01.101"
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {DIV} at (0,53) size 784x18
+        RenderText {#text} at (0,0) size 827x18
+          text run at (0,0) width 54: "01.01 "
+          text run at (54,0) width 54: "01.02 "
+          text run at (108,0) width 54: "01.03 "
+          text run at (162,0) width 54: "01.04 "
+          text run at (216,0) width 54: "01.05 "
+          text run at (270,0) width 54: "01.06 "
+          text run at (324,0) width 54: "01.07 "
+          text run at (378,0) width 54: "01.08 "
+          text run at (432,0) width 54: "01.09 "
+          text run at (486,0) width 54: "01.10 "
+          text run at (540,0) width 54: "01.11 "
+          text run at (594,0) width 54: "01.12 "
+          text run at (648,0) width 54: "01.99 "
+          text run at (702,0) width 65: "01.100 "
+          text run at (767,0) width 60: "01.101"

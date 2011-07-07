@@ -1,0 +1,6 @@
+#!/bin/bash
+
+pushd $OLYMPIAJAVA/lynx
+cmd.exe //c build.bat $OLYMPIABUILDCHOICE fetch_os
+popd
+

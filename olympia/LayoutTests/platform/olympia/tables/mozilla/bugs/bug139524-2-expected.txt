@@ -1,0 +1,49 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x387
+  RenderBlock {HTML} at (0,0) size 800x387
+    RenderBody {BODY} at (8,19) size 784x360
+      RenderBlock {H3} at (0,0) size 784x21
+        RenderText {#text} at (0,0) size 719x21
+          text run at (0,0) width 719: "SPAN attribute of COL element being ignored in Mozilla 1.0 rc1"
+      RenderBlock {P} at (0,40) size 784x36
+        RenderText {#text} at (0,0) size 755x36
+          text run at (0,0) width 755: "(Note: this is a regression bug - I don't know when it appeared, but I remember the SPAN"
+          text run at (0,18) width 596: "attribute on COL elements worked fine sometime before Mozilla 0.9.6)"
+      RenderBlock {P} at (0,93) size 784x18
+        RenderText {#text} at (0,0) size 432x18
+          text run at (0,0) width 432: "The following TABLE has a COLGROUP structure of:"
+      RenderBlock {PRE} at (15,128) size 769x84 [color=#000066]
+        RenderText {#text} at (0,0) size 270x84
+          text run at (0,0) width 100: "<colgroup>"
+          text run at (100,0) width 0: " "
+          text run at (0,21) width 270: " <col width=\"100\" span=\"2\">"
+          text run at (270,21) width 0: " "
+          text run at (0,42) width 180: " <col width=\"200\">"
+          text run at (180,42) width 0: " "
+          text run at (0,63) width 110: "</colgroup>"
+          text run at (110,63) width 0: " "
+      RenderBlock {P} at (0,229) size 784x18
+        RenderText {#text} at (0,0) size 749x18
+          text run at (0,0) width 749: "So the first two colums should both be 100px wide, and the third should be 200px wide."
+      RenderBlock {P} at (0,264) size 784x18
+        RenderText {#text} at (0,0) size 774x18
+          text run at (0,0) width 774: "However, the first column is 100px, the second is 200px, and the third is the default width."
+      RenderBlock {P} at (0,299) size 784x18
+        RenderText {#text} at (0,0) size 508x18
+          text run at (0,0) width 508: "So it would appear that the SPAN attribute is being ignored."
+      RenderTable {TABLE} at (0,334) size 408x26
+        RenderTableCol {COLGROUP} at (0,0) size 0x0
+          RenderTableCol {COL} at (0,0) size 0x0
+          RenderTableCol {COL} at (0,0) size 0x0
+        RenderTableSection {TBODY} at (0,0) size 408x26
+          RenderTableRow {TR} at (0,2) size 408x22
+            RenderTableCell {TD} at (2,2) size 100x22 [border: (1px solid #000000)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 40x18
+                text run at (2,2) width 40: "col 1"
+            RenderTableCell {TD} at (104,2) size 100x22 [border: (1px solid #000000)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 40x18
+                text run at (2,2) width 40: "col 2"
+            RenderTableCell {TD} at (206,2) size 200x22 [border: (1px solid #000000)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 40x18
+                text run at (2,2) width 40: "col 3"

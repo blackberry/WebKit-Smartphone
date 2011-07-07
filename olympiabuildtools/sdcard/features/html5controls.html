@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>HTML5 Forms</title>
+</head>
+<body>
+    <h1>HTML5 Forms</h1>
+    <form>
+      <div>
+        <label>Text:
+          <input type="text" maxlength="6"/>
+        </label>
+      </div>
+      <div>
+        <label>Search:
+          <input type="search" list="search-suggestions" />
+        </label>
+        <datalist id="search-suggestions">
+          <option label="DM" value="Depeche Mode">
+          <option label="Moz" value="Morrissey">
+          <option label="NO" value="New Order">
+          <option label="TC" value="The Cure">
+        </datalist>
+      </div>
+      <div>
+        <label>Telephone:
+          <input type="tel" pattern="[0-9]{10}" name="tel" title="Phone Number?!?!"/>
+        </label>
+      </div>
+      <div>
+        <label>Password:
+          <input type="password" autofocus placeholder="Password"/>
+        </label>
+      </div>  
+      <div>
+        <label>URL:
+          <input type="url" id="url" name="earl" required />
+        </label>
+        </div>
+      <div>
+        <label>Email:
+          <input type="email" placeholder="foo@bar.com" />
+        </label>
+      </div>
+      <div>
+        <label>Datetime:
+          <input type="datetime" />
+        </label>
+      </div>
+      <div>
+        <label>Date:
+          <input type="date" />
+        </label>
+        </div>
+      <div>
+        <label>Month:
+          <input type="month" />
+        </label>
+      </div>  
+        <label>Week:
+          <input type="week" />
+        </label>
+      <div>
+        <label>Time:
+          <input type="time" />
+        </label>
+      </div>
+        <label>Date-Time Local:
+          <input type="datetime-local" />
+        </label>
+      <div>
+        <label>Number:
+          <input type="number" min="99" max="101"/>
+        </label>
+      </div>
+      <div>
+        <label>Range:
+          <input type="range" name="range" />
+          <output required onforminput="value=range.value">0</output>
+        </label>
+        </div>
+      <div>
+        <label>Color:
+          <input type="color" />
+        </label>
+      </div>
+      <div>
+        <label>Checkbox:
+          <input type="checkbox" />
+        </label>
+      </div>
+      <div>
+        <label>Radio:
+          <input type="radio" />
+        </label>
+      </div>
+      <div>
+        <label>Select:
+          <select>
+            <option>Option 1</option>
+            <option>Option 2</option>
+            <option>Option 3</option>
+            <option>Option 4</option>
+            <option>Option 5</option>
+            <option>Option 6</option>
+            <option>Option 7</option>
+            <option>Option 8</option>
+            <option>Option 9</option>
+            <option>Option 10</option>
+            <option>Option 11</option>
+          </select>
+        </label>
+      </div>
+      <div>
+        <label>File:
+          <input type="file" multiple />
+        </label>
+      </div>
+      <input type="submit" />
+    </form>
+<body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"> 
+<html>
+<head>
+<title>Test for Buzilla Bug#37169</title>
+<link rel="stylesheet" href="../js/resources/js-test-style.css">
+<script src="../js/resources/js-test-pre.js"></script>
+<script src="../js/resources/js-test-post-function.js"></script>
+<script>
+if (window.layoutTestController) {
+    layoutTestController.waitUntilDone();
+    layoutTestController.dumpAsText();
+}
+
+function getComputedStyleForElement(element, cssPropertyName)
+{
+    if (!element) {
+        return null;
+    }
+    if (window.getComputedStyle) {
+        return window.getComputedStyle(element, '').getPropertyValue(cssPropertyName.replace(/([A-Z])/g, "-$1").toLowerCase());
+    }
+    if (element.currentStyle) {
+        return element.currentStyle[cssPropertyName];
+    }
+    return null;
+}
+
+function getWidth(id)
+{
+    return getComputedStyleForElement(document.getElementById(id), 'width');
+}
+
+function getHeight(id)
+{
+    return getComputedStyleForElement(document.getElementById(id), 'height');
+}
+
+function test()
+{
+    description("This test checks that replaced elements with percentage heights computes to 'auto' in standard mode, if the height of the containing block is not specified explicitly.<br>See bug #37169.");
+
+    shouldBe("getWidth('image') == getHeight('image')", "true");
+
+    isSuccessfullyParsed();
+    if (window.layoutTestController) { 
+        layoutTestController.notifyDone();
+    }
+}
+
+var successfullyParsed = true;
+</script>
+</head>
+<body onload="test()">
+
+<p>
+<img id="image" src="resources/square-blue-100x100.png" alt="att.gif" style="width: 40%; height: 10%;"/>
+</p> 
+
+<p id="description"></p>
+<div id="console"></div>
+</body>
+</html>

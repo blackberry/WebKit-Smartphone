@@ -1,0 +1,57 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x374
+  RenderBlock {HTML} at (0,0) size 800x374
+    RenderBody {BODY} at (8,8) size 784x358
+      RenderBlock {DIV} at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 466x18
+          text run at (0,0) width 466: "The blue bits of text should be decorated as described."
+      RenderBlock {P} at (0,35) size 784x288 [color=#C0C0C0]
+        RenderText {#text} at (0,0) size 765x72
+          text run at (0,0) width 660: "dummy text dummy text dummy text dummy text dummy text dummy text "
+          text run at (660,0) width 105: "dummy text"
+          text run at (0,18) width 550: "dummy text dummy text dummy text dummy text dummy text "
+          text run at (550,18) width 215: "dummy text dummy text"
+          text run at (0,36) width 440: "dummy text dummy text dummy text dummy text "
+          text run at (440,36) width 325: "dummy text dummy text dummy text"
+          text run at (0,54) width 330: "dummy text dummy text dummy text "
+        RenderInline {SPAN} at (0,0) size 346x38 [color=#0000FF] [border: (10px double #0000FF)]
+          RenderText {#text} at (340,54) size 326x18
+            text run at (340,54) width 326: "two blue lines all around this blue text"
+        RenderText {#text} at (676,54) size 765x126
+          text run at (676,54) width 5: " "
+          text run at (681,54) width 66: "dummy"
+          text run at (0,72) width 589: "text dummy text dummy text dummy text dummy text dummy text "
+          text run at (589,72) width 176: "dummy text dummy"
+          text run at (0,90) width 479: "text dummy text dummy text dummy text dummy text "
+          text run at (479,90) width 286: "dummy text dummy text dummy"
+          text run at (0,108) width 369: "text dummy text dummy text dummy text "
+          text run at (369,108) width 396: "dummy text dummy text dummy text dummy"
+          text run at (0,126) width 259: "text dummy text dummy text "
+          text run at (259,126) width 506: "dummy text dummy text dummy text dummy text dummy"
+          text run at (0,144) width 149: "text dummy text "
+          text run at (149,144) width 616: "dummy text dummy text dummy text dummy text dummy text dummy"
+          text run at (0,162) width 39: "text "
+          text run at (39,162) width 440: "dummy text dummy text dummy text dummy text "
+        RenderInline {SPAN} at (0,0) size 758x38 [color=#0000FF] [border: (1px solid #0000FF)]
+          RenderText {#text} at (480,162) size 758x36
+            text run at (480,162) width 36: "one "
+            text run at (516,162) width 242: "blue line all around this blue"
+            text run at (0,180) width 34: "text"
+        RenderText {#text} at (35,180) size 766x108
+          text run at (35,180) width 225: " dummy text dummy text "
+          text run at (260,180) width 506: "dummy text dummy text dummy text dummy text dummy"
+          text run at (0,198) width 149: "text dummy text "
+          text run at (149,198) width 616: "dummy text dummy text dummy text dummy text dummy text dummy"
+          text run at (0,216) width 39: "text "
+          text run at (39,216) width 660: "dummy text dummy text dummy text dummy text dummy text dummy text "
+          text run at (699,216) width 66: "dummy"
+          text run at (0,234) width 589: "text dummy text dummy text dummy text dummy text dummy text "
+          text run at (589,234) width 176: "dummy text dummy"
+          text run at (0,252) width 479: "text dummy text dummy text dummy text dummy text "
+          text run at (479,252) width 286: "dummy text dummy text dummy"
+          text run at (0,270) width 369: "text dummy text dummy text dummy text "
+          text run at (369,270) width 105: "dummy text"
+      RenderBlock {DIV} at (0,340) size 784x18
+        RenderText {#text} at (0,0) size 559x18
+          text run at (0,0) width 559: "(All the lines of text in the block above should be equally spaced.)"

@@ -1,0 +1,72 @@
+This test fuzzes the length list parser with semi-random attribute values and dumps the results of any values that parse successfully.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+Parsed as 3 length(s) [ 4, 0.252, 9 ]: 4	,.252	+9
+Parsed as 3 length(s) [ 787, 3.01, 0 ]: 787 3.01, .0,e
+Parsed as 3 length(s) [ 4, 45, -685 ]: 4,45	-685 +	26.e   +e4-
+Parsed as 2 length(s) [ 823, 1 ]: 823,1
+Parsed as 3 length(s) [ 42, 9, 624 ]: 42	9 624	0. 9 e47e52147433	7	
+Parsed as 1 length(s) [ 3 ]: 3 60746- 495	60.49 -+ 3194 .192,69-- 
+Parsed as 1 length(s) [ 54 ]: 54	858+0.7e4580611 975	.33e,5	-
+Parsed as 1 length(s) [ 0 ]: 0e1 e,9 3 589	-46+58	-5	1e68
+Parsed as 1 length(s) [ 525 ]: 525 ,.+ 252020-
+Parsed as 2 length(s) [ 9036, 6 ]: 9036 6
+Parsed as 2 length(s) [ -2, 7 ]: -2 7 2+8162 -0 9
+Parsed as 1 length(s) [ 2 ]: 2 8+0,684 0	e 9++	3+6e,-.++979,63
+Parsed as 3 length(s) [ 787, 3.01, 0 ]: 787 3.01, .0,e
+Parsed as 3 length(s) [ 4, 45, -685 ]: 4,45	-685 +	26.e   +e4-
+Parsed as 2 length(s) [ 823, 1 ]: 823,1
+Parsed as 3 length(s) [ 42, 9, 624 ]: 42	9 624	0. 9 e47e52147433	7	
+Parsed as 1 length(s) [ 3 ]: 3 60746- 495	60.49 -+ 3194 .192,69-- 
+Parsed as 1 length(s) [ 54 ]: 54	858+0.7e4580611 975	.33e,5	-
+Parsed as 1 length(s) [ 0 ]: 0e1 e,9 3 589	-46+58	-5	1e68
+Parsed as 1 length(s) [ 525 ]: 525 ,.+ 252020-
+Parsed as 2 length(s) [ 9036, 6 ]: 9036 6
+Parsed as 2 length(s) [ -2, 7 ]: -2 7 2+8162 -0 9
+Parsed as 1 length(s) [ 2 ]: 2 8+0,684 0	e 9++	3+6e,-.++979,63
+Parsed as 3 length(s) [ 787, 3.01, 0 ]: 787 3.01, .0,e
+Parsed as 3 length(s) [ 4, 45, -685 ]: 4,45	-685 +	26.e   +e4-
+Parsed as 2 length(s) [ 823, 1 ]: 823,1
+Parsed as 3 length(s) [ 42, 9, 624 ]: 42	9 624	0. 9 e47e52147433	7	
+Parsed as 1 length(s) [ 3 ]: 3 60746- 495	60.49 -+ 3194 .192,69-- 
+Parsed as 1 length(s) [ 54 ]: 54	858+0.7e4580611 975	.33e,5	-
+Parsed as 1 length(s) [ 0 ]: 0e1 e,9 3 589	-46+58	-5	1e68
+Parsed as 1 length(s) [ 525 ]: 525 ,.+ 252020-
+Parsed as 2 length(s) [ 9036, 6 ]: 9036 6
+Parsed as 2 length(s) [ -2, 7 ]: -2 7 2+8162 -0 9
+Parsed as 1 length(s) [ 2 ]: 2 8+0,684 0	e 9++	3+6e,-.++979,63
+Parsed as 3 length(s) [ 787, 3.01, 0 ]: 787 3.01, .0,e
+Parsed as 3 length(s) [ 4, 45, -685 ]: 4,45	-685 +	26.e   +e4-
+Parsed as 2 length(s) [ 823, 1 ]: 823,1
+Parsed as 3 length(s) [ 42, 9, 624 ]: 42	9 624	0. 9 e47e52147433	7	
+Parsed as 1 length(s) [ 3 ]: 3 60746- 495	60.49 -+ 3194 .192,69-- 
+Parsed as 1 length(s) [ 54 ]: 54	858+0.7e4580611 975	.33e,5	-
+Parsed as 1 length(s) [ 0 ]: 0e1 e,9 3 589	-46+58	-5	1e68
+Parsed as 1 length(s) [ 525 ]: 525 ,.+ 252020-
+Parsed as 2 length(s) [ 9036, 6 ]: 9036 6
+Parsed as 2 length(s) [ -2, 7 ]: -2 7 2+8162 -0 9
+Parsed as 1 length(s) [ 2 ]: 2 8+0,684 0	e 9++	3+6e,-.++979,63
+Parsed as 3 length(s) [ 787, 3.01, 0 ]: 787 3.01, .0,e
+Parsed as 3 length(s) [ 4, 45, -685 ]: 4,45	-685 +	26.e   +e4-
+Parsed as 2 length(s) [ 823, 1 ]: 823,1
+Parsed as 3 length(s) [ 42, 9, 624 ]: 42	9 624	0. 9 e47e52147433	7	
+Parsed as 1 length(s) [ 3 ]: 3 60746- 495	60.49 -+ 3194 .192,69-- 
+Parsed as 1 length(s) [ 54 ]: 54	858+0.7e4580611 975	.33e,5	-
+Parsed as 1 length(s) [ 0 ]: 0e1 e,9 3 589	-46+58	-5	1e68
+Parsed as 1 length(s) [ 525 ]: 525 ,.+ 252020-
+Parsed as 2 length(s) [ 9036, 6 ]: 9036 6
+Parsed as 2 length(s) [ -2, 7 ]: -2 7 2+8162 -0 9
+Parsed as 1 length(s) [ 2 ]: 2 8+0,684 0	e 9++	3+6e,-.++979,63
+Parsed as 3 length(s) [ 787, 3.01, 0 ]: 787 3.01, .0,e
+Parsed as 3 length(s) [ 4, 45, -685 ]: 4,45	-685 +	26.e   +e4-
+Parsed as 2 length(s) [ 823, 1 ]: 823,1
+Parsed as 3 length(s) [ 42, 9, 624 ]: 42	9 624	0. 9 e47e52147433	7	
+Parsed as 1 length(s) [ 3 ]: 3 60746- 495	60.49 -+ 3194 .192,69-- 
+Parsed as 1 length(s) [ 54 ]: 54	858+0.7e4580611 975	.33e,5	-
+Parsed as 1 length(s) [ 0 ]: 0e1 e,9 3 589	-46+58	-5	1e68
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

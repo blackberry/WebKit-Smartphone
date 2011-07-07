@@ -1,0 +1,40 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x263
+  RenderBlock {html} at (0,0) size 800x263
+    RenderBody {body} at (8,17) size 784x238
+      RenderBlock {p} at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 176x18
+          text run at (0,0) width 176: "TEST: td align=\"left\""
+      RenderBlock {p} at (0,35) size 784x36
+        RenderInline {b} at (0,0) size 106x18
+          RenderText {#text} at (0,0) size 106x18
+            text run at (0,0) width 106: "Example 1."
+        RenderBR {br} at (106,0) size 0x18
+        RenderText {#text} at (0,18) size 161x18
+          text run at (0,18) width 161: "Table width=100%"
+      RenderTable {table} at (0,88) size 784x28 [border: (1px outset #808080)]
+        RenderTableSection (anonymous) at (1,1) size 782x26
+          RenderTableRow {tr} at (0,2) size 782x22
+            RenderTableCell {td} at (2,2) size 778x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 260x18
+                text run at (2,2) width 260: "Cell text should be left aligned"
+      RenderBlock {p} at (0,133) size 784x36
+        RenderInline {b} at (0,0) size 106x18
+          RenderText {#text} at (0,0) size 106x18
+            text run at (0,0) width 106: "Example 2."
+        RenderBR {br} at (106,0) size 0x18
+        RenderText {#text} at (0,18) size 569x18
+          text run at (0,18) width 538: "No specific table width; text in second row exceeds text in first "
+          text run at (538,18) width 31: "row"
+      RenderTable {table} at (0,186) size 705x52 [border: (1px outset #808080)]
+        RenderTableSection (anonymous) at (1,1) size 703x50
+          RenderTableRow {tr} at (0,2) size 703x22
+            RenderTableCell {td} at (2,2) size 699x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 260x18
+                text run at (2,2) width 260: "Cell text should be left aligned"
+          RenderTableRow {tr} at (0,26) size 703x22
+            RenderTableCell {td} at (2,26) size 699x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 695x18
+                text run at (2,2) width 560: "xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx xxx "
+                text run at (562,2) width 135: "xxx xxx xxx xxx"

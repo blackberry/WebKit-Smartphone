@@ -1,0 +1,47 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x368
+  RenderBlock {html} at (0,0) size 800x368
+    RenderBody {body} at (8,17) size 784x343
+      RenderBlock {p} at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 223x18
+          text run at (0,0) width 223: "TFOOT VALIGN=BASELINE"
+      RenderTable {table} at (0,35) size 784x308 [border: (1px outset #808080)]
+        RenderTableSection {thead} at (1,1) size 782x26
+          RenderTableRow {tr} at (0,2) size 782x22
+            RenderTableCell {td} at (2,2) size 225x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 60x18
+                text run at (2,2) width 60: "THEAD"
+            RenderTableCell {td} at (229,2) size 551x22 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 60x18
+                text run at (2,2) width 60: "THEAD"
+        RenderTableSection {tfoot} at (1,53) size 782x254
+          RenderTableRow {tr} at (0,2) size 782x250
+            RenderTableCell {td} at (2,20) size 225x112 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 221x108
+                text run at (2,2) width 207: "Compare the baseline of"
+                text run at (2,20) width 221: "the first line of text in this"
+                text run at (2,38) width 34: "cell "
+                text run at (36,38) width 167: "with the baseline of"
+                text run at (2,56) width 217: "the first line of text in the"
+                text run at (2,74) width 126: "next cell: they "
+                text run at (128,74) width 83: "should be"
+                text run at (2,92) width 146: "vertically aligned"
+            RenderTableCell {td} at (229,2) size 551x250 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 521x246
+                text run at (2,2) width 492: "Compare the baseline of"
+                text run at (2,43) width 255: "the first line "
+                text run at (257,43) width 266: "of text in this"
+                text run at (2,84) width 478: "cell with the baseline of"
+                text run at (2,125) width 448: "the first line of text in "
+                text run at (450,125) width 66: "the"
+                text run at (2,166) width 512: "previous cell: they should"
+                text run at (2,207) width 408: "be vertically aligned"
+        RenderTableSection {tbody} at (1,27) size 782x26
+          RenderTableRow {tr} at (0,2) size 782x22
+            RenderTableCell {td} at (2,2) size 225x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 58x18
+                text run at (2,2) width 58: "TBODY"
+            RenderTableCell {td} at (229,2) size 551x22 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 58x18
+                text run at (2,2) width 58: "TBODY"

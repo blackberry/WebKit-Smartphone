@@ -1,0 +1,16 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {DIV} at (0,0) size 154x166 [border: (2px solid #FF0000)]
+        RenderText {#text} at (2,2) size 150x162
+          text run at (2,2) width 150: "Even though this "
+          text run at (2,20) width 142: "div is white-spac"
+          text run at (2,38) width 150: "e pre, the text ins"
+          text run at (2,56) width 150: "ide should still wr"
+          text run at (2,74) width 145: "ap to multiple lin"
+          text run at (2,92) width 148: "es because of the"
+          text run at (2,110) width 149: " word-wrap:break"
+          text run at (2,128) width 148: "-word CSS proper"
+          text run at (2,146) width 20: "ty."

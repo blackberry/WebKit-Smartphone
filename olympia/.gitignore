@@ -1,0 +1,35 @@
+*.mode*
+*.pbxuser
+*.perspective*
+*.pyc
+build/
+/WebKitBuild/
+autoinstall.cache.d
+WebKitTools/Scripts/webkitpy/thirdparty/autoinstalled
+
+# Ignore Chromium projects auto-generated from .gyp files:
+JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.xcodeproj
+WebCore/WebCore.gyp/WebCore.xcodeproj
+WebKit/chromium/WebKit.xcodeproj
+WebKitTools/DumpRenderTree/DumpRenderTree.gyp/DumpRenderTree.xcodeproj
+
+# Ignore status files that manage Chromium dependencies.
+WebKit/chromium/.gclient
+WebKit/chromium/.gclient_entries
+
+# Ignore compiled java tests:
+LayoutTests/java/*.class
+
+# Though the GTK build builds in a subdirectory, autogen.sh still deposits
+# a few files into the source tree.
+/aclocal.m4
+/autom4te.cache
+/autotools
+/autotoolsconfig.h.in
+/configure
+/GNUmakefile.in
+/WebKit/gtk/docs/GNUmakefile.in
+/gtk-doc.make
+/INSTALL
+/README
+*~

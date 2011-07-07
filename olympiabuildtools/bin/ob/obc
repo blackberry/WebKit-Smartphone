@@ -1,0 +1,22 @@
+#!/bin/bash
+
+if [ -z "$1" ] ; then
+    echo "Current build configuration is: $OLYMPIABUILDCONFIG"
+else
+    ARG=`echo $1 | tr '[:upper:]' '[:lower:]'`
+    case $ARG in
+        'release')
+            export OLYMPIABUILDCONFIG="Release"
+            export OLYMPIABUILDCONFIGL="release"
+        ;;
+        'debug')
+            export OLYMPIABUILDCONFIG="Debug"
+            export OLYMPIABUILDCONFIGL="debug"
+        ;;
+        *)
+            echo "Error: unknown build configuration. Please specify either 'release' or 'debug'"
+            return 1
+        ;;
+    esac
+    echo "New build configuration is: $OLYMPIABUILDCONFIG"
+fi

@@ -1,0 +1,44 @@
+layer at (0,0) size 800x775
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x775
+  RenderBlock {HTML} at (0,0) size 800x775
+    RenderBody {BODY} at (8,8) size 784x759
+      RenderBlock {P} at (0,0) size 784x18
+        RenderText {#text} at (0,0) size 352x18
+          text run at (0,0) width 352: "TABLE 1 - without 'height' style on TABLE"
+      RenderTable {TABLE} at (0,35) size 72x78 [border: (3px solid #000000)]
+        RenderTableSection {THEAD} at (3,3) size 66x24
+          RenderTableRow {TR} at (0,2) size 66x20
+            RenderTableCell {TD} at (2,2) size 62x20 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 60x18
+                text run at (1,1) width 60: "THEAD"
+        RenderTableSection {TFOOT} at (3,51) size 66x24
+          RenderTableRow {TR} at (0,2) size 66x20
+            RenderTableCell {TD} at (2,2) size 62x20 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 57x18
+                text run at (1,1) width 57: "TFOOT"
+        RenderTableSection {TBODY} at (3,27) size 66x24
+          RenderTableRow {TR} at (0,2) size 66x20
+            RenderTableCell {TD} at (2,2) size 62x20 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 58x18
+                text run at (1,1) width 58: "TBODY"
+      RenderBlock {HR} at (0,121) size 784x2 [border: (1px inset #000000)]
+      RenderBlock {P} at (0,140) size 784x18
+        RenderText {#text} at (0,0) size 324x18
+          text run at (0,0) width 324: "TABLE 2 - with 'height' style on TABLE"
+      RenderTable {TABLE} at (0,175) size 72x584 [border: (3px solid #000000)]
+        RenderTableSection {THEAD} at (3,3) size 66x24
+          RenderTableRow {TR} at (0,2) size 66x20
+            RenderTableCell {TD} at (2,2) size 62x20 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 60x18
+                text run at (1,1) width 60: "THEAD"
+        RenderTableSection {TFOOT} at (3,557) size 66x24
+          RenderTableRow {TR} at (0,2) size 66x20
+            RenderTableCell {TD} at (2,2) size 62x20 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 57x18
+                text run at (1,1) width 57: "TFOOT"
+        RenderTableSection {TBODY} at (3,27) size 66x530
+          RenderTableRow {TR} at (0,2) size 66x526
+            RenderTableCell {TD} at (2,255) size 62x20 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 58x18
+                text run at (1,1) width 58: "TBODY"

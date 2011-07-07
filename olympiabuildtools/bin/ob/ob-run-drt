@@ -1,0 +1,221 @@
+#!/bin/bash
+SCRIPT_NAME="ob-run-drt"
+usage()
+{
+cat <<EOT
+Usage: $SCRIPT_NAME <OPTIONS> -- <run-webkit-tests options>
+
+This script will start a Dump Render Tree for either fledge (default) or device.
+OPTIONS:
+   -d           # Device run
+   -f           # Fledge run (default)
+   -i           # Interactive (ask before removing data)
+   -r           # Results only (only process results)
+   -s <PATH>    # export SDCARD_PATH to the given path
+   -u <PORT>    # USB Port for device as assigned by USBPortMapper.exe
+   -x           # Debug run. (debugger will not be modified)
+   -h           # Show this help
+
+EOT
+}
+
+
+#=====================
+#DEFAULTS
+#=====================
+INTERACTIVE=0
+RESULTS_ONLY=0
+DEBUG=0
+TYPE=FLEDGE
+USB_PORT=
+SDCARD_PATH_IS_DEVICE=0
+OLD_EXTRA_FLEDGE_ARGS=$EXTRA_FLEDGE_ARGS
+[ ! "$EXTRA_FLEDGE_ARGS" ] && export EXTRA_FLEDGE_ARGS="-app-param=JvmDebugModeOff -app-param=JvmNoBreakOnThrowable -ignore-error=372"
+
+#=====================
+#Parse Options
+#=====================
+while getopts "dfirs:u:xh" OPTION
+do
+case $OPTION in
+    d)
+        export SDCARD_PATH_IS_DEVICE=1
+        ;;
+    f)
+        TYPE=FLEDGE;;
+    i)
+        INTERACTIVE=1;;
+    r)
+        RESULTS_ONLY=1;;
+    s)
+        export SDCARD_PATH="$OPTARG";;
+    u)
+        USB_PORT="$OPTARG";;
+    x)
+        DEBUG=1;;
+    h)
+        usage
+        shift $((OPTIND-1))
+        OPTIND=0
+        return 0
+        ;;
+    ?)
+        usage >&2
+        shift $((OPTIND-1))
+        OPTIND=0
+        return 1
+        ;;
+esac
+done
+shift $((OPTIND-1))
+OPTIND=0
+
+#=====================
+#Functions
+#=====================
+interactive_continue()
+{
+    if [ $INTERACTIVE -gt 0 ]; then
+        IN=
+        CNT=0
+        while [ "$IN" != "n" ] && [ "$IN" != "y" ]; do
+            [ $CNT -gt 0 ] && echo
+            let CNT+=1
+
+            echo -en "Continue? (y/n) "
+            read -n 1 IN
+            IN=`echo $IN | tr [:upper:] [:lower:]`
+        done
+        echo
+        if [ "$IN" = "n" ]; then
+            echo "$SCRIPT_NAME aborted by user."
+            return 1
+        fi
+    fi
+}
+
+cleanup()
+{
+    if [ -f "$SDCARD_PATH/drt_backup.reg" ] ; then
+        reg import "$SDCARD_PATH/drt_backup.reg" > /dev/null
+        rm -f "$SDCARD_PATH/drt_backup.reg" > /dev/null
+    fi
+    export SDCARD_PATH_IS_DEVICE=0
+    export EXTRA_FLEDGE_ARGS=$OLD_EXTRA_FLEDGE_ARGS
+}
+
+# Load SDCard with files which we can't include in the open sourced scripts (e.g. fonts)
+preload_sdcard()
+{
+    if [ ! -d "$SDCARD_PATH/fonts" ] ; then
+        mkdir "$SDCARD_PATH/fonts"
+    fi
+    cp -f "$OLYMPIATOOLS/fonts/"* "$SDCARD_PATH/fonts"
+}
+
+check_device_dir()
+{
+    if [ ! -d "$SDCARD_PATH/BlackBerry" ]; then
+        INTERACTIVE_OLD=$INTERACTIVE
+        INTERACTIVE=1
+        echo -e "\nWarning: This does not look like a device SDCard: [$SDCARD_PATH]."
+        interactive_continue
+        ret=$?; [ $ret -ne 0 ] && cleanup && return $ret
+        INTERACTIVE=$INTERACTIVE_OLD
+    fi
+}
+clean_sdcard()
+{
+    echo -e "\nWarning: Cleaning sdcard [$SDCARD_PATH] (index.drt, current.drt, etc)."
+    interactive_continue
+    ret=$?; [ $ret -ne 0 ] && cleanup && return $ret
+
+    rm -f "$SDCARD_PATH/index.drt"
+    rm -f "$SDCARD_PATH/current.drt"
+    rm -f "$SDCARD_PATH/done"
+    rm -rf "$SDCARD_PATH/user"
+}
+
+trap cleanup SIGINT
+
+
+
+#=====================
+#Environment
+#=====================
+if [ -z "$FLEDGE_WD" ] ; then
+    export FLEDGE_WD="$OLYMPIAJAVA/lynx/Debug"
+fi
+if [ -z "$FLEDGE_PATH" ] ; then
+    export FLEDGE_PATH="$OLYMPIAJAVA/lynx/fledge/bin"
+fi
+if [ -z "$SDCARD_PATH" ] ; then
+    export SDCARD_PATH="/tmp/sdcard";
+    echo -e "\nWarning: Set SDCARD_PATH to [$SDCARD_PATH]"
+    interactive_continue
+    ret=$?; [ $ret -ne 0 ] && cleanup && return $ret
+fi
+if [ ! -d "$SDCARD_PATH" ]; then
+    mkdir "$SDCARD_PATH"
+    if [ $? != 0 ]; then
+        echo "Error: Cannot create [$SDCARD_PATH]." >&2
+        cleanup
+        return 1
+    fi
+fi
+
+
+#=====================
+#Main
+#=====================
+
+if [ $SDCARD_PATH_IS_DEVICE -gt 0 ]; then
+    check_device_dir
+    ret=$?; [ $ret -ne 0 ] && cleanup && return $ret
+fi
+
+
+pushd "$SDCARD_PATH" > /dev/null
+    if [ $RESULTS_ONLY -gt 0 ]; then
+        export SDCARD_PATH_IS_DEVICE=0
+        touch done
+    else
+        clean_sdcard
+        ret=$?; [ $ret -ne 0 ] && cleanup && return $ret
+        preload_sdcard
+        ret=$?; [ $ret -ne 0 ] && cleanup && return $ret
+    fi
+popd > /dev/null
+
+#Registry settings for dr-watson
+if [ $DEBUG -le 0 ] && [ $SDCARD_PATH_IS_DEVICE -le 0 ]; then
+    if [ ! -f "$SDCARD_PATH/drt_backup.reg" ] ; then
+        reg export 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AeDebug' "$SDCARD_PATH/drt_backup.reg" > /dev/null
+    fi
+    reg import "$OLYMPIATOOLS/reg/drwtsn.reg" > /dev/null
+fi
+
+
+#Start the DRTs
+pushd "$OLYMPIAROOT/olympia/WebKitTools/DumpRenderTree/olympia" > /dev/null
+    echo "INFO: Starting run-webkit-tests..."
+   ../../Scripts/run-webkit-tests --olympia --root . --no-http $@
+popd > /dev/null
+
+
+if [ $SDCARD_PATH_IS_DEVICE -gt 0 ]; then
+
+    #Reboot device to start the tests.
+    echo -e "\nWarning: Rebooting device."
+    interactive_continue
+    ret=$?; [ $ret -ne 0 ] && cleanup && return $ret
+    cfp -u$USB_PORT USBMS -s
+
+    cat <<EOT
+!!!NOTE!!!
+Please ensure the OlympiaDebugger is started on the device after it boots.
+Once the device DRTs have completed, please remount your SDCard and run:
+   $SCRIPT_NAME -drs $SDCARD_PATH $@
+EOT
+fi
+cleanup

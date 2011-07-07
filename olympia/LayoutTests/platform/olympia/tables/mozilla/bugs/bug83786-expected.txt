@@ -1,0 +1,26 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x176
+  RenderBlock {HTML} at (0,0) size 800x176
+    RenderBody {BODY} at (0,0) size 800x176
+layer at (0,0) size 346x176 clip at (3,3) size 340x170 scrollWidth 420 scrollHeight 189
+  RenderBlock {DIV} at (0,0) size 346x176 [border: (3px solid #008000)]
+    RenderTable {TABLE} at (20,3) size 80x187
+      RenderTableSection {TBODY} at (0,0) size 80x187
+        RenderTableRow {TR} at (0,0) size 80x187
+          RenderTableCell {TD} at (0,0) size 80x187 [r=0 c=0 rs=1 cs=1]
+            RenderText {#text} at (0,-2) size 80x174
+              text run at (0,-2) width 80: "This____"
+              text run at (0,15) width 80: "text____"
+              text run at (0,32) width 80: "should__"
+              text run at (0,49) width 80: "be______"
+              text run at (0,66) width 80: "wrapped,"
+              text run at (0,83) width 80: "one_____"
+              text run at (0,100) width 80: "word____"
+              text run at (0,117) width 80: "to______"
+              text run at (0,134) width 80: "a_______"
+              text run at (0,151) width 80: "line.___"
+            RenderInline {SPAN} at (0,0) size 72x18 [color=#FFFF00] [bgcolor=#FF0000]
+              RenderText {#text} at (0,170) size 72x18
+                text run at (0,170) width 72: "_FAIL!__"
+            RenderText {#text} at (0,0) size 0x0

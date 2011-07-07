@@ -1,0 +1,8 @@
+#!/bin/bash
+
+ob-javaapplications-clean
+ob-lynx-clean
+ob-bbnsl-clean
+ob-webkit-clean
+ob-player-clean
+

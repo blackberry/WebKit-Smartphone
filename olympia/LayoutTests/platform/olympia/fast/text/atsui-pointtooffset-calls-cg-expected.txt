@@ -1,0 +1,21 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (0,0) size 800x600
+      RenderBlock (anonymous) at (0,0) size 800x18
+        RenderText {#text} at (0,0) size 72x18
+          text run at (0,0) width 72: "e\x{300}e\x{300}e\x{300}e\x{300}e\x{300}e\x{300}X"
+      RenderBlock {HR} at (0,26) size 800x2 [border: (1px inset #000000)]
+      RenderBlock (anonymous) at (0,36) size 800x54
+        RenderText {#text} at (0,0) size 287x18
+          text run at (0,0) width 287: "This tests for regressions against "
+        RenderInline {I} at (0,0) size 751x36
+          RenderText {#text} at (287,0) size 751x36
+            text run at (287,0) width 464: "http://bugzilla.opendarwin.org/show_bug.cgi?id=5878"
+            text run at (0,18) width 381: "pointToOffset always takes the CG code path"
+        RenderText {#text} at (381,18) size 781x36
+          text run at (381,18) width 400: " by clicking the X and verifying that the correct"
+          text run at (0,36) width 458: "caret position (13) is reported to the editing delegate."
+        RenderText {#text} at (0,0) size 0x0
+        RenderText {#text} at (0,0) size 0x0

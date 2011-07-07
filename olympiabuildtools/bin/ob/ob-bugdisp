@@ -1,0 +1,16 @@
+#!/bin/bash
+
+CFP_PASSWORD_ARG=
+if [ ! -z "$CFP_PASSWORD" ] ; then
+    CFP_PASSWORD_ARG=/w="$CFP_PASSWORD"
+fi
+if [ ! -z "$1" ] ; then
+    CFP_PASSWORD_ARG=/w="$1"
+fi
+
+pushd $OLYMPIATOOLS/bin
+cmd //c "wbugdisp.exe /d=../../os_latest/xscale/debug/$OLYMPIABUILDCHOICE.datz $CFP_PASSWORD_ARG"
+popd
+
+# wipe out the password arg for safety
+CFP_PASSWORD_ARG=
