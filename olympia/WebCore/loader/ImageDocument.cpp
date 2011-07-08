@@ -221,6 +221,45 @@ void ImageDocument::createDocumentStructure()
     m_imageElement = imageElement.get();
 }
 
+#if OS(OLYMPIA)
+
+float ImageDocument::scale() const
+{
+    return 1.0f;
+}
+
+void ImageDocument::resizeImageToFit()
+{
+}
+
+void ImageDocument::imageClicked(int, int)
+{
+}
+
+void ImageDocument::imageChanged()
+{
+}
+
+void ImageDocument::restoreImageSize()
+{
+}
+
+bool ImageDocument::imageFitsInWindow() const
+{
+    return true;
+}
+
+void ImageDocument::windowSizeChanged()
+{
+}
+
+bool ImageDocument::shouldShrinkToFit() const
+{
+    return false;
+}
+
+#else OS(OLYMPIA)
+
 float ImageDocument::scale() const
 {
     if (!m_imageElement)
@@ -360,18 +399,20 @@ void ImageDocument::windowSizeChanged()
     }
 }
 
+bool ImageDocument::shouldShrinkToFit() const
+{
+    return frame()->page()->settings()->shrinksStandaloneImagesToFit() &&
+        frame()->page()->mainFrame() == frame();
+}
+
+#endif // OS(OLYMPIA)
+
 CachedImage* ImageDocument::cachedImage()
 { 
     if (!m_imageElement)
         createDocumentStructure();
     
     return m_imageElement->cachedImage();
-}
-
-bool ImageDocument::shouldShrinkToFit() const
-{
-    return frame()->page()->settings()->shrinksStandaloneImagesToFit() &&
-        frame()->page()->mainFrame() == frame();
 }
 
 // --------

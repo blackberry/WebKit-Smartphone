@@ -1,0 +1,2 @@
+This tests that removing a child frame when it's been parsing does not crash the renderer. 
+

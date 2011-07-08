@@ -1,28 +1,28 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x230
-  RenderBlock {HTML} at (0,0) size 800x230
-    RenderBody {BODY} at (8,17) size 784x196 [color=#FF0000]
-      RenderBlock {P} at (0,0) size 784x18 [color=#008000]
-        RenderText {#text} at (0,0) size 265x18
-          text run at (0,0) width 265: "This sentence should be green."
-      RenderBlock {DIV} at (0,35) size 784x18 [color=#008000]
-        RenderBlock {P} at (0,0) size 784x18
-          RenderText {#text} at (0,0) size 265x18
-            text run at (0,0) width 265: "This sentence should be green."
-      RenderBlock {P} at (0,70) size 784x18 [color=#008000]
-        RenderText {#text} at (0,0) size 265x18
-          text run at (0,0) width 265: "This sentence should be green."
-      RenderBlock {P} at (0,105) size 784x18 [color=#008000]
-        RenderText {#text} at (0,0) size 265x18
-          text run at (0,0) width 265: "This sentence should be green."
-      RenderBlock {DIV} at (0,140) size 784x21 [color=#008000]
-        RenderBlock {PRE} at (0,0) size 784x21
-          RenderText {#text} at (0,0) size 300x21
-            text run at (0,0) width 300: "This sentence should be green."
-      RenderBlock {DIV} at (0,178) size 784x18 [color=#008000]
-        RenderBlock {UL} at (0,0) size 784x18
-          RenderListItem {LI} at (40,0) size 744x18
-            RenderListMarker at (-16,0) size 6x18: bullet
-            RenderText {#text} at (0,0) size 265x18
-              text run at (0,0) width 265: "This sentence should be green."
+layer at (0,0) size 800x214
+  RenderBlock {HTML} at (0,0) size 800x214
+    RenderBody {BODY} at (8,16) size 784x182 [color=#FF0000]
+      RenderBlock {P} at (0,0) size 784x17 [color=#008000]
+        RenderText {#text} at (0,0) size 250x17
+          text run at (0,0) width 250: "This sentence should be green."
+      RenderBlock {DIV} at (0,33) size 784x17 [color=#008000]
+        RenderBlock {P} at (0,0) size 784x17
+          RenderText {#text} at (0,0) size 250x17
+            text run at (0,0) width 250: "This sentence should be green."
+      RenderBlock {P} at (0,66) size 784x17 [color=#008000]
+        RenderText {#text} at (0,0) size 250x17
+          text run at (0,0) width 250: "This sentence should be green."
+      RenderBlock {P} at (0,99) size 784x17 [color=#008000]
+        RenderText {#text} at (0,0) size 250x17
+          text run at (0,0) width 250: "This sentence should be green."
+      RenderBlock {DIV} at (0,132) size 784x17 [color=#008000]
+        RenderBlock {PRE} at (0,0) size 784x17
+          RenderText {#text} at (0,0) size 240x17
+            text run at (0,0) width 240: "This sentence should be green."
+      RenderBlock {DIV} at (0,165) size 784x17 [color=#008000]
+        RenderBlock {UL} at (0,0) size 784x17
+          RenderListItem {LI} at (40,0) size 744x17
+            RenderListMarker at (-16,0) size 6x17: bullet
+            RenderText {#text} at (0,0) size 250x17
+              text run at (0,0) width 250: "This sentence should be green."

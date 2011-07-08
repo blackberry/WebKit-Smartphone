@@ -24,28 +24,23 @@ pushd $BBNSLDIR/players
 
 RETURNCODE=0
 
-if [ -d $PLAYERBUILDROOT/$CPUNAME-$OLYMPIABUILDCONFIGL ] ; then
-    pushd $PLAYERBUILDROOT/$CPUNAME-$OLYMPIABUILDCONFIGL
-    $BBNSLDIR/tools/win32/bin/make
-    let RETURNCODE+=$?
-    $BBNSLDIR/tools/win32/bin/make install
-    let RETURNCODE+=$?
-    popd
-else
-    mkdir -p $PLAYERBUILDROOT
-    pushd $PLAYERBUILDROOT
-    # Change to configure option
-    export LYNXDIR=$OLYMPIAJAVA/lynx
-    ../configure --arch=$CPUNAME --config=$OLYMPIABUILDCONFIGL --prefix=$PLAYERINSTALLPREFIX $CONFIGUREFLAGS
-    let RETURNCODE+=$?
-    pushd $CPUNAME-$OLYMPIABUILDCONFIGL
-    $BBNSLDIR/tools/win32/bin/make
-    let RETURNCODE+=$?
-    $BBNSLDIR/tools/win32/bin/make install
-    let RETURNCODE+=$?
-    popd
-    popd
-fi
+mkdir -p $PLAYERBUILDROOT
+pushd $PLAYERBUILDROOT
+
+# Change to configure option
+export LYNXDIR=$OLYMPIAJAVA/lynx
+
+$BBNSLDIR/players/configure \
+    --arch=$CPUNAME \
+    --config=$OLYMPIABUILDCONFIGL \
+    --device=$PLATFORMNAME \
+    --prefix=$PLAYERINSTALLPREFIX \
+    $CONFIGUREFLAGS
+let RETURNCODE+=$?
+
+$BBNSLDIR/tools/win32/bin/make install
+let RETURNCODE+=$?
+popd
 
 ob-copyWebkitToLynx
 

@@ -1,8 +1,4 @@
 #!/bin/bash
 
-pushd $BBNSLDIR
-
-pushd build
-rm -rf $CPUNAME-$OLYMPIABUILDCONFIGL
-popd
-popd
+rm -rf $BBNSLBUILDROOT
+rm -rf $BBNSLINSTALLPREFIX

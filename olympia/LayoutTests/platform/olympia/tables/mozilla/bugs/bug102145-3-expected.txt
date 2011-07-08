@@ -6,7 +6,7 @@ layer at (0,0) size 800x600
       RenderTable {TABLE} at (0,0) size 200x200
         RenderTableSection {TBODY} at (0,0) size 200x200
           RenderTableRow {TR} at (0,2) size 200x196
-            RenderTableCell {TD} at (2,81) size 196x38 [bgcolor=#008000] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (1,1) size 167x36
-                text run at (1,1) width 167: "I should be 200px x"
-                text run at (1,19) width 54: "200px"
+            RenderTableCell {TD} at (2,82) size 196x36 [bgcolor=#008000] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 155x34
+                text run at (1,1) width 155: "I should be 200px x"
+                text run at (1,18) width 49: "200px"

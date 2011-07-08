@@ -6,6 +6,7 @@
 #define RenderThemeOlympia_H
 
 #include "RenderTheme.h"
+#include "OlympiaPlatformMisc.h"
 
 namespace WebCore {
     class Gradient;
@@ -24,8 +25,7 @@ namespace WebCore {
         virtual void repaintCaret(RenderView*, const IntRect& caretRect, CaretVisibility);
         virtual void paintCaretMarker(GraphicsContext*, const FloatRect& caretRect, const Font&);
         virtual void adjustTextColorForCaretMarker(Color&) const;
-        void setCaretOutlineAppearanceEnabled(bool caretOutlineAppearanceEnabled) { m_caretOutlineAppearanceEnabled = caretOutlineAppearanceEnabled; }
-        bool isCaretOutlineAppearanceEnabled() const { return m_caretOutlineAppearanceEnabled; }
+        void setCaretHighlightStyle(Olympia::Platform::CaretHighlightStyle caretHighlightStyle) { m_caretHighlightStyle = caretHighlightStyle; }
 
         virtual void systemFont(int cssValueId, FontDescription&) const;
         virtual bool paintCheckbox(RenderObject*, const RenderObject::PaintInfo&, const IntRect&);
@@ -51,7 +51,9 @@ namespace WebCore {
         virtual bool paintTextArea(RenderObject*, const RenderObject::PaintInfo&, const IntRect&);
 
         virtual void adjustSearchFieldStyle(CSSStyleSelector*, RenderStyle*, Element*) const;
+        virtual void adjustSearchFieldCancelButtonStyle(CSSStyleSelector*, RenderStyle*, Element*) const;
         virtual bool paintSearchField(RenderObject*, const RenderObject::PaintInfo&, const IntRect&);
+        virtual bool paintSearchFieldCancelButton(RenderObject*, const RenderObject::PaintInfo&, const IntRect&);
 
         virtual void adjustMenuListButtonStyle(CSSStyleSelector*, RenderStyle*, Element*) const;
         virtual void adjustCheckboxStyle(CSSStyleSelector*, RenderStyle*, Element*) const;
@@ -65,7 +67,7 @@ namespace WebCore {
         void paintMenuListButtonGradientAndArrow(GraphicsContext*, RenderObject*, IntRect buttonRect, const Path& clipPath);
 
         bool m_shouldRepaintVerticalCaret;
-        bool m_caretOutlineAppearanceEnabled;
+        Olympia::Platform::CaretHighlightStyle m_caretHighlightStyle;
         RefPtr<Range> m_oldCaretTextRange; // Used to determine whether we may have already added/painted the caret marker.
     };
 

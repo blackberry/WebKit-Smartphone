@@ -47,6 +47,7 @@ ScrollView::ScrollView()
     , m_prohibitsScrolling(false)
     , m_canBlitOnScroll(true)
     , m_scrollbarsAvoidingResizer(0)
+    , m_fixedReportedSizeChanged(false)
     , m_canOverscroll(false)
     , m_scrollbarsSuppressed(false)
     , m_inUpdateScrollbars(false)
@@ -232,6 +233,7 @@ void ScrollView::setFixedReportedSize(const IntSize& newSize)
 {
     if (fixedReportedSize() == newSize)
         return;
+    m_fixedReportedSizeChanged = true;
     m_fixedReportedSize = newSize;
 }
 

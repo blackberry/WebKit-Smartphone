@@ -1,13 +1,12 @@
-layer at (0,0) size 812x600
+layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 812x384
-  RenderBlock {HTML} at (0,0) size 800x384
-    RenderBody {BODY} at (0,22) size 800x362
-      RenderBlock {H1} at (0,0) size 800x140
-        RenderText {#text} at (0,0) size 812x140
-          text run at (0,0) width 231: "Test for DRT"
-          text run at (0,35) width 812: "pauseAnimationAtTimeOnElementWithId()"
-          text run at (0,70) width 612: "API on animations with multiple"
-          text run at (0,105) width 200: "keyframes"
-layer at (15,184) size 200x200
-  RenderBlock (relative positioned) {DIV} at (0,162) size 200x200 [bgcolor=#FF0000]
+layer at (0,0) size 800x341
+  RenderBlock {HTML} at (0,0) size 800x341
+    RenderBody {BODY} at (0,21) size 800x320
+      RenderBlock {H1} at (0,0) size 800x99
+        RenderText {#text} at (0,0) size 778x99
+          text run at (0,0) width 221: "Test for DRT"
+          text run at (0,33) width 769: "pauseAnimationAtTimeOnElementWithId()"
+          text run at (0,66) width 778: "API on animations with multiple keyframes"
+layer at (15,141) size 200x200
+  RenderBlock (relative positioned) {DIV} at (0,120) size 200x200 [bgcolor=#FF0000]

@@ -6,12 +6,12 @@
 #include "PlatformScreen.h"
 
 #include "FloatRect.h"
+#include "HostWindow.h"
+#include "PageClientOlympia.h"
+#include "ScrollView.h"
 #include "Widget.h"
 
 #include "NotImplemented.h"
-
-//FIXME: layering violation!
-#include "WebSettings.h"
 
 namespace WebCore {
 
@@ -33,16 +33,26 @@ int screenDepth(Widget*)
     return 24;
 }
 
-FloatRect screenAvailableRect(Widget*)
+FloatRect screenAvailableRect(Widget* widget)
 {
-    //FIXME: layering violation!
-    return FloatRect(0, 0, Olympia::WebKit::WebSettings::screenWidth(), Olympia::WebKit::WebSettings::screenHeight());
+    ScrollView* view = widget->root() ? widget->root() : widget->parent();
+    if (!view)
+        return FloatRect(0, 0, 0, 0);
+
+    PageClientOlympia* pageClient = view->hostWindow()->platformPageClient();
+
+    return pageClient->screenAvailableRect();
 }
 
-FloatRect screenRect(Widget*)
+FloatRect screenRect(Widget* widget)
 {
-    //FIXME: layering violation!
-    return FloatRect(0, 0, Olympia::WebKit::WebSettings::screenWidth(), Olympia::WebKit::WebSettings::screenHeight());
+    ScrollView* view = widget->root() ? widget->root() : widget->parent();
+    if (!view)
+        return FloatRect(0, 0, 0, 0);
+
+    PageClientOlympia* pageClient = view->hostWindow()->platformPageClient();
+
+    return pageClient->screenRect();
 }
 
 } // namespace WebCore

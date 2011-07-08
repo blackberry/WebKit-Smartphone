@@ -631,6 +631,23 @@ Storage* DOMWindow::localStorage(ExceptionCode& ec) const
     m_localStorage = Storage::create(m_frame, storageArea.release());
     return m_localStorage.get();
 }
+
+#if OS(OLYMPIA)
+void DOMWindow::removeSessionStorage()
+{
+    if (m_sessionStorage)
+        m_sessionStorage->disconnectFrame();
+    m_sessionStorage = 0;
+}
+
+void DOMWindow::removeLocalStorage()
+{
+    if (m_localStorage)
+        m_localStorage->disconnectFrame();
+    m_localStorage = 0;
+}
+#endif
+
 #endif
 
 #if ENABLE(NOTIFICATIONS)

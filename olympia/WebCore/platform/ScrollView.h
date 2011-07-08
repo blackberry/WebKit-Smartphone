@@ -133,6 +133,7 @@ public:
     int reportedHeight() const;
     IntSize fixedReportedSize() const;
     void setFixedReportedSize(const IntSize&);
+    bool fixedReportedSizeChanged() const { return m_fixedReportedSizeChanged; }
 
     // Functions for getting/setting the size webkit should use to layout the contents. By default this is the same as the visible
     // content size. Explicitly setting a layout size value will cause webkit to layout the contents using this size instead.
@@ -271,6 +272,8 @@ protected:
     virtual void updateScrollCorner();
     virtual void paintScrollCorner(GraphicsContext*, const IntRect& cornerRect);
 
+    void setFixedReportedSizeChanged(bool changed) { m_fixedReportedSizeChanged = changed; }
+
 private:
     RefPtr<Scrollbar> m_horizontalScrollbar;
     RefPtr<Scrollbar> m_verticalScrollbar;
@@ -290,6 +293,7 @@ private:
 
     IntSize m_scrollOffset; // FIXME: Would rather store this as a position, but we will wait to make this change until more code is shared.
     IntSize m_fixedReportedSize;
+    bool m_fixedReportedSizeChanged;
     IntSize m_fixedLayoutSize;
     IntSize m_contentsSize;
     bool m_canOverscroll;

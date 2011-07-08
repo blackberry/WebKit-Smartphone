@@ -71,6 +71,16 @@ bool String::isEmpty() const
     return !m_impl || !m_impl->length();
 }
 
+bool String::equal(const char* utf8) const
+{
+    return WebCore::equal(m_impl, utf8);
+}
+
+bool String::equalIgnoringCase(const char* utf8) const
+{
+    return WebCore::equalIgnoringCase(m_impl, utf8);
+}
+
 } // namespace WebKit
 } // namespace Olympia
 

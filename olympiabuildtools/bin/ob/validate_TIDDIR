@@ -1,5 +1,0 @@
-#!/bin/bash
-
-echo "Validating usermode TID directory..."
-export TIDDIR=$OLYMPIAJAVA/lynx/runtime/tid
-source "$BBNSLDIR/tools/nightly/tid_latest.env"

@@ -1,18 +1,18 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x87
-  RenderBlock {HTML} at (0,0) size 800x87
-    RenderBody {BODY} at (8,17) size 784x53
-      RenderBlock {P} at (0,0) size 784x18
-        RenderText {#text} at (0,0) size 322x18
-          text run at (0,0) width 322: "This sentence should have no border. "
-        RenderInline {SPAN} at (0,0) size 370x28 [border: (5px solid #00FF00)]
-          RenderText {#text} at (327,0) size 360x18
-            text run at (327,0) width 360: "This sentence should have a green border."
+layer at (0,0) size 800x82
+  RenderBlock {HTML} at (0,0) size 800x82
+    RenderBody {BODY} at (8,16) size 784x50
+      RenderBlock {P} at (0,0) size 784x17
+        RenderText {#text} at (0,0) size 305x17
+          text run at (0,0) width 305: "This sentence should have no border. "
+        RenderInline {SPAN} at (0,0) size 352x27 [border: (5px solid #00FF00)]
+          RenderText {#text} at (310,0) size 342x17
+            text run at (310,0) width 342: "This sentence should have a green border."
         RenderText {#text} at (0,0) size 0x0
-      RenderBlock {P} at (0,35) size 784x18
-        RenderInline {SPAN} at (0,0) size 510x34 [bgcolor=#FF0000]
-          RenderInline {SPAN} at (0,0) size 510x34 [bgcolor=#00FF00]
-            RenderText {#text} at (0,0) size 510x18
-              text run at (0,0) width 510: "This sentence should be in a green bar, with no red present."
+      RenderBlock {P} at (0,33) size 784x17
+        RenderInline {SPAN} at (0,0) size 482x33 [bgcolor=#FF0000]
+          RenderInline {SPAN} at (0,0) size 482x33 [bgcolor=#00FF00]
+            RenderText {#text} at (0,0) size 482x17
+              text run at (0,0) width 482: "This sentence should be in a green bar, with no red present."
         RenderText {#text} at (0,0) size 0x0

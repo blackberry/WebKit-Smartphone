@@ -52,7 +52,9 @@ case $OPTION in
     u)
         USB_PORT="$OPTARG";;
     x)
-        DEBUG=1;;
+        EXTRA_FLEDGE_ARGS="-ump-debug-wait -ump-show-console -app-param=JvmDebugModeOff -app-param=JvmNoBreakOnThrowable -ignore-error=372"
+        DEBUG=1
+        ;;
     h)
         usage
         shift $((OPTIND-1))
@@ -172,11 +174,22 @@ fi
 if [ $SDCARD_PATH_IS_DEVICE -gt 0 ]; then
     check_device_dir
     ret=$?; [ $ret -ne 0 ] && cleanup && return $ret
+    defaultDrtResultsDir="$SDCARD_PATH/ltr"
+else
+    defaultDrtResultsDir="$SDCARD_PATH/layout-test-results"
 fi
 
 
 pushd "$SDCARD_PATH" > /dev/null
+
+    #Set default output directory if none specified by command line
+    if [ ! "`echo \"$@\" | grep -- -o`" ]; then
+        echo "INFO: Setting output to $defaultDrtResultsDir"
+        additionalDRTOpts="-o $defaultDrtResultsDir"
+    fi
+
     if [ $RESULTS_ONLY -gt 0 ]; then
+        OLD_SDCARD_PATH_IS_DEVICE=$SDCARD_PATH_IS_DEVICE
         export SDCARD_PATH_IS_DEVICE=0
         touch done
     else
@@ -199,7 +212,7 @@ fi
 #Start the DRTs
 pushd "$OLYMPIAROOT/olympia/WebKitTools/DumpRenderTree/olympia" > /dev/null
     echo "INFO: Starting run-webkit-tests..."
-   ../../Scripts/run-webkit-tests --olympia --root . --no-http $@
+   ../../Scripts/run-webkit-tests --olympia --root . --no-http $additionalDRTOpts $@
 popd > /dev/null
 
 
@@ -217,5 +230,19 @@ Please ensure the OlympiaDebugger is started on the device after it boots.
 Once the device DRTs have completed, please remount your SDCard and run:
    $SCRIPT_NAME -drs $SDCARD_PATH $@
 EOT
+    cleanup && return 0
 fi
+
+
+if [ -f "$defaultDrtResultsDir/results.html" ]; then
+    perl -p -i.bak -e "s~/.*/LayoutTests~../LayoutTests~g" $defaultDrtResultsDir/results.html
+
+    if [ $RESULTS_ONLY -gt 0 ] && [ $OLD_SDCARD_PATH_IS_DEVICE -gt 0 ]; then
+        echo "INFO: You can view the results directly on your device by specifying the following in your browser:"
+        echo "    file:///SDCard/ltr/results.html"
+    fi
+fi
+
+
+
 cleanup

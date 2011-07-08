@@ -1,25 +1,25 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x327
-  RenderBlock {HTML} at (0,0) size 800x327
-    RenderBody {BODY} at (8,8) size 784x302
-      RenderBlock {P} at (0,0) size 784x18 [color=#000080]
-        RenderText {#text} at (0,0) size 420x18
-          text run at (0,0) width 420: "The following two diagrams should look identical."
-      RenderBlock {DIV} at (17,35) size 176x125 [color=#008080] [bgcolor=#FFA500] [border: (3px solid #000000)]
-        RenderBlock {UL} at (3,3) size 170x119 [bgcolor=#FFFF00]
-          RenderListItem {LI} at (17,17) size 136x17
-            RenderText {#text} at (0,0) size 17x18
-              text run at (0,0) width 17: "-"
-          RenderListItem {LI} at (17,34) size 136x51 [bgcolor=#00FFFF]
-            RenderText {#text} at (17,17) size 17x18
-              text run at (17,17) width 17: "-"
-          RenderListItem {LI} at (17,85) size 136x17
-            RenderText {#text} at (0,0) size 17x18
-              text run at (0,0) width 17: "-"
-      RenderBlock {DIV} at (17,177) size 176x125 [bgcolor=#FF0000] [border: (3px solid #000000)]
-        RenderBlock {DIV} at (3,3) size 170x119 [bgcolor=#FFFF00] [border: (17px solid #FFFF00)]
-          RenderBlock {DIV} at (17,17) size 17x17 [bgcolor=#008080]
-          RenderBlock {DIV} at (17,34) size 136x51 [bgcolor=#00FFFF] [border: (17px solid #00FFFF)]
-            RenderBlock {DIV} at (17,17) size 17x17 [bgcolor=#008080]
-          RenderBlock {DIV} at (17,85) size 17x17 [bgcolor=#008080]
+layer at (0,0) size 800x309
+  RenderBlock {HTML} at (0,0) size 800x309
+    RenderBody {BODY} at (8,8) size 784x285
+      RenderBlock {P} at (0,0) size 784x17 [color=#000080]
+        RenderText {#text} at (0,0) size 393x17
+          text run at (0,0) width 393: "The following two diagrams should look identical."
+      RenderBlock {DIV} at (16,33) size 166x118 [color=#008080] [bgcolor=#FFA500] [border: (3px solid #000000)]
+        RenderBlock {UL} at (3,3) size 160x112 [bgcolor=#FFFF00]
+          RenderListItem {LI} at (16,16) size 128x16
+            RenderText {#text} at (0,0) size 16x17
+              text run at (0,0) width 16: "-"
+          RenderListItem {LI} at (16,32) size 128x48 [bgcolor=#00FFFF]
+            RenderText {#text} at (16,16) size 16x17
+              text run at (16,16) width 16: "-"
+          RenderListItem {LI} at (16,80) size 128x16
+            RenderText {#text} at (0,0) size 16x17
+              text run at (0,0) width 16: "-"
+      RenderBlock {DIV} at (16,167) size 166x118 [bgcolor=#FF0000] [border: (3px solid #000000)]
+        RenderBlock {DIV} at (3,3) size 160x112 [bgcolor=#FFFF00] [border: (16px solid #FFFF00)]
+          RenderBlock {DIV} at (16,16) size 16x16 [bgcolor=#008080]
+          RenderBlock {DIV} at (16,32) size 128x48 [bgcolor=#00FFFF] [border: (16px solid #00FFFF)]
+            RenderBlock {DIV} at (16,16) size 16x16 [bgcolor=#008080]
+          RenderBlock {DIV} at (16,80) size 16x16 [bgcolor=#008080]

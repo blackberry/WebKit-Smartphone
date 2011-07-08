@@ -330,6 +330,8 @@ namespace WebCore {
         bool shouldUseFirstScheduledLayoutDelay() const { return m_shouldUseFirstScheduleLayoutDelay; }
         void setProcessHTTPEquiv(bool);
         bool processHTTPEquiv() const { return m_processHTTPEquiv; }
+        void setUseCache(bool use) { m_useCache = use; }
+        bool useCache() { return m_useCache; }
 #endif
 
     private:
@@ -429,6 +431,7 @@ namespace WebCore {
         int m_firstScheduledLayoutDelay;
         bool m_shouldUseFirstScheduleLayoutDelay;
         bool m_processHTTPEquiv;
+        bool m_useCache;
 #endif
     };
 

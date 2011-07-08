@@ -1,166 +1,164 @@
-layer at (0,0) size 800x802
+layer at (0,0) size 800x705
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x802
-  RenderBlock {HTML} at (0,0) size 800x802
-    RenderBody {BODY} at (8,8) size 784x786 [bgcolor=#CCCCCC]
-      RenderBlock {P} at (0,0) size 784x18
-        RenderText {#text} at (0,0) size 481x18
-          text run at (0,0) width 481: "The style declarations which apply to the text below are:"
-      RenderBlock {PRE} at (0,35) size 784x126
-        RenderText {#text} at (0,0) size 250x126
-          text run at (0,0) width 170: "A {color: green;}"
-          text run at (170,0) width 0: " "
-          text run at (0,21) width 230: "A:link {color: purple;}"
-          text run at (230,21) width 0: " "
-          text run at (0,42) width 240: "A:visited {color: lime;}"
-          text run at (240,42) width 0: " "
-          text run at (0,63) width 250: "A:active {color: maroon;}"
-          text run at (250,63) width 0: " "
-          text run at (0,84) width 220: "#one {color: #006600;}"
-          text run at (220,84) width 0: " "
-          text run at (0,105) width 0: " "
-      RenderBlock {HR} at (0,178) size 784x2 [border: (1px inset #000000)]
-      RenderBlock {P} at (0,197) size 784x18
-        RenderText {#text} at (0,0) size 674x18
-          text run at (0,0) width 674: "The following anchors should appear as described; none of them should be red."
-      RenderBlock {UL} at (0,232) size 784x162
-        RenderListItem {LI} at (40,0) size 744x126
-          RenderBlock (anonymous) at (0,0) size 744x36
-            RenderListMarker at (-16,0) size 6x18: bullet
-            RenderText {#text} at (0,0) size 690x36
-              text run at (0,0) width 690: "Purple unvisited, lime (light green) visited, maroon (dark red) while active (being"
-              text run at (0,18) width 72: "clicked):"
-          RenderBlock {UL} at (0,36) size 744x90
-            RenderListItem {LI} at (40,0) size 704x18
-              RenderListMarker at (-16,0) size 6x18: white bullet
-              RenderInline {A} at (0,0) size 140x18 [color=#800080]
-                RenderText {#text} at (0,0) size 140x18
-                  text run at (0,0) width 140: "W3C Web server"
+layer at (0,0) size 800x705
+  RenderBlock {HTML} at (0,0) size 800x705
+    RenderBody {BODY} at (8,8) size 784x689 [bgcolor=#CCCCCC]
+      RenderBlock {P} at (0,0) size 784x17
+        RenderText {#text} at (0,0) size 452x17
+          text run at (0,0) width 452: "The style declarations which apply to the text below are:"
+      RenderBlock {PRE} at (0,33) size 784x102
+        RenderText {#text} at (0,0) size 200x102
+          text run at (0,0) width 136: "A {color: green;}"
+          text run at (136,0) width 0: " "
+          text run at (0,17) width 184: "A:link {color: purple;}"
+          text run at (184,17) width 0: " "
+          text run at (0,34) width 192: "A:visited {color: lime;}"
+          text run at (192,34) width 0: " "
+          text run at (0,51) width 200: "A:active {color: maroon;}"
+          text run at (200,51) width 0: " "
+          text run at (0,68) width 176: "#one {color: #006600;}"
+          text run at (176,68) width 0: " "
+          text run at (0,85) width 0: " "
+      RenderBlock {HR} at (0,148) size 784x2 [border: (1px inset #000000)]
+      RenderBlock {P} at (0,166) size 784x17
+        RenderText {#text} at (0,0) size 638x17
+          text run at (0,0) width 638: "The following anchors should appear as described; none of them should be red."
+      RenderBlock {UL} at (0,199) size 784x136
+        RenderListItem {LI} at (40,0) size 744x102
+          RenderBlock (anonymous) at (0,0) size 744x17
+            RenderListMarker at (-16,0) size 6x17: bullet
+            RenderText {#text} at (0,0) size 713x17
+              text run at (0,0) width 713: "Purple unvisited, lime (light green) visited, maroon (dark red) while active (being clicked):"
+          RenderBlock {UL} at (0,17) size 744x85
+            RenderListItem {LI} at (40,0) size 704x17
+              RenderListMarker at (-16,0) size 6x17: white bullet
+              RenderInline {A} at (0,0) size 133x17 [color=#800080]
+                RenderText {#text} at (0,0) size 133x17
+                  text run at (0,0) width 133: "W3C Web server"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,18) size 704x18
-              RenderListMarker at (-16,0) size 6x18: white bullet
-              RenderInline {A} at (0,0) size 139x18 [color=#800080]
-                RenderText {#text} at (0,0) size 139x18
-                  text run at (0,0) width 139: "NIST Web server"
+            RenderListItem {LI} at (40,17) size 704x17
+              RenderListMarker at (-16,0) size 6x17: white bullet
+              RenderInline {A} at (0,0) size 133x17 [color=#800080]
+                RenderText {#text} at (0,0) size 133x17
+                  text run at (0,0) width 133: "NIST Web server"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,36) size 704x18
-              RenderListMarker at (-16,0) size 6x18: white bullet
-              RenderInline {A} at (0,0) size 153x18 [color=#800080]
-                RenderText {#text} at (0,0) size 153x18
-                  text run at (0,0) width 153: "CWRU Web server"
+            RenderListItem {LI} at (40,34) size 704x17
+              RenderListMarker at (-16,0) size 6x17: white bullet
+              RenderInline {A} at (0,0) size 146x17 [color=#800080]
+                RenderText {#text} at (0,0) size 146x17
+                  text run at (0,0) width 146: "CWRU Web server"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,54) size 704x18
-              RenderListMarker at (-16,0) size 6x18: white bullet
-              RenderInline {A} at (0,0) size 57x18 [color=#800080]
-                RenderText {#text} at (0,0) size 57x18
-                  text run at (0,0) width 57: "Yahoo!"
+            RenderListItem {LI} at (40,51) size 704x17
+              RenderListMarker at (-16,0) size 6x17: white bullet
+              RenderInline {A} at (0,0) size 56x17 [color=#800080]
+                RenderText {#text} at (0,0) size 56x17
+                  text run at (0,0) width 56: "Yahoo!"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,72) size 704x18
-              RenderListMarker at (-16,0) size 6x18: white bullet
-              RenderInline {A} at (0,0) size 74x18 [color=#800080]
-                RenderText {#text} at (0,0) size 74x18
-                  text run at (0,0) width 74: "Erewhon"
-              RenderText {#text} at (74,0) size 294x18
-                text run at (74,0) width 294: " (don't click on it, it goes nowhere)"
-        RenderListItem {LI} at (40,126) size 744x36
-          RenderBlock (anonymous) at (0,0) size 744x18
-            RenderListMarker at (-16,0) size 6x18: bullet
-            RenderText {#text} at (0,0) size 276x18
-              text run at (0,0) width 276: "Dark green in any circumstance:"
-          RenderBlock {UL} at (0,18) size 744x18
-            RenderListItem {LI} at (40,0) size 704x18
-              RenderListMarker at (-16,0) size 6x18: white bullet
-              RenderInline {A} at (0,0) size 153x18 [color=#006600]
-                RenderText {#text} at (0,0) size 153x18
-                  text run at (0,0) width 153: "CWRU Web server"
+            RenderListItem {LI} at (40,68) size 704x17
+              RenderListMarker at (-16,0) size 6x17: white bullet
+              RenderInline {A} at (0,0) size 70x17 [color=#800080]
+                RenderText {#text} at (0,0) size 70x17
+                  text run at (0,0) width 70: "Erewhon"
+              RenderText {#text} at (70,0) size 275x17
+                text run at (70,0) width 275: " (don't click on it, it goes nowhere)"
+        RenderListItem {LI} at (40,102) size 744x34
+          RenderBlock (anonymous) at (0,0) size 744x17
+            RenderListMarker at (-16,0) size 6x17: bullet
+            RenderText {#text} at (0,0) size 261x17
+              text run at (0,0) width 261: "Dark green in any circumstance:"
+          RenderBlock {UL} at (0,17) size 744x17
+            RenderListItem {LI} at (40,0) size 704x17
+              RenderListMarker at (-16,0) size 6x17: white bullet
+              RenderInline {A} at (0,0) size 146x17 [color=#006600]
+                RenderText {#text} at (0,0) size 146x17
+                  text run at (0,0) width 146: "CWRU Web server"
               RenderText {#text} at (0,0) size 0x0
-      RenderBlock {P} at (0,411) size 784x54
-        RenderText {#text} at (0,0) size 157x18
-          text run at (0,0) width 157: "The quoted word \""
-        RenderInline {A} at (0,0) size 58x18 [color=#008000]
-          RenderText {#text} at (157,0) size 58x18
-            text run at (157,0) width 58: "anchor"
-        RenderText {#text} at (215,0) size 756x54
-          text run at (215,0) width 500: "\" should be green, NOT purple, since it's part of an anchor. "
-          text run at (715,0) width 41: "It's a"
-          text run at (0,18) width 695: "named anchor, and styles declared for the A tag are applied to them under CSS1. "
-          text run at (695,18) width 51: "It also"
-          text run at (0,36) width 371: "should NOT turn orange when clicked upon."
-      RenderTable {TABLE} at (0,482) size 784x304 [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 782x302
-          RenderTableRow {TR} at (0,0) size 782x26
-            RenderTableCell {TD} at (0,0) size 782x26 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
-              RenderInline {STRONG} at (0,0) size 214x18
-                RenderText {#text} at (4,4) size 214x18
-                  text run at (4,4) width 214: "TABLE Testing Section"
-          RenderTableRow {TR} at (0,26) size 782x276
-            RenderTableCell {TD} at (0,151) size 13x26 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (4,4) size 5x18
+      RenderBlock {P} at (0,351) size 784x51
+        RenderText {#text} at (0,0) size 149x17
+          text run at (0,0) width 149: "The quoted word \""
+        RenderInline {A} at (0,0) size 56x17 [color=#008000]
+          RenderText {#text} at (149,0) size 56x17
+            text run at (149,0) width 56: "anchor"
+        RenderText {#text} at (205,0) size 781x51
+          text run at (205,0) width 474: "\" should be green, NOT purple, since it's part of an anchor. "
+          text run at (679,0) width 99: "It's a named"
+          text run at (0,17) width 598: "anchor, and styles declared for the A tag are applied to them under CSS1. "
+          text run at (598,17) width 183: "It also should NOT turn"
+          text run at (0,34) width 215: "orange when clicked upon."
+      RenderTable {TABLE} at (0,418) size 784x271 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 782x269
+          RenderTableRow {TR} at (0,0) size 782x25
+            RenderTableCell {TD} at (0,0) size 782x25 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderInline {STRONG} at (0,0) size 200x17
+                RenderText {#text} at (4,4) size 200x17
+                  text run at (4,4) width 200: "TABLE Testing Section"
+          RenderTableRow {TR} at (0,25) size 782x244
+            RenderTableCell {TD} at (0,134) size 13x25 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,4) size 5x17
                 text run at (4,4) width 5: " "
-            RenderTableCell {TD} at (13,26) size 769x276 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
-              RenderBlock {P} at (4,4) size 761x18
-                RenderText {#text} at (0,0) size 674x18
-                  text run at (0,0) width 674: "The following anchors should appear as described; none of them should be red."
-              RenderBlock {UL} at (4,39) size 761x162
-                RenderListItem {LI} at (40,0) size 721x126
-                  RenderBlock (anonymous) at (0,0) size 721x36
-                    RenderListMarker at (-16,0) size 6x18: bullet
-                    RenderText {#text} at (0,0) size 690x36
-                      text run at (0,0) width 690: "Purple unvisited, lime (light green) visited, maroon (dark red) while active (being"
-                      text run at (0,18) width 72: "clicked):"
-                  RenderBlock {UL} at (0,36) size 721x90
-                    RenderListItem {LI} at (40,0) size 681x18
-                      RenderListMarker at (-16,0) size 6x18: white bullet
-                      RenderInline {A} at (0,0) size 140x18 [color=#800080]
-                        RenderText {#text} at (0,0) size 140x18
-                          text run at (0,0) width 140: "W3C Web server"
+            RenderTableCell {TD} at (13,25) size 769x244 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderBlock {P} at (4,4) size 761x17
+                RenderText {#text} at (0,0) size 638x17
+                  text run at (0,0) width 638: "The following anchors should appear as described; none of them should be red."
+              RenderBlock {UL} at (4,37) size 761x136
+                RenderListItem {LI} at (40,0) size 721x102
+                  RenderBlock (anonymous) at (0,0) size 721x17
+                    RenderListMarker at (-16,0) size 6x17: bullet
+                    RenderText {#text} at (0,0) size 713x17
+                      text run at (0,0) width 713: "Purple unvisited, lime (light green) visited, maroon (dark red) while active (being clicked):"
+                  RenderBlock {UL} at (0,17) size 721x85
+                    RenderListItem {LI} at (40,0) size 681x17
+                      RenderListMarker at (-16,0) size 6x17: white bullet
+                      RenderInline {A} at (0,0) size 133x17 [color=#800080]
+                        RenderText {#text} at (0,0) size 133x17
+                          text run at (0,0) width 133: "W3C Web server"
                       RenderText {#text} at (0,0) size 0x0
-                    RenderListItem {LI} at (40,18) size 681x18
-                      RenderListMarker at (-16,0) size 6x18: white bullet
-                      RenderInline {A} at (0,0) size 139x18 [color=#800080]
-                        RenderText {#text} at (0,0) size 139x18
-                          text run at (0,0) width 139: "NIST Web server"
+                    RenderListItem {LI} at (40,17) size 681x17
+                      RenderListMarker at (-16,0) size 6x17: white bullet
+                      RenderInline {A} at (0,0) size 133x17 [color=#800080]
+                        RenderText {#text} at (0,0) size 133x17
+                          text run at (0,0) width 133: "NIST Web server"
                       RenderText {#text} at (0,0) size 0x0
-                    RenderListItem {LI} at (40,36) size 681x18
-                      RenderListMarker at (-16,0) size 6x18: white bullet
-                      RenderInline {A} at (0,0) size 153x18 [color=#800080]
-                        RenderText {#text} at (0,0) size 153x18
-                          text run at (0,0) width 153: "CWRU Web server"
+                    RenderListItem {LI} at (40,34) size 681x17
+                      RenderListMarker at (-16,0) size 6x17: white bullet
+                      RenderInline {A} at (0,0) size 146x17 [color=#800080]
+                        RenderText {#text} at (0,0) size 146x17
+                          text run at (0,0) width 146: "CWRU Web server"
                       RenderText {#text} at (0,0) size 0x0
-                    RenderListItem {LI} at (40,54) size 681x18
-                      RenderListMarker at (-16,0) size 6x18: white bullet
-                      RenderInline {A} at (0,0) size 57x18 [color=#800080]
-                        RenderText {#text} at (0,0) size 57x18
-                          text run at (0,0) width 57: "Yahoo!"
+                    RenderListItem {LI} at (40,51) size 681x17
+                      RenderListMarker at (-16,0) size 6x17: white bullet
+                      RenderInline {A} at (0,0) size 56x17 [color=#800080]
+                        RenderText {#text} at (0,0) size 56x17
+                          text run at (0,0) width 56: "Yahoo!"
                       RenderText {#text} at (0,0) size 0x0
-                    RenderListItem {LI} at (40,72) size 681x18
-                      RenderListMarker at (-16,0) size 6x18: white bullet
-                      RenderInline {A} at (0,0) size 74x18 [color=#800080]
-                        RenderText {#text} at (0,0) size 74x18
-                          text run at (0,0) width 74: "Erewhon"
-                      RenderText {#text} at (74,0) size 294x18
-                        text run at (74,0) width 294: " (don't click on it, it goes nowhere)"
-                RenderListItem {LI} at (40,126) size 721x36
-                  RenderBlock (anonymous) at (0,0) size 721x18
-                    RenderListMarker at (-16,0) size 6x18: bullet
-                    RenderText {#text} at (0,0) size 276x18
-                      text run at (0,0) width 276: "Dark green in any circumstance:"
-                  RenderBlock {UL} at (0,18) size 721x18
-                    RenderListItem {LI} at (40,0) size 681x18
-                      RenderListMarker at (-16,0) size 6x18: white bullet
-                      RenderInline {A} at (0,0) size 153x18 [color=#006600]
-                        RenderText {#text} at (0,0) size 153x18
-                          text run at (0,0) width 153: "CWRU Web server"
+                    RenderListItem {LI} at (40,68) size 681x17
+                      RenderListMarker at (-16,0) size 6x17: white bullet
+                      RenderInline {A} at (0,0) size 70x17 [color=#800080]
+                        RenderText {#text} at (0,0) size 70x17
+                          text run at (0,0) width 70: "Erewhon"
+                      RenderText {#text} at (70,0) size 275x17
+                        text run at (70,0) width 275: " (don't click on it, it goes nowhere)"
+                RenderListItem {LI} at (40,102) size 721x34
+                  RenderBlock (anonymous) at (0,0) size 721x17
+                    RenderListMarker at (-16,0) size 6x17: bullet
+                    RenderText {#text} at (0,0) size 261x17
+                      text run at (0,0) width 261: "Dark green in any circumstance:"
+                  RenderBlock {UL} at (0,17) size 721x17
+                    RenderListItem {LI} at (40,0) size 681x17
+                      RenderListMarker at (-16,0) size 6x17: white bullet
+                      RenderInline {A} at (0,0) size 146x17 [color=#006600]
+                        RenderText {#text} at (0,0) size 146x17
+                          text run at (0,0) width 146: "CWRU Web server"
                       RenderText {#text} at (0,0) size 0x0
-              RenderBlock {P} at (4,218) size 761x54
-                RenderText {#text} at (0,0) size 157x18
-                  text run at (0,0) width 157: "The quoted word \""
-                RenderInline {A} at (0,0) size 58x18 [color=#008000]
-                  RenderText {#text} at (157,0) size 58x18
-                    text run at (157,0) width 58: "anchor"
-                RenderText {#text} at (215,0) size 756x54
-                  text run at (215,0) width 500: "\" should be green, NOT purple, since it's part of an anchor. "
-                  text run at (715,0) width 41: "It's a"
-                  text run at (0,18) width 695: "named anchor, and styles declared for the A tag are applied to them under CSS1. "
-                  text run at (695,18) width 51: "It also"
-                  text run at (0,36) width 371: "should NOT turn orange when clicked upon."
+              RenderBlock {P} at (4,189) size 761x51
+                RenderText {#text} at (0,0) size 149x17
+                  text run at (0,0) width 149: "The quoted word \""
+                RenderInline {A} at (0,0) size 56x17 [color=#008000]
+                  RenderText {#text} at (149,0) size 56x17
+                    text run at (149,0) width 56: "anchor"
+                RenderText {#text} at (205,0) size 717x51
+                  text run at (205,0) width 474: "\" should be green, NOT purple, since it's part of an anchor. "
+                  text run at (679,0) width 38: "It's a"
+                  text run at (0,17) width 659: "named anchor, and styles declared for the A tag are applied to them under CSS1. "
+                  text run at (659,17) width 48: "It also"
+                  text run at (0,34) width 350: "should NOT turn orange when clicked upon."

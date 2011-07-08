@@ -21,14 +21,14 @@ namespace WebKit {
 BackingStoreScrollbar::BackingStoreScrollbar(const WebCore::IntSize& size)
     : m_size(size)
 {
-    m_image = new unsigned char[size.height() * imageStride()];
-    m_alphaImage = new unsigned char[size.height() * alphaImageStride()];
+    m_image = static_cast<unsigned char*>(malloc(size.height() * imageStride()));
+    m_alphaImage = static_cast<unsigned char*>(malloc(size.height() * alphaImageStride()));
 }
 
 BackingStoreScrollbar::~BackingStoreScrollbar()
 {
-    delete[] m_image;
-    delete[] m_alphaImage;
+    free(m_image);
+    free(m_alphaImage);
 }
 
 void BackingStoreScrollbar::repaint(const WebCore::IntRect& hotRect, bool vertical)

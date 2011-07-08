@@ -209,6 +209,10 @@ namespace WebCore {
 #if ENABLE(DOM_STORAGE)
         StorageNamespace* sessionStorage(bool optionalCreate = true);
         void setSessionStorage(PassRefPtr<StorageNamespace>);
+
+#if OS(OLYMPIA)
+        void removeSessionStorage();
+#endif
 #endif
 
 #if ENABLE(WML)

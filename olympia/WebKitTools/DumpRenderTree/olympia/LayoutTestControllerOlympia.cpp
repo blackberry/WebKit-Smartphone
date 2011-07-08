@@ -138,8 +138,7 @@ void LayoutTestController::queueLoad(JSStringRef url, JSStringRef target)
 
 void LayoutTestController::setAcceptsEditing(bool acceptsEditing)
 {
-    UNUSED_PARAM(acceptsEditing);
-    notImplemented();
+    Olympia::WebKit::DumpRenderTree::currentInstance()->setAcceptsEditing(acceptsEditing);
 }
 
 void LayoutTestController::setAppCacheMaximumSize(unsigned long long quota)
@@ -370,7 +369,7 @@ void LayoutTestController::removeAllVisitedLinks()
 
 void LayoutTestController::disableImageLoading()
 {
-    Olympia::WebKit::WebSettings::globalSettings()->setLoadsImagesAutomatically(false);
+    Olympia::WebKit::WebSettings::pageGroupSettings(Olympia::WebKit::DumpRenderTree::currentInstance()->pageGroupName())->setLoadsImagesAutomatically(false);
 }
 
 JSRetainPtr<JSStringRef> LayoutTestController::counterValueForElementById(JSStringRef id)

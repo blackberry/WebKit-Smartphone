@@ -6,21 +6,21 @@ layer at (0,0) size 800x600
       RenderTable {TABLE} at (0,0) size 622x400 [border: (4px outset #808080)]
         RenderTableSection {TBODY} at (4,4) size 614x392
           RenderTableRow {TR} at (0,2) size 614x193
-            RenderTableCell {TD} at (2,167) size 204x58 [border: (1px inset #808080)] [r=0 c=0 rs=2 cs=1]
-              RenderText {#text} at (2,2) size 199x54
-                text run at (2,2) width 198: "1 Some sample text for"
-                text run at (2,20) width 199: "the first column. Notice"
-                text run at (2,38) width 122: "its formatting."
-            RenderTableCell {TD} at (208,60) size 404x76 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 385x72
-                text run at (2,2) width 368: "2 Here is some sample text to demonstrate"
-                text run at (2,20) width 315: "the problem. Is there some setting in"
-                text run at (2,38) width 385: "Navigator that will make this work correctly ?"
-                text run at (2,56) width 313: "If so I haven't found it. Is this a bug ?"
+            RenderTableCell {TD} at (2,168) size 204x55 [border: (1px inset #808080)] [r=0 c=0 rs=2 cs=1]
+              RenderText {#text} at (2,2) size 188x51
+                text run at (2,2) width 188: "1 Some sample text for"
+                text run at (2,19) width 187: "the first column. Notice"
+                text run at (2,36) width 113: "its formatting."
+            RenderTableCell {TD} at (208,62) size 404x72 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 385x68
+                text run at (2,2) width 379: "2 Here is some sample text to demonstrate the"
+                text run at (2,19) width 385: "problem. Is there some setting in Navigator that"
+                text run at (2,36) width 355: "will make this work correctly ? If so I haven't"
+                text run at (2,53) width 181: "found it. Is this a bug ?"
           RenderTableRow {TR} at (0,197) size 614x193
-            RenderTableCell {TD} at (208,255) size 404x76 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 385x72
-                text run at (2,2) width 368: "3 Here is some sample text to demonstrate"
-                text run at (2,20) width 315: "the problem. Is there some setting in"
-                text run at (2,38) width 385: "Navigator that will make this work correctly ?"
-                text run at (2,56) width 313: "If so I haven't found it. Is this a bug ?"
+            RenderTableCell {TD} at (208,257) size 404x72 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 385x68
+                text run at (2,2) width 379: "3 Here is some sample text to demonstrate the"
+                text run at (2,19) width 385: "problem. Is there some setting in Navigator that"
+                text run at (2,36) width 355: "will make this work correctly ? If so I haven't"
+                text run at (2,53) width 181: "found it. Is this a bug ?"

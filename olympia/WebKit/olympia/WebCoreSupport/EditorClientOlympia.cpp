@@ -32,6 +32,7 @@
 
 #include "NotImplemented.h"
 
+#include "DumpRenderTreeOlympia.h"
 #include "EditCommand.h"
 #include "FocusController.h"
 #include "Frame.h"
@@ -70,9 +71,10 @@ void EditorClientOlympia::pageDestroyed()
     delete this;
 }
 
-bool EditorClientOlympia::shouldDeleteRange(Range*)
+bool EditorClientOlympia::shouldDeleteRange(Range* range)
 {
-    notImplemented();
+    if (m_page->d->m_dumpRenderTree)
+        return m_page->d->m_dumpRenderTree->shouldDeleteDOMRange(range);
     return true;
 }
 
@@ -128,15 +130,17 @@ bool EditorClientOlympia::isEditable()
     return false;
 }
 
-bool EditorClientOlympia::shouldBeginEditing(Range*)
+bool EditorClientOlympia::shouldBeginEditing(Range* range)
 {
-    notImplemented();
+    if (m_page->d->m_dumpRenderTree)
+        return m_page->d->m_dumpRenderTree->shouldBeginEditingInDOMRange(range);
     return true;
 }
 
-bool EditorClientOlympia::shouldEndEditing(Range*)
+bool EditorClientOlympia::shouldEndEditing(Range* range)
 {
-    notImplemented();
+    if (m_page->d->m_dumpRenderTree)
+        return m_page->d->m_dumpRenderTree->shouldEndEditingInDOMRange(range);
     return true;
 }
 
@@ -152,8 +156,11 @@ bool EditorClientOlympia::shouldInsertText(const String&, Range*, EditorInsertAc
     return true;
 }
 
-bool EditorClientOlympia::shouldChangeSelectedRange(Range*, Range*, EAffinity, bool)
+bool EditorClientOlympia::shouldChangeSelectedRange(Range* fromRange, Range* toRange, EAffinity affinity, bool stillSelecting)
 {
+    if (m_page->d->m_dumpRenderTree)
+        return m_page->d->m_dumpRenderTree->shouldChangeSelectedDOMRangeToDOMRangeAffinityStillSelecting(fromRange, toRange, affinity, stillSelecting);
+
     Frame* frame = m_page->d->m_page->focusController()->focusedOrMainFrame();
     if (frame && frame->document()) {
         if (frame->document()->focusedNode() && frame->document()->focusedNode()->hasTagName(HTMLNames::selectTag))
@@ -178,12 +185,14 @@ bool EditorClientOlympia::shouldMoveRangeAfterDelete(Range*, Range*)
 
 void EditorClientOlympia::didBeginEditing()
 {
-    notImplemented();
+    if (m_page->d->m_dumpRenderTree)
+        m_page->d->m_dumpRenderTree->didBeginEditing();
 }
 
 void EditorClientOlympia::respondToChangedContents()
 {
-    notImplemented();
+    if (m_page->d->m_dumpRenderTree)
+        m_page->d->m_dumpRenderTree->didChange();
 }
 
 void EditorClientOlympia::respondToChangedSelection()
@@ -192,11 +201,15 @@ void EditorClientOlympia::respondToChangedSelection()
         m_waitingForCursorFocus = false;
     else
         m_page->selectionChanged();
+
+    if (m_page->d->m_dumpRenderTree)
+        m_page->d->m_dumpRenderTree->didChangeSelection();
 }
 
 void EditorClientOlympia::didEndEditing()
 {
-    notImplemented();
+    if (m_page->d->m_dumpRenderTree)
+        m_page->d->m_dumpRenderTree->didEndEditing();
 }
 
 void EditorClientOlympia::didWriteSelectionToPasteboard()

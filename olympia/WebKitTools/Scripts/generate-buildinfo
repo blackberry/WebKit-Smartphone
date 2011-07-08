@@ -105,6 +105,8 @@ print INFOFILE "\"<tr><td>Build Computer</td><td>" . $ENV{'COMPUTERNAME'} . "</t
 print INFOFILE "\"<tr><td>Build Platform</td><td>" . $ENV{'PLATFORMNAME'} . "</td></tr>\"\n";
 print INFOFILE "\"<tr><td></td><td></td></tr>\"\n";
 
+chdir($ENV{WEBKITDIR});
+
 if (isGit()) {
     print INFOFILE "\"<tr><td>git branch</td><td>" . gitBranch() . "</td></tr>\"\n";
     my $sha1s = `git rev-list --max-count=3 HEAD`;
@@ -118,5 +120,6 @@ if (isGit()) {
 print INFOFILE "\"</table></body></html>\"\n";
 print INFOFILE ";\n";
 print INFOFILE "#endif\n";
+print INFOFILE "const char BUILDTIME[]=\"$date\";\n";
 print INFOFILE "}\n";
 close INFOFILE;

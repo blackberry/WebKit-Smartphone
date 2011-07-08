@@ -30,10 +30,16 @@
 #include "GIFImageDecoder.h"
 #include "JPEGImageDecoder.h"
 #include "PNGImageDecoder.h"
+
 #if !PLATFORM(OLYMPIA) //FIXME!!
 #include "ICOImageDecoder.h"
 #include "XBMImageDecoder.h"
 #endif
+
+#if PLATFORM(OLYMPIA)
+#include "RxIImageDecoder.h"
+#endif
+
 #include "SharedBuffer.h"
 
 using namespace std;
@@ -80,6 +86,25 @@ ImageDecoder* ImageDecoder::create(const SharedBuffer& data)
     // BMP
     if (strncmp(contents, "BM", 2) == 0)
         return new BMPImageDecoder();
+
+#if PLATFORM(OLYMPIA)
+    // Tests for RDI.
+    if (!memcmp(contents, "\x89\x52\x44\x49", 4))
+        return new RxIImageDecoder(RxIImageDecoder::FormatRdi);
+
+    // Tests for RGI.
+    if (!memcmp(contents, "\x89\x52\x47\x49", 4))
+        return new RxIImageDecoder(RxIImageDecoder::FormatRgi);
+
+    // Tests for RPI.
+    if (!memcmp(contents, "\x89\x52\x50\x49", 4))
+        return new RxIImageDecoder(RxIImageDecoder::FormatRpi);
+
+    // Tests for RWI.
+    if (!memcmp(contents, "\x89\x52\x57\x49", 4))
+        return new RxIImageDecoder(RxIImageDecoder::FormatRwi);
+
+#endif
 
 #if !PLATFORM(OLYMPIA)
     // ICOs always begin with a 2-byte 0 followed by a 2-byte 1.
@@ -228,19 +253,20 @@ template <MatchType type> int getScaledValue(const Vector<int>& scaledValues, in
 
 void ImageDecoder::prepareScaleDataIfNecessary()
 {
+    m_scaled = false;
+    m_scaledColumns.clear();
+    m_scaledRows.clear();
+
     int width = size().width();
     int height = size().height();
     int numPixels = height * width;
-    if (m_maxNumPixels > 0 && numPixels > m_maxNumPixels) {
-        m_scaled = true;
-        double scale = sqrt(m_maxNumPixels / (double)numPixels);
-        fillScaledValues(m_scaledColumns, scale, width);
-        fillScaledValues(m_scaledRows, scale, height);
-    } else if (m_scaled) {
-        m_scaled = false;
-        m_scaledColumns.clear();
-        m_scaledRows.clear();
-    }
+    if (m_maxNumPixels <= 0 || numPixels <= m_maxNumPixels)
+        return;
+
+    m_scaled = true;
+    double scale = sqrt(m_maxNumPixels / (double)numPixels);
+    fillScaledValues(m_scaledColumns, scale, width);
+    fillScaledValues(m_scaledRows, scale, height);
 }
 
 int ImageDecoder::upperBoundScaledX(int origX, int searchStart)

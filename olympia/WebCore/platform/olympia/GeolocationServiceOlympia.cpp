@@ -9,6 +9,7 @@
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
+#include "FrameLoaderClientOlympia.h"
 #include "Geolocation.h"
 #include "NotImplemented.h"
 #include "PositionOptions.h"
@@ -43,7 +44,11 @@ GeolocationServiceOlympia::~GeolocationServiceOlympia()
 
 bool GeolocationServiceOlympia::startUpdating(PositionOptions* options)
 {
-    m_tracker = Olympia::Platform::GeoTracker::create(this, options->enableHighAccuracy(), options->hasTimeout() ? options->timeout() : -1, options->hasMaximumAge() ? options->maximumAge() : -1);
+    Frame *frame = m_geolocation->frame();
+    if(!frame)
+        return false;
+    int playerId = static_cast<FrameLoaderClientOlympia*>(frame->loader()->client())->playerId();
+    m_tracker = Olympia::Platform::GeoTracker::create(this, playerId, options->enableHighAccuracy(), options->hasTimeout() ? options->timeout() : -1, options->hasMaximumAge() ? options->maximumAge() : -1);
     m_updating = true;
     return m_tracker;
 }

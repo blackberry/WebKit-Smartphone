@@ -9,6 +9,7 @@
 #include "OlympiaGlobal.h"
 #include "OlympiaPlatformInputEvents.h"
 #include "OlympiaPlatformKeyboardEvent.h"
+#include "OlympiaPlatformMisc.h"
 #include "OlympiaPlatformPrimitives.h"
 #include "OlympiaPlatformReplaceText.h"
 #include "OlympiaString.h"
@@ -51,16 +52,14 @@ namespace Olympia {
         class WebPlugin;
         class WebSettings;
 
-        enum MouseEventType { MouseEventMoved, MouseEventPressed, MouseEventReleased };
+        enum MouseEventType { MouseEventMoved, MouseEventPressed, MouseEventReleased, MouseEventAborted };
 
         class OLYMPIA_EXPORT WebPage {
         public:
-            WebPage(WebPageClient*, const Platform::IntRect&);
+            WebPage(WebPageClient*, const String& pageGroupName, const Platform::IntRect&);
             ~WebPage();
 
             WebPageClient* client() const;
-
-            void setPageGroupName(const char* name);
 
             void load(const char* url, const char* networkToken, bool isInitial = false);
 
@@ -105,13 +104,13 @@ namespace Olympia {
 
             void setFocused(bool focused);
 
-            void mouseEvent(MouseEventType, const Platform::IntPoint&);
+            void mouseEvent(MouseEventType, const Platform::IntPoint& pos, const Platform::IntPoint& globalPos);
 
             bool touchEvent(Olympia::Platform::TouchEvent&);
 
             // Returns true if the key stroke was handled by webkit.
             bool keyEvent(Olympia::Platform::KeyboardEvent::Type type, const unsigned short character, bool shiftDown);
-            void navigationMoveEvent(const unsigned short character, bool shiftDown);
+            void navigationMoveEvent(const unsigned short character, bool shiftDown, bool altDown);
 
             Olympia::WebKit::String selectedText() const;
 
@@ -157,6 +156,15 @@ namespace Olympia {
              */
             bool findNextString(const char*);
 
+            /**
+             * Finds and selects the next unicode string. This is a case
+             * sensitive search that will wrap if it reaches the end. An empty
+             * string will result in no match and no selection.
+             *
+             * Returns true if the string matched and false if not.
+             */
+            bool findNextUnicodeString(const unsigned short*);
+
             /* JavaScriptDebugger interface */
             bool enableScriptDebugger();
             bool disableScriptDebugger();
@@ -188,8 +196,7 @@ namespace Olympia {
             void requestElementText(int requestedFrameId, int requestedElementId, int offset, int length);
             void selectionChanged();
             void setCaretPosition(int requestedFrameId, int requestedElementId, int caretPosition);
-            void setCaretOutlineAppearanceEnabled(bool caretOutlineAppearanceEnabled);
-            bool isCaretOutlineAppearanceEnabled() const;
+            void setCaretHighlightStyle(Platform::CaretHighlightStyle);
             Olympia::Platform::IntRect rectForCaret(int index);
             Olympia::Platform::ReplaceTextErrorCode replaceText(const Olympia::Platform::ReplaceArguments&, const Olympia::Platform::AttributedText&);
 
@@ -202,6 +209,7 @@ namespace Olympia {
             void popupListClosed(const int size, bool* selecteds);
             void popupListClosed(const int index);
             void setDateTimeInput(const Olympia::WebKit::String& value);
+            void setColorInput(const Olympia::WebKit::String& value);
 
             Olympia::WebKit::Context getContext() const;
 
@@ -227,6 +235,8 @@ namespace Olympia {
             bool defersLoading() const;
 
             bool willFireTimer();
+
+            void clearStorage();
 
         private:
             friend class Olympia::WebKit::BackingStorePrivate;

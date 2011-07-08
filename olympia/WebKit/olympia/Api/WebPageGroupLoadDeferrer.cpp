@@ -14,6 +14,7 @@ namespace WebKit {
 
 WebPageGroupLoadDeferrer::WebPageGroupLoadDeferrer(WebPage* webPage)
 {
+    WebCore::TimerBase::fireTimersInNestedEventLoop();
     m_pageGroupLoadDeferrer = new WebCore::PageGroupLoadDeferrer(webPage->d->m_page, true);
 }
 

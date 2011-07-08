@@ -152,6 +152,11 @@ sub determineBaseProductDir
         $baseProductDir = $ENV{"WEBKITOUTPUTDIR"} || "$sourceDir/WebKitBuild";
     }
 
+    if ((1 == 1) || isOlympia()) {
+        my $cpu = $ENV{"CPUNAME"};
+        $baseProductDir = "$baseProductDir/$cpu";
+    }
+
     if (isGit() && isGitBranchBuild()) {
         my $branch = gitBranch();
         $baseProductDir = "$baseProductDir/$branch";

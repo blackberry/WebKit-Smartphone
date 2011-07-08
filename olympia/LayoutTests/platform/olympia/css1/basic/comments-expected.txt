@@ -1,100 +1,100 @@
-layer at (0,0) size 800x981
+layer at (0,0) size 800x882
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x981
-  RenderBlock {HTML} at (0,0) size 800x981
-    RenderBody {BODY} at (8,8) size 784x965 [bgcolor=#CCCCCC]
-      RenderBlock {P} at (0,0) size 784x18
-        RenderText {#text} at (0,0) size 481x18
-          text run at (0,0) width 481: "The style declarations which apply to the text below are:"
-      RenderBlock {PRE} at (0,35) size 784x315
-        RenderText {#text} at (0,0) size 420x315
-          text run at (0,0) width 290: "/* This is a CSS1 comment. */"
-          text run at (290,0) width 0: " "
-          text run at (0,21) width 420: ".one {color: green;} /* Another comment */"
-          text run at (420,21) width 0: " "
-          text run at (0,42) width 360: "/* The following should not be used:"
-          text run at (360,42) width 0: " "
-          text run at (0,63) width 210: ".two {color: red;} */"
-          text run at (210,63) width 0: " "
-          text run at (0,84) width 400: ".three {color: green; /* color: red; */}"
-          text run at (400,84) width 0: " "
-          text run at (0,105) width 30: "/**"
-          text run at (30,105) width 0: " "
-          text run at (0,126) width 220: ".four {color: red;} */"
-          text run at (220,126) width 0: " "
-          text run at (0,147) width 210: ".five {color: green;}"
-          text run at (210,147) width 0: " "
-          text run at (0,168) width 40: "/**/"
-          text run at (40,168) width 0: " "
-          text run at (0,189) width 200: ".six {color: green;}"
-          text run at (200,189) width 0: " "
-          text run at (0,210) width 110: "/*********/"
-          text run at (110,210) width 0: " "
-          text run at (0,231) width 220: ".seven {color: green;}"
-          text run at (220,231) width 0: " "
-          text run at (0,252) width 160: "/* a comment **/"
-          text run at (160,252) width 0: " "
-          text run at (0,273) width 220: ".eight {color: green;}"
-          text run at (220,273) width 0: " "
-          text run at (0,294) width 0: " "
-      RenderBlock {HR} at (0,367) size 784x2 [border: (1px inset #000000)]
-      RenderBlock {P} at (0,386) size 784x18 [color=#008000]
-        RenderText {#text} at (0,0) size 265x18
-          text run at (0,0) width 265: "This sentence should be green."
-      RenderBlock {P} at (0,421) size 784x18
-        RenderText {#text} at (0,0) size 261x18
-          text run at (0,0) width 261: "This sentence should be black."
-      RenderBlock {P} at (0,456) size 784x18 [color=#008000]
-        RenderText {#text} at (0,0) size 265x18
-          text run at (0,0) width 265: "This sentence should be green."
-      RenderBlock {P} at (0,491) size 784x18
-        RenderText {#text} at (0,0) size 261x18
-          text run at (0,0) width 261: "This sentence should be black."
-      RenderBlock {P} at (0,526) size 784x18 [color=#008000]
-        RenderText {#text} at (0,0) size 265x18
-          text run at (0,0) width 265: "This sentence should be green."
-      RenderBlock {P} at (0,561) size 784x18 [color=#008000]
-        RenderText {#text} at (0,0) size 265x18
-          text run at (0,0) width 265: "This sentence should be green."
-      RenderBlock {P} at (0,596) size 784x18 [color=#008000]
-        RenderText {#text} at (0,0) size 265x18
-          text run at (0,0) width 265: "This sentence should be green."
-      RenderBlock {P} at (0,631) size 784x18 [color=#008000]
-        RenderText {#text} at (0,0) size 265x18
-          text run at (0,0) width 265: "This sentence should be green."
-      RenderTable {TABLE} at (0,666) size 288x299 [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 286x297
-          RenderTableRow {TR} at (0,0) size 286x26
-            RenderTableCell {TD} at (0,0) size 286x26 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
-              RenderInline {STRONG} at (0,0) size 214x18
-                RenderText {#text} at (4,4) size 214x18
-                  text run at (4,4) width 214: "TABLE Testing Section"
-          RenderTableRow {TR} at (0,26) size 286x271
-            RenderTableCell {TD} at (0,148) size 13x26 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (4,4) size 5x18
+layer at (0,0) size 800x882
+  RenderBlock {HTML} at (0,0) size 800x882
+    RenderBody {BODY} at (8,8) size 784x866 [bgcolor=#CCCCCC]
+      RenderBlock {P} at (0,0) size 784x17
+        RenderText {#text} at (0,0) size 452x17
+          text run at (0,0) width 452: "The style declarations which apply to the text below are:"
+      RenderBlock {PRE} at (0,33) size 784x255
+        RenderText {#text} at (0,0) size 336x255
+          text run at (0,0) width 232: "/* This is a CSS1 comment. */"
+          text run at (232,0) width 0: " "
+          text run at (0,17) width 336: ".one {color: green;} /* Another comment */"
+          text run at (336,17) width 0: " "
+          text run at (0,34) width 288: "/* The following should not be used:"
+          text run at (288,34) width 0: " "
+          text run at (0,51) width 168: ".two {color: red;} */"
+          text run at (168,51) width 0: " "
+          text run at (0,68) width 320: ".three {color: green; /* color: red; */}"
+          text run at (320,68) width 0: " "
+          text run at (0,85) width 24: "/**"
+          text run at (24,85) width 0: " "
+          text run at (0,102) width 176: ".four {color: red;} */"
+          text run at (176,102) width 0: " "
+          text run at (0,119) width 168: ".five {color: green;}"
+          text run at (168,119) width 0: " "
+          text run at (0,136) width 32: "/**/"
+          text run at (32,136) width 0: " "
+          text run at (0,153) width 160: ".six {color: green;}"
+          text run at (160,153) width 0: " "
+          text run at (0,170) width 88: "/*********/"
+          text run at (88,170) width 0: " "
+          text run at (0,187) width 176: ".seven {color: green;}"
+          text run at (176,187) width 0: " "
+          text run at (0,204) width 128: "/* a comment **/"
+          text run at (128,204) width 0: " "
+          text run at (0,221) width 176: ".eight {color: green;}"
+          text run at (176,221) width 0: " "
+          text run at (0,238) width 0: " "
+      RenderBlock {HR} at (0,301) size 784x2 [border: (1px inset #000000)]
+      RenderBlock {P} at (0,319) size 784x17 [color=#008000]
+        RenderText {#text} at (0,0) size 250x17
+          text run at (0,0) width 250: "This sentence should be green."
+      RenderBlock {P} at (0,352) size 784x17
+        RenderText {#text} at (0,0) size 245x17
+          text run at (0,0) width 245: "This sentence should be black."
+      RenderBlock {P} at (0,385) size 784x17 [color=#008000]
+        RenderText {#text} at (0,0) size 250x17
+          text run at (0,0) width 250: "This sentence should be green."
+      RenderBlock {P} at (0,418) size 784x17
+        RenderText {#text} at (0,0) size 245x17
+          text run at (0,0) width 245: "This sentence should be black."
+      RenderBlock {P} at (0,451) size 784x17 [color=#008000]
+        RenderText {#text} at (0,0) size 250x17
+          text run at (0,0) width 250: "This sentence should be green."
+      RenderBlock {P} at (0,484) size 784x17 [color=#008000]
+        RenderText {#text} at (0,0) size 250x17
+          text run at (0,0) width 250: "This sentence should be green."
+      RenderBlock {P} at (0,517) size 784x17 [color=#008000]
+        RenderText {#text} at (0,0) size 250x17
+          text run at (0,0) width 250: "This sentence should be green."
+      RenderBlock {P} at (0,550) size 784x17 [color=#008000]
+        RenderText {#text} at (0,0) size 250x17
+          text run at (0,0) width 250: "This sentence should be green."
+      RenderTable {TABLE} at (0,583) size 273x283 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 271x281
+          RenderTableRow {TR} at (0,0) size 271x25
+            RenderTableCell {TD} at (0,0) size 271x25 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderInline {STRONG} at (0,0) size 200x17
+                RenderText {#text} at (4,4) size 200x17
+                  text run at (4,4) width 200: "TABLE Testing Section"
+          RenderTableRow {TR} at (0,25) size 271x256
+            RenderTableCell {TD} at (0,140) size 13x25 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,4) size 5x17
                 text run at (4,4) width 5: " "
-            RenderTableCell {TD} at (13,26) size 273x271 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
-              RenderBlock {P} at (4,4) size 265x18 [color=#008000]
-                RenderText {#text} at (0,0) size 265x18
-                  text run at (0,0) width 265: "This sentence should be green."
-              RenderBlock {P} at (4,39) size 265x18
-                RenderText {#text} at (0,0) size 261x18
-                  text run at (0,0) width 261: "This sentence should be black."
-              RenderBlock {P} at (4,74) size 265x18 [color=#008000]
-                RenderText {#text} at (0,0) size 265x18
-                  text run at (0,0) width 265: "This sentence should be green."
-              RenderBlock {P} at (4,109) size 265x18
-                RenderText {#text} at (0,0) size 261x18
-                  text run at (0,0) width 261: "This sentence should be black."
-              RenderBlock {P} at (4,144) size 265x18 [color=#008000]
-                RenderText {#text} at (0,0) size 265x18
-                  text run at (0,0) width 265: "This sentence should be green."
-              RenderBlock {P} at (4,179) size 265x18 [color=#008000]
-                RenderText {#text} at (0,0) size 265x18
-                  text run at (0,0) width 265: "This sentence should be green."
-              RenderBlock {P} at (4,214) size 265x18 [color=#008000]
-                RenderText {#text} at (0,0) size 265x18
-                  text run at (0,0) width 265: "This sentence should be green."
-              RenderBlock {P} at (4,249) size 265x18 [color=#008000]
-                RenderText {#text} at (0,0) size 265x18
-                  text run at (0,0) width 265: "This sentence should be green."
+            RenderTableCell {TD} at (13,25) size 258x256 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderBlock {P} at (4,4) size 250x17 [color=#008000]
+                RenderText {#text} at (0,0) size 250x17
+                  text run at (0,0) width 250: "This sentence should be green."
+              RenderBlock {P} at (4,37) size 250x17
+                RenderText {#text} at (0,0) size 245x17
+                  text run at (0,0) width 245: "This sentence should be black."
+              RenderBlock {P} at (4,70) size 250x17 [color=#008000]
+                RenderText {#text} at (0,0) size 250x17
+                  text run at (0,0) width 250: "This sentence should be green."
+              RenderBlock {P} at (4,103) size 250x17
+                RenderText {#text} at (0,0) size 245x17
+                  text run at (0,0) width 245: "This sentence should be black."
+              RenderBlock {P} at (4,136) size 250x17 [color=#008000]
+                RenderText {#text} at (0,0) size 250x17
+                  text run at (0,0) width 250: "This sentence should be green."
+              RenderBlock {P} at (4,169) size 250x17 [color=#008000]
+                RenderText {#text} at (0,0) size 250x17
+                  text run at (0,0) width 250: "This sentence should be green."
+              RenderBlock {P} at (4,202) size 250x17 [color=#008000]
+                RenderText {#text} at (0,0) size 250x17
+                  text run at (0,0) width 250: "This sentence should be green."
+              RenderBlock {P} at (4,235) size 250x17 [color=#008000]
+                RenderText {#text} at (0,0) size 250x17
+                  text run at (0,0) width 250: "This sentence should be green."

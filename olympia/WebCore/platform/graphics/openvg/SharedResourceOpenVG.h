@@ -24,8 +24,8 @@ namespace WebCore {
 
 class SharedResourceOpenVG {
 public:
-    void makeSharedContextCurrent();
-    void makeCompatibleContextCurrent();
+    void makeResourceCreationContextCurrent() const;
+    void makeCompatibleContextCurrent() const;
 };
 
 }

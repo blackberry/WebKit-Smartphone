@@ -40,7 +40,7 @@ public:
 
     Olympia::Platform::ReplaceTextErrorCode replaceText(const Olympia::Platform::ReplaceArguments& replaceArguments, const Olympia::Platform::AttributedText& attributedText);
     bool handleKeyboardInput(WebCore::PlatformKeyboardEvent::Type, const unsigned short character, bool shiftDown);
-    void handleNavigationMove(const unsigned short character, bool shiftDown);
+    void handleNavigationMove(const unsigned short character, bool shiftDown, bool altDown);
     void requestElementText(int requestedFrameId, int requestedElementId, int offset, int length);
 
     void setCaretPosition(int requestedFrameId, int requestedElementId, int caretPosition);
@@ -51,6 +51,7 @@ public:
     bool selectionAtStartOfElement();
     bool selectionAtEndOfElement();
     bool isInputMode() { return m_currentFocusElement; }
+    bool isProcessingChange() { return m_processingChange; }
 
     void setNavigationMode(bool active, bool sendMessage = true);
 

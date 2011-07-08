@@ -1,11 +1,11 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x36
+layer at (0,0) size 800x35
   RenderBlock {html} at (0,0) size 800x8
     RenderBody {body} at (8,8) size 784x0
-      RenderTable {table} at (382,0) size 402x28 [border: (1px outset #808080)]
-        RenderTableSection (anonymous) at (1,1) size 400x26
-          RenderTableRow {tr} at (0,2) size 400x22
-            RenderTableCell {td} at (2,2) size 396x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 392x18
-                text run at (2,2) width 392: "This table should be right aligned on the page"
+      RenderTable {table} at (408,0) size 376x27 [border: (1px outset #808080)]
+        RenderTableSection (anonymous) at (1,1) size 374x25
+          RenderTableRow {tr} at (0,2) size 374x21
+            RenderTableCell {td} at (2,2) size 370x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 366x17
+                text run at (2,2) width 366: "This table should be right aligned on the page"

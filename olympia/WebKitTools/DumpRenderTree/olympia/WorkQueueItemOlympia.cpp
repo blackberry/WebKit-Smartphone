@@ -12,6 +12,7 @@
 #include "OwnArrayPtr.h"
 #include "Page.h"
 #include "PlatformString.h"
+#include "WebPage.h"
 
 #include "NotImplemented.h"
 
@@ -52,14 +53,5 @@ bool ScriptItem::invoke() const
 
 bool BackForwardItem::invoke() const
 {
-    if (m_howFar == 1)
-        mainFrame->page()->goForward();
-    else if (m_howFar == -1)
-        mainFrame->page()->goBack();
-    else {
-        // TODO implement multiple forward/back/handling of BackForward list
-        notImplemented();
-        return false;
-    }
-    return true;
+    return Olympia::WebKit::DumpRenderTree::currentInstance()->page()->goBackOrForward(m_howFar);
 }

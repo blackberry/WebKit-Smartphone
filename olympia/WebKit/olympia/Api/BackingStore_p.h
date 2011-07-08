@@ -58,6 +58,9 @@ namespace Olympia {
 
             bool shouldPerformRenderJobs() const;
             bool shouldPerformRegularRenderJobs() const;
+            void startRenderTimer();
+            void stopRenderTimer();
+            void renderOnTimer(WebCore::Timer<BackingStorePrivate>*);
             void renderOnIdle();
             bool willFireTimer();
 
@@ -98,7 +101,8 @@ namespace Olympia {
                                   const WebCore::IntRect& backingStoreRect) const;
             void clearAndUpdateTileOfNotRenderedRegion(const TileIndex& index, BackingStoreTile* tile,
                                                        const WebCore::IntRectRegion& tileNotRenderedRegion,
-                                                       const WebCore::IntRect& backingStoreRect);
+                                                       const WebCore::IntRect& backingStoreRect,
+                                                       bool update = true);
             bool isCurrentVisibleJob(const TileIndex& index, BackingStoreTile* tile,
                                      const WebCore::IntRect& backingStoreRect) const;
 
@@ -125,7 +129,7 @@ namespace Olympia {
             float verticalScrollbarExtent() const;
             void blitHorizontalScrollbar();
             void blitVerticalScrollbar();
-            void blitScaledArbitraryRectFromBackingStoreToScreen(const WebCore::IntRect& srcRect, WebCore::IntRect dstRect, WebCore::SurfaceOpenVG* tempSurface);
+            void blitScaledArbitraryRectFromBackingStoreToScreen(const WebCore::IntRect& srcRect, WebCore::IntRect dstRect, unsigned short* tempSurface, unsigned int tempSurfaceStride);
 
             /* Returns whether the tile index is currently visible or not */
             bool isTileVisible(const TileIndex&) const;
@@ -148,8 +152,8 @@ namespace Olympia {
             /* This is called by WebPage after load is complete to update all the tiles */
             void updateTiles(bool updateVisible, bool immediate);
 
-            /* This is called by scroll() and is useful when scrolling before page load is complete */
-            void updateTilesForScroll();
+            /* This is called during scroll and by the render queue */
+            void updateTilesForScrollOrNotRenderedRegion();
 
             /* Reset an individual tile */
             void resetTile(const TileIndex&, BackingStoreTile*, bool resetBackground);
@@ -221,6 +225,9 @@ namespace Olympia {
 
             // Resumes the render queue when this times out
             WebCore::Timer<BackingStorePrivate>* m_resumeRenderQueueTimer;
+
+            // Last resort timer for rendering
+            WebCore::Timer<BackingStorePrivate>* m_renderTimer;
 
             WebCore::IntPoint m_backingStoreOffset;
             typedef WTF::HashMap<TileIndex, WTF::RefPtr<BackingStoreTile> > TileMap;

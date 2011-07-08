@@ -7,6 +7,7 @@
 #include "EGLDisplayOpenVG.h"
 #include "EGLUtils.h"
 #include "OlympiaPlatformMisc.h"
+#include "OlympiaPlatformSettings.h"
 
 using namespace WebCore;
 
@@ -50,13 +51,7 @@ void SurfacePool::initialize(const WebCore::IntSize& tileSize)
 
     m_tileRenderingSurface.set(new SurfaceOpenVG(tileSize, EGLDisplayOpenVG::current()->display(), &config));
 
-    unsigned tileNumber = 0;
-    const char* tileLimit = Olympia::Platform::environment("TILE_NUMBER");
-    if (tileLimit)
-        tileNumber = strtoul(tileLimit, 0, 0);
-    // if TILE_NUMBER was not set or is invalid, default to 24
-    if (!tileNumber)
-        tileNumber = 24;
+    unsigned tileNumber = Olympia::Platform::Settings::get()->numberOfBackingStoreTiles();
 
     for (size_t i = 0; i < tileNumber; ++i) {
         RefPtr<BackingStoreTile> tile = BackingStoreTile::create(tileSize);
@@ -78,12 +73,16 @@ void SurfacePool::initializeScrollbars(const WebCore::IntSize& horizontalSize, c
 {
     if (!m_horizontalScrollbar || m_horizontalScrollbar->size() != horizontalSize) {
         m_horizontalScrollbar.clear();
-        m_horizontalScrollbar = BackingStoreScrollbar::create(horizontalSize);
+
+        if (!horizontalSize.isEmpty() && horizontalSize.width() > 6)
+            m_horizontalScrollbar = BackingStoreScrollbar::create(horizontalSize);
     }
 
     if (!m_verticalScrollbar || m_verticalScrollbar->size() != verticalSize) {
         m_verticalScrollbar.clear();
-        m_verticalScrollbar = BackingStoreScrollbar::create(verticalSize);
+
+        if (!verticalSize.isEmpty() && verticalSize.height() > 6)
+            m_verticalScrollbar = BackingStoreScrollbar::create(verticalSize);
     }
 }
 

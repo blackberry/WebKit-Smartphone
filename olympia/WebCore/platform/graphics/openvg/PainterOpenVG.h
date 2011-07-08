@@ -166,6 +166,7 @@ public:
     void drawPath(VGPath, VGbitfield paintModes = (VG_STROKE_PATH | VG_FILL_PATH), WindRule fillRule = RULE_NONZERO);
 
     void clipRect(const FloatRect&, PainterOpenVG::ClipOperation);
+    void clipEllipse(const FloatRect&, PainterOpenVG::ClipOperation);
     void clipPath(const Path&, PainterOpenVG::ClipOperation, WindRule clipRule = RULE_NONZERO);
     void clipPath(VGPath, PainterOpenVG::ClipOperation, WindRule clipRule = RULE_NONZERO);
 
@@ -186,6 +187,8 @@ private:
     void endTransparencyLayer(int blurRadius);
 
     void intersectScissorRect(const FloatRect&);
+    void transformAndClipPath(VGPath, const FloatRect&, PainterOpenVG::ClipOperation);
+    void transformAndFillPath(VGPath, const FloatRect&);
 
     void setSurfaceTransformation(const AffineTransform&);
     PassRefPtr<TiledImageOpenVG> asNewNativeImage(SurfaceOpenVG* surface, const IntRect& src, VGImageFormat format);

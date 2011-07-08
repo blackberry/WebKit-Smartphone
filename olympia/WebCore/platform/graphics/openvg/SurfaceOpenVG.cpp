@@ -47,8 +47,71 @@ SurfaceOpenVG* SurfaceOpenVG::currentSurface()
 }
 
 #if PLATFORM(EGL)
+SurfaceOpenVG* SurfaceOpenVG::adoptExistingSurface(const EGLDisplay& display, const EGLSurface& surface, SurfaceOwnership ownership, EGLint surfaceType)
+{
+    return adoptExistingSurface(display, surface, EGLDisplayOpenVG::forDisplay(display)->contextForSurface(surface), ownership, surfaceType);
+}
+
+SurfaceOpenVG* SurfaceOpenVG::adoptExistingSurface(const EGLDisplay& display, const EGLSurface& surface, const EGLContext& context, SurfaceOwnership ownership, EGLint surfaceType)
+{
+    SurfaceOpenVG* s = new SurfaceOpenVG;
+    s->m_eglDisplay = display;
+    s->m_eglSurface = surface;
+    s->m_eglContext = context;
+    s->m_doesOwnSurface = ownership == TakeSurfaceOwnership;
+
+    // The surface size can change for windows, but not for pbuffer or
+    // pixmap surfaces. If we don't know whether we're a window or not,
+    // we can check the config and hope it only supports a specific type
+    // of surface. (If we don't know that as well, we can't cache the size.)
+    // Unfortunately, EGL 1.4 doesn't allow for any way to retrieve the
+    // surface type, so this is the best we can do here.
+    if (surfaceType & EGL_WINDOW_BIT && surfaceType & (EGL_PBUFFER_BIT | EGL_PIXMAP_BIT)) {
+        // Retrieve the same EGL config for context creation that was used to
+        // create the the EGL surface, and see if we can extract the size.
+        EGLint surfaceConfigId;
+        EGLBoolean success = eglQuerySurface(display, surface, EGL_CONFIG_ID, &surfaceConfigId);
+        ASSERT(success == EGL_TRUE);
+        ASSERT(surfaceConfigId != EGL_BAD_ATTRIBUTE);
+
+        EGLConfig config;
+        EGLint numConfigs;
+
+        const EGLint configAttribs[] = {
+            EGL_CONFIG_ID, surfaceConfigId,
+            EGL_NONE
+        };
+        eglChooseConfig(display, configAttribs, &config, 1, &numConfigs);
+        ASSERT_EGL_NO_ERROR();
+        ASSERT(numConfigs == 1);
+
+        EGLint configSurfaceType;
+        success = eglGetConfigAttrib(display, config, EGL_SURFACE_TYPE, &configSurfaceType);
+        ASSERT(success == EGL_TRUE);
+        ASSERT(surfaceType != EGL_BAD_ATTRIBUTE);
+
+        surfaceType &= configSurfaceType;
+    }
+
+    // Hopefully we now know whether we've got a window or not,
+    // so we can cache the surface size.
+    if (!(surfaceType & EGL_WINDOW_BIT)) {
+        EGLint len = 0;
+        eglQuerySurface(display, surface, EGL_WIDTH, &len);
+        ASSERT_EGL_NO_ERROR();
+        s->m_size.setWidth(len);
+        eglQuerySurface(display, surface, EGL_HEIGHT, &len);
+        ASSERT_EGL_NO_ERROR();
+        s->m_size.setHeight(len);
+    }
+
+    EGLDisplayOpenVG::registerPlatformSurface(s);
+    return s;
+}
+
 SurfaceOpenVG::SurfaceOpenVG(const IntSize& size, const EGLDisplay& display, EGLConfig* confPtr, EGLint* errorCode)
     : m_activePainter(0)
+    , m_doesOwnSurface(true)
     , m_eglDisplay(display)
     , m_eglSurface(EGL_NO_SURFACE)
     , m_eglContext(EGL_NO_CONTEXT)
@@ -70,6 +133,7 @@ SurfaceOpenVG::SurfaceOpenVG(const IntSize& size, const EGLDisplay& display, EGL
 
 SurfaceOpenVG::SurfaceOpenVG(EGLClientBuffer buffer, EGLenum bufferType, const EGLDisplay& display, EGLConfig* confPtr, EGLint* errorCode)
     : m_activePainter(0)
+    , m_doesOwnSurface(true)
     , m_eglDisplay(display)
     , m_eglSurface(EGL_NO_SURFACE)
     , m_eglContext(EGL_NO_CONTEXT)
@@ -96,6 +160,7 @@ SurfaceOpenVG::SurfaceOpenVG(EGLClientBuffer buffer, EGLenum bufferType, const E
 
 SurfaceOpenVG::SurfaceOpenVG(EGLNativeWindowType window, const EGLDisplay& display, EGLConfig* confPtr)
     : m_activePainter(0)
+    , m_doesOwnSurface(true)
     , m_eglDisplay(display)
     , m_eglSurface(EGL_NO_SURFACE)
     , m_eglContext(EGL_NO_CONTEXT)
@@ -122,6 +187,7 @@ SurfaceOpenVG::SurfaceOpenVG(EGLNativeWindowType window, const EGLDisplay& displ
 // by itself.
 SurfaceOpenVG::SurfaceOpenVG()
     : m_activePainter(0)
+    , m_doesOwnSurface(true)
     , m_eglDisplay(EGL_NO_DISPLAY)
     , m_eglSurface(EGL_NO_SURFACE)
     , m_eglContext(EGL_NO_CONTEXT)
@@ -130,6 +196,11 @@ SurfaceOpenVG::SurfaceOpenVG()
 #endif
 
 SurfaceOpenVG::~SurfaceOpenVG()
+{
+    detach();
+}
+
+void SurfaceOpenVG::detach()
 {
     if (!isValid())
         return;
@@ -153,8 +224,11 @@ SurfaceOpenVG::~SurfaceOpenVG()
     }
 
 #if PLATFORM(EGL)
-    EGLDisplayOpenVG::forDisplay(m_eglDisplay)->destroySurface(m_eglSurface);
+    EGLDisplayOpenVG::forDisplay(m_eglDisplay)->removeSurface(m_eglSurface, m_doesOwnSurface);
     EGLDisplayOpenVG::unregisterPlatformSurface(this);
+    m_eglDisplay = EGL_NO_DISPLAY;
+    m_eglSurface = EGL_NO_SURFACE;
+    m_eglContext = EGL_NO_CONTEXT;
 #else
     ASSERT_NOT_REACHED();
 #endif
@@ -274,6 +348,35 @@ void SurfaceOpenVG::makeCompatibleCurrent()
 #endif
 }
 
+void SurfaceOpenVG::makeResourceCreationContextCurrent()
+{
+#if PLATFORM(EGL)
+    ASSERT(m_eglContext != EGL_NO_CONTEXT);
+
+    SurfaceOpenVG* shared = sharedSurface();
+
+    eglBindAPI(EGL_OPENVG_API);
+    ASSERT_EGL_NO_ERROR();
+    EGLContext currentContext = eglGetCurrentContext();
+    ASSERT_EGL_NO_ERROR();
+
+    // The shared surface might not be current, but the shared context is.
+    // A proper OpenVG implementation stores all resources in the context,
+    // and none in the surface, so we don't need to do anything here.
+    if (currentContext == shared->m_eglContext)
+        return;
+
+    // The shared surface is not usually used for any productive work,
+    // any other surface (i.e. this) is more likely to be painted on.
+    if (m_eglContext == shared->m_eglContext) {
+        makeCurrent(DontApplyPainterState);
+        return;
+    }
+
+    shared->makeCurrent(DontApplyPainterState);
+#endif
+}
+
 void SurfaceOpenVG::flush()
 {
 #if PLATFORM(EGL)
@@ -367,12 +470,42 @@ VGPath SurfaceOpenVG::cachedPath(CachedPathDescriptor which)
             ASSERT(errorCode == VGU_NO_ERROR);
             break;
 
+        case CachedCirclePath:
+            path = vgCreatePath(
+                VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+                1.0 /* scale */, 0.0 /* bias */,
+                4 /* expected number of segments */,
+                10 /* expected number of total coordinates */,
+                VG_PATH_CAPABILITY_APPEND_TO);
+            ASSERT_VG_NO_ERROR();
+
+            errorCode = vguEllipse(path, 0.5, 0.5, 1, 1);
+            ASSERT(errorCode == VGU_NO_ERROR);
+            break;
+
+        case EmptyTemporaryPath:
+            path = vgCreatePath(
+                VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+                1.0 /* scale */, 0.0 /* bias */,
+                0 /* expected number of segments */,
+                0 /* expected number of total coordinates */,
+                VG_PATH_CAPABILITY_ALL);
+            ASSERT_VG_NO_ERROR();
+            break;
+
         default:
             ASSERT_NOT_REACHED();
         }
 
         paths.at(which) = path;
         makeCurrent();
+    }
+
+    if (which == EmptyTemporaryPath) {
+        VGPath path = paths.at(EmptyTemporaryPath);
+        vgClearPath(path, VG_PATH_CAPABILITY_ALL);
+        ASSERT_VG_NO_ERROR();
+        return path;
     }
 
     return paths.at(which);

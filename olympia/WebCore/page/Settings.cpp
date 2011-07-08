@@ -142,6 +142,7 @@ Settings::Settings(Page* page)
     , m_firstScheduledLayoutDelay(250) // match Document.cpp cLayoutScheduleThreshold by default
     , m_shouldUseFirstScheduleLayoutDelay(false)
     , m_processHTTPEquiv(true)
+    , m_useCache(true)
 #endif
 {
     // A Frame may not have been created yet, so we initialize the AtomicString 

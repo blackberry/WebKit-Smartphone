@@ -55,6 +55,7 @@ static const ExtensionMap extensionMap[] = {
     { "ppm", "image/x-portable-pixmap" },
     { "rss", "application/rss+xml" },
     { "svg", "image/svg+xml" },
+    { "svgz", "image/svg+xml" },
     { "text", "text/plain" },
     { "tif", "image/tiff" },
     { "tiff", "image/tiff" },

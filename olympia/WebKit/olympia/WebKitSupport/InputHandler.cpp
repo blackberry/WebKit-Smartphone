@@ -77,9 +77,10 @@ void InputHandler::syncAckReceived()
     if (!m_numberOfOutstandingSyncMessages) {
 #if SHOWDEBUG_SYNCHANDLING
         Olympia::Platform::log(Olympia::Platform::LogLevelInfo, "InputHandler::syncAckReceived unexpected");
-#endif
+
         // An unexpected ack was received.  Sender should be investigated.
         ASSERT_NOT_REACHED();
+#endif
         return;
     }
     m_numberOfOutstandingSyncMessages--;
@@ -392,8 +393,35 @@ void InputHandler::ensureFocusElementVisible()
     Position start = frame->selection()->start();
     if (start.node() && start.node()->renderer()) {
         if (RenderLayer* layer = start.node()->renderer()->enclosingLayer()) {
+
+            // Align the selection rect if possible so that we show the field's
+            // outline if the caret is at the edge of the field
+            ScrollAlignment horizontalScrollAlignment = ScrollAlignment::alignCenterIfNeeded;
+            if (RenderObject* focusedRenderer = m_currentFocusElement->renderer()) {
+                WebCore::IntRect nodeOutlineBounds = focusedRenderer->absoluteOutlineBounds();
+                WebCore::IntRect caretAtEdgeRect = rectForCaret(0);
+                int paddingX = abs(caretAtEdgeRect.x() - nodeOutlineBounds.x());
+                int paddingY = abs(caretAtEdgeRect.y() - nodeOutlineBounds.y());
+
+                if (selectionFocusRect.x() - paddingX == nodeOutlineBounds.x())
+                    selectionFocusRect.setX(nodeOutlineBounds.x());
+                else if (selectionFocusRect.right() + paddingX == nodeOutlineBounds.right())
+                    selectionFocusRect.setRight(nodeOutlineBounds.right());
+                if (selectionFocusRect.y() - paddingY == nodeOutlineBounds.y())
+                    selectionFocusRect.setY(nodeOutlineBounds.y());
+                else if (selectionFocusRect.bottom() + paddingY == nodeOutlineBounds.bottom())
+                    selectionFocusRect.setBottom(nodeOutlineBounds.bottom());
+
+                // If the editing point is on the left hand side of the screen when the node's
+                // rect is edge aligned, edge align the node rect.
+                if (selectionFocusRect.x() - caretAtEdgeRect.x() < actualScreenRect.width() / 2) {
+                    selectionFocusRect.setX(nodeOutlineBounds.x());
+                    horizontalScrollAlignment = ScrollAlignment::alignToEdgeIfNeeded;
+                }
+            }
+
             WebCore::IntRect revealRect = layer->getRectToExpose(actualScreenRect, selectionFocusRect,
-                                                                 ScrollAlignment::alignCenterIfNeeded,
+                                                                 horizontalScrollAlignment,
                                                                  ScrollAlignment::alignCenterIfNeeded);
 
             frameView->setScrollPosition(revealRect.location());
@@ -757,7 +785,7 @@ bool InputHandler::handleKeyboardInput(PlatformKeyboardEvent::Type type, unsigne
     return keyboardEventHandled;
 }
 
-void InputHandler::handleNavigationMove(unsigned short character, bool shiftDown)
+void InputHandler::handleNavigationMove(unsigned short character, bool shiftDown, bool altDown)
 {
 #if SHOWDEBUG_INPUTHANDLER
     Olympia::Platform::log(Olympia::Platform::LogLevelInfo, "InputHandler::handleNavigationMove received character=%lc", character);
@@ -767,9 +795,15 @@ void InputHandler::handleNavigationMove(unsigned short character, bool shiftDown
     if (Frame* focusedFrame = m_webPage->m_page->focusController()->focusedFrame()) {
         switch (character) {
         case Olympia::Platform::KEY_CONTROL_LEFT:
-            if (shiftDown)
+            if (altDown) {
+                // If alt is down, do not break out of the field.
+                if (shiftDown)
+                    focusedFrame->editor()->command("MoveToBeginningOfLineAndModifySelection").execute();
+                else
+                    focusedFrame->editor()->command("MoveToBeginningOfLine").execute();
+            } else if (shiftDown) {
                 focusedFrame->editor()->command("MoveBackwardAndModifySelection").execute();
-            else {
+            } else {
                 // If we are at the extent of the edit box restore the cursor.
                 if (selectionAtStartOfElement())
                     setNavigationMode(false);
@@ -778,9 +812,15 @@ void InputHandler::handleNavigationMove(unsigned short character, bool shiftDown
             }
             break;
         case Olympia::Platform::KEY_CONTROL_RIGHT:
-            if (shiftDown)
+            if (altDown) {
+                // If alt is down, do not break out of the field.
+                if (shiftDown)
+                    focusedFrame->editor()->command("MoveToEndOfLineAndModifySelection").execute();
+                else
+                    focusedFrame->editor()->command("MoveToEndOfLine").execute();
+            } else if (shiftDown) {
                 focusedFrame->editor()->command("MoveForwardAndModifySelection").execute();
-            else {
+            } else {
                 // If we are at the extent of the edit box restore the cursor.
                 if (selectionAtEndOfElement())
                     setNavigationMode(false);
@@ -789,9 +829,15 @@ void InputHandler::handleNavigationMove(unsigned short character, bool shiftDown
             }
             break;
         case Olympia::Platform::KEY_CONTROL_UP:
-            if (shiftDown)
+            if (altDown) {
+                // If alt is down, do not break out of the field.
+                if (shiftDown)
+                    focusedFrame->editor()->command("MoveToBeginningOfDocumentAndModifySelection").execute();
+                else
+                    focusedFrame->editor()->command("MoveToBeginningOfDocument").execute();
+            } else if (shiftDown) {
                 focusedFrame->editor()->command("MoveUpAndModifySelection").execute();
-            else {
+            } else {
                 // If we are at the extent of the edit box restore the cursor.
                 if (selectionAtStartOfElement())
                     setNavigationMode(false);
@@ -800,9 +846,15 @@ void InputHandler::handleNavigationMove(unsigned short character, bool shiftDown
             }
             break;
         case Olympia::Platform::KEY_CONTROL_DOWN:
-            if (shiftDown)
+            if (altDown) {
+                // If alt is down, do not break out of the field.
+                if (shiftDown)
+                    focusedFrame->editor()->command("MoveToEndOfDocumentAndModifySelection").execute();
+                else
+                    focusedFrame->editor()->command("MoveToEndOfDocument").execute();
+            } else if (shiftDown) {
                 focusedFrame->editor()->command("MoveDownAndModifySelection").execute();
-            else {
+            } else {
                 // If we are at the extent of the edit box restore the cursor.
                 if (selectionAtEndOfElement())
                     setNavigationMode(false);
@@ -981,173 +1033,61 @@ ReplaceTextErrorCode InputHandler::processReplaceText(const ReplaceArguments& re
     unsigned int cachedSelectionStart = selectionStart();
     unsigned int cachedSelectionEnd = selectionEnd();
 
-    if (Editor* editor = frame->editor()) {
-        if (start > stringLength)
-            return ReplaceTextWrongStartArgument;
-        if (end < start || end > stringLength)
-            return ReplaceTextWrongEndArgument;
+    Editor* editor = frame->editor();
+    if (!editor)
+        return ReplaceTextNonSpecifiedFault;
 
-        WebCore::String replacementText(attributedText.text, attributedText.length);
-        WebCore::String expectedString = elementText(m_currentFocusElement.get());
-        if (expectedString.isEmpty())
-            expectedString = replacementText;
-        else
-            expectedString.replace(start, end - start, replacementText);
+    if (start > stringLength)
+        return ReplaceTextWrongStartArgument;
+    if (end < start || end > stringLength)
+        return ReplaceTextWrongEndArgument;
 
-        if (desiredCursorPosition > expectedString.length())
-            return ReplaceTextWrongCursorLocation;
+    WebCore::String replacementText(attributedText.text, attributedText.length);
+    WebCore::String expectedString = elementText(m_currentFocusElement.get());
+    if (expectedString.isEmpty())
+        expectedString = replacementText;
+    else
+        expectedString.replace(start, end - start, replacementText);
 
-        // Validation of input parameters is complete.  A change will be made!
-        m_processingChange = true;
+    if (desiredCursorPosition > expectedString.length())
+        return ReplaceTextWrongCursorLocation;
+
+    // Validation of input parameters is complete.  A change will be made!
+    m_processingChange = true;
 
 #if SHOWDEBUG_INPUTHANDLER
-        Olympia::Platform::log(Olympia::Platform::LogLevelInfo, "InputHandler::replaceText Text before %s", elementText(m_currentFocusElement.get()).latin1().data());
+    Olympia::Platform::log(Olympia::Platform::LogLevelInfo, "InputHandler::replaceText Text before %s", elementText(m_currentFocusElement.get()).latin1().data());
 #endif
 
-        // Disable selectionHandler's active selection as we will be resetting and these
-        // changes should not be handled as notification event.
-        m_webPage->m_selectionHandler->setSelectionActive(false);
+    // Disable selectionHandler's active selection as we will be resetting and these
+    // changes should not be handled as notification event.
+    m_webPage->m_selectionHandler->setSelectionActive(false);
 
-        // Remove any attributes currently set on the text in the field before making any changes.
-        resetAttributedText();
+    // Remove any attributes currently set on the text in the field before making any changes.
+    resetAttributedText();
 
-        // Place the cursor at the desired location or select the appropriate text.
-        if (cachedSelectionStart != start || cachedSelectionEnd != end)
-            setSelection(start, end);
+    // Place the cursor at the desired location or select the appropriate text.
+    if (cachedSelectionStart != start || cachedSelectionEnd != end)
+        setSelection(start, end);
 
-        if (elementType(m_currentFocusElement.get()) == InputTypePassword)
-            applyPasswordFieldUnmaskSecure(m_currentFocusElement.get(), 0, 0);
+    if (elementType(m_currentFocusElement.get()) == InputTypePassword)
+        applyPasswordFieldUnmaskSecure(m_currentFocusElement.get(), 0, 0);
 
-        if (attributedText.length == 1 && attributeStart == attributeEnd && start == end) {
-            // Handle single key non-attributed entry as key press rather than replaceText to allow
-            // triggering of javascript events.
+    if (attributedText.length == 1 && attributeStart == attributeEnd && start == end) {
+        // Handle single key non-attributed entry as key press rather than replaceText to allow
+        // triggering of javascript events.
 
 #if ENABLE_DEBUG_UNDOREDO
-            if (replacementText[0] == 'u')
-                editor->command("Undo").execute();
-            else if (replacementText[0] == 'r')
-                editor->command("Redo").execute();
-            else
+        if (replacementText[0] == 'u')
+            editor->command("Undo").execute();
+        else if (replacementText[0] == 'r')
+            editor->command("Redo").execute();
+        else
 #endif
-                handleKeyboardInput(PlatformKeyboardEvent::Char, replacementText[0], false);
-
-            m_processingChange = false;
-
-            if (!confirmReplacementValue(expectedString))
-                return ReplaceTextChangeNotValidated;
-
-            return ReplaceTextSuccess;
-        }
-
-        // Perform the text change as a single command if there is one.
-        if (attributedText.length)
-            editor->command("InsertText").execute(replacementText);
-        else if (end > start)
-            editor->command("Delete").execute();
-
-#if SHOWDEBUG_INPUTHANDLER
-        Olympia::Platform::log(Olympia::Platform::LogLevelInfo, "InputHandler::replaceText Text after %s", elementText(m_currentFocusElement.get()).latin1().data());
-#endif
-
-        m_addCommandToUndoStack = false;
-
-        if (elementType(m_currentFocusElement.get()) == InputTypePassword) {
-            if (attributedText.runsCount) {
-                AttribRun* attributeRun = reinterpret_cast<AttribRun*>(attributedText.runs);
-                for (int i = 0; i < attributedText.runsCount; i++) {
-                    unsigned int runStartPosition = start + attributeRun->offset;
-
-#if SHOWDEBUG_INPUTHANDLER
-                    // What are the attributes?
-                    AttributeValue italicAttribute = static_cast<AttributeValue>(getItalicAttrib(attributeRun->attributes));
-                    AttributeValue strikethroughAttribute = static_cast<AttributeValue>(getStrikethroughAttrib(attributeRun->attributes));
-                    UnderlineStyles underlineAttribute = static_cast<UnderlineStyles>(getUnderlineAttrib(attributeRun->attributes));
-                    AttributeValue highlightAttribute = static_cast<AttributeValue>(getHighlightAttrib(attributeRun->attributes));
-                    AttributeValue passwordAttribute = static_cast<AttributeValue>(getPasswordAttrib(attributeRun->attributes));
-                    FontWeights fontWeight = static_cast<FontWeights>(getFontWeightAttrib(attributeRun->attributes));
-                    Olympia::Platform::log(Olympia::Platform::LogLevelInfo, "InputHandler::replaceText Run Details offset=%u, length=%u, italic=%d, strikethrough=%d, underline=%d, highlight=%d, password=%d, fontWeight=%d",
-                                            attributeRun->offset, attributeRun->length, italicAttribute, strikethroughAttribute, underlineAttribute, highlightAttribute, passwordAttribute, fontWeight);
-#endif
-                    // This is a hack.  It would be nice to test against the password attribute, but it is not present
-                    // on the reduced keyboard, but other attributes are and we need to show the text.  Additionally,
-                    // we can't just check if there is a run and show the text because we get alot of useless requests
-                    // with empty attributes (no change) being applied over top of the text.
-
-                    // There should never be more than one run, just in case there is, we'll only actually be using the
-                    // last one.
-                    if (attributeRun->attributes)
-                        applyPasswordFieldUnmaskSecure(m_currentFocusElement.get(), runStartPosition, attributeRun->length);
-                    attributeRun++;
-                }
-            }
-        } else {
-
-            // There will be attributed text, cache the current style.
-            if (attributedText.runsCount)
-                cacheTypingStyle(attributeStart, attributeEnd);
-
-            bool isSearch = elementType(m_currentFocusElement.get()) == InputTypeSearch;
-            AttribRun* attributeRun = reinterpret_cast<AttribRun*>(attributedText.runs);
-            for (int i = 0; i < attributedText.runsCount; i++) {
-
-                unsigned int runStartPosition = start + attributeRun->offset;
-                unsigned int runEndPosition = runStartPosition + attributeRun->length;
-                if (runEndPosition > stringLength - (end - start) + attributedText.length || runEndPosition > attributeEnd) {
-                    m_processingChange = false;
-                    return ReplaceTextInvalidRunlength;
-                }
-
-                // Avoid crash when handling search fields that do not support splitting of field as
-                // SplitElement doesn't support isSearch as the parent of the Text field is a non-editable
-                // HTML DIV element.
-                if (isSearch && runEndPosition != expectedString.length() - 1)
-                    continue;
-
-                setSelection(runStartPosition, runEndPosition);
-
-                bool isUnderline = selectionHasStyle(frame, CSSPropertyWebkitTextDecorationsInEffect, "underline");
-                bool isStrikethrough = selectionHasStyle(frame, CSSPropertyWebkitTextDecorationsInEffect, "line-through");
-                bool isItalic = selectionHasStyle(frame, CSSPropertyFontStyle, "italic");
-
-                // Apply attributes
-                AttributeValue italicAttribute = static_cast<AttributeValue>(getItalicAttrib(attributeRun->attributes));
-                if (shouldToggleAttribute(isItalic, italicAttribute))
-                    editor->command("Italic").execute();
-
-                AttributeValue strikethroughAttribute = static_cast<AttributeValue>(getStrikethroughAttrib(attributeRun->attributes));
-                if (shouldToggleAttribute(isStrikethrough, strikethroughAttribute))
-                    editor->command("Strikethrough").execute();
-
-                UnderlineStyles underlineAttribute = static_cast<UnderlineStyles>(getUnderlineAttrib(attributeRun->attributes));
-                if (shouldToggleUnderline(isUnderline, underlineAttribute))
-                    editor->command("Underline").execute();
-
-                AttributeValue highlightAttribute = static_cast<AttributeValue>(getHighlightAttrib(attributeRun->attributes));
-                if (highlightAttribute == AttributeApplied) {
-                    editor->command("HiliteColor").execute("blue");
-                    editor->command("ForeColor").execute("white");
-                } else if (highlightAttribute == AttributeNotApplied) {
-                    editor->command("HiliteColor").execute("white");
-                    editor->command("ForeColor").execute("black");
-                }
-
-                FontWeights fontWeight = static_cast<FontWeights>(getFontWeightAttrib(attributeRun->attributes));
-                if (fontWeight != EUnsetWeight)
-                    editor->command("FontWeight").execute(convertWeightToString(static_cast<FontWeights>(fontWeight)));
-
-                setSelection(runEndPosition, runEndPosition);
-#if SHOWDEBUG_INPUTHANDLER
-                Olympia::Platform::log(Olympia::Platform::LogLevelInfo, "InputHandler::replaceText Run Details offset=%u, length=%u, italic=%d, strikethrough=%d, underline=%d, highlight=%d, fontWeight=%d",
-                            attributeRun->offset, attributeRun->length, italicAttribute, strikethroughAttribute, underlineAttribute, highlightAttribute, fontWeight);
-#endif
-                attributeRun++;
-            }
-        }
+            handleKeyboardInput(PlatformKeyboardEvent::Char, replacementText[0], false);
 
         setSelection(desiredCursorPosition, desiredCursorPosition);
         frame->revealSelection();
-
-        m_addCommandToUndoStack = true;
 
         m_processingChange = false;
 
@@ -1156,7 +1096,123 @@ ReplaceTextErrorCode InputHandler::processReplaceText(const ReplaceArguments& re
 
         return ReplaceTextSuccess;
     }
-    return ReplaceTextNonSpecifiedFault;
+
+    // Perform the text change as a single command if there is one.
+    if (attributedText.length)
+        editor->command("InsertText").execute(replacementText);
+    else if (end > start)
+        editor->command("Delete").execute();
+
+#if SHOWDEBUG_INPUTHANDLER
+    Olympia::Platform::log(Olympia::Platform::LogLevelInfo, "InputHandler::replaceText Text after %s", elementText(m_currentFocusElement.get()).latin1().data());
+#endif
+
+    m_addCommandToUndoStack = false;
+
+    if (elementType(m_currentFocusElement.get()) == InputTypePassword) {
+        if (attributedText.runsCount) {
+            AttribRun* attributeRun = reinterpret_cast<AttribRun*>(attributedText.runs);
+            for (int i = 0; i < attributedText.runsCount; i++) {
+                unsigned int runStartPosition = start + attributeRun->offset;
+
+#if SHOWDEBUG_INPUTHANDLER
+                // What are the attributes?
+                AttributeValue italicAttribute = static_cast<AttributeValue>(getItalicAttrib(attributeRun->attributes));
+                AttributeValue strikethroughAttribute = static_cast<AttributeValue>(getStrikethroughAttrib(attributeRun->attributes));
+                UnderlineStyles underlineAttribute = static_cast<UnderlineStyles>(getUnderlineAttrib(attributeRun->attributes));
+                AttributeValue highlightAttribute = static_cast<AttributeValue>(getHighlightAttrib(attributeRun->attributes));
+                AttributeValue passwordAttribute = static_cast<AttributeValue>(getPasswordAttrib(attributeRun->attributes));
+                FontWeights fontWeight = static_cast<FontWeights>(getFontWeightAttrib(attributeRun->attributes));
+                Olympia::Platform::log(Olympia::Platform::LogLevelInfo, "InputHandler::replaceText Run Details offset=%u, length=%u, italic=%d, strikethrough=%d, underline=%d, highlight=%d, password=%d, fontWeight=%d",
+                                        attributeRun->offset, attributeRun->length, italicAttribute, strikethroughAttribute, underlineAttribute, highlightAttribute, passwordAttribute, fontWeight);
+#endif
+                // This is a hack.  It would be nice to test against the password attribute, but it is not present
+                // on the reduced keyboard, but other attributes are and we need to show the text.  Additionally,
+                // we can't just check if there is a run and show the text because we get alot of useless requests
+                // with empty attributes (no change) being applied over top of the text.
+
+                // There should never be more than one run, just in case there is, we'll only actually be using the
+                // last one.
+                if (attributeRun->attributes)
+                    applyPasswordFieldUnmaskSecure(m_currentFocusElement.get(), runStartPosition, attributeRun->length);
+                attributeRun++;
+            }
+        }
+    } else {
+
+        // There will be attributed text, cache the current style.
+        if (attributedText.runsCount)
+            cacheTypingStyle(attributeStart, attributeEnd);
+
+        bool isSearch = elementType(m_currentFocusElement.get()) == InputTypeSearch;
+        AttribRun* attributeRun = reinterpret_cast<AttribRun*>(attributedText.runs);
+        for (int i = 0; i < attributedText.runsCount; i++) {
+
+            unsigned int runStartPosition = start + attributeRun->offset;
+            unsigned int runEndPosition = runStartPosition + attributeRun->length;
+            if (runEndPosition > stringLength - (end - start) + attributedText.length || runEndPosition > attributeEnd) {
+                m_processingChange = false;
+                return ReplaceTextInvalidRunlength;
+            }
+
+            // Avoid crash when handling search fields that do not support splitting of field as
+            // SplitElement doesn't support isSearch as the parent of the Text field is a non-editable
+            // HTML DIV element.
+            if (isSearch && runEndPosition != expectedString.length() - 1)
+                continue;
+
+            setSelection(runStartPosition, runEndPosition);
+
+            bool isUnderline = selectionHasStyle(frame, CSSPropertyWebkitTextDecorationsInEffect, "underline");
+            bool isStrikethrough = selectionHasStyle(frame, CSSPropertyWebkitTextDecorationsInEffect, "line-through");
+            bool isItalic = selectionHasStyle(frame, CSSPropertyFontStyle, "italic");
+
+            // Apply attributes
+            AttributeValue italicAttribute = static_cast<AttributeValue>(getItalicAttrib(attributeRun->attributes));
+            if (shouldToggleAttribute(isItalic, italicAttribute))
+                editor->command("Italic").execute();
+
+            AttributeValue strikethroughAttribute = static_cast<AttributeValue>(getStrikethroughAttrib(attributeRun->attributes));
+            if (shouldToggleAttribute(isStrikethrough, strikethroughAttribute))
+                editor->command("Strikethrough").execute();
+
+            UnderlineStyles underlineAttribute = static_cast<UnderlineStyles>(getUnderlineAttrib(attributeRun->attributes));
+            if (shouldToggleUnderline(isUnderline, underlineAttribute))
+                editor->command("Underline").execute();
+
+            AttributeValue highlightAttribute = static_cast<AttributeValue>(getHighlightAttrib(attributeRun->attributes));
+            if (highlightAttribute == AttributeApplied) {
+                editor->command("HiliteColor").execute("blue");
+                editor->command("ForeColor").execute("white");
+            } else if (highlightAttribute == AttributeNotApplied) {
+                editor->command("HiliteColor").execute("white");
+                editor->command("ForeColor").execute("black");
+            }
+
+            FontWeights fontWeight = static_cast<FontWeights>(getFontWeightAttrib(attributeRun->attributes));
+            if (fontWeight != EUnsetWeight)
+                editor->command("FontWeight").execute(convertWeightToString(static_cast<FontWeights>(fontWeight)));
+
+            setSelection(runEndPosition, runEndPosition);
+#if SHOWDEBUG_INPUTHANDLER
+            Olympia::Platform::log(Olympia::Platform::LogLevelInfo, "InputHandler::replaceText Run Details offset=%u, length=%u, italic=%d, strikethrough=%d, underline=%d, highlight=%d, fontWeight=%d",
+                        attributeRun->offset, attributeRun->length, italicAttribute, strikethroughAttribute, underlineAttribute, highlightAttribute, fontWeight);
+#endif
+            attributeRun++;
+        }
+    }
+
+    setSelection(desiredCursorPosition, desiredCursorPosition);
+    frame->revealSelection();
+
+    m_addCommandToUndoStack = true;
+
+    m_processingChange = false;
+
+    if (!confirmReplacementValue(expectedString))
+        return ReplaceTextChangeNotValidated;
+
+    return ReplaceTextSuccess;
 }
 
 }

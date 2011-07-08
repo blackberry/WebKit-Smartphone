@@ -69,6 +69,8 @@
 #include "SelectElement.h"
 #include "SelectionHandler.h"
 #include "Settings.h"
+#include "Storage.h"
+#include "StorageNamespace.h"
 #include "SurfaceOpenVG.h"
 #include "TouchEventHandler.h"
 #include "TransformationMatrix.h"
@@ -198,6 +200,9 @@ WebPagePrivate::WebPagePrivate(WebPage* webPage, WebPageClient* client, const Pl
     , m_olympiaOriginatedScroll(false)
     , m_resetVirtualViewportOnCommitted(true)
     , m_shouldUseFixedDesktopMode(false)
+#if ENABLE(TOUCH_EVENTS)
+    , m_preventDefaultOnTouchStart(false)
+#endif
     , m_nestedLayoutFinishedCount(0)
     , m_x(rect.x())
     , m_y(rect.y())
@@ -216,6 +221,7 @@ WebPagePrivate::WebPagePrivate(WebPage* webPage, WebPageClient* client, const Pl
     , m_selectionHandler(new SelectionHandler(this))
     , m_touchEventHandler(new TouchEventHandler(this))
     , m_dateTimeInput(0) // lazy initialization
+    , m_colorInput(0) // lazy initialization
     , m_selectElement(0) // lazy initialization
     , m_currentCursor(Olympia::Platform::CursorNone)
     , m_dumpRenderTree(0) // lazy initialization
@@ -231,6 +237,7 @@ WebPagePrivate::WebPagePrivate(WebPage* webPage, WebPageClient* client, const Pl
     , m_currentBlockZoomAdjustedNode(0)
     , m_shouldReflowBlock(false)
     , m_bitmapZoomBuffer(0)
+    , m_bitmapZoomBufferStride(0)
     , m_delayedZoomTimer(new Timer<WebPagePrivate>(this, &WebPagePrivate::zoomAboutPointTimerFired))
     , m_lastUserEventTimestamp(0.0)
     , m_deferredScrollEventTimer(new Timer<WebPagePrivate>(this, &WebPagePrivate::scrollEventTimerFired))
@@ -277,7 +284,7 @@ WebPagePrivate::~WebPagePrivate()
     m_blockZoomAnimation = 0;
 }
 
-void WebPagePrivate::init()
+void WebPagePrivate::init(const String& pageGroupName)
 {
     globalInitialize();
 
@@ -302,10 +309,11 @@ void WebPagePrivate::init()
     m_page = new Page(chromeClient, contextMenuClient, editorClient,
                       dragClient, inspectorClient, /*WebCore::PluginHalterClient*/0, 0, 0);
 
+    m_page->setGroupName(pageGroupName);
     m_page->setCustomHTMLTokenizerChunkSize(256);
     m_page->setCustomHTMLTokenizerTimeDelay(0.300);
 
-    m_webSettings = new WebSettings(m_page->settings());
+    m_webSettings = new WebSettings(m_page->settings(), pageGroupName);
 
     RefPtr<Frame> newFrame = Frame::create(m_page, /*HTMLFrameOwnerElement**/0, frameLoaderClient);
 
@@ -316,12 +324,6 @@ void WebPagePrivate::init()
 #if ENABLE(VIEWPORT_REFLOW)
     m_page->settings()->setTextReflowEnabled(m_webSettings->textReflowMode() == WebSettings::TextReflowEnabled);
 #endif
-}
-
-PlatformMouseEvent WebPagePrivate::transformMouseEvent(PlatformMouseEvent eventIn)
-{
-    WebCore::PlatformMouseEvent eventOut(mapFromTransformed(eventIn.pos()), mapFromTransformed(eventIn.globalPos()), eventIn.eventType(), eventIn.clickCount());
-    return eventOut;
 }
 
 void WebPagePrivate::load(const char* url, const char* networkToken, const char* method, Platform::NetworkRequest::CachePolicy cachePolicy, const char* data, size_t dataLength, const char* const* headers, size_t headersLength, bool isInitial)
@@ -380,6 +382,10 @@ void WebPagePrivate::setLoadState(LoadState state)
 
     bool isFirstLoad = m_loadState == None;
 
+    // See RIM Bug #1068
+    if (state == Finished && m_mainFrame && m_mainFrame->document())
+        m_mainFrame->document()->updateStyleIfNeeded();
+
     m_loadState = state;
 
 #if DEBUG_WEBPAGE_LOAD
@@ -396,6 +402,9 @@ void WebPagePrivate::setLoadState(LoadState state)
         break;
     case Committed:
         {
+            unscheduleZoomAboutPoint();
+            unscheduleAllDeferrableTimers();
+
             m_previousContentsSize = IntSize();
             m_backingStore->d->clearRenderQueue();
             m_backingStore->d->resetTiles(true /*resetBackground*/);
@@ -404,13 +413,13 @@ void WebPagePrivate::setLoadState(LoadState state)
             m_userScalable = m_webSettings->isUserScalable();
             m_shouldUseFixedDesktopMode = false;
             resetScales();
-            if (m_webSettings->viewportWidth() > 0) {
-                m_virtualViewportWidth = m_webSettings->viewportWidth();
-                m_virtualViewportHeight = m_defaultLayoutSize.height();
-            }
             if (m_resetVirtualViewportOnCommitted) { // for DRT
                 m_virtualViewportWidth = 0;
                 m_virtualViewportHeight = 0;
+            }
+            if (m_webSettings->viewportWidth() > 0) {
+                m_virtualViewportWidth = m_webSettings->viewportWidth();
+                m_virtualViewportHeight = m_defaultLayoutSize.height();
             }
             m_viewportArguments = ViewportArguments();
 
@@ -601,7 +610,7 @@ bool WebPagePrivate::scheduleZoomAboutPoint(double unclampedScale, const FloatPo
     if (!shouldZoomAboutPoint(unclampedScale, anchor, enforceScaleClamping, &scale)) {
         // We could be back to the right zoom level before the timer has
         // timed out, because of wiggling back and forth. Stop the timer.
-        m_delayedZoomTimer->stop();
+        unscheduleZoomAboutPoint();
         return false;
     }
 
@@ -609,13 +618,13 @@ bool WebPagePrivate::scheduleZoomAboutPoint(double unclampedScale, const FloatPo
     m_backingStore->d->suspendScreenUpdates();
 
     IntSize requiredSize = transformedVisibleContentsRect().size();
-    if (SurfaceOpenVG* tempSurface = new SurfaceOpenVG(requiredSize, EGLDisplayOpenVG::current()->display())) {
-        // For some reason, renderBitmapZoomFrame wants an anchor in backingstore coordinates!
-        // this is different from zoomAboutPoint, which wants content coordinates.
-        // See RIM Bug #641
-        renderBitmapZoomFrame(scale, mapToTransformedFloatPoint(anchor), tempSurface);
-        delete tempSurface;
-    }
+    unsigned short* tempSurface = new unsigned short[requiredSize.width() * requiredSize.height() * 2];
+    unsigned int tempSurfaceStride = requiredSize.width() * 2;
+    // For some reason, renderBitmapZoomFrame wants an anchor in backingstore coordinates!
+    // this is different from zoomAboutPoint, which wants content coordinates.
+    // See RIM Bug #641
+    renderBitmapZoomFrame(scale, mapToTransformedFloatPoint(anchor), tempSurface, tempSurfaceStride);
+    delete [] tempSurface;
 
     m_delayedZoomArguments.scale = scale;
     m_delayedZoomArguments.anchor = anchor;
@@ -624,6 +633,14 @@ bool WebPagePrivate::scheduleZoomAboutPoint(double unclampedScale, const FloatPo
     m_delayedZoomTimer->startOneShot(delayedZoomInterval);
 
     return true;
+}
+
+void WebPagePrivate::unscheduleZoomAboutPoint()
+{
+    if (m_delayedZoomTimer->isActive())
+        m_backingStore->d->resumeScreenUpdates(BackingStorePrivate::None);
+
+    m_delayedZoomTimer->stop();
 }
 
 void WebPagePrivate::zoomAboutPointTimerFired(WebCore::Timer<WebPagePrivate>*)
@@ -711,22 +728,6 @@ void WebPagePrivate::renderContents(SurfaceOpenVG* surface, BackingStoreTile* ti
     ASSERT_VG_NO_ERROR();
 }
 
-void WebPagePrivate::blitToCanvas(SurfaceOpenVG* surface, const IntRect& dst, const IntRect& src)
-{
-    surface->makeCurrent();
-    surface->flush();
-
-    IntRect dstRect = dst;
-    IntRect srcRect = src;
-
-    IntRect viewPortRect(IntPoint(0, 0), transformedViewportSize());
-    dstRect.intersect(viewPortRect);
-
-    srcRect.intersect(IntRect(srcRect.location(), dstRect.size()));
-    m_client->blitToCanvas(dstRect.x(), dstRect.y(), dstRect.width(), dstRect.height(),
-        srcRect.x(), srcRect.y(), srcRect.width(), srcRect.height());
-}
-
 void WebPagePrivate::blitToCanvas(const unsigned char* image, int imageStride, const IntRect& dst, const IntRect& src)
 {
     IntRect dstRect = dst;
@@ -744,6 +745,19 @@ void WebPagePrivate::blitFromBufferToBuffer(unsigned char* dst, const int dstStr
                                             const unsigned char* src, const int srcStride, const WebCore::IntRect& srcRect)
 {
     m_client->blitFromBufferToBuffer(dst, dstStride, dstRect.x(), dstRect.y(), src, srcStride, srcRect.x(), srcRect.y(), srcRect.width(), srcRect.height());
+}
+
+void WebPagePrivate::stretchBlitToCanvas(const unsigned char* src, int srcStride, const WebCore::IntRect& dstRect, const WebCore::IntRect& srcRect)
+{
+    m_client->stretchBlitToCanvas(src, srcStride,
+        srcRect.x(), srcRect.y(), srcRect.width(), srcRect.height(),
+        dstRect.x(), dstRect.y(), dstRect.width(), dstRect.height());
+}
+
+void WebPagePrivate::stretchBlitFromBufferToBuffer(unsigned char* dst, const int dstStride, const WebCore::IntRect& dstRect,
+                                            const unsigned char* src, const int srcStride, const WebCore::IntRect& srcRect)
+{
+    m_client->stretchBlitFromBufferToBuffer(dst, dstStride, dstRect, src, srcStride, srcRect);
 }
 
 void WebPagePrivate::blendOntoCanvas(const unsigned char* image, int imageStride,
@@ -770,6 +784,16 @@ void WebPagePrivate::invalidateWindow(const WebCore::IntRect& dst)
     dstRect.intersect(viewPortRect);
 
     m_client->invalidateWindow(dstRect.x(), dstRect.y(), dstRect.width(), dstRect.height());
+}
+
+void WebPagePrivate::clearCanvas(const WebCore::IntRect& rect, unsigned short color)
+{
+    m_client->clearCanvas(rect, color);
+}
+
+void WebPagePrivate::clearBuffer(unsigned char* buffer, const int stride, const WebCore::IntRect& rect, unsigned short color)
+{
+    m_client->clearBuffer(buffer, stride, rect, color);
 }
 
 WebCore::IntPoint WebPagePrivate::scrollPosition() const
@@ -815,9 +839,14 @@ void WebPagePrivate::scrollEventTimerFired(Timer<WebPagePrivate>*)
 
 void WebPagePrivate::resizeEventTimerFired(Timer<WebPagePrivate>*)
 {
-    if (FrameView* view = m_mainFrame->view())
+    if (FrameView* view = m_mainFrame->view()) {
         if (view->shouldSendResizeEvent())
             m_mainFrame->eventHandler()->sendResizeEvent();
+
+        // When the actual visible size changes, we also
+        // need to reposition fixed elements
+        view->repaintFixedElementsAfterScrolling();
+    }
 }
 
 void WebPagePrivate::scheduleDeferrableTimer(Timer<WebPagePrivate>* timer, double timeOut)
@@ -828,6 +857,12 @@ void WebPagePrivate::scheduleDeferrableTimer(Timer<WebPagePrivate>* timer, doubl
     }
 
     timer->startOneShot(timeOut);
+}
+
+void WebPagePrivate::unscheduleAllDeferrableTimers()
+{
+    for (Vector<Timer<WebPagePrivate>* >::const_iterator it = m_deferrableTimers.begin(); it != m_deferrableTimers.end(); ++it)
+        (*it)->stop();
 }
 
 void WebPagePrivate::willDeferLoading()
@@ -996,6 +1031,9 @@ void WebPagePrivate::layoutFinished()
         setScrollPosition(newScrollPosition);
         if (scrollPoint != scrollPosition())
             notifyTransformedScrollChanged();
+
+        // If we were waiting for more data to continue an fragment scroll, continue it now
+        static_cast<FrameLoaderClientOlympia*>(m_mainFrame->loader()->client())->doPendingFragmentScroll();
     }
 }
 
@@ -1007,10 +1045,14 @@ void WebPagePrivate::zoomToInitialScaleOnLoad()
 
     bool needsLayout = false;
 
+    // If a web page would fit in either portrait or landscape mode, use view mode Mobile
+    WebSettings* settings = WebSettings::pageGroupSettings(m_page->groupName());
+    int maxMobileWidth = std::max(settings->screenWidth(), settings->screenHeight());
+
     // If the contents width exceeds the viewport width set to desktop mode
     if (m_shouldUseFixedDesktopMode)
         needsLayout = setViewMode(FixedDesktop);
-    else if (contentsSize().width() > m_defaultLayoutSize.width() || absoluteVisibleOverflowSize().width() > m_defaultLayoutSize.width())
+    else if (contentsSize().width() > maxMobileWidth || absoluteVisibleOverflowSize().width() > maxMobileWidth)
         needsLayout = setViewMode(Desktop);
     else
         needsLayout = setViewMode(Mobile);
@@ -1426,15 +1468,18 @@ Olympia::Platform::NetworkStreamFactory* WebPagePrivate::networkStreamFactory()
     return m_client->networkStreamFactory();
 }
 
-Olympia::Platform::HttpStreamDebugger* WebPagePrivate::httpStreamDebugger()
+WebCore::FloatRect WebPagePrivate::screenAvailableRect()
 {
-    return m_client->httpStreamDebugger();
+    WebSettings* settings = WebSettings::pageGroupSettings(m_page->groupName());
+    return FloatRect(0, 0, settings->screenWidth(), settings->screenHeight());
 }
 
-bool WebPagePrivate::runMessageLoopForJavaScript()
+WebCore::FloatRect WebPagePrivate::screenRect()
 {
-    return m_client->runMessageLoopForJavaScript();
+    WebSettings* settings = WebSettings::pageGroupSettings(m_page->groupName());
+    return FloatRect(0, 0, settings->screenWidth(), settings->screenHeight());
 }
+
 
 bool WebPagePrivate::didNodeOpenPopup(Node* node)
 {
@@ -1477,6 +1522,10 @@ bool WebPagePrivate::openLineInputPopup(HTMLInputElement* input)
     case HTMLInputElement::WEEK:
         type = Week;
         break;
+    case HTMLInputElement::COLOR:
+        m_colorInput = input;
+        m_client->openColorPopup(input->value());
+        return true;
     default:
         return false;
     }
@@ -1532,6 +1581,12 @@ bool WebPagePrivate::openSelectPopup(HTMLSelectElement* select)
     return true;
 }
 
+void WebPagePrivate::setColorInput(const WebCore::String& value)
+{
+    if (m_colorInput)
+        m_colorInput->setValue(value);
+}
+
 void WebPagePrivate::setDateTimeInput(const WebCore::String& value)
 {
     if (m_dateTimeInput)
@@ -1584,26 +1639,29 @@ bool WebPagePrivate::useFixedLayout() const
     return true;
 }
 
-Node* WebPagePrivate::getContextNode() const
+PassRefPtr<Node> WebPagePrivate::contextNode() const
 {
-    Node* contextNode = 0;
+    RefPtr<Node> node;
     EventHandler* eventHandler = m_page->mainFrame()->eventHandler();
 
     if (eventHandler->mousePressed()) {
-        contextNode = eventHandler->mousePressNode();
+        node = eventHandler->mousePressNode();
         eventHandler->setMousePressed(false);
     } else if (m_webSettings->doesGetFocusNodeContext())
-        contextNode = m_page->focusController()->focusedOrMainFrame()->document()->focusedNode();
-    else if (m_currentCursor.type() != Olympia::Platform::CursorNone)
-        contextNode = eventHandler->hitTestResultAtPoint(m_lastMousePoint, true).innerNode();
+        node = m_page->focusController()->focusedOrMainFrame()->document()->focusedNode();
+    else if (m_currentCursor.type() != Olympia::Platform::CursorNone) {
+        HitTestResult result = eventHandler->hitTestResultAtPoint(mapFromViewportToContents(m_lastMouseEvent.pos()), true);
+        node = result.innerNode();
+    }
 
-    return contextNode;
+    return node.release();
 }
 
 Context WebPagePrivate::getContext()
 {
     // We're called to get a fresh context
-    return getContextForNode(getContextNode());
+    RefPtr<Node> node = contextNode();
+    return getContextForNode(node.get());
 }
 
 void WebPagePrivate::sendContextIfChanged(Node* node)
@@ -1652,12 +1710,10 @@ Context WebPagePrivate::getContextForNode(Node* node)
             href = area->href();
         }
 
-        WebCore::String pattern;
-        if (findPatternStringForUrl(href, pattern)) {
-            if (!pattern.isEmpty()) {
-                types.push_back(Context::ContextTypePattern);
-                info.push_back(pattern);
-            }
+        WebCore::String pattern = findPatternStringForUrl(href);
+        if (!pattern.isEmpty()) {
+            types.push_back(Context::ContextTypePattern);
+            info.push_back(pattern);
         } else if (!href.string().isEmpty()) {
             types.push_back(Context::ContextTypeUrl);
             info.push_back(href.string());
@@ -1682,12 +1738,27 @@ Context WebPagePrivate::getContextForNode(Node* node)
         info.push_back(WebCore::String(toRenderText(obj)->text()));
     }
 
+    if (node->isElementNode()) {
+        Element* element = static_cast<Element*>(node);
+        if (element && ((element->hasTagName(HTMLNames::inputTag) && element->isTextFormControl())
+                || element->hasTagName(HTMLNames::textareaTag)
+                || element->isContentEditable())) {
+            types.push_back(Context::ContextTypeInput);
+            info.push_back("");
+        }
+    }
+
+    if (node->isFocusable()) {
+        types.push_back(Context::ContextTypeFocusable);
+        info.push_back("");
+    }
+
     return Context(types, info);
 }
 
 void WebPagePrivate::updateCursor()
 {
-    m_webPage->mouseEvent(Olympia::WebKit::MouseEventMoved, m_lastMousePoint);
+    m_webPage->mouseEvent(Olympia::WebKit::MouseEventMoved, mapToTransformed(m_lastMouseEvent.pos()), mapToTransformed(m_lastMouseEvent.globalPos()));
 }
 
 WebCore::IntSize WebPagePrivate::fixedLayoutSize(bool snapToIncrement) const
@@ -1737,14 +1808,25 @@ WebCore::IntSize WebPagePrivate::fixedLayoutSize(bool snapToIncrement) const
         return IntSize(width, height);
     }
 
-    // We need to clamp the layout width to the minimum of the layout
-    // width or the content width.  This is important under rotation for mobile
-    // websites. We want the page to remain layouted at the same width which
-    // it was loaded with, and instead change the zoom level to fit to screen.
-    // The height is welcome to adapt to the height used in the new orientation,
-    // otherwise we will get a grey bar below the web page.
-    if (m_mainFrame->view() && !contentsSize().isEmpty())
-        minWidth = contentsSize().width();
+    if (m_webSettings->isZoomToFitOnLoad()) {
+        // We need to clamp the layout width to the minimum of the layout
+        // width or the content width.  This is important under rotation for mobile
+        // websites. We want the page to remain layouted at the same width which
+        // it was loaded with, and instead change the zoom level to fit to screen.
+        // The height is welcome to adapt to the height used in the new orientation,
+        // otherwise we will get a grey bar below the web page.
+        if (m_mainFrame->view() && !contentsSize().isEmpty())
+            minWidth = contentsSize().width();
+        else {
+            // If there is no contents width, use the minimum of screen width,
+            // screen height and default layout width to shape the first layout to
+            // a contents width that we could reasonably zoom to fit,
+            // in a manner that is rotation independent and still respects a small
+            // default layout width.
+            WebSettings* settings = WebSettings::pageGroupSettings(m_page->groupName());
+            minWidth = std::min(settings->screenWidth(), settings->screenHeight());
+        }
+    }
 
     return IntSize(std::min(minWidth, defaultLayoutWidth), defaultLayoutHeight);
 }
@@ -1996,6 +2078,8 @@ bool WebPagePrivate::moveToNextField(Frame* frame, Olympia::Platform::ScrollDire
     NodeDistance bestChoiceDistance;
     Node* lastCandidate = 0;
 
+    WebCore::IntRect bestChoiceRect = baseRect;
+
     Node* cur = startNode;
 
     do {
@@ -2015,6 +2099,7 @@ bool WebPagePrivate::moveToNextField(Frame* frame, Olympia::Platform::ScrollDire
                             || nodeDistance.isCloser(bestChoiceDistance, dir)) {
                             bestChoice = cur;
                             bestChoiceDistance = nodeDistance;
+                            bestChoiceRect = nodeRect;
                         }
                     } else
                         lastCandidate = cur;
@@ -2048,6 +2133,10 @@ bool WebPagePrivate::moveToNextField(Frame* frame, Olympia::Platform::ScrollDire
         else
             m_page->focusController()->setFocusedNode(bestChoice, bestChoice->document()->frame());
 
+        // Trigger a repaint of the node rect as it frequently isn't updated due to JavaScript being
+        // disabled.  See RIM Bug #1242.
+        m_backingStore->d->repaint(bestChoiceRect, true /*contentChanged*/, false /*immediate*/, false /*repaintContentOnly*/);
+
         return true;
     }
 
@@ -2056,24 +2145,31 @@ bool WebPagePrivate::moveToNextField(Frame* frame, Olympia::Platform::ScrollDire
             return true;
     }
 
-    // No new focusfield found.  Defocus the current focus node if it is offscreen.
-    // Adjust the current view rect to be the anticipated new view rect.
+    // No new focus field found, a page scroll is about to occur.
+    // Calculate the new visible rect after this move and if
+    // the visible rect doesn't contain the focus node, tell Java
+    // through the context mechanism only that the node is unfocused
+    // to prevent GCM actions on it.
+    // See RIM Bug #1396.
     switch (dir) {
     case Olympia::Platform::ScrollLeft:
-        visibleRect.move(-min(visibleRect.x(), desiredScrollAmount), 0);
+        visibleRect.move(-min(scrollPosition().x(), desiredScrollAmount), 0);
         break;
     case Olympia::Platform::ScrollRight:
         visibleRect.move(min(contentsSize().width() - visibleRect.right(), desiredScrollAmount), 0);
         break;
     case Olympia::Platform::ScrollUp:
-        visibleRect.move(0, -min(visibleRect.y(), desiredScrollAmount));
+        visibleRect.move(0, -min(scrollPosition().y(), desiredScrollAmount));
         break;
     case Olympia::Platform::ScrollDown:
         visibleRect.move(0, min(contentsSize().height() - visibleRect.bottom(), desiredScrollAmount));
         break;
     }
-    if (!visibleRect.intersects(baseRect) && origFocusedNode && origFocusedNode->isElementNode())
-        static_cast<Element*>(origFocusedNode)->blur();
+
+    if (!visibleRect.intersects(baseRect))
+        sendContextIfChanged(0); // Send an empty context.
+    else
+        sendContextIfChanged(origFocusedNode);  // Send the valid context if required.
 
     return false;
 }
@@ -2106,6 +2202,8 @@ Node* WebPagePrivate::bestNodeForZoomUnderPoint(const WebCore::IntPoint& point)
     IntPoint pt = mapFromTransformed(point);
     IntRect clickRect(pt.x() - blockClickRadius, pt.y() - blockClickRadius, 2 * blockClickRadius, 2 * blockClickRadius);
     Node* originalNode = nodeForZoomUnderPoint(point);
+    if (!originalNode)
+        return 0;
     Node* node = bestChildNodeForClickRect(originalNode, clickRect);
     return node ? adjustedBlockZoomNodeForZoomLimits(node) : adjustedBlockZoomNodeForZoomLimits(originalNode);
 }
@@ -2329,18 +2427,9 @@ WebCore::IntRect WebPagePrivate::blockZoomRectForNode(Node* node)
     IntSize viewportSize = transformedViewportSize();
     renderRect.intersect(IntRect(0, 0, viewportSize.width(), viewportSize.height()));
     originalRenderRect.intersect(IntRect(0, 0, viewportSize.width(), viewportSize.height()));
-    SurfaceOpenVG* surface = new SurfaceOpenVG(IntSize(m_width, m_height), EGLDisplayOpenVG::current()->display());
-    PainterOpenVG p(surface);
-    p.setStrokeColor(Color::black);
-    p.setFillColor(Color::black);
-    p.setStrokeThickness(3);
-    p.drawRect(renderRect);
-    p.setStrokeColor(Color::gray);
-    p.setFillColor(Color::gray);
-    p.drawRect(originalRenderRect);
-    blitToCanvas(surface, renderRect, renderRect);
+    m_client->clearCanvas(renderRect, 0x0000);
+    m_client->clearCanvas(originalRenderRect, 0x7BEF);
     invalidateWindow(renderRect);
-    delete surface;
 #endif
 
     return blockRect;
@@ -2364,7 +2453,7 @@ void WebPagePrivate::animationBlockZoomFrameChanged(Olympia::WebKit::OlympiaAnim
             double zoomFraction = m_blockZoomFinalScale / m_blockZoomInitialScale;
             IntPoint pt(roundTransformedPoint(m_finalBlockPoint));
             IntRect srcRect(pt.x(), pt.y(), ceil(static_cast<double>(transformedVisibleContentsRect().width()) / zoomFraction), ceil(static_cast<double>(transformedVisibleContentsRect().height()) / zoomFraction));
-            m_backingStore->d->blitScaledArbitraryRectFromBackingStoreToScreen(srcRect, IntRect(IntPoint(0, 0), transformedVisibleContentsRect().size()), animation->buffer());
+            m_backingStore->d->blitScaledArbitraryRectFromBackingStoreToScreen(srcRect, IntRect(IntPoint(0, 0), transformedVisibleContentsRect().size()), animation->buffer(), animation->bufferStride());
 #if DEBUG_BLOCK_ZOOM
             m_currentBlockZoomNode = 0L;
             m_currentBlockZoomAdjustedNode = 0L;
@@ -2385,7 +2474,7 @@ void WebPagePrivate::animationBlockZoomFrameChanged(Olympia::WebKit::OlympiaAnim
     FloatPoint srcPoint(m_finalBlockPoint.x() - anchorOffset.x() / zoomFraction,
             m_finalBlockPoint.y() - anchorOffset.y() / zoomFraction);
     IntRect srcRect(roundTransformedPoint(srcPoint), IntSize(ceil(static_cast<double>(transformedVisibleContentsRect().width()) / zoomFraction), ceil(static_cast<double>(transformedVisibleContentsRect().height()) / zoomFraction)));
-    m_backingStore->d->blitScaledArbitraryRectFromBackingStoreToScreen(srcRect, IntRect(IntPoint(0, 0), transformedVisibleContentsRect().size()), animation->buffer());
+    m_backingStore->d->blitScaledArbitraryRectFromBackingStoreToScreen(srcRect, IntRect(IntPoint(0, 0), transformedVisibleContentsRect().size()), animation->buffer(), animation->bufferStride());
     m_blockZoomAnimation->setCanRenderNextFrame(true);
 }
 
@@ -2425,12 +2514,13 @@ void WebPagePrivate::animationZoomBounceBackFrameChanged(Olympia::WebKit::Olympi
         if (previousValue != m_zoomBounceBackAnimation->duration()) {
             double zoomFraction = minimumScale() / m_transformationMatrix->m11();
             IntRect srcRect(static_cast<int>(roundf(m_bounceBackFinalPoint.x())), static_cast<int>(roundf(m_bounceBackFinalPoint.y())), transformedVisibleContentsRect().width() / zoomFraction, transformedVisibleContentsRect().height() / zoomFraction);
-            m_backingStore->d->blitScaledArbitraryRectFromBackingStoreToScreen(srcRect, IntRect(IntPoint(0, 0), transformedVisibleContentsRect().size()), m_bitmapZoomBuffer);
+            m_backingStore->d->blitScaledArbitraryRectFromBackingStoreToScreen(srcRect, IntRect(IntPoint(0, 0), transformedVisibleContentsRect().size()), m_bitmapZoomBuffer, m_bitmapZoomBufferStride);
             m_bitmapScale = minimumScale();
             m_webPage->zoomToFit();
         }
-        delete m_bitmapZoomBuffer;
+        delete [] m_bitmapZoomBuffer;
         m_bitmapZoomBuffer = 0;
+        m_bitmapZoomBufferStride = 0;
         return;
     }
 
@@ -2439,12 +2529,12 @@ void WebPagePrivate::animationZoomBounceBackFrameChanged(Olympia::WebKit::Olympi
     double dy = m_lastBounceBackFocalPoint.y() + currentValue * (m_bounceBackFinalPoint.y() - m_lastBounceBackFocalPoint.y());
     IntPoint srcPoint(static_cast<int>(roundf(dx)), static_cast<int>(roundf(dy)));
     IntRect srcRect(srcPoint.x(), srcPoint.y(), transformedVisibleContentsRect().width() / zoomFraction, transformedVisibleContentsRect().height() / zoomFraction);
-    m_backingStore->d->blitScaledArbitraryRectFromBackingStoreToScreen(srcRect, IntRect(IntPoint(0, 0), transformedVisibleContentsRect().size()), m_bitmapZoomBuffer);
+    m_backingStore->d->blitScaledArbitraryRectFromBackingStoreToScreen(srcRect, IntRect(IntPoint(0, 0), transformedVisibleContentsRect().size()), m_bitmapZoomBuffer, m_bitmapZoomBufferStride);
 
     m_zoomBounceBackAnimation->setCanRenderNextFrame(true);
 }
 
-void WebPagePrivate::renderBitmapZoomFrame(double scale, const FloatPoint& anchor /* backingstore coordinates */, SurfaceOpenVG* tempSurface /* = 0 */)
+void WebPagePrivate::renderBitmapZoomFrame(double scale, const FloatPoint& anchor /* backingstore coordinates */, unsigned short* tempSurface /* = 0 */, unsigned int tempSurfaceStride)
 {
     // Need to invert the previous transform to anchor the viewport.
     double zoomFraction = scale / m_transformationMatrix->m11();
@@ -2461,9 +2551,11 @@ void WebPagePrivate::renderBitmapZoomFrame(double scale, const FloatPoint& ancho
     // This is the rect to pass as the actual source rect in the backingstore for the transform given by zoom.
     IntRect srcRect(srcPoint.x(), srcPoint.y(), transformedVisibleContentsRect().width() / zoomFraction, transformedVisibleContentsRect().height() / zoomFraction);
 
-    if (!tempSurface)
+    if (!tempSurface) {
         tempSurface = m_bitmapZoomBuffer;
-    m_backingStore->d->blitScaledArbitraryRectFromBackingStoreToScreen(srcRect, IntRect(IntPoint(0, 0), transformedVisibleContentsRect().size()), tempSurface);
+        tempSurfaceStride = m_bitmapZoomBufferStride;
+    }
+    m_backingStore->d->blitScaledArbitraryRectFromBackingStoreToScreen(srcRect, IntRect(IntPoint(0, 0), transformedVisibleContentsRect().size()), tempSurface, tempSurfaceStride);
 }
 
 // This function should not be called directly. It is called after the animation ends automatically.
@@ -2523,12 +2615,14 @@ void WebPagePrivate::resetBlockZoom()
     m_currentBlockZoomAdjustedNode = 0;
 }
 
-WebPage::WebPage(WebPageClient* client, const Platform::IntRect& rect)
+WebPage::WebPage(WebPageClient* client, const String& pageGroupName, const Platform::IntRect& rect)
 {
-    WebSettings::setScreenWidth(rect.width());
-    WebSettings::setScreenHeight(rect.height());
+    WebSettings* settings = WebSettings::pageGroupSettings(pageGroupName);
+    settings->setScreenWidth(rect.width());
+    settings->setScreenHeight(rect.height());
+
     d = new WebPagePrivate(this, client, rect);
-    d->init();
+    d->init(pageGroupName);
 }
 
 WebPage::~WebPage()
@@ -2540,12 +2634,6 @@ WebPage::~WebPage()
 WebPageClient* WebPage::client() const
 {
     return d->m_client;
-}
-
-void WebPage::setPageGroupName(const char* name)
-{
-    ASSERT(d->m_page);
-    d->m_page->setGroupName(name);
 }
 
 void WebPage::load(const char* url, const char* networkToken, bool isInitial)
@@ -2652,20 +2740,13 @@ void WebPage::setCaretPosition(int requestedFrameId, int requestedElementId, int
     d->m_inputHandler->setCaretPosition(requestedFrameId, requestedElementId, caretPosition);
 }
 
-void WebPage::setCaretOutlineAppearanceEnabled(bool caretOutlineAppearanceEnabled)
+void WebPage::setCaretHighlightStyle(Olympia::Platform::CaretHighlightStyle style)
 {
     // Note, this method assumes we are using the Olympia theme.
     RenderThemeOlympia* theme = static_cast<RenderThemeOlympia*>(d->m_page->theme());
-    theme->setCaretOutlineAppearanceEnabled(caretOutlineAppearanceEnabled);
+    theme->setCaretHighlightStyle(style);
     if (RenderObject* caretRenderer = d->m_mainFrame->selection()->caretRenderer())
         caretRenderer->repaint();
-}
-
-bool WebPage::isCaretOutlineAppearanceEnabled() const
-{
-    // Note, this method assumes we are using the Olympia theme.
-    RenderThemeOlympia* theme = static_cast<RenderThemeOlympia*>(d->m_page->theme());
-    return theme->isCaretOutlineAppearanceEnabled();
 }
 
 Olympia::Platform::ReplaceTextErrorCode WebPage::replaceText(const Olympia::Platform::ReplaceArguments& replaceArgs, const Olympia::Platform::AttributedText& attribText)
@@ -2694,6 +2775,11 @@ void WebPage::popupListClosed(const int index)
 void WebPage::setDateTimeInput(const Olympia::WebKit::String& value)
 {
     d->setDateTimeInput(String(value.impl()));
+}
+
+void WebPage::setColorInput(const Olympia::WebKit::String& value)
+{
+    d->setColorInput(String(value.impl()));
 }
 
 Context WebPage::getContext() const
@@ -2840,8 +2926,10 @@ void WebPagePrivate::setScreenRotated(const WebCore::IntSize& screenSize, const 
 
     m_width = screenSize.width();
     m_height = screenSize.height();
-    WebSettings::setScreenWidth(screenSize.width());
-    WebSettings::setScreenHeight(screenSize.height());
+
+    WebSettings* settings = WebSettings::pageGroupSettings(m_page->groupName());
+    settings->setScreenWidth(screenSize.width());
+    settings->setScreenHeight(screenSize.height());
 
     // We need to reorient the visibleTileRect because the following code
     // could cause BackingStore::transformChanged to be called, where it
@@ -2906,8 +2994,9 @@ void WebPagePrivate::setScreenRotated(const WebCore::IntSize& screenSize, const 
         // Normally, if the contents size is smaller than the layout width,
         // we would zoom in. If zoom is disabled, we need to do something else,
         // or there will be artifacts due to non-rendered areas outside of the
-        // contents size.
-        if (contentsSize().width() < m_defaultLayoutSize.width()) {
+        // contents size. If there is a virtual viewport, we are not allowed
+        // to modify the fixed layout size, however.
+        if (!hasVirtualViewport() && contentsSize().width() < m_defaultLayoutSize.width()) {
             m_mainFrame->view()->setUseFixedLayout(useFixedLayout());
             m_mainFrame->view()->setFixedLayoutSize(m_defaultLayoutSize);
             needsLayout = true;
@@ -2956,7 +3045,7 @@ void WebPagePrivate::setScreenRotated(const WebCore::IntSize& screenSize, const 
 
         if (!needsLayout) {
             // The visible tiles for scroll must be up-to-date before we blit since we are not performing a layout.
-            m_backingStore->d->updateTilesForScroll();
+            m_backingStore->d->updateTilesForScrollOrNotRenderedRegion();
         }
         m_inputHandler->ensureFocusElementVisible();
 
@@ -3008,7 +3097,7 @@ void WebPage::setPlatformScreenSize(int width, int height)
 
 void WebPage::setApplicationViewSize(int width, int height)
 {
-    WebSettings::setApplicationViewSize(IntSize(width, height));
+    WebSettings::pageGroupSettings(d->m_page->groupName())->setApplicationViewSize(IntSize(width, height));
 }
 
 void WebPage::setFocused(bool focused)
@@ -3023,20 +3112,22 @@ void WebPage::setFocused(bool focused)
     focusController->setFocused(focused);
 }
 
-void WebPage::mouseEvent(MouseEventType type, const Platform::IntPoint& pos)
+void WebPage::mouseEvent(MouseEventType type, const Platform::IntPoint& pos, const Platform::IntPoint& globalPos)
 {
     if (!d->m_mainFrame->view())
         return;
 
-    d->m_lastUserEventTimestamp = currentTime();
+    if (type == Olympia::WebKit::MouseEventAborted) {
+        d->m_mainFrame->eventHandler()->setMousePressed(false);
+        return;
+    }
 
-    WebCore::IntPoint globalPos = d->mapFromTransformedViewportToTransformedContents(pos);
-    d->m_lastMousePoint = globalPos;
+    d->m_lastUserEventTimestamp = currentTime();
     int clickCount = (d->m_selectionHandler->isSelectionActive() || type != MouseEventMoved) ? 1 : 0;
 
     // Create our event.
-    WebCore::PlatformMouseEvent mouseEvent(pos, globalPos, toWebCoreMouseEventType(type), clickCount);
-    mouseEvent = d->transformMouseEvent(mouseEvent);
+    WebCore::PlatformMouseEvent mouseEvent(d->mapFromTransformed(pos), d->mapFromTransformed(globalPos), toWebCoreMouseEventType(type), clickCount);
+    d->m_lastMouseEvent = mouseEvent;
     d->handleMouseEvent(mouseEvent);
 }
 
@@ -3050,11 +3141,12 @@ void WebPagePrivate::handleMouseEvent(WebCore::PlatformMouseEvent& mouseEvent)
         sendContextIfChanged(eventHandler->mousePressNode());
         break;
     case WebCore::MouseEventReleased:
-        {
-            if (!didNodeOpenPopup(eventHandler->hitTestResultAtPoint(mouseEvent.globalPos(), false).innerNode()))
-                eventHandler->handleMouseReleaseEvent(mouseEvent);
-            break;
-        }
+    {
+        HitTestResult result = eventHandler->hitTestResultAtPoint(mapFromViewportToContents(mouseEvent.pos()), false);
+        if (!didNodeOpenPopup(result.innerNode()))
+            eventHandler->handleMouseReleaseEvent(mouseEvent);
+        break;
+    }
     case WebCore::MouseEventMoved:
     default:
         eventHandler->mouseMoved(mouseEvent);
@@ -3070,13 +3162,23 @@ bool WebPage::touchEvent(Olympia::Platform::TouchEvent& event)
     d->m_lastUserEventTimestamp = currentTime();
 
     for (int i = 0; i < event.m_points.size(); i++) {
-        event.m_points[i].m_pos = d->mapFromTransformed(d->mapFromTransformedViewportToTransformedContents(event.m_points[i].m_pos));
+        event.m_points[i].m_pos = d->mapFromTransformed(event.m_points[i].m_pos);
         event.m_points[i].m_screenPos = d->mapFromTransformed(event.m_points[i].m_screenPos);
     }
 
 #if ENABLE(TOUCH_EVENTS)
-    if (d->m_mainFrame->eventHandler()->handleTouchEvent(PlatformTouchEvent(&event)))
+    bool handled = d->m_mainFrame->eventHandler()->handleTouchEvent(PlatformTouchEvent(&event));
+    if (d->m_preventDefaultOnTouchStart) {
+        if (event.m_type == Olympia::Platform::TouchEvent::TouchEnd || event.m_type == Olympia::Platform::TouchEvent::TouchCancel)
+            d->m_preventDefaultOnTouchStart = false;
         return true;
+    }
+
+    if (handled) {
+        if (event.m_type == Olympia::Platform::TouchEvent::TouchStart)
+            d->m_preventDefaultOnTouchStart = true;
+        return true;
+    }
 #endif
 
     return d->m_touchEventHandler->handleTouchEvent(event);
@@ -3207,13 +3309,13 @@ bool WebPage::keyEvent(Olympia::Platform::KeyboardEvent::Type type, const unsign
     return d->m_inputHandler->handleKeyboardInput(toWebCorePlatformKeyboardEventType(type), character, shiftDown);
 }
 
-void WebPage::navigationMoveEvent(const unsigned short character, bool shiftDown)
+void WebPage::navigationMoveEvent(const unsigned short character, bool shiftDown, bool altDown)
 {
     if (!d->m_mainFrame->view())
         return;
 
     ASSERT(d->m_page->focusController());
-    d->m_inputHandler->handleNavigationMove(character, shiftDown);
+    d->m_inputHandler->handleNavigationMove(character, shiftDown, altDown);
 }
 
 void WebPage::selectionCancelled()
@@ -3293,8 +3395,10 @@ bool WebPage::zoomIn()
     d->m_userPerformedManualZoom = true;
     d->m_userPerformedManualScroll = true;
     double scale = d->m_transformationMatrix->m11() + 0.2;
-    d->renderBitmapZoomFrame(scale, d->mapToTransformedFloatPoint(d->centerOfVisibleContentsRect()));
-    return d->zoomAboutPoint(scale, d->centerOfVisibleContentsRect());
+
+    FloatPoint center = d->mapToTransformedFloatPoint(d->centerOfVisibleContentsRect());
+
+    return bitmapZoom(center.x(), center.y(), scale / d->m_bitmapScale, true);
 }
 
 bool WebPage::zoomOut()
@@ -3311,8 +3415,9 @@ bool WebPage::zoomOut()
     if (scale < minimumScale)
         scale = minimumScale;
 
-    d->renderBitmapZoomFrame(scale, d->mapToTransformedFloatPoint(d->centerOfVisibleContentsRect()));
-    return d->zoomAboutPoint(scale, d->centerOfVisibleContentsRect());
+    FloatPoint center = d->mapToTransformedFloatPoint(d->centerOfVisibleContentsRect());
+
+    return bitmapZoom(center.x(), center.y(), scale / d->m_bitmapScale, true);
 }
 
 bool WebPage::zoomToFit()
@@ -3354,8 +3459,10 @@ bool WebPage::bitmapZoom(int x, int y, double scale, bool shouldZoomAboutPoint)
 
     IntPoint anchor(x,y);
 
-    if (!d->m_bitmapZoomBuffer)
-        d->m_bitmapZoomBuffer = new SurfaceOpenVG(d->transformedVisibleContentsRect().size(), EGLDisplayOpenVG::current()->display());
+    if (!d->m_bitmapZoomBuffer) {
+        d->m_bitmapZoomBuffer = new unsigned short[d->transformedVisibleContentsRect().width() * d->transformedVisibleContentsRect().height() * 2];
+        d->m_bitmapZoomBufferStride = d->transformedVisibleContentsRect().width() * 2;
+    }
 
     if (shouldRenderFrame) {
         // Prohibit backingstore from updating the canvas overtop of the bitmap
@@ -3375,8 +3482,9 @@ bool WebPage::bitmapZoom(int x, int y, double scale, bool shouldZoomAboutPoint)
     else {
         d->m_userPerformedManualZoom = true;
         d->m_userPerformedManualScroll = true;
-        delete d->m_bitmapZoomBuffer;
+        delete [] d->m_bitmapZoomBuffer;
         d->m_bitmapZoomBuffer = 0;
+        d->m_bitmapZoomBufferStride = 0;
 
         if (d->m_webPage->settings()->textReflowMode() == WebSettings::TextReflowEnabled) {
             // This is a hack for email which has reflow always turned on
@@ -3400,6 +3508,9 @@ bool WebPage::blockZoom(int x, int y)
         return false;
 
     Node* node = d->bestNodeForZoomUnderPoint(IntPoint(x, y));
+    if (!node)
+        return false;
+
     IntRect nodeRect = d->rectForNode(node);
     IntRect blockRect;
     bool endOfBlockZoomMode = d->compareNodesForBlockZoom(d->m_currentBlockZoomAdjustedNode.get(), node);
@@ -3451,18 +3562,12 @@ bool WebPage::blockZoom(int x, int y)
     renderRect = d->mapFromTransformedContentsToTransformedViewport(renderRect);
     IntSize viewportSize = d->transformedViewportSize();
     renderRect.intersect(IntRect(0, 0, viewportSize.width(), viewportSize.height()));
-    SurfaceOpenVG* surface = new SurfaceOpenVG(IntSize(d->m_width, d->m_height), EGLDisplayOpenVG::current()->display());
-    PainterOpenVG p(surface);
-    p.setStrokeColor(Color::black);
-    p.setFillColor(Color::black);
-    p.drawRect(renderRect);
-    d->blitToCanvas(surface, renderRect, renderRect);
+    d->clearCanvas(renderRect, 0x0000);
     d->invalidateWindow(renderRect);
-    delete surface;
 
     // uncomment this to return in order to see the blocks being selected
 //    d->m_client->zoomChanged(isMinZoomed(), isMaxZoomed(), isAtInitialZoom(), currentZoomLevel());
-//    return;
+//    return true;
 #endif
 
 #if ENABLE(VIEWPORT_REFLOW)
@@ -3644,10 +3749,19 @@ bool WebPage::linkToLinkOnClick()
 
     Node* focusedNode = doc->focusedNode();  
 
-    // Create click event.
     if (!focusedNode)
         return false;
 
+    // Make sure the node is visible before triggering the click.
+    WebCore::IntRect visibleRect = IntRect(IntPoint(), d->actualVisibleSize());
+    // Constrain the rect if this is a subframe.
+    if (frame->view()->parent())
+        visibleRect.intersect(getRecursiveVisibleWindowRect(frame->view()));
+
+    if (!visibleRect.intersects(getNodeWindowRect(focusedNode)))
+        return false;
+
+    // Create click event.
     focusedNode->dispatchSimulatedClick(0, true);
     return true;
 }
@@ -3655,6 +3769,11 @@ bool WebPage::linkToLinkOnClick()
 bool WebPage::findNextString(const char* text)
 {
     return d->m_selectionHandler->findNextString(WebCore::String::fromUTF8(text));
+}
+
+bool WebPage::findNextUnicodeString(const unsigned short* text)
+{
+    return d->m_selectionHandler->findNextString(WebCore::String(text));
 }
 
 void WebPage::runLayoutTests()
@@ -3907,7 +4026,7 @@ bool WebPage::nodeHasHover(const WebDOMNode& node)
     return false;
 }
 
-bool WebPagePrivate::findPatternStringForUrl(const KURL& url, WebCore::String& pattern) const
+WebCore::String WebPagePrivate::findPatternStringForUrl(const KURL& url) const
 {
     if ((m_webSettings->shouldHandlePatternUrls() && protocolIs(url, "pattern"))
             || protocolIs(url, "tel")
@@ -3916,15 +4035,9 @@ bool WebPagePrivate::findPatternStringForUrl(const KURL& url, WebCore::String& p
             || protocolIs(url, "mailto")
             || protocolIs(url, "sms")
             || protocolIs(url, "pin")) {
-        if (!url.isEmpty()) {
-            pattern = decodeURLEscapeSequences(url.string());
-            // if the pattern contained %00, the decoded pattern will contain embedded nulls.  Replace them with spaces.
-            pattern.replace(0, ' ');
-        }
-        return true;
+        return url;
     }
-    pattern = WebCore::String();
-    return false;
+    return WebCore::String();
 }
 
 bool WebPage::defersLoading() const
@@ -3942,6 +4055,35 @@ bool WebPage::willFireTimer()
         return true;
 
     return d->m_backingStore->d->willFireTimer();
+}
+
+static void clearStorageFromFrame(Frame* frame) {
+    ASSERT(frame);
+
+    if (Storage* storage = frame->domWindow()->optionalSessionStorage()) {
+        storage->clear();
+        frame->domWindow()->removeSessionStorage();
+    }
+    if (Storage* storage = frame->domWindow()->optionalLocalStorage()) {
+        storage->clear();
+        frame->domWindow()->removeLocalStorage();
+    }
+}
+
+static void clearStorageFromFrameRecursively(Frame* frame)
+{
+    ASSERT(frame);
+
+    for (Frame* child = frame->tree()->firstChild(); child; child = child->tree()->nextSibling())
+        clearStorageFromFrameRecursively(child);
+
+    clearStorageFromFrame(frame);
+}
+
+void WebPage::clearStorage()
+{
+    clearStorageFromFrameRecursively(d->m_page->mainFrame());
+    d->m_page->removeSessionStorage();
 }
 
 }

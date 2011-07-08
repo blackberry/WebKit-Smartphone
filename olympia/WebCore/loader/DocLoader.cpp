@@ -254,7 +254,11 @@ CachedResource* DocLoader::requestResource(CachedResource::Type type, const Stri
     if (!fullURL.isValid() || !canRequest(type, fullURL))
         return 0;
 
+#if OS(OLYMPIA)
+    if (cache()->disabled() || !m_doc->settings()->useCache()) {
+#else
     if (cache()->disabled()) {
+#endif
         DocumentResourceMap::iterator it = m_documentResources.find(fullURL.string());
         
         if (it != m_documentResources.end()) {

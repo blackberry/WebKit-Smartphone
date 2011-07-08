@@ -21,7 +21,7 @@ static String keyIdentifierForOlympiaCharacter(unsigned short character)
     case Olympia::Platform::KEY_ENTERALT:
         return "Enter";
     case Olympia::Platform::KEY_BACKSPACE:
-        return "U+0009";
+        return "U+0008";
     case Olympia::Platform::KEY_DELETE:
         return "U+007F";
     case Olympia::Platform::KEY_CONTROL_LEFT:

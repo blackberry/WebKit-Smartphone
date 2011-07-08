@@ -27,6 +27,9 @@ namespace WebKit {
         unsigned length() const;
         bool isEmpty() const;
 
+        bool equal(const char* utf8) const;
+        bool equalIgnoringCase(const char* utf8) const;
+
         StringImpl* impl() const { return m_impl; }
     private:
         StringImpl* m_impl;

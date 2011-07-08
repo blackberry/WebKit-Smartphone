@@ -54,6 +54,7 @@ PlatformPathOpenVG::PlatformPathOpenVG(const PlatformPathOpenVG& other)
 {
     createPath();
     // makeCompatibleContextCurrent() is called by createPath(), so not necessary here.
+    other.flushPathDataBuffer();
     vgAppendPath(m_vgPath, other.m_vgPath);
     ASSERT_VG_NO_ERROR();
 }
@@ -63,6 +64,7 @@ PlatformPathOpenVG& PlatformPathOpenVG::operator=(const PlatformPathOpenVG& othe
     if (&other != this) {
         clear();
         // makeCompatibleContextCurrent() is called by clear(), so not necessary here.
+        other.flushPathDataBuffer();
         vgAppendPath(m_vgPath, other.m_vgPath);
         ASSERT_VG_NO_ERROR();
     }
@@ -77,9 +79,57 @@ PlatformPathOpenVG::~PlatformPathOpenVG()
     ASSERT_VG_NO_ERROR();
 }
 
+void PlatformPathOpenVG::appendPathData(VGuint commandCount, const VGubyte* commands, const VGfloat* coords)
+{
+    unsigned int coordOffset = 0;
+
+    for (unsigned int i = 0; i < commandCount; ++i) {
+        m_commandBuffer.append(commands[i]);
+        const unsigned int numCoords = numberOfCoordinatesForCommand(commands[i]);
+        if (numCoords) {
+            m_coordinateBuffer.append(&(coords[coordOffset]), numCoords);
+            coords += numCoords;
+        }
+    }
+}
+
+void PlatformPathOpenVG::flushPathDataBuffer() const
+{
+    if (!m_commandBuffer.size())
+        return;
+
+    makeCompatibleContextCurrent();
+
+    // If we have a single VG_CLOSE_PATH buffered, the coordinate buffer is
+    // empty. The coordinate pointer must not be 0, and we can't rely on
+    // zero-size arrays (certain compilers don't create them, Vector might
+    // store it differently). Certain OpenVG implementations check the
+    // validity for the memory address and change it to zero if it's
+    // in invalid one. So in the end, let's use a dummy value's address here.
+    static VGfloat zeroSizeCoordinateDummy = 0.0;
+    const VGfloat* coords = m_coordinateBuffer.isEmpty()
+        ? &zeroSizeCoordinateDummy
+        : m_coordinateBuffer.data();
+
+    vgAppendPathData(m_vgPath, m_commandBuffer.size(), m_commandBuffer.data(), coords);
+    ASSERT_VG_NO_ERROR();
+
+    m_commandBuffer.clear();
+    m_coordinateBuffer.clear();
+}
+
+VGPath PlatformPathOpenVG::vgPath() const
+{
+    flushPathDataBuffer();
+    return m_vgPath;
+}
+
 void PlatformPathOpenVG::clear()
 {
     makeCompatibleContextCurrent();
+
+    m_commandBuffer.clear();
+    m_coordinateBuffer.clear();
 
     vgClearPath(m_vgPath, WEBKIT_VG_PATH_CAPABILITIES);
     ASSERT_VG_NO_ERROR();
@@ -91,7 +141,7 @@ void PlatformPathOpenVG::clear()
 
 void PlatformPathOpenVG::createPath()
 {
-    makeSharedContextCurrent();
+    makeResourceCreationContextCurrent();
 
     m_vgPath = vgCreatePath(
         VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
@@ -178,8 +228,7 @@ void Path::moveTo(const FloatPoint& point)
     const VGfloat pathData[] = { point.x(), point.y() };
 
     m_path->makeCompatibleContextCurrent();
-    vgAppendPathData(m_path->vgPath(), 1, pathSegments, pathData);
-    ASSERT_VG_NO_ERROR();
+    m_path->appendPathData(1, pathSegments, pathData);
 
     m_path->m_currentPoint = m_path->m_subpathStartPoint = point;
 }
@@ -190,8 +239,7 @@ void Path::addLineTo(const FloatPoint& point)
     const VGfloat pathData[] = { point.x(), point.y() };
 
     m_path->makeCompatibleContextCurrent();
-    vgAppendPathData(m_path->vgPath(), 1, pathSegments, pathData);
-    ASSERT_VG_NO_ERROR();
+    m_path->appendPathData(1, pathSegments, pathData);
 
     m_path->m_currentPoint = point;
 }
@@ -202,8 +250,7 @@ void Path::addQuadCurveTo(const FloatPoint& controlPoint, const FloatPoint& endP
     const VGfloat pathData[] = { controlPoint.x(), controlPoint.y(), endPoint.x(), endPoint.y() };
 
     m_path->makeCompatibleContextCurrent();
-    vgAppendPathData(m_path->vgPath(), 1, pathSegments, pathData);
-    ASSERT_VG_NO_ERROR();
+    m_path->appendPathData(1, pathSegments, pathData);
 
     m_path->m_currentPoint = endPoint;
 }
@@ -214,8 +261,7 @@ void Path::addBezierCurveTo(const FloatPoint& controlPoint1, const FloatPoint& c
     const VGfloat pathData[] = { controlPoint1.x(), controlPoint1.y(), controlPoint2.x(), controlPoint2.y(), endPoint.x(), endPoint.y() };
 
     m_path->makeCompatibleContextCurrent();
-    vgAppendPathData(m_path->vgPath(), 1, pathSegments, pathData);
-    ASSERT_VG_NO_ERROR();
+    m_path->appendPathData(1, pathSegments, pathData);
 
     m_path->m_currentPoint = endPoint;
 }
@@ -275,8 +321,7 @@ void Path::addArcTo(const FloatPoint& point1, const FloatPoint& point2, float ra
     };
 
     m_path->makeCompatibleContextCurrent();
-    vgAppendPathData(m_path->vgPath(), 2, pathSegments, pathData);
-    ASSERT_VG_NO_ERROR();
+    m_path->appendPathData(2, pathSegments, pathData);
 
     m_path->m_currentPoint = endPoint;
 }
@@ -284,14 +329,9 @@ void Path::addArcTo(const FloatPoint& point1, const FloatPoint& point2, float ra
 void Path::closeSubpath()
 {
     static const VGubyte pathSegments[] = { VG_CLOSE_PATH };
-    // pathData must not be 0, but certain compilers also don't create
-    // zero-size arrays. So let's use a random aligned value (sizeof(VGfloat)),
-    // it won't be accessed anyways as VG_CLOSE_PATH doesn't take coordinates.
-    static const VGfloat* pathData = reinterpret_cast<VGfloat*>(sizeof(VGfloat));
 
     m_path->makeCompatibleContextCurrent();
-    vgAppendPathData(m_path->vgPath(), 1, pathSegments, pathData);
-    ASSERT_VG_NO_ERROR();
+    m_path->appendPathData(1, pathSegments, 0);
 
     m_path->m_currentPoint = m_path->m_subpathStartPoint;
 }
@@ -373,8 +413,7 @@ void Path::addArc(const FloatPoint& center, float radius, float startAngle, floa
             radius, radius, 0, endX, endY
         };
 
-        vgAppendPathData(m_path->vgPath(), 2, pathSegments, pathData);
-        ASSERT_VG_NO_ERROR();
+        m_path->appendPathData(2, pathSegments, pathData);
     }
 
     m_path->m_currentPoint.setX(endX);

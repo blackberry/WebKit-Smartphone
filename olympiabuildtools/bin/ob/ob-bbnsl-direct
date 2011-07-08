@@ -16,31 +16,27 @@ if [ "$FEATURE_OLYMPIA_DEBUG_MEMORY" = "Yes" ] ; then
     CONFIGUREFLAGS="$CONFIGUREFLAGS --enable-debug-memory"
 fi
 
-pushd $BBNSLDIR
-
 RETURNCODE=0
-if [ -f $BBNSLBUILDROOT/$CPUNAME-$OLYMPIABUILDCONFIGL/Makefile ] ; then
-    pushd $BBNSLBUILDROOT/$CPUNAME-$OLYMPIABUILDCONFIGL
-    $BBNSLDIR/tools/win32/bin/make
-    let RETURNCODE+=$?
-    $BBNSLDIR/tools/win32/bin/make install
-    let RETURNCODE+=$?
-    popd
-else
-    mkdir -p $BBNSLBUILDROOT
-    pushd $BBNSLBUILDROOT
-    # Change to configure option
-    export LYNXDIR=$OLYMPIAJAVA/lynx
-    ../configure --with-webkit --arch=$CPUNAME --config=$OLYMPIABUILDCONFIGL --prefix=$BBNSLINSTALLPREFIX --nocache-osndk --nocache-tid $CONFIGUREFLAGS
-    let RETURNCODE+=$?
-    pushd $CPUNAME-$OLYMPIABUILDCONFIGL
-    $BBNSLDIR/tools/win32/bin/make
-    let RETURNCODE+=$?
-    $BBNSLDIR/tools/win32/bin/make install
-    let RETURNCODE+=$?
-    popd
-    popd
-fi
+
+mkdir -p $BBNSLBUILDROOT
+pushd $BBNSLBUILDROOT
+
+# Change to configure option
+export LYNXDIR=$OLYMPIAJAVA/lynx
+
+$BBNSLDIR/configure \
+    --with-webkit \
+    --arch=$CPUNAME \
+    --config=$OLYMPIABUILDCONFIGL \
+    --device=$PLATFORMNAME \
+    --prefix=$BBNSLINSTALLPREFIX \
+    --nocache-osndk \
+    --nocache-tid \
+    $CONFIGUREFLAGS
+let RETURNCODE+=$?
+
+$BBNSLDIR/tools/win32/bin/make install
+let RETURNCODE+=$?
 
 popd
 

@@ -1,42 +1,42 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x96
-  RenderBlock {HTML} at (0,0) size 800x96
-    RenderBody {BODY} at (8,17) size 784x71
-      RenderBlock {P} at (0,0) size 784x18
-        RenderText {#text} at (0,0) size 367x18
-          text run at (0,0) width 367: "The following two lines should be identical:"
-      RenderBlock {DIV} at (0,35) size 784x18
-        RenderInline {SPAN} at (0,0) size 44x18
-          RenderInline (generated) at (0,0) size 12x18
-            RenderText at (0,0) size 12x18
-              text run at (0,0) width 12: "B"
-          RenderInline {SPAN} at (0,0) size 16x18
-            RenderInline (generated) at (0,0) size 16x18
-              RenderCounter at (12,0) size 11x18
-                text run at (12,0) width 11: "1"
-              RenderText at (23,0) size 5x18
-                text run at (23,0) width 5: " "
-          RenderInline {SPAN} at (0,0) size 16x18
-            RenderInline {SPAN} at (0,0) size 16x18
-              RenderInline (generated) at (0,0) size 16x18
-                RenderCounter at (28,0) size 11x18
-                  text run at (28,0) width 11: "0"
-                RenderText at (39,0) size 5x18
-                  text run at (39,0) width 5: " "
-        RenderInline {SPAN} at (0,0) size 43x18
-          RenderInline {SPAN} at (0,0) size 16x18
-            RenderInline (generated) at (0,0) size 16x18
-              RenderCounter at (44,0) size 11x18
-                text run at (44,0) width 11: "1"
-              RenderText at (55,0) size 5x18
-                text run at (55,0) width 5: " "
-          RenderInline {SPAN} at (0,0) size 27x18
-            RenderInline {SPAN} at (0,0) size 27x18
-              RenderInline (generated) at (0,0) size 27x18
-                RenderCounter at (60,0) size 27x18
-                  text run at (60,0) width 27: "1.0"
+layer at (0,0) size 800x91
+  RenderBlock {HTML} at (0,0) size 800x91
+    RenderBody {BODY} at (8,16) size 784x67
+      RenderBlock {P} at (0,0) size 784x17
+        RenderText {#text} at (0,0) size 341x17
+          text run at (0,0) width 341: "The following two lines should be identical:"
+      RenderBlock {DIV} at (0,33) size 784x17
+        RenderInline {SPAN} at (0,0) size 41x17
+          RenderInline (generated) at (0,0) size 11x17
+            RenderText at (0,0) size 11x17
+              text run at (0,0) width 11: "B"
+          RenderInline {SPAN} at (0,0) size 15x17
+            RenderInline (generated) at (0,0) size 15x17
+              RenderCounter at (11,0) size 10x17
+                text run at (11,0) width 10: "1"
+              RenderText at (21,0) size 5x17
+                text run at (21,0) width 5: " "
+          RenderInline {SPAN} at (0,0) size 15x17
+            RenderInline {SPAN} at (0,0) size 15x17
+              RenderInline (generated) at (0,0) size 15x17
+                RenderCounter at (26,0) size 10x17
+                  text run at (26,0) width 10: "0"
+                RenderText at (36,0) size 5x17
+                  text run at (36,0) width 5: " "
+        RenderInline {SPAN} at (0,0) size 40x17
+          RenderInline {SPAN} at (0,0) size 15x17
+            RenderInline (generated) at (0,0) size 15x17
+              RenderCounter at (41,0) size 10x17
+                text run at (41,0) width 10: "1"
+              RenderText at (51,0) size 5x17
+                text run at (51,0) width 5: " "
+          RenderInline {SPAN} at (0,0) size 25x17
+            RenderInline {SPAN} at (0,0) size 25x17
+              RenderInline (generated) at (0,0) size 25x17
+                RenderCounter at (56,0) size 25x17
+                  text run at (56,0) width 25: "1.0"
                 RenderText at (0,0) size 0x0
-      RenderBlock {DIV} at (0,53) size 784x18
-        RenderText {#text} at (0,0) size 87x18
-          text run at (0,0) width 87: "B1 0 1 1.0"
+      RenderBlock {DIV} at (0,50) size 784x17
+        RenderText {#text} at (0,0) size 81x17
+          text run at (0,0) width 81: "B1 0 1 1.0"

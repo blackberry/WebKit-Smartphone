@@ -84,7 +84,8 @@ class OlympiaAnimationBase {
 
         bool initializeBuffer(const WebCore::IntSize& size);
         void destroyBuffer();
-        WebCore::SurfaceOpenVG* buffer() { return m_buffer; }
+        unsigned short* buffer() { return m_buffer; }
+        unsigned int bufferStride() const { return m_bufferStride; }
 
     private:
         WebCore::Timer<OlympiaAnimationBase> m_timer;
@@ -110,7 +111,8 @@ class OlympiaAnimationBase {
 
         ShapingFunction m_shapingFunction;
 
-        WebCore::SurfaceOpenVG* m_buffer;
+        unsigned short* m_buffer;
+        unsigned int m_bufferStride;
 };
 
 template <typename OlympiaAnimationControlClass> class OlympiaAnimation : public OlympiaAnimationBase {

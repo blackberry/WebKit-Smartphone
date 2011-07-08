@@ -20,7 +20,6 @@ namespace WebCore {
 namespace Olympia {
 
     namespace Platform {
-        class HttpStreamDebugger;
         class NetworkStreamFactory;
     }
 
@@ -48,7 +47,7 @@ namespace Olympia {
 
             NetworkJob* findJobForHandle(WTF::PassRefPtr<WebCore::ResourceHandle>);
             void deleteJob(NetworkJob* job);
-            bool startJob(int playerId, const WebCore::String& pageGroupName, WTF::PassRefPtr<WebCore::ResourceHandle> job, const WebCore::ResourceRequest& request, Platform::NetworkStreamFactory* streamFactory, Platform::HttpStreamDebugger* debugger, int deferLoadingCount = 0, int redirectCount = 0);
+            bool startJob(int playerId, const WebCore::String& pageGroupName, WTF::PassRefPtr<WebCore::ResourceHandle> job, const WebCore::ResourceRequest& request, Platform::NetworkStreamFactory* streamFactory, int deferLoadingCount = 0, int redirectCount = 0);
 
             WTF::Vector<NetworkJob*> m_jobs;
             WebCore::KURL m_initialURL;

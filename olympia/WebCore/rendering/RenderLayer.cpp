@@ -395,6 +395,11 @@ void RenderLayer::updateRepaintRectsAfterScroll(bool fixed)
 {
     if (fixed || renderer()->style()->position() == FixedPosition) {
         computeRepaintRects();
+
+        if (RenderView* view = renderer()->view())
+            if (view->frameView() && view->frameView()->fixedReportedSizeChanged())
+                renderer()->setNeedsPositionedMovementLayout();
+
         fixed = true;
     } else if (renderer()->hasTransform()) {
         // Transforms act as fixed position containers, so nothing inside a

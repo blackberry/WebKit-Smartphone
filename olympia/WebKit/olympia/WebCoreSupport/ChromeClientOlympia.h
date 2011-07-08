@@ -32,6 +32,7 @@ public:
     virtual bool canTakeFocus(FocusDirection);
     virtual void takeFocus(FocusDirection);
     virtual void focusedNodeChanged(Node*);
+    virtual bool shouldForceDocumentStyleSelectorUpdate();
     virtual Page* createWindow(Frame*, const FrameLoadRequest&, const WindowFeatures&);
     virtual void show();
     virtual bool canRunModal();

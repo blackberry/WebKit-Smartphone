@@ -31,6 +31,7 @@
 #include "PageGroup.h"
 #include "PlatformString.h"
 #include "RenderView.h"
+#include "SecurityOrigin.h"
 #include "SharedPointer.h"
 #include "SVGZoomAndPan.h"
 #include "ViewportArguments.h"
@@ -62,6 +63,7 @@ void ChromeClientOlympia::runJavaScriptAlert(Frame*, const String& message)
         m_webPage->d->m_dumpRenderTree->runJavaScriptAlert(message);
         return;
     }
+    TimerBase::fireTimersInNestedEventLoop();
     m_webPage->client()->runJavaScriptAlert(message.characters(), message.length());
 }
 
@@ -69,6 +71,7 @@ bool ChromeClientOlympia::runJavaScriptConfirm(Frame*, const String& message)
 {
     if (m_webPage->d->m_dumpRenderTree)
         return m_webPage->d->m_dumpRenderTree->runJavaScriptConfirm(message);
+    TimerBase::fireTimersInNestedEventLoop();
     return m_webPage->client()->runJavaScriptConfirm(message.characters(), message.length());
 }
 
@@ -81,6 +84,7 @@ bool ChromeClientOlympia::runJavaScriptPrompt(Frame*, const String& message, con
         return true;
     }
 
+    TimerBase::fireTimersInNestedEventLoop();
     if (m_webPage->client()->runJavaScriptPrompt(message.characters(), message.length(), defaultValue.characters(), defaultValue.length(), clientResult)) {
         result = clientResult;
         return true;
@@ -100,7 +104,7 @@ void ChromeClientOlympia::setWindowRect(const FloatRect&)
 
 FloatRect ChromeClientOlympia::windowRect()
 {
-    IntSize applicationViewSize = m_webPage->settings()->applicationViewSize();
+    IntSize applicationViewSize = Olympia::WebKit::WebSettings::pageGroupSettings(m_webPage->d->m_page->groupName())->applicationViewSize();
     return FloatRect(0, 0, applicationViewSize.width(), applicationViewSize.height());;
 }
 
@@ -141,9 +145,15 @@ void ChromeClientOlympia::focusedNodeChanged(Node* node)
     m_webPage->d->sendContextIfChanged(node);
 }
 
+bool ChromeClientOlympia::shouldForceDocumentStyleSelectorUpdate()
+{
+    return !m_webPage->settings()->isJavaScriptEnabled() && !m_webPage->d->m_inputHandler->isProcessingChange();
+}
+
 Page* ChromeClientOlympia::createWindow(Frame*, const FrameLoadRequest& request, const WindowFeatures& features)
 {
     PageGroupLoadDeferrer deferrer(m_webPage->d->m_page, true);
+    TimerBase::fireTimersInNestedEventLoop();
 
     int x = features.xSet ? features.x : 0;
     int y = features.ySet ? features.y : 0;
@@ -354,15 +364,21 @@ void ChromeClientOlympia::exceededDatabaseQuota(Frame* frame, const String& name
 #endif
 }
 
-void ChromeClientOlympia::requestGeolocationPermissionForFrame(Frame*, Geolocation* geolocation)
+void ChromeClientOlympia::requestGeolocationPermissionForFrame(Frame* frame, Geolocation* geolocation)
 {
     if (!m_webPage->settings()->isGeolocationEnabled()) {
         geolocation->setIsAllowed(false);
         return;
     }
+    DOMWindow* window = frame->domWindow();
+    if (!window)
+        return;
+
+    SecurityOrigin* origin = window->securityOrigin();
+    String url = origin->toString();
 
     GeolocationServiceOlympia* service = static_cast<GeolocationServiceOlympia*>(geolocation->getGeolocationService());
-    m_webPage->client()->requestGeolocationPermission(service->tracker());
+    m_webPage->client()->requestGeolocationPermission(service->tracker(), url.latin1().data());
 }
 
 void ChromeClientOlympia::cancelGeolocationPermissionRequestForFrame(Frame*, Geolocation* geolocation)
@@ -374,6 +390,7 @@ void ChromeClientOlympia::cancelGeolocationPermissionRequestForFrame(Frame*, Geo
 void ChromeClientOlympia::runOpenPanel(WebCore::Frame*, WTF::PassRefPtr<WebCore::FileChooser> chooser)
 {
     PageGroupLoadDeferrer deferrer(m_webPage->d->m_page, true);
+    TimerBase::fireTimersInNestedEventLoop();
 
     SharedArray<Olympia::WebKit::String> initialFiles;
     unsigned int initialFileSize = chooser->filenames().size();
@@ -467,6 +484,7 @@ void ChromeClientOlympia::scrollRectIntoView(const IntRect&, const ScrollView*) 
 
 bool ChromeClientOlympia::shouldInterruptJavaScript()
 {
+    TimerBase::fireTimersInNestedEventLoop();
     return m_webPage->client()->shouldInterruptJavaScript();
 }
 

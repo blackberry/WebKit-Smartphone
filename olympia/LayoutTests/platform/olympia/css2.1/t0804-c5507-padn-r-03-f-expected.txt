@@ -1,14 +1,14 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x122
-  RenderBlock {HTML} at (0,0) size 800x122
-    RenderBody {BODY} at (8,17) size 784x88
-      RenderBlock {P} at (0,0) size 784x18
-        RenderText {#text} at (0,0) size 325x18
-          text run at (0,0) width 325: "The next two bars should be identical:"
-      RenderBlock {DIV} at (17,35) size 204x18 [color=#FFFF00] [bgcolor=#000080]
-        RenderText {#text} at (0,0) size 43x18
-          text run at (0,0) width 43: "TEST"
-      RenderBlock {DIV} at (17,70) size 204x18 [color=#FFFF00] [bgcolor=#000080]
-        RenderText {#text} at (0,0) size 43x18
-          text run at (0,0) width 43: "TEST"
+layer at (0,0) size 800x115
+  RenderBlock {HTML} at (0,0) size 800x115
+    RenderBody {BODY} at (8,16) size 784x83
+      RenderBlock {P} at (0,0) size 784x17
+        RenderText {#text} at (0,0) size 304x17
+          text run at (0,0) width 304: "The next two bars should be identical:"
+      RenderBlock {DIV} at (16,33) size 192x17 [color=#FFFF00] [bgcolor=#000080]
+        RenderText {#text} at (0,0) size 41x17
+          text run at (0,0) width 41: "TEST"
+      RenderBlock {DIV} at (16,66) size 192x17 [color=#FFFF00] [bgcolor=#000080]
+        RenderText {#text} at (0,0) size 41x17
+          text run at (0,0) width 41: "TEST"

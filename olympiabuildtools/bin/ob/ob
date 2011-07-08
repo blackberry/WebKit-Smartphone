@@ -20,5 +20,24 @@ if [ ! -z "$1" ] ; then
         obc $DEFAULTCONFIG
     fi
 fi
+
+export BUILDROOT="$OLYMPIAROOT/build/$PLATFORMNAME"
+export INSTALLROOT="$OLYMPIAROOT/publish/$PLATFORMNAME"
+
+mkdir -p $BUILDROOT
+mkdir -p $INSTALLROOT
+
+export BBNSLBUILDROOT="$BUILDROOT/bbnsl/$OLYMPIABUILDCONFIGL"
+export PLAYERBUILDROOT="$BUILDROOT/webkitplayer"
+
+export BBNSLINSTALLPREFIX="$INSTALLROOT/bbnsl/$OLYMPIABUILDCONFIGL"
+export PLAYERINSTALLPREFIX="$INSTALLROOT/webkitplayer/$OLYMPIABUILDCONFIGL"
+
+# Note: this variable is used in olympia/WebKitTools/webkitdirs.pm,
+# which is called by build-webkit Perl script in ob-webkit-direct
+export WEBKITOUTPUTDIR="$BUILDROOT/webkit"
+
 echo "Using: $OLYMPIABUILDCHOICE"
+echo "Shadow build directory: $BUILDROOT"
+echo "Build deliverables directory: $INSTALLROOT"
 $(exit 0)

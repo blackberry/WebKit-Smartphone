@@ -56,12 +56,14 @@ void WebPlugin::destroy()
 
 void WebPlugin::play()
 {
-    m_webPage->client()->playMedia(m_playerID);
+    if (m_webPage && m_webPage->client())
+        m_webPage->client()->playMedia(m_playerID);
 }
 
 void WebPlugin::pause()
 {
-    m_webPage->client()->pauseMedia(m_playerID);
+    if (m_webPage && m_webPage->client())
+        m_webPage->client()->pauseMedia(m_playerID);
 }
 
 }

@@ -208,6 +208,11 @@ namespace WebCore {
         // HTML 5 key/value storage
         Storage* sessionStorage(ExceptionCode&) const;
         Storage* localStorage(ExceptionCode&) const;
+
+#if OS(OLYMPIA)
+        void removeSessionStorage();
+        void removeLocalStorage();
+#endif
 #endif
 
         Console* console() const;

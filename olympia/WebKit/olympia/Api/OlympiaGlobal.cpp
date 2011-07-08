@@ -19,6 +19,7 @@
 #include "ObjectAllocator.h"
 #include "OlympiaCookieCache.h"
 #include "OlympiaPlatformSettings.h"
+#include "OlympiaString.h"
 #include "OutOfMemoryHandler.h"
 #include "PageCache.h"
 #include "PageGroup.h"
@@ -90,6 +91,31 @@ void clearMemoryCaches()
     WebCore::cache()->setDisabled(true);
     WebCore::cache()->setDisabled(false);
 #endif
+}
+
+void clearAppCache(const String& pageGroupName)
+{
+    WebCore::String name(pageGroupName.characters(), pageGroupName.length());
+
+    WebCore::cacheStorage(name).empty();
+}
+
+void clearLocalStorage(const String& pageGroupName)
+{
+    WebCore::String name(pageGroupName.characters(), pageGroupName.length());
+
+    WebCore::PageGroup* group = WebCore::PageGroup::pageGroup(name);
+    if (!group)
+        return;
+
+    group->removeLocalStorage();
+}
+
+void clearDatabase(const String& pageGroupName)
+{
+    WebCore::String name(pageGroupName.characters(), pageGroupName.length());
+
+    WebCore::DatabaseTracker::tracker(name).deleteAllDatabases();
 }
 
 void updateOnlineStatus(bool online)

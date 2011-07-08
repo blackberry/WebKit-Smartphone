@@ -122,6 +122,7 @@ void ResourceHandle::loadResourceSynchronously(const ResourceRequest& request, S
     }
 
     PageGroupLoadDeferrer deferrer(frame->page(), true);
+    TimerBase::fireTimersInNestedEventLoop();
 
     int playerId = static_cast<FrameLoaderClientOlympia*>(frame->loader()->client())->playerId();
 

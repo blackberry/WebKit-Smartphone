@@ -1,4 +1,5 @@
 #!/bin/bash
 
-rm -rf "$OLYMPIAROOT/olympia/WebKitBuild" "$BBNSLDIR/build" "$BBNSLDIR/players/build"
-
+ob-webkit-clean
+ob-bbnsl-clean
+ob-player-clean

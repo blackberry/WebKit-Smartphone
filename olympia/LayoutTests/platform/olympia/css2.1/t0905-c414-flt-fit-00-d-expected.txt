@@ -1,22 +1,22 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x156
-  RenderBlock {HTML} at (0,0) size 800x156
-    RenderBody {BODY} at (8,17) size 784x129
-      RenderBlock {P} at (0,0) size 784x36 [color=#000080]
-        RenderText {#text} at (0,0) size 773x36
-          text run at (0,0) width 773: "There should be five numbers, in numerical order, below: on the first line 1, 2 and 3, on the"
-          text run at (0,18) width 139: "second, 4 and 5."
-      RenderBlock {DIV} at (10,53) size 278x76 [color=#000080] [border: (3px solid #0000FF)]
-        RenderBlock (floating) {P} at (20,20) size 85x18
-          RenderText {#text} at (0,0) size 11x18
-            text run at (0,0) width 11: "1"
-        RenderBlock (floating) {P} at (105,20) size 85x18
-          RenderText {#text} at (0,0) size 11x18
-            text run at (0,0) width 11: "2"
-        RenderBlock (floating) {P} at (20,38) size 85x18
-          RenderText {#text} at (0,0) size 11x18
-            text run at (0,0) width 11: "4"
-        RenderText {#text} at (190,20) size 111x36
-          text run at (190,20) width 11: "3"
-          text run at (105,38) width 111: "5                    "
+layer at (0,0) size 800x148
+  RenderBlock {HTML} at (0,0) size 800x148
+    RenderBody {BODY} at (8,16) size 784x122
+      RenderBlock {P} at (0,0) size 784x34 [color=#000080]
+        RenderText {#text} at (0,0) size 730x34
+          text run at (0,0) width 730: "There should be five numbers, in numerical order, below: on the first line 1, 2 and 3, on the"
+          text run at (0,17) width 132: "second, 4 and 5."
+      RenderBlock {DIV} at (10,50) size 262x72 [color=#000080] [border: (3px solid #0000FF)]
+        RenderBlock (floating) {P} at (19,19) size 80x17
+          RenderText {#text} at (0,0) size 10x17
+            text run at (0,0) width 10: "1"
+        RenderBlock (floating) {P} at (99,19) size 80x17
+          RenderText {#text} at (0,0) size 10x17
+            text run at (0,0) width 10: "2"
+        RenderBlock (floating) {P} at (19,36) size 80x17
+          RenderText {#text} at (0,0) size 10x17
+            text run at (0,0) width 10: "4"
+        RenderText {#text} at (179,19) size 110x34
+          text run at (179,19) width 10: "3"
+          text run at (99,36) width 110: "5                    "

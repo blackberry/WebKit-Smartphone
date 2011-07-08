@@ -20,6 +20,7 @@ namespace WebCore {
 namespace Olympia {
 namespace WebKit {
 
+class String;
 class WebSettingsPrivate;
 
 class OLYMPIA_EXPORT WebSettings {
@@ -27,7 +28,7 @@ public:
 
     enum TextReflowMode { TextReflowDisabled, TextReflowEnabled, TextReflowEnabledOnlyForBlockZoom };
 
-    static WebSettings* globalSettings();
+    static WebSettings* pageGroupSettings(const String& pageGroupName);
 
     // FIXME: Consider which settings below should be made static so as to enforce
     // that they apply to all pages or do we wish to maintain maximum flexibility?
@@ -154,17 +155,16 @@ public:
     void setAppCachePath(const String& path);
 
     String pageGroupName() const;
-    void setPageGroupName(const String& name);
 
     // Object MIMEType
     static void addSupportedObjectPluginMIMEType(const char*);
     static bool isSupportedObjectMIMEType(const WebCore::String& mimeType);
     static String getNormalizedMIMEType(const String&);
 
-    static int screenWidth();
-    static int screenHeight();
+    int screenWidth();
+    int screenHeight();
 
-    static WebCore::IntSize applicationViewSize();
+    WebCore::IntSize applicationViewSize();
 
     bool isEmailMode() const;
     void setEmailMode(bool enable);
@@ -176,11 +176,18 @@ public:
     int overZoomColor() const;
     void setOverZoomColor(int);
 
+    bool WebSettings::useWebKitCache() const;
+    void WebSettings::setUseWebKitCache(bool use);
+
+    // Frame flattening
+    bool isFrameFlatteningEnabled() const;
+    void setFrameFlatteningEnabled(bool enable);
+
 private:
     // These are set via WebPage
-    static void setScreenWidth(int width);
-    static void setScreenHeight(int height);
-    static void setApplicationViewSize(const WebCore::IntSize&);
+    void setScreenWidth(int width);
+    void setScreenHeight(int height);
+    void setApplicationViewSize(const WebCore::IntSize&);
 
     // These are for internal usage inside of WebKit so as not to cause a copy
     WebCore::String serifFontFamily() const;
@@ -193,8 +200,8 @@ private:
     friend class WebPagePrivate;
     friend class WebSettingsPrivate;
     friend class WebCore::FrameLoaderClientOlympia;
-    WebSettings();
-    WebSettings(WebCore::Settings*);
+    WebSettings(const String&);
+    WebSettings(WebCore::Settings*, const String&);
     ~WebSettings();
 
     WebSettingsPrivate* d;

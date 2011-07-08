@@ -1,11 +1,18 @@
 <html>
 <head>
 <meta name="viewport" content="initial-scale=1.0">
+<script src="meta-viewport-utilities.js"></script>
 <script>
 function updateDisplay() {
     var square = document.getElementById("square");
-    square.innerHTML = "window.innerWidth: " + window.innerWidth;
+    var scale = getScale();
+
+    logStart(square);
+    log(square, "innerWidth: " + window.innerWidth);
+    log(square, "scale: " + scale);
+    logResultAndNotifyDone(square, scale === 1.0);
 }
+
 window.onload = updateDisplay;
 window.onorientationchange = updateDisplay;
 </script>
@@ -14,9 +21,11 @@ window.onorientationchange = updateDisplay;
 </style>
 </head>
 <body>
-<p>This test can be used to verify that we preserve the specified viewport initial-scale on rotation.<p>
-<p>This test PASSED if the text in the blue square (below) reads &quot;window.innerWidth: 360&quot;(*) when rotating from portrait- to landscape- orientation, and vice-versa. Otherwise, it FAILED.</p>
-<p>(*) Note, this test is platform-specific. For example, on an iPod Touch, the text in the blue square should read &quot;window.innerWidth: 320&quot; since the width of its screen in direction north is 320 pixels.</p>
+<p>This test can be used to verify that we preserve the specified viewport initial-scale on rotation. This differs from Mobile Safari, which will instead preserve innerWidth on rotation, if possible.</p>
+<p>This test PASSED if, when rotating the device, the text below always reads</p>
+<li>RIM device: &quot;scale: 1&quot;</li>
+<li>Mobile Safari: &quot;innerWidth: 320&quot;</li>
+<p>Otherwise, it FAILED.</p>
 <hr/>
 <div id="square"></div>
 </body>

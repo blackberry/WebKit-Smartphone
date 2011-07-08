@@ -3,19 +3,19 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584
-      RenderBlock (anonymous) at (0,0) size 784x36
-        RenderText {#text} at (0,0) size 783x36
-          text run at (0,0) width 783: "The TD cell (The EggPlant Exchange) should not wrap when window is resized. However, the"
-          text run at (0,18) width 122: "cell below the "
-          text run at (122,18) width 274: "heading will wrap atuomatically."
-        RenderBR {BR} at (396,31) size 0x0
-      RenderTable {TABLE} at (0,36) size 311x52 [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 309x50
-          RenderTableRow {TR} at (0,2) size 309x22
-            RenderTableCell {TD} at (2,2) size 305x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 202x18
-                text run at (2,2) width 202: "The Eggplant Exchange"
-          RenderTableRow {TR} at (0,26) size 309x22
-            RenderTableCell {TD} at (2,26) size 305x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 301x18
-                text run at (2,2) width 301: "Lots of Recipies for Eggplant Lovers"
+      RenderBlock (anonymous) at (0,0) size 784x34
+        RenderText {#text} at (0,0) size 769x34
+          text run at (0,0) width 769: "The TD cell (The EggPlant Exchange) should not wrap when window is resized. However, the cell"
+          text run at (0,17) width 83: "below the "
+          text run at (83,17) width 256: "heading will wrap atuomatically."
+        RenderBR {BR} at (339,30) size 0x0
+      RenderTable {TABLE} at (0,34) size 296x50 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 294x48
+          RenderTableRow {TR} at (0,2) size 294x21
+            RenderTableCell {TD} at (2,2) size 290x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 189x17
+                text run at (2,2) width 189: "The Eggplant Exchange"
+          RenderTableRow {TR} at (0,25) size 294x21
+            RenderTableCell {TD} at (2,25) size 290x21 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 286x17
+                text run at (2,2) width 286: "Lots of Recipies for Eggplant Lovers"

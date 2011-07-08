@@ -36,7 +36,7 @@ String cookies(Document const* document, KURL const& url)
     if (!page)
         return String();
 
-    bool isCookieCacheEnabled = Olympia::WebKit::WebSettings::globalSettings()->isCookieCacheEnabled();
+    bool isCookieCacheEnabled = Olympia::WebKit::WebSettings::pageGroupSettings(page->groupName())->isCookieCacheEnabled();
 
     if (isCookieCacheEnabled) {
         String cachedCookies = OlympiaCookieCache::instance().cookies(page->groupName(), url);
@@ -69,7 +69,7 @@ void setCookies(Document* document, KURL const& url, String const& value)
         return;
 
     if (Olympia::Platform::setCookieString(getPlayerId(frame), url.string().latin1().data(), value.latin1().data())
-        && Olympia::WebKit::WebSettings::globalSettings()->isCookieCacheEnabled())
+        && Olympia::WebKit::WebSettings::pageGroupSettings(page->groupName())->isCookieCacheEnabled())
         OlympiaCookieCache::instance().clearAllCookiesForHost(page->groupName(), url);
 }
 

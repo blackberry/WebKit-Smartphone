@@ -3,9 +3,6 @@
 # Bug #71 causes DRT hang/crash
 compositing/video/video-background-color.html
 
-# Bug #96 editing needs investigation and DRT implementation
-editing
-
 # Bug #70: We do not have DASHBOARD_SUPPORT enabled.
 fast/css/dashboard-regions-attr-crash.html
 
@@ -286,10 +283,206 @@ fast/js/sputnik/Unicode/Unicode_510/S7.6_A5.3_T2.html
 fast/js/sputnik/Unicode/Unicode_510/S15.10.2.12_A1_T6.html
 fast/js/sputnik/Unicode/Unicode_510/S15.10.2.12_A2_T6.html
 
-###
+# Bug #1281
+editing/execCommand/16049.html
+
+# Bug #96 Remaining tests in editing that fail or crash
+editing/deleting/5390681.html
+editing/deleting/delete-ligature-002.html
+editing/deleting/delete-ligature-003.html
+editing/deleting/pruning-after-merge-1.html
+editing/deleting/skip-virama-001.html
+editing/execCommand/editing-nontext-node-crash.xhtml
+editing/execCommand/enabling-and-selection-2.html
+editing/inserting/insert-thai-characters-001.html
+editing/selection/4866671.html
+editing/selection/end-of-document.html
+editing/selection/extend-by-word-002.html
+editing/selection/extend-selection.html
+editing/selection/home-end.html
+editing/selection/move-left-right.html
+editing/selection/thai-word-at-document-end.html
+editing/execCommand/4128080-2.html
+editing/execCommand/5939887.html
+editing/execCommand/copy-without-selection.html
+editing/execCommand/createLink.html
+editing/execCommand/enabling-and-selection.html
+editing/execCommand/insert-list-xml.xhtml
+editing/execCommand/paste-and-match-style-event.html
+editing/execCommand/unlink.html
+editing/inserting/5994480-2.html
+editing/inserting/typing-tab-designmode.html
+editing/pasteboard/19644-1.html
+editing/pasteboard/19644-2.html
+editing/pasteboard/4922709.html
+editing/pasteboard/5665299.html
+editing/pasteboard/5761530-1.html
+editing/pasteboard/5780697-2.html
+editing/pasteboard/copy-backslash-with-euc.html
+editing/pasteboard/copy-in-password-field.html
+editing/pasteboard/copy-paste-float.html
+editing/pasteboard/dataTransfer-setData-getData.html
+editing/pasteboard/drag-drop-input-textarea.html
+editing/pasteboard/drag-drop-url-text.html
+editing/pasteboard/drag-image-in-about-blank-frame.html
+editing/pasteboard/drop-inputtext-acquires-style.html
+editing/pasteboard/drop-link.html
+editing/pasteboard/file-input-files-access.html
+editing/pasteboard/files-during-page-drags.html
+editing/pasteboard/get-data-text-plain-drop.html
+editing/pasteboard/get-data-text-plain-paste.html
+editing/pasteboard/onpaste-text-html.html
+editing/pasteboard/page-zoom.html
+editing/pasteboard/paste-blockquote-before-blockquote.html
+editing/pasteboard/paste-double-nested-blockquote-before-blockquote.html
+editing/pasteboard/paste-into-anchor-text.html
+editing/pasteboard/paste-list-002.html
+editing/pasteboard/paste-list-003.html
+editing/pasteboard/paste-list-004.html
+editing/pasteboard/paste-noscript-svg.html
+editing/pasteboard/paste-noscript-xhtml.xhtml
+editing/pasteboard/paste-noscript.html
+editing/pasteboard/paste-plaintext-user-select-none.html
+editing/pasteboard/paste-table-002.html
+editing/pasteboard/paste-text-013.html
+editing/pasteboard/paste-visible-script.html
+editing/selection/5825350-1.html
+editing/selection/5825350-2.html
+editing/selection/anchor-focus1.html
+editing/selection/anchor-focus2.html
+editing/selection/anchor-focus3.html
+editing/selection/click-before-and-after-table.html
+editing/selection/click-in-margins-inside-editable-div.html
+editing/selection/click-in-padding-with-multiple-line-boxes.html
+editing/selection/doubleclick-beside-cr-span.html
+editing/selection/doubleclick-whitespace.html
+editing/selection/drag-start-event-client-x-y.html
+editing/selection/drag-text-delay.html
+editing/selection/extend-selection-after-double-click.html
+editing/selection/extend-selection-bidi.html
+editing/selection/find-yensign-and-backslash.html
+editing/selection/hit-test-anonymous.html
+editing/selection/last-empty-inline.html
+editing/selection/mixed-editability-10.html
+editing/selection/move-begin-end.html
+editing/selection/move-by-line-003.html
+editing/selection/move-paragraph-document-edges.html
+editing/selection/select-all-textarea.html
+editing/selection/shift-click.html
+editing/selection/user-drag-element-and-user-select-none.html
+editing/style/apply-through-end-of-document.html
+editing/text-iterator/basic-iteration.html
+editing/undo/undo-deleteWord.html
+editing/undo/undo-indent.html
+editing/undo/undo-smart-delete-reversed-selection.html
+editing/undo/undo-smart-delete-word.html
+
+
+# Bug #1331 fast/events tests that still fail
+fast/events/attempt-scroll-with-no-scrollbars.html
+fast/events/attribute-listener-cloned-from-frameless-doc-context-2.html
+fast/events/attribute-listener-extracted-from-frameless-doc-context-2.html
+fast/events/autoscroll-in-textfield.html
+fast/events/autoscroll-nonscrollable-iframe-in-scrollable-div.html
+fast/events/autoscroll-with-non-scrollable-parent.html
+fast/events/blur-focus-window-should-blur-focus-element.html
+fast/events/clientXY-in-zoom-and-scroll.html
+fast/events/content-changed-during-drop.html
+fast/events/context-onmousedown-event.html
+fast/events/contextmenu-scrolled-page-with-frame.html
+fast/events/continuous-platform-wheelevent-in-scrolling-div.html
+fast/events/event-view-toString.html
+fast/events/frame-tab-focus.html
+fast/events/ime-composition-events-001.html
+fast/events/js-keyboard-event-creation.html
+fast/events/key-events-in-input-text.html
+fast/events/keypress-insert-tab.html
+fast/events/mousedown-in-subframe-scrollbar.html
+fast/events/multiline-link-arrow-navigation.html
+fast/events/node-event-anchor-lock.html
+fast/events/offsetX-offsetY.html
+fast/events/onbeforeunload-focused-iframe.html
+fast/events/onload-webkit-before-webcore.html
+fast/events/onunload-clears-onbeforeunload.html
+fast/events/open-window-from-another-frame.html
+fast/events/pageshow-pagehide-on-back-cached-with-frames.html
+fast/events/pageshow-pagehide-on-back-cached.html
+fast/events/pageshow-pagehide-on-back-uncached.html
+fast/events/platform-wheelevent-in-scrolling-div.html
+fast/events/pointer-events-2.html
+fast/events/popup-allowed-from-gesture-initiated-event.html
+fast/events/popup-allowed-from-gesture-initiated-form-submit.html
+fast/events/popup-blocked-to-post-blank.html
+fast/events/popup-blocking-click-in-iframe.html
+fast/events/prevent-drag-to-navigate.html
+fast/events/remove-child-onscroll.html
+fast/events/resize-subframe.html
+fast/events/special-key-events-in-input-text.html
+fast/events/tab-focus-anchor.html
+fast/events/tabindex-focus-chain.html
+fast/events/spatial-navigation/snav-fully-aligned-horizontally.html
+fast/events/spatial-navigation/snav-fully-aligned-vertically.html
+fast/events/spatial-navigation/snav-iframe-flattening-simple.html
+fast/events/spatial-navigation/snav-iframe-no-focusable-content.html
+fast/events/spatial-navigation/snav-iframe-no-scrollable-content.html
+fast/events/spatial-navigation/snav-iframe-with-offscreen-focusable-element.html
+fast/events/spatial-navigation/snav-offscreen-content.html
+fast/events/spatial-navigation/snav-table-traversal.html
+fast/events/spatial-navigation/snav-tiny-table-traversal.html
+fast/events/spatial-navigation/snav-unit-overflow-and-scroll-in-direction.html
+fast/events/touch/send-oncancel-event.html
+fast/events/touch/touch-coords-in-zoom-and-scroll.html
+fast/events/nested-event-remove-node-crash.html
+fast/events/no-blur-on-page-leave.html
+fast/events/onchange-select-popup.html
+fast/events/select-onchange-crash.html
 
 
 ########## UNSUPPORTED FEATURES ##########
+
+# access keys not supported
+fast/events/access-key-self-destruct.html
+
+# arrow keys not supported
+fast/events/arrow-keys-on-body.html
+editing/input/page-up-down-scrolls.html
+
+# function keys not supported
+fast/events/keydown-function-keys.html
+
+# numpad keys not supported
+fast/events/keydown-numpad-keys.html
+
+# double click not supporoted
+fast/events/click-count.html
+fast/events/dblclick-addEventListener.html
+fast/events/mouse-click-events.html
+fast/events/scrollbar-double-click.html
+fast/events/zoom-dblclick.html
+
+# option key not supported
+fast/events/option-tab.html
+editing/input/option-page-up-down.html
+
+# right click not supported
+fast/events/mouseup-from-button2.html
+fast/events/right-click-focus.html
+
+# drag and drop not supported
+fast/events/bogus-dropEffect-effectAllowed.html
+fast/events/crash-on-mutate-during-drop.html
+fast/events/drag-outside-window.html
+fast/events/drag-parent-node.html
+fast/events/drag-and-drop-dataTransfer-types-nocrash.html
+fast/events/drag-and-drop-fire-drag-dragover.html
+fast/events/drag-and-drop.html
+fast/events/drag-in-frames.html
+fast/events/drag-to-navigate.html
+fast/events/ondragenter.html
+fast/events/ondrop-text-html.html
+
+# no modifier key + touch event support
+fast/events/touch/basic-single-touch-events.html
 
 # inspector not supported in Olympia
 inspector
@@ -298,9 +491,6 @@ inspector
 accessibility
 webarchive
 svg/webarchive
-
-# websockets not supported
-websocket
 
 # plugin tests that use Objective-C - not supported in Olympia
 fast/dom/objc-big-method-name.html

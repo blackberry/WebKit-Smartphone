@@ -1,34 +1,33 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x275
-  RenderBlock {HTML} at (0,0) size 800x275
-    RenderBody {BODY} at (8,17) size 784x250
-      RenderBlock {P} at (0,0) size 784x54 [bgcolor=#00FFFF]
-        RenderText {#text} at (392,0) size 742x54
-          text run at (392,0) width 335: "The first line of this sentence should be"
-          text run at (0,18) width 244: "indented halfway across the "
-          text run at (244,18) width 498: "page, but the rest of it should be flush with the normal left"
-          text run at (0,36) width 66: "margin "
-          text run at (66,36) width 101: "of the page."
-      RenderBlock {P} at (0,71) size 784x72 [bgcolor=#00FFFF]
-        RenderText {#text} at (85,0) size 287x18
-          text run at (85,0) width 287: "Only the first line of this sentence"
-        RenderBR {BR} at (372,0) size 0x18
-        RenderText {#text} at (0,18) size 169x18
-          text run at (0,18) width 169: "should be indented,"
-        RenderBR {BR} at (169,18) size 0x18
-        RenderText {#text} at (0,36) size 200x18
-          text run at (0,36) width 200: "the others should all be"
-        RenderBR {BR} at (200,36) size 0x18
-        RenderInline {EM} at (0,0) size 155x18
-          RenderText {#text} at (0,54) size 155x18
-            text run at (0,54) width 155: "aligned on the left"
-        RenderText {#text} at (155,54) size 128x18
-          text run at (155,54) width 128: " of the window."
-      RenderBlock {DIV} at (0,160) size 196x90 [bgcolor=#00FFFF]
-        RenderText {#text} at (392,0) size 404x90
-          text run at (392,0) width 12: "X"
-          text run at (0,18) width 186: "The X on the previous"
-          text run at (0,36) width 119: "line should be"
-          text run at (0,54) width 167: "centered across the"
-          text run at (0,72) width 69: "window."
+layer at (0,0) size 800x243
+  RenderBlock {HTML} at (0,0) size 800x243
+    RenderBody {BODY} at (8,16) size 784x219
+      RenderBlock {P} at (0,0) size 784x51 [bgcolor=#00FFFF]
+        RenderText {#text} at (392,0) size 781x51
+          text run at (392,0) width 389: "The first line of this sentence should be indented"
+          text run at (0,17) width 155: "halfway across the "
+          text run at (155,17) width 533: "page, but the rest of it should be flush with the normal left margin "
+          text run at (688,17) width 47: "of the"
+          text run at (0,34) width 45: "page."
+      RenderBlock {P} at (0,67) size 784x68 [bgcolor=#00FFFF]
+        RenderText {#text} at (80,0) size 268x17
+          text run at (80,0) width 268: "Only the first line of this sentence"
+        RenderBR {BR} at (348,0) size 0x17
+        RenderText {#text} at (0,17) size 157x17
+          text run at (0,17) width 157: "should be indented,"
+        RenderBR {BR} at (157,17) size 0x17
+        RenderText {#text} at (0,34) size 187x17
+          text run at (0,34) width 187: "the others should all be"
+        RenderBR {BR} at (187,34) size 0x17
+        RenderInline {EM} at (0,0) size 145x17
+          RenderText {#text} at (0,51) size 145x17
+            text run at (0,51) width 145: "aligned on the left"
+        RenderText {#text} at (145,51) size 121x17
+          text run at (145,51) width 121: " of the window."
+      RenderBlock {DIV} at (0,151) size 196x68 [bgcolor=#00FFFF]
+        RenderText {#text} at (392,0) size 403x68
+          text run at (392,0) width 11: "X"
+          text run at (0,17) width 176: "The X on the previous"
+          text run at (0,34) width 187: "line should be centered"
+          text run at (0,51) width 152: "across the window."

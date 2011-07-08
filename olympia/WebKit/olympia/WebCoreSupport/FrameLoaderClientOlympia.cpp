@@ -35,10 +35,10 @@
 #include "WebPageClient.h"
 #include "WebPlugin.h"
 #include "WebSettings.h"
-#include "streams/IStream.h"
-#include "streams/NetworkRequest.h"
 #include "WebDOMDocument.h"
 #include "JavaScriptCore/APICast.h"
+#include "streams/IStream.h"
+#include "streams/NetworkRequest.h"
 
 using namespace WTF;
 using namespace WebCore;
@@ -49,6 +49,8 @@ namespace WebCore {
 FrameLoaderClientOlympia::FrameLoaderClientOlympia()
     : m_frame(0)
     , m_webPage(0)
+    , m_sentReadyToRender(false)
+    , m_pendingFragmentScrollPolicyFunction(0)
 {
     m_invalidateBackForwardTimer = new Timer<FrameLoaderClientOlympia>(this, &FrameLoaderClientOlympia::invalidateBackForwardTimerFired);
     m_deferredJobsTimer = new Timer<FrameLoaderClientOlympia>(this, &FrameLoaderClientOlympia::deferredJobsTimerFired);
@@ -115,13 +117,68 @@ void FrameLoaderClientOlympia::dispatchDecidePolicyForMIMEType(FramePolicyFuncti
 
 void FrameLoaderClientOlympia::dispatchDecidePolicyForNavigationAction(FramePolicyFunction function, const NavigationAction&, const ResourceRequest& request, PassRefPtr<FormState>)
 {
-    PolicyAction decision = decidePolicyForExternalLoad(request);
+    // Fragment scrolls on the same page should always be handled internally.
+    // (Only count as a fragment scroll if we are scrolling to a #fragment url, not back to the top, and reloading
+    // the same url is not a fragment scroll even if it has a #fragment.)
+    const KURL& url = request.url();
+    const KURL& currentUrl = m_frame->loader()->url();
+    bool isFragmentScroll = url.hasFragmentIdentifier() && url != currentUrl && equalIgnoringFragmentIdentifier(currentUrl, url);
+
+    PolicyAction decision = decidePolicyForExternalLoad(request, isFragmentScroll);
+
+    // if the client has not delivered all data to the main frame, a fragment scroll to an anchor that hasn't arrived yet will fail
+    // kick the client and try again
+    if (decision == PolicyUse && isFragmentScroll && isMainFrame()) {
+        String fragment = url.fragmentIdentifier();
+        if (fragment != currentUrl.fragmentIdentifier()) {
+            delayPolicyCheckUntilFragmentExists(fragment, function);
+            return;
+        }
+    }
+
     (m_frame->loader()->policyChecker()->*function)(decision);
+}
+
+void FrameLoaderClientOlympia::delayPolicyCheckUntilFragmentExists(const String& fragment, FramePolicyFunction function)
+{
+    ASSERT(isMainFrame());
+
+    if (m_webPage->d->loadState() < WebPagePrivate::Finished && !m_frame->document()->findAnchor(fragment)) {
+        // tell the client we need more data, in case the fragment exists but is being held back
+        m_webPage->client()->needMoreData();
+        m_pendingFragmentScrollPolicyFunction = function;
+        m_pendingFragmentScroll = fragment;
+        return;
+    }
+
+    (m_frame->loader()->policyChecker()->*function)(PolicyUse);
+}
+
+void FrameLoaderClientOlympia::cancelPolicyCheck()
+{
+    m_pendingFragmentScrollPolicyFunction = 0;
+    m_pendingFragmentScroll = String();
+}
+
+void FrameLoaderClientOlympia::doPendingFragmentScroll()
+{
+    if (m_pendingFragmentScroll.isNull())
+        return;
+
+    // make sure to clear the pending members first to avoid recursion
+    String fragment = m_pendingFragmentScroll;
+    m_pendingFragmentScroll = String();
+
+    FramePolicyFunction function = m_pendingFragmentScrollPolicyFunction;
+    m_pendingFragmentScrollPolicyFunction = 0;
+
+    delayPolicyCheckUntilFragmentExists(fragment, function);
 }
 
 void FrameLoaderClientOlympia::dispatchDecidePolicyForNewWindowAction(FramePolicyFunction function, const NavigationAction&, const ResourceRequest& request, PassRefPtr<FormState>, const String& frameName)
 {
-    PolicyAction decision = decidePolicyForExternalLoad(request);
+    // a new window can never be a fragment scroll
+    PolicyAction decision = decidePolicyForExternalLoad(request, false);
     (m_frame->loader()->policyChecker()->*function)(decision);
 }
 
@@ -425,8 +482,16 @@ void FrameLoaderClientOlympia::dispatchDidCommitLoad()
     }
 
     // TODO: creating a WebDOMDocument for subframes here is a bit heavy since it's not always used; revisit later
-    if (!loadFailed)
-        m_webPage->client()->notifyDocumentCreatedForFrame(m_frame, isMainFrame(), WebDOMDocument(m_frame->document()), toRef(m_frame->script()->globalObject(WebCore::mainThreadNormalWorld())));
+    if (!loadFailed) {
+        JSDOMWindow* jsWindow = m_frame->script()->globalObject(WebCore::mainThreadNormalWorld());
+        if (jsWindow) {
+            JSContextRef contextRef = toRef(jsWindow->globalExec());
+            if (m_webPage->settings()->isEmailMode())
+                m_webPage->client()->notifyDocumentCreatedForFrameAsync(m_frame, isMainFrame(), WebDOMDocument(m_frame->document()), contextRef, toRef(jsWindow));
+            else
+                m_webPage->client()->notifyDocumentCreatedForFrame(m_frame, isMainFrame(), WebDOMDocument(m_frame->document()), contextRef, toRef(jsWindow));
+        }
+    }
 
     if (m_webPage->d->m_dumpRenderTree)
         m_webPage->d->m_dumpRenderTree->didCommitLoadForFrame(m_frame);
@@ -472,6 +537,14 @@ void FrameLoaderClientOlympia::dispatchDidFinishLoad()
         m_webPage->d->m_dumpRenderTree->didFinishLoadForFrame(m_frame);
 }
 
+void FrameLoaderClientOlympia::dispatchDidFinishDocumentLoad()
+{
+    if (m_webPage->d->m_dumpRenderTree)
+        m_webPage->d->m_dumpRenderTree->didFinishDocumentLoadForFrame(m_frame);
+    notImplemented();
+}
+
+
 void FrameLoaderClientOlympia::dispatchDidFailLoad(const ResourceError& error)
 {
     m_frame->document()->setExtraLayoutDelay(0);
@@ -513,16 +586,22 @@ void FrameLoaderClientOlympia::dispatchDidFailProvisionalLoad(const ResourceErro
             , error.localizedDescription().isEmpty() ? "" : error.localizedDescription().latin1().data()
             , error.failingURL().isEmpty() ? "" : error.failingURL().latin1().data());
 
-    SubstituteData errorData(utf8Buffer(errorPage), "text/html", "utf-8", KURL(KURL(), error.failingURL()));
-    ResourceRequest originalRequest = m_frame->loader()->provisionalDocumentLoader()->originalRequest();
+    // make sure we're still in the provisionalLoad state - getErrorPage runs a
+    // nested event loop while it's waiting for client resources to load so
+    // there's a small window for the user to hit stop
+    if (m_frame->loader()->provisionalDocumentLoader()) {
+        SubstituteData errorData(utf8Buffer(errorPage), "text/html", "utf-8", KURL(KURL(), error.failingURL()));
 
-    // Loading using SubstituteData will replace the original request with out
-    // error data.  This must be done within dispatchDidFailProvisionalLoad,
-    // and do NOT call stopAllLoaders first, because the loader checks the
-    // provisionalDocumentLoader to decide the load type; if called any other
-    // way, the error page is added to the end of the history instead of
-    // replacing the failed load.
-    m_frame->loader()->load(originalRequest, errorData, false);
+        ResourceRequest originalRequest = m_frame->loader()->provisionalDocumentLoader()->originalRequest();
+
+        // Loading using SubstituteData will replace the original request with out
+        // error data.  This must be done within dispatchDidFailProvisionalLoad,
+        // and do NOT call stopAllLoaders first, because the loader checks the
+        // provisionalDocumentLoader to decide the load type; if called any other
+        // way, the error page is added to the end of the history instead of
+        // replacing the failed load.
+        m_frame->loader()->load(originalRequest, errorData, false);
+    }
 }
 
 void FrameLoaderClientOlympia::dispatchWillSubmitForm(FramePolicyFunction function, PassRefPtr<FormState>)
@@ -555,7 +634,10 @@ WTF::PassRefPtr<Frame> FrameLoaderClientOlympia::createFrame(const KURL& url, co
     childFrame->tree()->setName(name);
     childFrame->init();
 
-    childFrame->loader()->loadURLIntoChildFrame(url, referrer, childFrame.get());
+    if (!childFrame->tree()->parent())
+        return 0;
+
+    m_frame->loader()->loadURLIntoChildFrame(url, referrer, childFrame.get());
 
     if (!childFrame->tree()->parent())
         return 0;
@@ -594,6 +676,7 @@ void FrameLoaderClientOlympia::postProgressStartedNotification()
 
     // new load started, so clear the error
     m_loadError = ResourceError();
+    m_sentReadyToRender = false;
     m_webPage->client()->notifyLoadStarted();
 }
 
@@ -612,7 +695,7 @@ void FrameLoaderClientOlympia::dispatchDidFirstVisuallyNonEmptyLayout()
 
     Olympia::Platform::log(Olympia::Platform::LogLevelInfo, "dispatchDidFirstVisuallyNonEmptyLayout");
 
-    m_webPage->client()->notifyLoadReadyToRender();
+    readyToRender(true);
 
     // FIXME: We shouldn't be getting here if we are not in the Committed state but we are
     // so we can not assert on that right now. But we only want to do this on load.
@@ -628,6 +711,11 @@ void FrameLoaderClientOlympia::postProgressFinishedNotification()
 {
     if (!isMainFrame())
         return;
+
+    // empty pages will never have called
+    // dispatchDidFirstVisuallyNonEmptyLayout, since they're visually empty, so
+    // we may need to call readyToRender now
+    readyToRender(false);
 
     // FIXME: send up a real status code
     m_webPage->client()->notifyLoadFinished(m_loadError.isNull() ? 0 : -1);
@@ -751,19 +839,19 @@ void FrameLoaderClientOlympia::restoreViewState()
     }
 }
 
-PolicyAction FrameLoaderClientOlympia::decidePolicyForExternalLoad(const ResourceRequest& request)
+PolicyAction FrameLoaderClientOlympia::decidePolicyForExternalLoad(const ResourceRequest& request, bool isFragmentScroll)
 {
     const KURL& url = request.url();
-    String pattern;
-    if (m_webPage->d->findPatternStringForUrl(url, pattern)) {
-        if (!pattern.isEmpty())
-            m_webPage->client()->handleStringPattern(pattern.characters(), pattern.length());
+    String pattern = m_webPage->d->findPatternStringForUrl(url);
+    if (!pattern.isEmpty()) {
+        m_webPage->client()->handleStringPattern(pattern.characters(), pattern.length());
         return PolicyIgnore;
     }
 
     if (m_webPage->settings()->areLinksHandledExternally()
             && request.targetType() == ResourceRequest::TargetIsMainFrame
-            && !request.mustHandleInternally()) {
+            && !request.mustHandleInternally()
+            && !isFragmentScroll) {
         Olympia::Platform::NetworkRequest platformRequest;
         request.initializePlatformRequest(platformRequest);
         m_webPage->client()->handleExternalLink(platformRequest, request.anchorText().characters(), request.anchorText().length());
@@ -794,8 +882,11 @@ void FrameLoaderClientOlympia::didResumeLoading()
         m_deferredJobsTimer->startOneShot(0);
     else if (m_geolocation) {
         GeolocationServiceOlympia* service = static_cast<GeolocationServiceOlympia*>(m_geolocation->getGeolocationService());
+        // If we have deferred notifications, we should use a timer to forward those notificatons.
         if (service->hasDeferredNotifications())
             m_deferredJobsTimer->startOneShot(0);
+        else
+            service->resumeNotifications();
     }
 
     if (!isMainFrame())
@@ -835,6 +926,15 @@ void FrameLoaderClientOlympia::didCreateGeolocation(Geolocation* geolocation)
     // There is only one Geolocation object per frame.
     ASSERT(!m_geolocation);
     m_geolocation = geolocation;
+}
+
+void FrameLoaderClientOlympia::readyToRender(bool pageIsVisuallyNonEmpty)
+{
+    // only send the notification once
+    if (!m_sentReadyToRender) {
+        m_webPage->client()->notifyLoadReadyToRender(pageIsVisuallyNonEmpty);
+        m_sentReadyToRender = true;
+    }
 }
 
 } // WebCore

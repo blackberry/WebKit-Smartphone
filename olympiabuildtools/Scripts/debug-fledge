@@ -1,0 +1,45 @@
+#!/usr/bin/env perl
+# Copyright (C) Research in Motion Limited 2010. All rights reserved.
+#
+# Debug fledge.
+
+use strict;
+use warnings;
+use FindBin;
+use lib $FindBin::Bin;
+use File::Basename;
+use Getopt::Long;
+use olympiadirs;
+
+my $showHelp;
+my $debugJavaBindings;
+
+my $getOptionsResults = GetOptions(
+    'h|help' => \$showHelp,
+    'java-bindings' => \$debugJavaBindings,
+);
+
+if (!$getOptionsResults || $showHelp) {
+    print STDERR <<__END__;
+Usage: @{[ basename($0) ]} [options]
+  -h|--help                    show the help message
+  --java-bindings              Debug the Java bindings
+__END__
+    exit(1);
+}
+
+dieIfNotWindows();
+
+if (!$debugJavaBindings) {
+    runFledge(1);
+} else {
+    my $lynxBinPath = lynxDir() . "/bin";
+    chdir($lynxBinPath) or die;
+    my $lynxIDE = toWindowsPath("$lynxBinPath/idehelper.bat");
+
+    # FIXME: We should place such settings in a config module.
+    my $memoryHint = "1024"; # 1 GB of memory.
+
+    exitStatus(system("cmd.exe /c \"call $lynxIDE $memoryHint\"")) == 1 or die "Failed to run $lynxIDE: $!."; # FIXME: Why does running the lynxIDE script have a return code == 1?
+}
+exit(0);

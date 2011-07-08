@@ -1,0 +1,138 @@
+#!/usr/bin/env perl
+# Copyright (C) Research in Motion Limited 2010. All rights reserved.
+#
+# Take a screen shot or screen recording from a device.
+
+use strict;
+use warnings;
+
+use File::Temp;
+use FindBin;
+use lib $FindBin::Bin;
+use Getopt::Long;
+use olympiadirs;
+use POSIX;
+
+my $framesPerSecond = 1;
+my $showHelp;
+my $recordMovie;
+
+sub convertToImageFormat($$);
+sub makeAnimatedGIF($$$);
+sub record($$$);
+sub takeScreenshot($);
+
+my $getOptionsResults = GetOptions(
+    'h|help' => \$showHelp,
+    'movie' => \$recordMovie,
+    'fps=i' => \$framesPerSecond,
+);
+
+if (!$getOptionsResults || $showHelp || !$ARGV[0]) {
+    print STDERR <<__END__;
+Usage: @{[ basename($0) ]} [options] outputfile
+  -h|--help                    show the help message
+  --movie                      screen recording
+  --fps X                      When recording a movie, X is the number of frames per second (default: 1)
+__END__
+    exit(1);
+}
+
+$framesPerSecond = 1 if ($framesPerSecond <= 0);
+
+# FIXME: We should add support for Mac.
+dieIfNotWindows();
+
+dieIfBlackBerryIsNotConnected();
+
+my $convertApp = "convert.exe";
+if (exitStatus(system($convertApp))) {
+    print "*************************************************************\n";
+    print "You must have ImageMagick installed and in your PATH to\n";
+    print "run " . basename($0) . ". Download it at <http://www.imagemagick.org\n";
+    print "/script/binary-releases.php#windows>.\n";
+    print "*************************************************************\n";
+    die;
+}
+
+if (!$recordMovie) {
+    # FIXME: We should convert this to GIF to be consistent with our movie output format.
+    my $fileName = $ARGV[0] . ".bmp";
+    my $outputFileExtension = ".png";
+    takeScreenshot($fileName);
+    my $convertedFileName = convertToImageFormat($fileName, $outputFileExtension);
+    unlink $fileName;
+    rename $convertedFileName, $ARGV[0] . $outputFileExtension;
+    exit(0);
+}
+
+my $tempDirectory = File::Temp->newdir();
+my $filePrefix = "screen_capture_";
+my $childPid;
+if ($childPid = fork()) {
+    print "Recording...\n";
+    print "Press the Enter key on your keyboard to stop recording.";
+    <STDIN>;
+    kill 9, $childPid;
+    my $outputFile = $ARGV[0] . ".gif";
+    print "Saving animation to file '$outputFile'.\n";
+    makeAnimatedGIF($tempDirectory, $filePrefix, $outputFile);
+} else {
+    # We execute the following in a child process so that we can still accept input (in the parent process) to know when to stop recording.
+    chdir($tempDirectory);
+    record($tempDirectory, $filePrefix, $framesPerSecond);
+}
+
+sub takeScreenshot($)
+{
+    my ($fileName) = @_;
+    my @args = (pathToJavaLoader(), "-q", "-u", "screenshot");
+    exitStatus(system((@args, $fileName))) == 0 or die "Failed to run '" . join(' ', @args) . "': $!";
+}
+
+sub convertToImageFormat($$)
+{
+    my ($fileName, $outputFileExtension) = @_;
+    my @args = ($convertApp, $fileName, "$fileName$outputFileExtension");
+    exitStatus(system(@args)) == 0 or die "Failed to run '" . join(' ', @args) . "': $!";
+    return "$fileName$outputFileExtension";
+}
+
+sub record($$$)
+{
+    my ($tempDirectory, $filePrefix, $framesPerSecond) = @_;
+    # Lazily load some libraries.
+    use File::Spec;
+    use Time::HiRes qw(usleep gettimeofday tv_interval);
+
+    use constant millisecond => 1000; # seconds
+    use constant microsecond => 1000000; # seconds
+    my $expectedElapsedTimePerFrame = int(microsecond / $framesPerSecond); # microseconds
+
+    my $numFrames = 0;
+    while ($recordMovie) {
+        my $startTime = [gettimeofday()]; # microseconds
+
+        $numFrames = ++$numFrames % 10;
+        $filePrefix .= "9" if ($numFrames == 0); # So that our file names are in lexicographic order we prepend more '9's.
+        my $fileName = "$filePrefix$numFrames.bmp";
+        takeScreenshot($fileName);
+
+        my $elapsedTime = int(tv_interval($startTime) * microsecond); # microseconds
+        my $remainingTime = $expectedElapsedTimePerFrame - $elapsedTime; # microseconds
+        if ($remainingTime <= 0) {
+            # We spent more time than we expected. So, sleep some arbitrary amount of time.
+            usleep(2);
+            next;
+        }
+        usleep($remainingTime);
+    }
+}
+
+sub makeAnimatedGIF($$$)
+{
+    my ($outputDirectory, $filePrefix, $outputFile) = @_;
+    my $wildcardScreenShotPath = File::Spec->catfile($outputDirectory, "$filePrefix*.bmp");
+    my @args = ($convertApp, "-quiet", "-delay", 30, "-loop", 1, "-layers", "optimize", "+map", "\"$wildcardScreenShotPath\"", $outputFile);
+    exitStatus(system(@args)) == 0 or die "Failed to run '" . join(' ', @args) . "': $!";
+}

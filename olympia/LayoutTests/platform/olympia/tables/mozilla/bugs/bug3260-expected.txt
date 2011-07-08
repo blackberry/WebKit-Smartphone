@@ -3,46 +3,46 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584
-      RenderTable {TABLE} at (0,0) size 300x28 [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 298x26
-          RenderTableRow {TR} at (0,2) size 298x22
-            RenderTableCell {TD} at (2,2) size 147x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (56,2) size 34x18
-                text run at (56,2) width 34: "One"
-            RenderTableCell {TD} at (151,2) size 145x22 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (56,2) size 33x18
-                text run at (56,2) width 33: "Two"
-      RenderTable {TABLE} at (0,28) size 300x28 [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 298x26
-          RenderTableRow {TR} at (0,2) size 298x22
-            RenderTableCell {TD} at (2,2) size 147x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (111,2) size 34x18
-                text run at (111,2) width 34: "One"
-            RenderTableCell {TD} at (151,2) size 145x22 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (110,2) size 33x18
-                text run at (110,2) width 33: "Two"
-      RenderTable {TABLE} at (0,56) size 439x52 [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 437x50
-          RenderTableRow {TR} at (0,2) size 437x22
-            RenderTableCell {TD} at (2,2) size 216x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (91,2) size 34x18
-                text run at (91,2) width 34: "One"
-            RenderTableCell {TD} at (220,2) size 215x22 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (91,2) size 33x18
-                text run at (91,2) width 33: "Two"
-          RenderTableRow {TR} at (0,26) size 437x22
-            RenderTableCell {TD} at (2,26) size 216x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 212x18
-                text run at (2,2) width 212: "----------Long One------------"
-            RenderTableCell {TD} at (220,26) size 215x22 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 211x18
-                text run at (2,2) width 211: "----------Long Two------------"
-      RenderTable {TABLE} at (0,108) size 784x28 [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 782x26
-          RenderTableRow {TR} at (0,2) size 782x22
-            RenderTableCell {TD} at (2,2) size 393x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (179,2) size 34x18
-                text run at (179,2) width 34: "One"
-            RenderTableCell {TD} at (397,2) size 383x22 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (175,2) size 33x18
-                text run at (175,2) width 33: "Two"
+      RenderTable {TABLE} at (0,0) size 300x27 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 298x25
+          RenderTableRow {TR} at (0,2) size 298x21
+            RenderTableCell {TD} at (2,2) size 148x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (57,2) size 33x17
+                text run at (57,2) width 33: "One"
+            RenderTableCell {TD} at (152,2) size 144x21 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (56,2) size 32x17
+                text run at (56,2) width 32: "Two"
+      RenderTable {TABLE} at (0,27) size 300x27 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 298x25
+          RenderTableRow {TR} at (0,2) size 298x21
+            RenderTableCell {TD} at (2,2) size 148x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (113,2) size 33x17
+                text run at (113,2) width 33: "One"
+            RenderTableCell {TD} at (152,2) size 144x21 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (110,2) size 32x17
+                text run at (110,2) width 32: "Two"
+      RenderTable {TABLE} at (0,54) size 433x50 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 431x48
+          RenderTableRow {TR} at (0,2) size 431x21
+            RenderTableCell {TD} at (2,2) size 213x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (90,2) size 33x17
+                text run at (90,2) width 33: "One"
+            RenderTableCell {TD} at (217,2) size 212x21 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (90,2) size 32x17
+                text run at (90,2) width 32: "Two"
+          RenderTableRow {TR} at (0,25) size 431x21
+            RenderTableCell {TD} at (2,25) size 213x21 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 209x17
+                text run at (2,2) width 209: "----------Long One------------"
+            RenderTableCell {TD} at (217,25) size 212x21 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 208x17
+                text run at (2,2) width 208: "----------Long Two------------"
+      RenderTable {TABLE} at (0,104) size 784x27 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 782x25
+          RenderTableRow {TR} at (0,2) size 782x21
+            RenderTableCell {TD} at (2,2) size 393x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (180,2) size 33x17
+                text run at (180,2) width 33: "One"
+            RenderTableCell {TD} at (397,2) size 383x21 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (175,2) size 32x17
+                text run at (175,2) width 32: "Two"

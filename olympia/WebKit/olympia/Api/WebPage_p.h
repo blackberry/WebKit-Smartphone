@@ -10,8 +10,10 @@
 #include "IntSize.h"
 #include "OlympiaAnimation.h"
 #include "OlympiaContext.h"
+#include "OlympiaString.h"
 #include "OlympiaPlatformInputEvents.h"
 #include "PageClientOlympia.h"
+#include "PlatformMouseEvent.h"
 #include "Timer.h"
 #include "ViewportArguments.h"
 #include "VisiblePosition.h"
@@ -36,7 +38,6 @@ namespace WebCore {
     class KURL;
     class Node;
     class Page;
-    class PlatformMouseEvent;
     class RenderObject;
     class String;
     class SurfaceOpenVG;
@@ -72,8 +73,7 @@ namespace Olympia {
             WebPagePrivate(WebPage*, WebPageClient*, const Platform::IntRect&);
             virtual ~WebPagePrivate();
 
-            void init();
-            WebCore::PlatformMouseEvent transformMouseEvent(WebCore::PlatformMouseEvent eventIn);
+            void init(const String& pageGroupName);
             void handleMouseEvent(WebCore::PlatformMouseEvent& mouseEvent);
 
             void load(const char* url, const char* networkToken, const char* method, Platform::NetworkRequest::CachePolicy cachePolicy, const char* data, size_t dataLength, const char* const* headers, size_t headersLength, bool isInitial);
@@ -91,6 +91,7 @@ namespace Olympia {
             /* Scale the page to the given scale and anchor about the point which is specified in untransformed content coordinates; */
             bool zoomAboutPoint(double scale, const WebCore::FloatPoint& anchor, bool enforceScaleClamping = true, bool forceRendering = false);
             bool scheduleZoomAboutPoint(double scale, const WebCore::FloatPoint& anchor, bool enforceScaleClamping = true, bool forceRendering = false);
+            void unscheduleZoomAboutPoint();
 
             // Perform actual zoom for block zoom.
             void zoomBlock();
@@ -103,15 +104,18 @@ namespace Olympia {
             void renderContents(WebCore::SurfaceOpenVG* surface, BackingStoreTile* tile,
                                 const WebCore::IntPoint& surfaceOffset, const WebCore::IntRect& contentsRect) const;
 
-            /* These takes transformed viewport coordinates */
-            void blitToCanvas(WebCore::SurfaceOpenVG* surface, const WebCore::IntRect& dst, const WebCore::IntRect& src);
             void blitToCanvas(const unsigned char* image, int imageStride, const WebCore::IntRect& dst, const WebCore::IntRect& src);
             void blitFromBufferToBuffer(unsigned char* dst, const int dstStride, const WebCore::IntRect& dstRect,
                                         const unsigned char* src, const int srcStride, const WebCore::IntRect& srcRect);
+            void stretchBlitToCanvas(const unsigned char* src, const int srcStride, const WebCore::IntRect& dstRect, const WebCore::IntRect& srcRect);
+            void stretchBlitFromBufferToBuffer(unsigned char* dst, const int dstStride, const WebCore::IntRect& dstRect,
+                                               const unsigned char* src, const int srcStride, const WebCore::IntRect& srcRect);
             void blendOntoCanvas(const unsigned char* image, int imageStride,
                                  const unsigned char* alphaImage, int alphaImageStride, char globalAlpha,
                                  const WebCore::IntRect& dst, const WebCore::IntRect& src);
             void invalidateWindow(const WebCore::IntRect& dst);
+            void clearCanvas(const WebCore::IntRect&, unsigned short color); // color is RGB565
+            void clearBuffer(unsigned char* buffer, const int stride, const WebCore::IntRect&, unsigned short color);
 
             WebCore::IntPoint scrollPosition() const;
             WebCore::IntPoint maximumScrollPosition() const;
@@ -146,8 +150,8 @@ namespace Olympia {
             /* Virtual functions inherited from PageClientOlympia */
             virtual void setCursor(WebCore::PlatformCursorHandle handle);
             virtual Olympia::Platform::NetworkStreamFactory* networkStreamFactory();
-            virtual Olympia::Platform::HttpStreamDebugger* httpStreamDebugger();
-            virtual bool runMessageLoopForJavaScript();
+            virtual WebCore::FloatRect screenAvailableRect();
+            virtual WebCore::FloatRect screenRect();
 
             /* Called from within WebKit via ChromeClientOlympia */
             void contentsSizeChanged(const WebCore::IntSize&);
@@ -232,7 +236,7 @@ namespace Olympia {
             double maxBlockZoomScale() const;
 
             /* Zooming and animations */
-            void renderBitmapZoomFrame(double factor, const WebCore::FloatPoint& anchor, WebCore::SurfaceOpenVG* tempSurface = 0);
+            void renderBitmapZoomFrame(double factor, const WebCore::FloatPoint& anchor, unsigned short* tempSurface = 0, unsigned int tempSurfaceStride = 0);
             void animateZoomBounceBack(const WebCore::FloatPoint& lastBouncePoint);
             void animationZoomBounceBackFrameChanged(Olympia::WebKit::OlympiaAnimation<WebPagePrivate>*, double currentValue, double previousValue);
             void animateBlockZoom();
@@ -245,13 +249,14 @@ namespace Olympia {
             void setPopupListIndex(int index);
             void setPopupListIndexes(int size, bool* selecteds);
             void setDateTimeInput(const WebCore::String& value);
+            void setColorInput(const WebCore::String& value);
 
             /* Plugin Methods */
             void notifyPluginRectChanged(int id, const WebCore::IntRect& rectChanged);
 
             /* Context Methods */
             Context getContext();
-            WebCore::Node* getContextNode() const;
+            PassRefPtr<WebCore::Node> contextNode() const;
             Context getContextForNode(WebCore::Node* node);
             void sendContextIfChanged(WebCore::Node* node);
 
@@ -297,15 +302,16 @@ namespace Olympia {
             void scrollEventTimerFired(WebCore::Timer<WebPagePrivate>*);
             void resizeEventTimerFired(WebCore::Timer<WebPagePrivate>*);
 
-            // returns true if this url should be handled as a pattern, and puts the pattern in the "pattern" param
-            // the pattern can be empty even if this returns true (for example, the url "pattern:")
-            bool findPatternStringForUrl(const WebCore::KURL&, WebCore::String& pattern) const;
+            // if this url should be handled as a pattern, returns the pattern
+            // otherwise, returns an empty string
+            WebCore::String findPatternStringForUrl(const WebCore::KURL&) const;
 
             // Scroll and/or zoom so that the webpage fits the new screen size and actual visible size.
             // This is only needed if we get a major change like screen rotation or out-of-order viewport events.
             void setScreenRotated(const WebCore::IntSize& screenSize, const WebCore::IntSize& defaultLayoutSize, const WebCore::IntSize& transformedActualVisibleSize);
 
             void scheduleDeferrableTimer(WebCore::Timer<WebPagePrivate>*, double timeOut);
+            void unscheduleAllDeferrableTimers();
             void willDeferLoading();
             void didResumeLoading();
 
@@ -316,7 +322,6 @@ namespace Olympia {
             WebPageClient* m_client;
             WebCore::Page* m_page;
             WebCore::Frame* m_mainFrame;
-            WebCore::IntPoint m_lastMousePoint;
             RefPtr<WebCore::Node> m_currentContextNode;
 
             WebSettings* m_webSettings;
@@ -336,6 +341,10 @@ namespace Olympia {
             bool m_olympiaOriginatedScroll;
             bool m_resetVirtualViewportOnCommitted;
             bool m_shouldUseFixedDesktopMode;
+
+#if ENABLE(TOUCH_EVENTS)
+            bool m_preventDefaultOnTouchStart;
+#endif
             unsigned int m_nestedLayoutFinishedCount;
             WebCore::IntSize m_previousContentsSize;
             int m_x;
@@ -356,6 +365,7 @@ namespace Olympia {
             SelectionHandler* m_selectionHandler;
             TouchEventHandler* m_touchEventHandler;
             WebCore::HTMLInputElement* m_dateTimeInput;
+            WebCore::HTMLInputElement* m_colorInput;
             WebCore::HTMLSelectElement* m_selectElement;
 
             Olympia::Platform::OlympiaCursor m_currentCursor;
@@ -385,7 +395,8 @@ namespace Olympia {
             RefPtr<WebCore::Node> m_currentBlockZoomAdjustedNode;
             bool m_shouldReflowBlock;
 
-            WebCore::SurfaceOpenVG* m_bitmapZoomBuffer;
+            unsigned short* m_bitmapZoomBuffer;
+            unsigned int m_bitmapZoomBufferStride;
 
             // Delayed zoomAboutPoint
             OwnPtr<WebCore::Timer<WebPagePrivate> > m_delayedZoomTimer;
@@ -402,6 +413,8 @@ namespace Olympia {
             OwnPtr<WebCore::Timer<WebPagePrivate> > m_deferredResizeEventTimer;
             Vector<WebCore::Timer<WebPagePrivate>* > m_deferrableTimers;
             Vector<WebCore::Timer<WebPagePrivate>* > m_deferredTimers;
+
+            WebCore::PlatformMouseEvent m_lastMouseEvent;
         };
     }
 }

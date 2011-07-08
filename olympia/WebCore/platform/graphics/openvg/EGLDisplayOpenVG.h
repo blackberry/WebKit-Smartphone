@@ -63,10 +63,10 @@ public:
 
     bool surfacesCompatible(const EGLSurface&, const EGLSurface&);
 
-    /** Destroy the surface and its corresponding context (unless another
-     * surface is still using the same context, in which case the context
-     * is not destroyed). */
-    void destroySurface(const EGLSurface&);
+    /** Break all ties with the given surface, and destroy its corresponding
+     * context unless it's still in use by another surface. If destroySurface
+     * is true, the given surface itself is also destroyed. */
+    void removeSurface(const EGLSurface&, bool destroySurface = true);
 
     /** Return the context corresponding to the surface.
      * If no corresponding context exists, one is created automatically. */

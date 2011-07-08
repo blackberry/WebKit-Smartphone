@@ -26,10 +26,7 @@ void CacheClientOlympia::initialize()
 #if ENABLE(OLYMPIA_DEBUG_MEMORY)
     bool isDisabled = true;
 #else
-    const char* enableSegregatedMemoryCache = Olympia::Platform::environment("ENABLE_SEGREGATED_MEMORY_CACHE");
-    // FIXME: segregated memory cache is not implemented yet; for now we will
-    // turn off caching entirely if it is requested
-    bool isDisabled = enableSegregatedMemoryCache && !strcmp(enableSegregatedMemoryCache, "1");
+    bool isDisabled = false;
 #endif
     cache()->setDisabled(isDisabled);
     if (!isDisabled) {

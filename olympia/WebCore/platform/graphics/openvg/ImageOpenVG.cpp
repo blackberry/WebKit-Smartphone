@@ -222,7 +222,7 @@ PassRefPtr<Image> Image::loadPlatformResource(char const* name)
     String iconName(name); // a.k.a. "enable string comparisons with =="
 
     if (iconName == "missingImage") {
-        // Draw an x-shaped icon.
+        // Draw a fancy red x-shaped icon.
         GraphicsContext* context = imageBuffer->context();
         context->save();
 
@@ -244,6 +244,27 @@ PassRefPtr<Image> Image::loadPlatformResource(char const* name)
 
         context->rotate(piDouble / 2.0);
         context->fillRect(FloatRect(-1.5, -7, 3, 14));
+
+        context->restore();
+    } else if (iconName == "searchCancel" || iconName == "searchCancelPressed") {
+        // Draw a more subtle, gray x-shaped icon.
+        GraphicsContext* context = imageBuffer->context();
+        context->save();
+
+        context->fillRect(FloatRect(0, 0, 16, 16), Color::white, DeviceColorSpace);
+
+        if (iconName.length() == sizeof("searchCancel") - 1)
+            context->setFillColor(Color(128, 128, 128), DeviceColorSpace);
+        else
+            context->setFillColor(Color(64, 64, 64), DeviceColorSpace);
+
+        context->translate(8, 8);
+
+        context->rotate(piDouble / 4.0);
+        context->fillRect(FloatRect(-1, -7, 2, 14));
+
+        context->rotate(-piDouble / 2.0);
+        context->fillRect(FloatRect(-1, -7, 2, 14));
 
         context->restore();
     }

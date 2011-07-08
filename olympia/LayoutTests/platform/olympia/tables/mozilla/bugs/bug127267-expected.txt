@@ -3,23 +3,23 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584 [bgcolor=#FFFFFF]
-      RenderTable {TABLE} at (0,0) size 506x48
-        RenderBlock {CAPTION} at (0,0) size 506x24 [border: (3px solid #000000)]
-          RenderText {#text} at (51,3) size 404x18
-            text run at (51,3) width 9 RTL: "?"
-            text run at (60,3) width 395: "is the question mark on the left side with style"
-        RenderTableSection {TBODY} at (0,24) size 506x24
-          RenderTableRow {TR} at (0,2) size 506x20
-            RenderTableCell {TD} at (2,2) size 502x20 [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (1,1) size 77x18
-                text run at (1,1) width 77: "table cell"
-      RenderTable {TABLE} at (0,48) size 506x48
-        RenderBlock {CAPTION} at (0,0) size 506x24 [border: (3px solid #000000)]
-          RenderText {#text} at (37,3) size 432x18
-            text run at (37,3) width 9 RTL: "?"
-            text run at (46,3) width 423: "is the question mark on the left side without style"
-        RenderTableSection {TBODY} at (0,24) size 506x24
-          RenderTableRow {TR} at (0,2) size 506x20
-            RenderTableCell {TD} at (2,2) size 502x20 [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (1,1) size 77x18
-                text run at (1,1) width 77: "table cell"
+      RenderTable {TABLE} at (0,0) size 506x46
+        RenderBlock {CAPTION} at (0,0) size 506x23 [border: (3px solid #000000)]
+          RenderText {#text} at (65,3) size 376x17
+            text run at (65,3) width 9 RTL: "?"
+            text run at (74,3) width 367: "is the question mark on the left side with style"
+        RenderTableSection {TBODY} at (0,23) size 506x23
+          RenderTableRow {TR} at (0,2) size 506x19
+            RenderTableCell {TD} at (2,2) size 502x19 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 72x17
+                text run at (1,1) width 72: "table cell"
+      RenderTable {TABLE} at (0,46) size 506x46
+        RenderBlock {CAPTION} at (0,0) size 506x23 [border: (3px solid #000000)]
+          RenderText {#text} at (52,3) size 402x17
+            text run at (52,3) width 9 RTL: "?"
+            text run at (61,3) width 393: "is the question mark on the left side without style"
+        RenderTableSection {TBODY} at (0,23) size 506x23
+          RenderTableRow {TR} at (0,2) size 506x19
+            RenderTableCell {TD} at (2,2) size 502x19 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 72x17
+                text run at (1,1) width 72: "table cell"

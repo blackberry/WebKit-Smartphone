@@ -237,8 +237,7 @@ SOURCES += \
     yarr/RegexJIT.cpp
 
 
-OLYMPIA_PTHREAD = $$(FEATURE_OLYMPIA_PTHREAD)
-!isEmpty(OLYMPIA_PTHREAD) {
+isEmpty(OLYMPIA_PTHREAD) {
     SOURCES += wtf/ThreadingPthreads.cpp \
                wtf/ThreadIdentifierDataPthreads.cpp
     HEADERS += wtf/ThreadIdentifierDataPthreads.h

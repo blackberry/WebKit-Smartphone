@@ -28,14 +28,14 @@
 
 namespace WebCore {
 
-void SharedResourceOpenVG::makeSharedContextCurrent()
+void SharedResourceOpenVG::makeResourceCreationContextCurrent() const
 {
 #if PLATFORM(EGL)
-    EGLDisplayOpenVG::current()->sharedPlatformSurface()->makeCurrent();
+    EGLDisplayOpenVG::current()->sharedPlatformSurface()->makeResourceCreationContextCurrent();
 #endif
 }
 
-void SharedResourceOpenVG::makeCompatibleContextCurrent()
+void SharedResourceOpenVG::makeCompatibleContextCurrent() const
 {
 #if PLATFORM(EGL)
     EGLDisplayOpenVG::current()->sharedPlatformSurface()->makeCompatibleCurrent();

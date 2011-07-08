@@ -134,6 +134,7 @@ BackingStorePrivate::BackingStorePrivate()
     m_autoHideScrollbarsTimer = new Timer<BackingStorePrivate>(this, &BackingStorePrivate::autoHideScrollbars);
 #endif
     m_resumeRenderQueueTimer = new Timer<BackingStorePrivate>(this, &BackingStorePrivate::resumeRenderQueue);
+    m_renderTimer = new Timer<BackingStorePrivate>(this, &BackingStorePrivate::renderOnTimer);
 }
 
 BackingStorePrivate::~BackingStorePrivate()
@@ -146,6 +147,8 @@ BackingStorePrivate::~BackingStorePrivate()
 #endif
     delete m_resumeRenderQueueTimer;
     m_resumeRenderQueueTimer = 0;
+    delete m_renderTimer;
+    m_renderTimer = 0;
 }
 
 void BackingStorePrivate::suspendScreenUpdates()
@@ -302,7 +305,7 @@ void BackingStorePrivate::scrollingStartedHelper(const WebCore::IntSize& delta)
 
     // Add any newly visible tiles that have not been previously rendered to the queue
     // and check if the tile was previously rendered by regular render job
-    updateTilesForScroll();
+    updateTilesForScrollOrNotRenderedRegion();
 }
 
 bool BackingStorePrivate::shouldPerformRenderJobs() const
@@ -315,17 +318,71 @@ bool BackingStorePrivate::shouldPerformRegularRenderJobs() const
     return shouldPerformRenderJobs() && !m_suspendRegularRenderJobs;
 }
 
+void BackingStorePrivate::startRenderTimer()
+{
+    // Called when render queue has a new job added
+    if (m_renderTimer->isActive() || m_renderQueue->isEmpty(!m_suspendRegularRenderJobs))
+        return;
+#if DEBUG_BACKINGSTORE
+    Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "BackingStorePrivate::startRenderTimer time=%f", WTF::currentTime());
+#endif
+    m_renderTimer->startOneShot(5.0); // five seconds since this is a catch-all fallback
+}
+
+void BackingStorePrivate::stopRenderTimer()
+{
+    if (!m_renderTimer->isActive())
+        return;
+
+    // Called when we render something to restart
+#if DEBUG_BACKINGSTORE
+    Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "BackingStorePrivate::stopRenderTimer time=%f", WTF::currentTime());
+#endif
+    m_renderTimer->stop();
+}
+
+void BackingStorePrivate::renderOnTimer(WebCore::Timer<BackingStorePrivate>*)
+{
+    // This timer is a third method of starting a render operation that is a catch-all.  If more
+    // than two seconds elapses with no rendering taking place and render jobs in the queue, then
+    // renderOnTimer will be called which will actually render.
+    if (!shouldPerformRenderJobs())
+        return;
+
+#if DEBUG_BACKINGSTORE
+    Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "BackingStorePrivate::renderOnTimer time=%f", WTF::currentTime());
+#endif
+    while (m_renderQueue->hasCurrentVisibleZoomJob() || m_renderQueue->hasCurrentVisibleScrollJob())
+        m_renderQueue->render(!m_suspendRegularRenderJobs);
+}
+
 void BackingStorePrivate::renderOnIdle()
 {
     ASSERT(shouldPerformRenderJobs());
+
+    // Let the render queue know that we entered a new event queue cycle
+    // so it can determine if it is under pressure
+    m_renderQueue->eventQueueCycled();
+
+#if DEBUG_BACKINGSTORE
+    Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "BackingStorePrivate::renderOnIdle");
+#endif
 
     m_renderQueue->render(!m_suspendRegularRenderJobs);
 }
 
 bool BackingStorePrivate::willFireTimer()
 {
-    if (!shouldPerformRegularRenderJobs() || !m_renderQueue->currentRegularRenderJobBatchUnderPressure())
+    // Let the render queue know that we entered a new event queue cycle
+    // so it can determine if it is under pressure
+    m_renderQueue->eventQueueCycled();
+
+    if (!shouldPerformRegularRenderJobs() || !m_renderQueue->hasCurrentRegularRenderJob() || !m_renderQueue->currentRegularRenderJobBatchUnderPressure())
         return true;
+
+#if DEBUG_BACKINGSTORE
+    Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "BackingStorePrivate::willFireTimer");
+#endif
 
     // We've detected that the regular render jobs are coming under pressure likely
     // due to timers firing producing invalidation jobs and our efforts to break them
@@ -513,9 +570,8 @@ void BackingStorePrivate::setBackingStoreRect(const WebCore::IntRect& backingSto
 
     // Iterate through our current tile map and add tiles that are rendered with
     // our new backingstore rect
-    TileMap::const_iterator end = m_tileMap.end();
-    TileMap::const_iterator it = m_tileMap.begin();
-    while (it != end) {
+    TileMap::const_iterator tileMapEnd = m_tileMap.end();
+    for (TileMap::const_iterator it = m_tileMap.begin(); it != tileMapEnd; ++it) {
         TileIndex oldIndex = it->first;
         RefPtr<BackingStoreTile> tile = it->second;
 
@@ -565,18 +621,21 @@ void BackingStorePrivate::setBackingStoreRect(const WebCore::IntRect& backingSto
             // Store this tile and index so we can add it to the remaining left over spots...
             leftOverTiles.add(oldIndex, tile);
         }
-
-        ++it;
     }
 
     ASSERT(indexesToFill.size() == leftOverTiles.size());
-    TileMap::const_iterator leftOverTilesIterator = leftOverTiles.begin();
+    size_t i = 0;
+    TileMap::const_iterator leftOverEnd = leftOverTiles.end();
+    for (TileMap::const_iterator it = leftOverTiles.begin(); it != leftOverEnd; ++it) {
+        TileIndex oldIndex = it->first;
+        RefPtr<BackingStoreTile> tile = it->second;
+        
+        if (!(i < indexesToFill.size())) {
+            ASSERT_NOT_REACHED();
+            break;
+        }
 
-    // Iterate through the remaining indexes and fill them in with left over tiles
-    for (size_t i = 0; i < indexesToFill.size(); ++i) {
-        TileIndex oldIndex = leftOverTilesIterator->first;
         TileIndex newIndex = indexesToFill.at(i);
-        RefPtr<BackingStoreTile> tile = leftOverTilesIterator->second;
 
         // Origin of last committed render for tile in transformed content coordinates
         IntPoint originOfOld = originOfLastRenderForTile(oldIndex, tile.get(), currentBackingStoreRect);
@@ -594,7 +653,7 @@ void BackingStorePrivate::setBackingStoreRect(const WebCore::IntRect& backingSto
 
         tiles.add(newIndex, tile);
 
-        ++leftOverTilesIterator;
+        ++i;
     }
 
     // Actually set state
@@ -645,7 +704,8 @@ TileIndex BackingStorePrivate::indexOfTile(const WebCore::IntPoint& origin,
 
 void BackingStorePrivate::clearAndUpdateTileOfNotRenderedRegion(const TileIndex& index, BackingStoreTile* tile,
                                                                 const WebCore::IntRectRegion& tileNotRenderedRegion,
-                                                                const WebCore::IntRect& backingStoreRect)
+                                                                const WebCore::IntRect& backingStoreRect,
+                                                                bool update)
 {
     // Intersect the tile with the not rendered region to get the areas
     // of the tile that we need to clear
@@ -655,8 +715,10 @@ void BackingStorePrivate::clearAndUpdateTileOfNotRenderedRegion(const TileIndex&
         // Clear the render queue of this rect
         m_renderQueue->clear(tileNotRenderedRegionRect, true /*clearRegularRenderJobs*/);
 
-        // Add it again as a regular render job
-        m_renderQueue->addToQueue(RenderQueue::RegularRender, tileNotRenderedRegionRect);
+        if (update) {
+            // Add it again as a regular render job
+            m_renderQueue->addToQueue(RenderQueue::RegularRender, tileNotRenderedRegionRect);
+        }
 
         // Find the origin of this tile
         IntPoint origin = originOfTile(index, backingStoreRect);
@@ -1023,7 +1085,7 @@ float BackingStorePrivate::horizontalScrollbarExtent() const
         return 0.0;
     }
 
-    if (!scrollsHorizontally())
+    if (!scrollsHorizontally() || !SurfacePool::globalSurfacePool()->horizontalScrollbar())
         return 0.0;
 
     FloatRect scrollbarRect = SurfacePool::globalSurfacePool()->horizontalScrollbar()->rect();
@@ -1041,7 +1103,7 @@ float BackingStorePrivate::verticalScrollbarExtent() const
         return 0.0;
     }
 
-    if (!scrollsVertically())
+    if (!scrollsVertically() || !SurfacePool::globalSurfacePool()->verticalScrollbar())
         return 0.0;
 
     FloatRect scrollbarRect = SurfacePool::globalSurfacePool()->verticalScrollbar()->rect();
@@ -1055,7 +1117,12 @@ void BackingStorePrivate::blitHorizontalScrollbar()
         return;
 
     ASSERT(scrollsHorizontally());
-    IntRect scrollbarRect = SurfacePool::globalSurfacePool()->horizontalScrollbar()->rect();
+    BackingStoreScrollbar* scrollbar = SurfacePool::globalSurfacePool()->horizontalScrollbar();
+
+    if (!scrollbar)
+        return;
+
+    IntRect scrollbarRect = scrollbar->rect();
     IntRect canvasRect = scrollbarRect;
     IntSize visibleSize = m_webPage->d->transformedActualVisibleSize();
     canvasRect.move(0, visibleSize.height() - scrollbarRect.height());
@@ -1080,10 +1147,7 @@ void BackingStorePrivate::blitHorizontalScrollbar()
     if (hotRect.width() <= 0 || hotRect.height() <= 0)
         return;
 
-
-    SurfacePool::globalSurfacePool()->horizontalScrollbar()->repaint(hotRect, false /*vertical*/);
-
-    BackingStoreScrollbar* scrollbar = SurfacePool::globalSurfacePool()->horizontalScrollbar();
+    scrollbar->repaint(hotRect, false /*vertical*/);
     m_webPage->d->blendOntoCanvas(scrollbar->image(), scrollbar->imageStride(),
         scrollbar->alphaImage(), scrollbar->alphaImageStride(), 255, canvasRect, scrollbarRect);
 }
@@ -1094,7 +1158,12 @@ void BackingStorePrivate::blitVerticalScrollbar()
         return;
 
     ASSERT(scrollsVertically());
-    IntRect scrollbarRect = SurfacePool::globalSurfacePool()->verticalScrollbar()->rect();
+    BackingStoreScrollbar* scrollbar = SurfacePool::globalSurfacePool()->verticalScrollbar();
+
+    if (!scrollbar)
+        return;
+
+    IntRect scrollbarRect = scrollbar->rect();
     IntRect canvasRect = scrollbarRect;
     IntSize visibleSize = m_webPage->d->transformedActualVisibleSize();
     canvasRect.move(visibleSize.width() - scrollbarRect.width(), 0);
@@ -1119,14 +1188,12 @@ void BackingStorePrivate::blitVerticalScrollbar()
     if (hotRect.width() <= 0 || hotRect.height() <= 0)
         return;
 
-    SurfacePool::globalSurfacePool()->verticalScrollbar()->repaint(hotRect, true /*vertical*/);
-
-    BackingStoreScrollbar* scrollbar = SurfacePool::globalSurfacePool()->verticalScrollbar();
+    scrollbar->repaint(hotRect, true /*vertical*/);
     m_webPage->d->blendOntoCanvas(scrollbar->image(), scrollbar->imageStride(),
         scrollbar->alphaImage(), scrollbar->alphaImageStride(), 255, canvasRect, scrollbarRect);
 }
 
-void BackingStorePrivate::blitScaledArbitraryRectFromBackingStoreToScreen(const WebCore::IntRect& srcRect, WebCore::IntRect dstRect, SurfaceOpenVG* tempSurface)
+void BackingStorePrivate::blitScaledArbitraryRectFromBackingStoreToScreen(const WebCore::IntRect& srcRect, WebCore::IntRect dstRect, unsigned short* tempSurface, unsigned int tempSurfaceStride)
 {
     ASSERT(tempSurface);
 
@@ -1141,17 +1208,12 @@ void BackingStorePrivate::blitScaledArbitraryRectFromBackingStoreToScreen(const 
 
     const IntRect viewportRect = IntRect(IntPoint(0, 0), m_webPage->d->transformedViewportSize());
 
-    tempSurface->makeCurrent();
-
     // Paint overZoomColor background for non-page area.
     // color is expected to be ARGB32
     unsigned int color = m_webPage->settings()->overZoomColor();
-    VGfloat overZoomColor[4];
-    Color c(color);
-    c.getRGBA(overZoomColor[0], overZoomColor[1], overZoomColor[2], overZoomColor[3]);
-    vgSeti(VG_SCISSORING, VG_FALSE);
-    vgSetfv(VG_CLEAR_COLOR, 4, overZoomColor);
-    vgClear(0, 0, dstRect.width(), dstRect.height());
+    unsigned int colorARGBPre = premultipliedARGBFromColor(Color(color));
+    unsigned short colorRGB565 = ((colorARGBPre >> 8) & 0xF800) | ((colorARGBPre >> 5) & 0x7E0) | ((colorARGBPre >> 3) & 0x1F);
+    m_webPage->client()->clearBuffer((unsigned char*)tempSurface, tempSurfaceStride, Olympia::Platform::IntRect(0, 0, dstRect.width(), dstRect.height()), colorRGB565);
 
     // Paint checkerboard for non-drawn page areas.
     IntRect checkerRect = srcRect;
@@ -1184,22 +1246,21 @@ void BackingStorePrivate::blitScaledArbitraryRectFromBackingStoreToScreen(const 
                 const unsigned char* srcBufferStart = checkeredTile->image() +
                     (srcY * checkeredTile->imageStride()) + (srcX * checkeredTile->imageBytesPerPixel());
 
-                vgWritePixels(srcBufferStart, checkeredTile->imageStride(), VG_sRGB_565,
-                    dstX, dstY, dstRight - dstX, dstBottom - dstY);
+                const IntRect dstRect(dstX, dstY, dstRight - dstX, dstBottom - dstY);
+                const IntRect srcRect(0, 0, dstRight - dstX, dstBottom - dstY);
+                m_webPage->d->blitFromBufferToBuffer((unsigned char*)tempSurface, tempSurfaceStride, dstRect,
+                        srcBufferStart, checkeredTile->imageStride(), srcRect);
             }
         }
         ASSERT_VG_NO_ERROR();
     }
 
     TileRectList tileRectList = mapFromTransformedContentsToTiles(srcRect);
-    PainterOpenVG p(tempSurface);
-
-    const IntSize vgMaxImageSize(vgGeti(VG_MAX_IMAGE_WIDTH), vgGeti(VG_MAX_IMAGE_HEIGHT));
 
     for (size_t i = 0; i < tileRectList.size(); ++i) {
-        TileRect tileRect = tileRectList[i];
-        TileIndex index = tileRect.first;
-        IntRect dirtyTileRect = tileRect.second;
+        const TileRect& dirtyTile = tileRectList[i];
+        const TileIndex& index = dirtyTile.first;
+        const IntRect& dirtyTileRect = dirtyTile.second;
         RefPtr<BackingStoreTile> tile = m_tileMap.get(index);
 
         if (!tile->isCompletelyRendered())
@@ -1218,41 +1279,21 @@ void BackingStorePrivate::blitScaledArbitraryRectFromBackingStoreToScreen(const 
         if (rect.isEmpty())
             continue;
 
-        TiledImageOpenVG tiledImage(rect.size(), vgMaxImageSize);
+        // Map the image onto the canvas.
+        IntRect dstDirtyTileRect = mapFromTilesToTransformedContents(dirtyTile);
+        dstDirtyTileRect.intersect(contentsRect);
+        dstDirtyTileRect = transformation.mapRect(dstDirtyTileRect);
+        dstDirtyTileRect.intersect(viewportRect);
 
-        const int numColumns = tiledImage.numColumns();
-        const int numRows = tiledImage.numRows();
-
-        // Create a TiledImage from the dirty rect of the current surface.
-        for (int yIndex = 0; yIndex < numRows; ++yIndex) {
-            for (int xIndex = 0; xIndex < numColumns; ++xIndex) {
-                IntRect tRect = tiledImage.tileRect(xIndex, yIndex);
-                VGImage image = vgCreateImage(VG_sARGB_8888_PRE, tRect.width(), tRect.height(), VG_IMAGE_QUALITY_FASTER);
-                ASSERT_VG_NO_ERROR();
-
-                const int srcX = rect.x() + tRect.x();
-                const int srcY = rect.y() + tRect.y();
-                const unsigned char* srcBufferStart = tile->image() + (srcY * tile->imageStride()) + (srcX * tile->imageBytesPerPixel());
-                vgImageSubData(image, srcBufferStart, tile->imageStride(), VG_sRGB_565, 0, 0, tRect.width(), tRect.height());
-                ASSERT_VG_NO_ERROR();
-                tiledImage.setTile(xIndex, yIndex, image);
-            }
-        }
-
-        // Copy the image to the temp surface.
-        IntRect dirtyRect = mapFromTilesToTransformedContents(tileRect);
-        dirtyRect.intersect(contentsRect);
-        dirtyRect = transformation.mapRect(dirtyRect);
-
-        // Stretch-blit image to temp surface.
-        p.drawImage(&tiledImage, dirtyRect, IntRect(0, 0, rect.width(), rect.height()));
+        if (!dstDirtyTileRect.isEmpty())
+            m_webPage->d->stretchBlitFromBufferToBuffer((unsigned char*)tempSurface, tempSurfaceStride, dstDirtyTileRect, tile->image(), tile->imageStride(), rect);
     }
 
     dstRect.intersect(viewportRect);
 
     // blit temp surface to canvas
     m_webPage->client()->lockCanvas();
-    m_webPage->d->blitToCanvas(tempSurface, dstRect, IntRect(0, 0, dstRect.width(), dstRect.height()));
+    m_webPage->d->blitToCanvas((unsigned char*)tempSurface, tempSurfaceStride, dstRect, IntRect(0, 0, dstRect.width(), dstRect.height()));
     m_webPage->client()->unlockCanvas();
     m_webPage->d->invalidateWindow(dstRect);
 }
@@ -1328,7 +1369,7 @@ void BackingStorePrivate::updateTiles(bool updateVisible, bool immediate)
     }
 }
 
-void BackingStorePrivate::updateTilesForScroll()
+void BackingStorePrivate::updateTilesForScrollOrNotRenderedRegion()
 {
     // This method looks at all the tiles and if they are visible, but not completely
     // rendered or we are loading, then it updates them. For all tiles, visible and
@@ -1340,7 +1381,7 @@ void BackingStorePrivate::updateTilesForScroll()
     TileMap::const_iterator end = m_tileMap.end();
     for (TileMap::const_iterator it = m_tileMap.begin(); it != end; ++it) {
         TileIndex index = it->first;
-        BackingStoreTile* tile = it->second.get();
+        RefPtr<BackingStoreTile> tile = it->second;
         bool isVisible = isTileVisible(index);
         // The rect in transformed contents coordinates
         IntRect rect(originOfTile(index), tileSize());
@@ -1354,15 +1395,15 @@ void BackingStorePrivate::updateTilesForScroll()
                 // Intersect the tile with the not rendered region to get the areas
                 // of the tile that we need to clear
                 IntRectRegion tileNotRenderedRegion = IntRectRegion::intersectRegions(m_renderQueue->regularRenderJobsNotRenderedRegion(), rect);
-                clearAndUpdateTileOfNotRenderedRegion(index, tile, tileNotRenderedRegion, backingStoreRect());
+                clearAndUpdateTileOfNotRenderedRegion(index, tile.get(), tileNotRenderedRegion, backingStoreRect(), false /*update*/);
 #if DEBUG_BACKINGSTORE
                 IntRect extents = tileNotRenderedRegion.extents();
                 Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "BackingStorePrivate::updateTilesForScroll did clear tile %d,%d %dx%d",
                                        extents.x(), extents.y(), extents.width(), extents.height());
 #endif
-            } else
-                updateTile(index, false /*immediate*/);
-        } else if (isVisible && (isLoading || !tile->isCompletelyRendered()) && !isCurrentVisibleJob(index, tile, backingStoreRect()))
+            }
+            updateTile(index, false /*immediate*/);
+        } else if (isVisible && (isLoading || !tile->isCompletelyRendered()) && !isCurrentVisibleJob(index, tile.get(), backingStoreRect()))
             updateTile(index, false /*immediate*/);
     }
 }

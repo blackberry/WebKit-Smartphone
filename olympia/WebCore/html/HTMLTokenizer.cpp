@@ -218,7 +218,12 @@ void HTMLTokenizer::reset()
     while (!m_pendingScripts.isEmpty()) {
         CachedScript* cs = m_pendingScripts.first().get();
         m_pendingScripts.removeFirst();
+#if PLATFORM(OLYMPIA)
+        Settings* settings = m_doc ? m_doc->settings() : 0;
+        ASSERT(cache()->disabled() || cs->accessCount() > 0 || !settings || !settings->useCache());
+#else
         ASSERT(cache()->disabled() || cs->accessCount() > 0);
+#endif
         cs->removeClient(this);
     }
 
@@ -2077,7 +2082,12 @@ void HTMLTokenizer::executeExternalScriptsIfReady()
 
         CachedScript* cs = m_pendingScripts.first().get();
         m_pendingScripts.removeFirst();
+#if PLATFORM(OLYMPIA)
+        Settings* settings = m_doc ? m_doc->settings() : 0;
+        ASSERT(cache()->disabled() || cs->accessCount() > 0 || !settings || !settings->useCache());
+#else
         ASSERT(cache()->disabled() || cs->accessCount() > 0);
+#endif
 
         setSrc(SegmentedString());
 

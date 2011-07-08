@@ -76,7 +76,7 @@ public:
     virtual void dispatchDidCommitLoad();
     virtual void dispatchDidFailProvisionalLoad(const ResourceError&);
     virtual void dispatchDidFailLoad(const ResourceError&);
-    virtual void dispatchDidFinishDocumentLoad() { notImplemented(); }
+    virtual void dispatchDidFinishDocumentLoad();
     virtual void dispatchDidFinishLoad();
     virtual void dispatchDidFirstLayout() { notImplemented(); }
     virtual void dispatchDidFirstVisuallyNonEmptyLayout();
@@ -85,7 +85,7 @@ public:
     virtual void dispatchDecidePolicyForMIMEType(FramePolicyFunction, const String& MIMEType, const ResourceRequest&);
     virtual void dispatchDecidePolicyForNewWindowAction(FramePolicyFunction, const NavigationAction&, const ResourceRequest&, PassRefPtr<FormState>, const String& frameName);
     virtual void dispatchDecidePolicyForNavigationAction(FramePolicyFunction, const NavigationAction&, const ResourceRequest&, PassRefPtr<FormState>);
-    virtual void cancelPolicyCheck() { notImplemented(); }
+    virtual void cancelPolicyCheck();
     virtual void dispatchUnableToImplementPolicy(const ResourceError&) { notImplemented(); }
     virtual void dispatchWillSubmitForm(FramePolicyFunction, PassRefPtr<FormState>);
     virtual void dispatchDidLoadMainResource(DocumentLoader*) { notImplemented(); }
@@ -168,6 +168,10 @@ public:
      */
     void setDeferredManualScript(const KURL&);
 
+    void readyToRender(bool pageIsVisuallyNonEmpty);
+
+    void doPendingFragmentScroll();
+
 private:
     void receivedData(const char*, int, const String&);
     bool isMainFrame() const;
@@ -180,7 +184,8 @@ private:
         const Vector<String>& paramValues, const String& mimeType,
         bool isPlaceHolder, bool isHtml5Video, bool hasRenderer);
 
-    PolicyAction decidePolicyForExternalLoad(const ResourceRequest &);
+    PolicyAction decidePolicyForExternalLoad(const ResourceRequest &, bool isFragmentScroll);
+    void delayPolicyCheckUntilFragmentExists(const String& fragment, FramePolicyFunction);
 
     void deferredJobsTimerFired(Timer<FrameLoaderClientOlympia>*);
 
@@ -195,6 +200,10 @@ private:
     Timer<FrameLoaderClientOlympia>* m_deferredJobsTimer;
     KURL m_deferredManualScript;
     RefPtr<Geolocation> m_geolocation;
+    bool m_sentReadyToRender;
+
+    FramePolicyFunction m_pendingFragmentScrollPolicyFunction;
+    String m_pendingFragmentScroll;
 };
 
 } // WebCore

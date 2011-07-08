@@ -3,26 +3,26 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584
-      RenderBlock (anonymous) at (0,0) size 784x18
-        RenderText {#text} at (0,0) size 150x18
-          text run at (0,0) width 150: "table height=200"
-      RenderTable {TABLE} at (0,18) size 144x200 [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 142x198
-          RenderTableRow {TR} at (0,2) size 142x156
-            RenderTableCell {TD} at (2,69) size 138x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 134x18
-                text run at (2,2) width 134: "80% height row"
-          RenderTableRow {TR} at (0,160) size 142x36
-            RenderTableCell {TD} at (2,167) size 138x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 134x18
-                text run at (2,2) width 134: "80% height row"
-      RenderBlock (anonymous) at (0,218) size 784x36
-        RenderBR {BR} at (0,0) size 0x18
-        RenderText {#text} at (0,18) size 150x18
-          text run at (0,18) width 150: "table height=200"
-      RenderTable {TABLE} at (0,254) size 139x306 [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 137x304
-          RenderTableRow {TR} at (0,2) size 137x300
-            RenderTableCell {TD} at (2,141) size 133x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 129x18
-                text run at (2,2) width 129: "400 height row"
+      RenderBlock (anonymous) at (0,0) size 784x17
+        RenderText {#text} at (0,0) size 138x17
+          text run at (0,0) width 138: "table height=200"
+      RenderTable {TABLE} at (0,17) size 135x200 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 133x198
+          RenderTableRow {TR} at (0,2) size 133x156
+            RenderTableCell {TD} at (2,69) size 129x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 125x17
+                text run at (2,2) width 125: "80% height row"
+          RenderTableRow {TR} at (0,160) size 133x36
+            RenderTableCell {TD} at (2,167) size 129x21 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 125x17
+                text run at (2,2) width 125: "80% height row"
+      RenderBlock (anonymous) at (0,217) size 784x34
+        RenderBR {BR} at (0,0) size 0x17
+        RenderText {#text} at (0,17) size 138x17
+          text run at (0,17) width 138: "table height=200"
+      RenderTable {TABLE} at (0,251) size 130x306 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 128x304
+          RenderTableRow {TR} at (0,2) size 128x300
+            RenderTableCell {TD} at (2,141) size 124x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 120x17
+                text run at (2,2) width 120: "400 height row"

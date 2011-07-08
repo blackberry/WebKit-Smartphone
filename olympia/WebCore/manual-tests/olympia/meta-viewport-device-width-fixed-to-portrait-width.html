@@ -2,13 +2,31 @@
 <head>
 <meta name="viewport" content="width=device-width"/>
 <style>
-body { margin: 0; padding: 0; }
-#test-container { background-color: red; height: 450px; width: 100%; }
-#square { background-color: green; height: 450px; width: 450px; }
+body { margin: 0; padding: 0;}
+#test-container { background-color: red; width: 100%; }
+#square { background-color: green; width: 60px; }
 </style>
+<script src="meta-viewport-utilities.js"></script>
+<script>
+function updateOrientation() {
+    var container = document.getElementById("test-container");
+    var square = document.getElementById("square");
+    var deviceWidth = getDeviceWidth();
+    var width = parseInt(getComputedStyle(container).width, 10);
+
+    square.style.width = deviceWidth;
+
+    logStart(square);
+    log(square, "device-width: " + deviceWidth);
+    log(square, "actual width: " + width);
+    logResultAndNotifyDone(square, width === deviceWidth);
+}
+
+window.onorientationchange = updateOrientation;
+window.onload = updateOrientation;
+</script>
 <body>
 <p>This tests that the viewport meta property value device-width is defined to be the width of the device in portrait orientation. This test FAILED if you see any red on this page for any device orientation.</p>
-<p>Note, this test is expected to fail on a RIM device since it does not zoom on rotate. See RIM Bug #252.</p>
 <div id="test-container">
     <div id="square"></div>
 </div>

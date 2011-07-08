@@ -156,10 +156,10 @@ $dirs_gathered = null;
 $handle = opendir ( $incremental_dir );
 while (  $file = readdir ( $handle ) ) {
     if ( preg_match ( "/^\.+\$/",$file ) ){
-    continue;
+        continue;
     }
     if ( ! is_dir ( "$incremental_dir/$file" ) ) {
-    continue;
+        continue;
     }
     $dirs_gathered[] = "$incremental_dir/$file";
 }
@@ -174,7 +174,7 @@ for ( $dir_cnt=0; $dir_cnt < sizeof($dirs_gathered); $dir_cnt++ ){
 
     //Only show some archives unless show all
     if ( $show_num_incremental != "All"  && $dir_cnt >= $show_num_incremental ) {
-    continue;
+        continue;
     }
 
     //Get the sizes of all files in this directory
@@ -189,7 +189,7 @@ for ( $dir_cnt=0; $dir_cnt < sizeof($dirs_gathered); $dir_cnt++ ){
     parse_dir ( "$revision" );
     for( $cnt=0; $cnt < sizeof ( $file_names ); $cnt++ ) {
         $file_size_full = (int) ( ( $file_sizes[$cnt] + $link_sizes[$cnt] ) / 1000 );
-    $file_size_part = (int) ( ( $file_sizes[$cnt] ) / 1000 );
+        $file_size_part = (int) ( ( $file_sizes[$cnt] ) / 1000 );
 
         $total_file_size_full += $file_size_full;
         $total_file_size_part += $file_size_part;

@@ -2,10 +2,10 @@
 
 pushd $OLYMPIAROOT/olympia
 
-if [ -d "$OLYMPIAROOT/olympia/WebKitBuild/$CPUNAME/$OLYMPIABUILDCONFIG" ] ; then
-    rm -rf "$OLYMPIAROOT/olympia/WebKitBuild/$CPUNAME/$OLYMPIABUILDCONFIG"
+if [ -d "$WEBKITOUTPUTDIR/$CPUNAME/$OLYMPIABUILDCONFIG" ] ; then
+    rm -rf "$WEBKITOUTPUTDIR/$CPUNAME/$OLYMPIABUILDCONFIG"
 else
-    echo "Can't clean: no WebKit build found in $OLYMPIAROOT/olympia/WebKitBuild/$CPUNAME/$OLYMPIABUILDCONFIG"
+    echo "Can't clean: no WebKit build found in $WEBKITOUTPUTDIR/$CPUNAME/$OLYMPIABUILDCONFIG"
 fi
 
 popd

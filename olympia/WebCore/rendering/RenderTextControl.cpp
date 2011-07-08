@@ -405,8 +405,6 @@ unsigned int RenderTextControl::softBreaksBeforeIndex(int index)
     if (!firstChild)
         return 0;
 
-    document()->updateLayout();
-
     RenderObject* renderer = firstChild->renderer();
     if (!renderer)
         return 0;

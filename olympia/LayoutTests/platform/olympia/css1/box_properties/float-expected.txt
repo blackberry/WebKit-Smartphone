@@ -3,56 +3,54 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584 [bgcolor=#CCCCCC]
-      RenderBlock {P} at (0,0) size 784x18
-        RenderText {#text} at (0,0) size 481x18
-          text run at (0,0) width 481: "The style declarations which apply to the text below are:"
-      RenderBlock {PRE} at (0,35) size 784x63
-        RenderText {#text} at (0,0) size 200x63
-          text run at (0,0) width 190: ".one {float: left;}"
-          text run at (190,0) width 0: " "
-          text run at (0,21) width 200: ".two {float: right;}"
-          text run at (200,21) width 0: " "
-          text run at (0,42) width 0: " "
-      RenderBlock {HR} at (0,115) size 784x2 [border: (1px inset #000000)]
-      RenderImage {IMG} at (0,125) size 15x50
-      RenderBlock {P} at (0,134) size 784x36
-        RenderText {#text} at (15,0) size 727x36
-          text run at (15,0) width 727: "This text should be flowing past a tall orange rectangle on the left side of the browser"
-          text run at (15,18) width 74: "window. "
-          text run at (89,18) width 522: "In this case, it is the image which has been floated to the left."
-      RenderBlock (anonymous) at (0,187) size 784x18
-        RenderBR {BR} at (0,0) size 0x18
-      RenderBlock {HR} at (0,213) size 784x2 [border: (1px inset #000000)]
-      RenderImage {IMG} at (769,223) size 15x50
-      RenderBlock {P} at (0,232) size 784x36
-        RenderText {#text} at (0,0) size 740x36
-          text run at (0,0) width 740: "This text should be flowing past a tall orange rectangle on the right side of the browser"
-          text run at (0,18) width 74: "window. "
-          text run at (74,18) width 535: "In this case, it is the image which has been floated to the right."
-      RenderTable {TABLE} at (0,285) size 784x175 [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 782x173
-          RenderTableRow {TR} at (0,0) size 782x26
-            RenderTableCell {TD} at (0,0) size 782x26 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
-              RenderInline {STRONG} at (0,0) size 214x18
-                RenderText {#text} at (4,4) size 214x18
-                  text run at (4,4) width 214: "TABLE Testing Section"
-          RenderTableRow {TR} at (0,26) size 782x147
-            RenderTableCell {TD} at (0,86) size 13x26 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (4,4) size 5x18
+      RenderBlock {P} at (0,0) size 784x17
+        RenderText {#text} at (0,0) size 452x17
+          text run at (0,0) width 452: "The style declarations which apply to the text below are:"
+      RenderBlock {PRE} at (0,33) size 784x51
+        RenderText {#text} at (0,0) size 160x51
+          text run at (0,0) width 152: ".one {float: left;}"
+          text run at (152,0) width 0: " "
+          text run at (0,17) width 160: ".two {float: right;}"
+          text run at (160,17) width 0: " "
+          text run at (0,34) width 0: " "
+      RenderBlock {HR} at (0,97) size 784x2 [border: (1px inset #000000)]
+      RenderImage {IMG} at (0,107) size 15x50
+      RenderBlock {P} at (0,115) size 784x34
+        RenderText {#text} at (15,0) size 754x34
+          text run at (15,0) width 754: "This text should be flowing past a tall orange rectangle on the left side of the browser window."
+          text run at (15,17) width 491: "In this case, it is the image which has been floated to the left."
+      RenderBlock (anonymous) at (0,165) size 784x17
+        RenderBR {BR} at (0,0) size 0x17
+      RenderBlock {HR} at (0,190) size 784x2 [border: (1px inset #000000)]
+      RenderImage {IMG} at (769,200) size 15x50
+      RenderBlock {P} at (0,208) size 784x34
+        RenderText {#text} at (0,0) size 765x34
+          text run at (0,0) width 765: "This text should be flowing past a tall orange rectangle on the right side of the browser window."
+          text run at (0,17) width 502: "In this case, it is the image which has been floated to the right."
+      RenderTable {TABLE} at (0,258) size 784x170 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 782x168
+          RenderTableRow {TR} at (0,0) size 782x25
+            RenderTableCell {TD} at (0,0) size 782x25 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderInline {STRONG} at (0,0) size 200x17
+                RenderText {#text} at (4,4) size 200x17
+                  text run at (4,4) width 200: "TABLE Testing Section"
+          RenderTableRow {TR} at (0,25) size 782x143
+            RenderTableCell {TD} at (0,84) size 13x25 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,4) size 5x17
                 text run at (4,4) width 5: " "
-            RenderTableCell {TD} at (13,26) size 769x147 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+            RenderTableCell {TD} at (13,25) size 769x143 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
               RenderImage {IMG} at (4,4) size 15x50
-              RenderBlock {P} at (4,4) size 761x36
-                RenderText {#text} at (15,0) size 727x36
-                  text run at (15,0) width 727: "This text should be flowing past a tall orange rectangle on the left side of the browser"
-                  text run at (15,18) width 74: "window. "
-                  text run at (89,18) width 522: "In this case, it is the image which has been floated to the left."
-              RenderBlock (anonymous) at (4,57) size 761x18
-                RenderBR {BR} at (0,0) size 0x18
-              RenderBlock {HR} at (4,83) size 761x2 [border: (1px inset #000000)]
-              RenderImage {IMG} at (750,93) size 15x50
-              RenderBlock {P} at (4,102) size 761x36
-                RenderText {#text} at (0,0) size 740x36
-                  text run at (0,0) width 740: "This text should be flowing past a tall orange rectangle on the right side of the browser"
-                  text run at (0,18) width 74: "window. "
-                  text run at (74,18) width 535: "In this case, it is the image which has been floated to the right."
+              RenderBlock {P} at (4,4) size 761x34
+                RenderText {#text} at (15,0) size 685x34
+                  text run at (15,0) width 685: "This text should be flowing past a tall orange rectangle on the left side of the browser"
+                  text run at (15,17) width 69: "window. "
+                  text run at (84,17) width 491: "In this case, it is the image which has been floated to the left."
+              RenderBlock (anonymous) at (4,54) size 761x17
+                RenderBR {BR} at (0,0) size 0x17
+              RenderBlock {HR} at (4,79) size 761x2 [border: (1px inset #000000)]
+              RenderImage {IMG} at (750,89) size 15x50
+              RenderBlock {P} at (4,97) size 761x34
+                RenderText {#text} at (0,0) size 696x34
+                  text run at (0,0) width 696: "This text should be flowing past a tall orange rectangle on the right side of the browser"
+                  text run at (0,17) width 69: "window. "
+                  text run at (69,17) width 502: "In this case, it is the image which has been floated to the right."

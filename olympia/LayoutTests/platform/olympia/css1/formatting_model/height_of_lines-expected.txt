@@ -1,48 +1,48 @@
-layer at (0,0) size 800x2520
+layer at (0,0) size 800x2441
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x2520
-  RenderBlock {HTML} at (0,0) size 800x2520
-    RenderBody {BODY} at (8,8) size 784x2504 [bgcolor=#CCCCCC]
-      RenderBlock {P} at (0,0) size 784x18
-        RenderText {#text} at (0,0) size 481x18
-          text run at (0,0) width 481: "The style declarations which apply to the text below are:"
-      RenderBlock {PRE} at (0,35) size 784x378
-        RenderText {#text} at (0,0) size 670x378
-          text run at (0,0) width 430: "P.one {font-size: 14px; line-height: 20px;}"
-          text run at (430,0) width 0: " "
-          text run at (0,21) width 380: "IMG.onea {vertical-align: text-bottom;"
-          text run at (380,21) width 0: " "
-          text run at (0,42) width 340: "     width: 200px; height: 200px;}"
-          text run at (340,42) width 0: " "
-          text run at (0,63) width 650: "IMG.oneb {vertical-align: text-top; width: 200px; height: 200px;}"
-          text run at (650,63) width 0: " "
-          text run at (0,84) width 0: " "
-          text run at (0,105) width 430: "P.two {font-size: 14px; line-height: 20px;}"
-          text run at (430,105) width 0: " "
-          text run at (0,126) width 670: "IMG.twoa {vertical-align: text-bottom; width: 100px; height: 100px;"
-          text run at (670,126) width 0: " "
-          text run at (0,147) width 390: "     padding: 5px; border-style: solid;"
-          text run at (390,147) width 0: " "
-          text run at (0,168) width 390: "     border-width: 10px; margin: 15px;}"
-          text run at (390,168) width 0: " "
-          text run at (0,189) width 350: "IMG.twob {vertical-align: text-top;"
-          text run at (350,189) width 0: " "
-          text run at (0,210) width 380: "          width: 100px; height: 100px;"
-          text run at (380,210) width 0: " "
-          text run at (0,231) width 390: "     padding: 5px; border-style: solid;"
-          text run at (390,231) width 0: " "
-          text run at (0,252) width 390: "     border-width: 10px; margin: 15px;}"
-          text run at (390,252) width 0: " "
-          text run at (0,273) width 0: " "
-          text run at (0,294) width 600: "IMG.twoc {vertical-align: middle; width: 50px; height: 50px;"
-          text run at (600,294) width 0: " "
-          text run at (0,315) width 390: "     padding: 5px; border-style: solid;"
-          text run at (390,315) width 0: " "
-          text run at (0,336) width 400: "     border-width: 10px; margin: -10px;}"
-          text run at (400,336) width 0: " "
-          text run at (0,357) width 0: " "
-      RenderBlock {HR} at (0,430) size 784x2 [border: (1px inset #000000)]
-      RenderBlock {P} at (0,446) size 784x465
+layer at (0,0) size 800x2441
+  RenderBlock {HTML} at (0,0) size 800x2441
+    RenderBody {BODY} at (8,8) size 784x2425 [bgcolor=#CCCCCC]
+      RenderBlock {P} at (0,0) size 784x17
+        RenderText {#text} at (0,0) size 452x17
+          text run at (0,0) width 452: "The style declarations which apply to the text below are:"
+      RenderBlock {PRE} at (0,33) size 784x306
+        RenderText {#text} at (0,0) size 536x306
+          text run at (0,0) width 344: "P.one {font-size: 14px; line-height: 20px;}"
+          text run at (344,0) width 0: " "
+          text run at (0,17) width 304: "IMG.onea {vertical-align: text-bottom;"
+          text run at (304,17) width 0: " "
+          text run at (0,34) width 272: "     width: 200px; height: 200px;}"
+          text run at (272,34) width 0: " "
+          text run at (0,51) width 520: "IMG.oneb {vertical-align: text-top; width: 200px; height: 200px;}"
+          text run at (520,51) width 0: " "
+          text run at (0,68) width 0: " "
+          text run at (0,85) width 344: "P.two {font-size: 14px; line-height: 20px;}"
+          text run at (344,85) width 0: " "
+          text run at (0,102) width 536: "IMG.twoa {vertical-align: text-bottom; width: 100px; height: 100px;"
+          text run at (536,102) width 0: " "
+          text run at (0,119) width 312: "     padding: 5px; border-style: solid;"
+          text run at (312,119) width 0: " "
+          text run at (0,136) width 312: "     border-width: 10px; margin: 15px;}"
+          text run at (312,136) width 0: " "
+          text run at (0,153) width 280: "IMG.twob {vertical-align: text-top;"
+          text run at (280,153) width 0: " "
+          text run at (0,170) width 304: "          width: 100px; height: 100px;"
+          text run at (304,170) width 0: " "
+          text run at (0,187) width 312: "     padding: 5px; border-style: solid;"
+          text run at (312,187) width 0: " "
+          text run at (0,204) width 312: "     border-width: 10px; margin: 15px;}"
+          text run at (312,204) width 0: " "
+          text run at (0,221) width 0: " "
+          text run at (0,238) width 480: "IMG.twoc {vertical-align: middle; width: 50px; height: 50px;"
+          text run at (480,238) width 0: " "
+          text run at (0,255) width 312: "     padding: 5px; border-style: solid;"
+          text run at (312,255) width 0: " "
+          text run at (0,272) width 320: "     border-width: 10px; margin: -10px;}"
+          text run at (320,272) width 0: " "
+          text run at (0,289) width 0: " "
+      RenderBlock {HR} at (0,352) size 784x2 [border: (1px inset #000000)]
+      RenderBlock {P} at (0,368) size 784x465
         RenderText {#text} at (0,2) size 749x55
           text run at (0,2) width 520: "This paragraph should have a font size of 14px and a line height of 20px. "
           text run at (520,2) width 227: "This means that the lines of text"
@@ -57,7 +57,7 @@ layer at (0,0) size 800x2520
           text run at (435,245) width 8: ". "
           text run at (443,245) width 337: "This is additional text to make sure that there is"
           text run at (0,447) width 686: "enough room left below the image so that this line does not hit the image that is text-top aligned."
-      RenderBlock {P} at (0,925) size 784x525
+      RenderBlock {P} at (0,847) size 784x525
         RenderText {#text} at (0,2) size 773x218
           text run at (0,2) width 520: "This paragraph should have a font size of 14px and a line height of 20px. "
           text run at (520,2) width 227: "This means that the lines of text"
@@ -83,18 +83,18 @@ layer at (0,0) size 800x2520
           text run at (430,448) width 304: "The last image in this paragraph has -10px"
           text run at (0,487) width 739: "margins set on it, so that should pull the text in toward the image in the vertical direction, and also in the"
           text run at (0,507) width 142: "horizontal direction."
-      RenderTable {TABLE} at (0,1464) size 784x1040 [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 782x1038
-          RenderTableRow {TR} at (0,0) size 782x26
-            RenderTableCell {TD} at (0,0) size 782x26 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
-              RenderInline {STRONG} at (0,0) size 214x18
-                RenderText {#text} at (4,4) size 214x18
-                  text run at (4,4) width 214: "TABLE Testing Section"
-          RenderTableRow {TR} at (0,26) size 782x1012
-            RenderTableCell {TD} at (0,519) size 13x26 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (4,4) size 5x18
+      RenderTable {TABLE} at (0,1386) size 784x1039 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 782x1037
+          RenderTableRow {TR} at (0,0) size 782x25
+            RenderTableCell {TD} at (0,0) size 782x25 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderInline {STRONG} at (0,0) size 200x17
+                RenderText {#text} at (4,4) size 200x17
+                  text run at (4,4) width 200: "TABLE Testing Section"
+          RenderTableRow {TR} at (0,25) size 782x1012
+            RenderTableCell {TD} at (0,518) size 13x25 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,4) size 5x17
                 text run at (4,4) width 5: " "
-            RenderTableCell {TD} at (13,26) size 769x1012 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+            RenderTableCell {TD} at (13,25) size 769x1012 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
               RenderBlock {P} at (4,4) size 761x465
                 RenderText {#text} at (0,2) size 749x55
                   text run at (0,2) width 520: "This paragraph should have a font size of 14px and a line height of 20px. "

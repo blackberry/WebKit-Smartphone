@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2004, 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -853,7 +854,11 @@ String KURL::prettyURL() const
         result.append('/');
         result.append('/');
         result.append(authority);
+#if OS(OLYMPIA)
+    } else if (protocolIs("file") || protocolIs("local")) {
+#else
     } else if (protocolIs("file")) {
+#endif
         result.append('/');
         result.append('/');
     }
@@ -1087,6 +1092,17 @@ void KURL::parse(const char* url, const String* originalString)
         && matchLetter(url[1], 'i')
         && matchLetter(url[2], 'l')
         && matchLetter(url[3], 'e');
+
+#if OS(OLYMPIA)
+    // parse local: urls the same as file: urls
+    if (!isFile)
+        isFile = schemeEnd == 5
+            && matchLetter(url[0], 'l')
+            && matchLetter(url[1], 'o')
+            && matchLetter(url[2], 'c')
+            && matchLetter(url[3], 'a')
+            && matchLetter(url[4], 'l');
+#endif
 
     m_protocolInHTTPFamily = matchLetter(url[0], 'h')
         && matchLetter(url[1], 't')
@@ -1798,6 +1814,10 @@ bool portAllowed(const KURL& url)
     // Allow any port number in a file URL, since the port number is ignored.
     if (url.protocolIs("file"))
         return true;
+#if OS(OLYMPIA)
+    if (url.protocolIs("local"))
+        return true;
+#endif
 
     return false;
 }

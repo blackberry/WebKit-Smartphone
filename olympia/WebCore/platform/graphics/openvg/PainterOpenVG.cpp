@@ -1196,27 +1196,7 @@ void PainterOpenVG::clipRect(const FloatRect& rect, PainterOpenVG::ClipOperation
     m_currentSurface->makeCurrent();
 
     if (maskOp == PainterOpenVG::SubtractClip) {
-        AffineTransform localTransformation;
-        localTransformation.setA(rect.width());
-        localTransformation.setD(rect.height());
-        localTransformation.setE(rect.x());
-        localTransformation.setF(rect.y());
-
-        AffineTransform transformation = m_state->surfaceTransformation;
-        transformation.multLeft(localTransformation);
-
-        Vector<VGfloat> currentMatrix(9);
-        vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
-        vgGetMatrix(currentMatrix.data());
-        ASSERT_VG_NO_ERROR();
-
-        vgLoadMatrix(VGMatrix(transformation).toVGfloat());
-        ASSERT_VG_NO_ERROR();
-
-        clipPath(m_currentSurface->cachedPath(SurfaceOpenVG::CachedRectPath), PainterOpenVG::SubtractClip);
-
-        vgLoadMatrix(currentMatrix.data());
-        ASSERT_VG_NO_ERROR();
+        transformAndClipPath(m_currentSurface->cachedPath(SurfaceOpenVG::CachedRectPath), rect, maskOp);
         return;
     }
 
@@ -1242,6 +1222,12 @@ void PainterOpenVG::clipRect(const FloatRect& rect, PainterOpenVG::ClipOperation
         scissorRectPath.addRect(rect);
         clipPath(scissorRectPath, PainterOpenVG::IntersectClip);
     }
+}
+
+void PainterOpenVG::clipEllipse(const FloatRect& rect, PainterOpenVG::ClipOperation maskOp)
+{
+    ASSERT(m_state);
+    transformAndClipPath(m_currentSurface->cachedPath(SurfaceOpenVG::CachedCirclePath), rect, maskOp);
 }
 
 void PainterOpenVG::clipPath(const Path& path, PainterOpenVG::ClipOperation maskOp, WindRule clipRule)
@@ -1283,6 +1269,63 @@ void PainterOpenVG::clipPath(VGPath path, PainterOpenVG::ClipOperation maskOp, W
 #endif
 }
 
+void PainterOpenVG::transformAndClipPath(VGPath path, const FloatRect& rect, PainterOpenVG::ClipOperation maskOp)
+{
+    AffineTransform localTransformation;
+    localTransformation.setA(rect.width());
+    localTransformation.setD(rect.height());
+    localTransformation.setE(rect.x());
+    localTransformation.setF(rect.y());
+
+    AffineTransform transformation = m_state->surfaceTransformation;
+    transformation.multLeft(localTransformation);
+
+    Vector<VGfloat> currentMatrix(9);
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgGetMatrix(currentMatrix.data());
+    ASSERT_VG_NO_ERROR();
+
+    vgLoadMatrix(VGMatrix(transformation).toVGfloat());
+    ASSERT_VG_NO_ERROR();
+
+    clipPath(path, maskOp);
+
+    vgLoadMatrix(currentMatrix.data());
+    ASSERT_VG_NO_ERROR();
+}
+
+void PainterOpenVG::transformAndFillPath(VGPath path, const FloatRect& rect)
+{
+    AffineTransform localTransformation;
+    localTransformation.setA(rect.width());
+    localTransformation.setD(rect.height());
+    localTransformation.setE(rect.x());
+    localTransformation.setF(rect.y());
+
+    // Make sure the path don't disappear when zooming out a lot.
+    if (rect.width() * fabs(m_state->surfaceTransformation.a()) < 1.0)
+        localTransformation.setA(1.0 / fabs(m_state->surfaceTransformation.a()));
+    if (rect.height() * fabs(m_state->surfaceTransformation.d()) < 1.0)
+        localTransformation.setD(1.0 / fabs(m_state->surfaceTransformation.d()));
+
+    AffineTransform transformation = m_state->surfaceTransformation;
+    transformation.multLeft(localTransformation);
+
+    Vector<VGfloat> currentMatrix(9);
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgGetMatrix(currentMatrix.data());
+    ASSERT_VG_NO_ERROR();
+
+    vgLoadMatrix(VGMatrix(transformation).toVGfloat());
+    ASSERT_VG_NO_ERROR();
+
+    vgDrawPath(path, VG_FILL_PATH);
+    ASSERT_VG_NO_ERROR();
+
+    vgLoadMatrix(currentMatrix.data());
+    ASSERT_VG_NO_ERROR();
+}
+
 void PainterOpenVG::drawRect(const FloatRect& rect, VGbitfield specifiedPaintModes)
 {
     ASSERT(m_state);
@@ -1319,51 +1362,15 @@ void PainterOpenVG::drawRect(const FloatRect& rect, VGbitfield specifiedPaintMod
     // If possible, transform the cached rectangle path. Creating paths
     // in OpenVG is pretty expensive, whereas changing transformations to draw
     // our cached 1x1 rectangle at the right coordinates... not so much.
-    if (!(paintModes & VG_STROKE_PATH) && m_state->fillPaint.type() == PaintOpenVG::ColorPaint) {
-        AffineTransform localTransformation;
-        localTransformation.setA(rect.width());
-        localTransformation.setD(rect.height());
-        localTransformation.setE(rect.x());
-        localTransformation.setF(rect.y());
-
-        // Make sure rects don't disappear when zooming out a lot.
-        if (rect.width() * fabs(m_state->surfaceTransformation.a()) < 1.0)
-            localTransformation.setA(1.0 / fabs(m_state->surfaceTransformation.a()));
-        if (rect.height() * fabs(m_state->surfaceTransformation.d()) < 1.0)
-            localTransformation.setD(1.0 / fabs(m_state->surfaceTransformation.d()));
-
-        AffineTransform transformation = m_state->surfaceTransformation;
-        transformation.multLeft(localTransformation);
-
-        Vector<VGfloat> currentMatrix(9);
-        vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
-        vgGetMatrix(currentMatrix.data());
-        ASSERT_VG_NO_ERROR();
-
-        vgLoadMatrix(VGMatrix(transformation).toVGfloat());
-        ASSERT_VG_NO_ERROR();
-
-        vgDrawPath(m_currentSurface->cachedPath(SurfaceOpenVG::CachedRectPath), paintModes);
-        ASSERT_VG_NO_ERROR();
-
-        vgLoadMatrix(currentMatrix.data());
-        ASSERT_VG_NO_ERROR();
-    } else {
-        VGPath path = vgCreatePath(
-            VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-            1.0 /* scale */, 0.0 /* bias */,
-            5 /* expected number of segments */,
-            5 /* expected number of total coordinates */,
-            VG_PATH_CAPABILITY_APPEND_TO);
-        ASSERT_VG_NO_ERROR();
+    if (paintModes == VG_FILL_PATH && m_state->fillPaint.type() == PaintOpenVG::ColorPaint)
+        transformAndFillPath(m_currentSurface->cachedPath(SurfaceOpenVG::CachedRectPath), rect);
+    else {
+        VGPath path = m_currentSurface->cachedPath(SurfaceOpenVG::EmptyTemporaryPath);
 
         if (vguRect(path, rect.x(), rect.y(), rect.width(), rect.height()) == VGU_NO_ERROR) {
             vgDrawPath(path, paintModes);
             ASSERT_VG_NO_ERROR();
         }
-
-        vgDestroyPath(path);
-        ASSERT_VG_NO_ERROR();
     }
 }
 
@@ -1389,13 +1396,7 @@ void PainterOpenVG::drawRoundedRect(const FloatRect& rect, const IntSize& topLef
     } else
         m_currentSurface->makeCurrent();
 
-    VGPath path = vgCreatePath(
-        VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-        1.0 /* scale */, 0.0 /* bias */,
-        10 /* expected number of segments */,
-        25 /* expected number of total coordinates */,
-        VG_PATH_CAPABILITY_APPEND_TO);
-    ASSERT_VG_NO_ERROR();
+    VGPath path = m_currentSurface->cachedPath(SurfaceOpenVG::EmptyTemporaryPath);
 
     // clamp corner arc sizes
     FloatSize clampedTopLeft = FloatSize(topLeft).shrunkTo(rect.size()).expandedTo(FloatSize());
@@ -1433,7 +1434,6 @@ void PainterOpenVG::drawRoundedRect(const FloatRect& rect, const IntSize& topLef
 
     vgAppendPathData(path, 10, pathSegments, pathData);
     vgDrawPath(path, paintModes);
-    vgDestroyPath(path);
     ASSERT_VG_NO_ERROR();
 }
 
@@ -1504,21 +1504,12 @@ void PainterOpenVG::drawLine(const IntPoint& from, const IntPoint& to)
         vgSetf(VG_STROKE_LINE_WIDTH, m_state->strokeThickness);
         vgLoadMatrix(currentMatrix.data());
     } else {
-        VGPath path = vgCreatePath(
-            VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-            1.0 /* scale */, 0.0 /* bias */,
-            2 /* expected number of segments */,
-            4 /* expected number of total coordinates */,
-            VG_PATH_CAPABILITY_APPEND_TO);
-        ASSERT_VG_NO_ERROR();
+        VGPath path = m_currentSurface->cachedPath(SurfaceOpenVG::EmptyTemporaryPath);
 
         if (vguLine(path, from.x(), from.y(), to.x(), to.y()) == VGU_NO_ERROR) {
             vgDrawPath(path, VG_STROKE_PATH);
             ASSERT_VG_NO_ERROR();
         }
-
-        vgDestroyPath(path);
-        ASSERT_VG_NO_ERROR();
     }
 }
 
@@ -1544,21 +1535,12 @@ void PainterOpenVG::drawArc(const IntRect& rect, int startAngle, int angleSpan, 
     } else
         m_currentSurface->makeCurrent();
 
-    VGPath path = vgCreatePath(
-        VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-        1.0 /* scale */, 0.0 /* bias */,
-        2 /* expected number of segments */,
-        4 /* expected number of total coordinates */,
-        VG_PATH_CAPABILITY_APPEND_TO);
-    ASSERT_VG_NO_ERROR();
+    VGPath path = m_currentSurface->cachedPath(SurfaceOpenVG::EmptyTemporaryPath);
 
     if (vguArc(path, rect.x() + rect.width() / 2.0, rect.y() + rect.height() / 2.0, rect.width(), rect.height(), -startAngle, -angleSpan, VGU_ARC_OPEN) == VGU_NO_ERROR) {
         vgDrawPath(path, VG_STROKE_PATH);
         ASSERT_VG_NO_ERROR();
     }
-
-    vgDestroyPath(path);
-    ASSERT_VG_NO_ERROR();
 }
 
 void PainterOpenVG::drawEllipse(const IntRect& rect, VGbitfield specifiedPaintModes)
@@ -1583,21 +1565,19 @@ void PainterOpenVG::drawEllipse(const IntRect& rect, VGbitfield specifiedPaintMo
     } else
         m_currentSurface->makeCurrent();
 
-    VGPath path = vgCreatePath(
-        VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-        1.0 /* scale */, 0.0 /* bias */,
-        4 /* expected number of segments */,
-        12 /* expected number of total coordinates */,
-        VG_PATH_CAPABILITY_APPEND_TO);
-    ASSERT_VG_NO_ERROR();
+    // If possible, transform the cached ellipse path. Creating paths
+    // in OpenVG is pretty expensive, whereas changing transformations to draw
+    // our cached 1x1 circle at the right coordinates... not so much.
+    if (paintModes == VG_FILL_PATH && m_state->fillPaint.type() == PaintOpenVG::ColorPaint)
+        transformAndFillPath(m_currentSurface->cachedPath(SurfaceOpenVG::CachedCirclePath), rect);
+    else {
+        VGPath path = m_currentSurface->cachedPath(SurfaceOpenVG::EmptyTemporaryPath);
 
-    if (vguEllipse(path, rect.x() + rect.width() / 2.0, rect.y() + rect.height() / 2.0, rect.width(), rect.height()) == VGU_NO_ERROR) {
-        vgDrawPath(path, paintModes);
-        ASSERT_VG_NO_ERROR();
+        if (vguEllipse(path, rect.x() + rect.width() / 2.0, rect.y() + rect.height() / 2.0, rect.width(), rect.height()) == VGU_NO_ERROR) {
+            vgDrawPath(path, paintModes);
+            ASSERT_VG_NO_ERROR();
+        }
     }
-
-    vgDestroyPath(path);
-    ASSERT_VG_NO_ERROR();
 }
 
 void PainterOpenVG::drawPolygon(size_t numPoints, const FloatPoint* points, VGbitfield specifiedPaintModes)
@@ -1626,13 +1606,7 @@ void PainterOpenVG::drawPolygon(size_t numPoints, const FloatPoint* points, VGbi
     const VGint numSegments = numPoints + 1;
     const VGint numCoordinates = numPoints * 2;
 
-    VGPath path = vgCreatePath(
-        VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-        1.0 /* scale */, 0.0 /* bias */,
-        numSegments /* expected number of segments */,
-        numCoordinates /* expected number of total coordinates */,
-        VG_PATH_CAPABILITY_APPEND_TO);
-    ASSERT_VG_NO_ERROR();
+    VGPath path = m_currentSurface->cachedPath(SurfaceOpenVG::EmptyTemporaryPath);
 
     Vector<VGfloat> vgPoints(numCoordinates);
     for (int i = 0; i < numPoints; ++i) {
@@ -1644,9 +1618,6 @@ void PainterOpenVG::drawPolygon(size_t numPoints, const FloatPoint* points, VGbi
         vgDrawPath(path, paintModes);
         ASSERT_VG_NO_ERROR();
     }
-
-    vgDestroyPath(path);
-    ASSERT_VG_NO_ERROR();
 }
 
 void PainterOpenVG::drawImage(TiledImageOpenVG* tiledImage, const FloatRect& dst, const FloatRect& src)
@@ -1770,7 +1741,7 @@ PassRefPtr<TiledImageOpenVG> PainterOpenVG::asNewNativeImage(const IntRect& src,
 PassRefPtr<TiledImageOpenVG> PainterOpenVG::asNewNativeImage(SurfaceOpenVG* surface, const IntRect& src, VGImageFormat format)
 {
     ASSERT(m_state);
-    surface->sharedSurface()->makeCurrent();
+    surface->makeResourceCreationContextCurrent();
 
     const IntSize vgMaxImageSize(vgGeti(VG_MAX_IMAGE_WIDTH), vgGeti(VG_MAX_IMAGE_HEIGHT));
     ASSERT_VG_NO_ERROR();

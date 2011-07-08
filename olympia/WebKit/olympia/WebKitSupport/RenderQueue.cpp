@@ -180,6 +180,7 @@ void RenderRect::quickSort(WebCore::IntRectList* queue)
 
 RenderQueue::RenderQueue(BackingStorePrivate* parent)
     : m_parent(parent)
+    , m_rectsAddedToRegularRenderJobsInCurrentCycle(false)
     , m_currentRegularRenderJobsBatchUnderPressure(false)
     , m_primarySortDirection(LeftToRight)
     , m_secondarySortDirection(TopToBottom)
@@ -231,9 +232,19 @@ bool RenderQueue::isEmpty(bool shouldPerformRegularRenderJobs) const
             && m_nonVisibleScrollJobs.isEmpty();
 }
 
+bool RenderQueue::hasCurrentRegularRenderJob() const
+{
+    return !m_currentRegularRenderJobsBatch.isEmpty() || !m_regularRenderJobsRegion.isEmpty();
+}
+
 bool RenderQueue::hasCurrentVisibleZoomJob() const
 {
     return !m_visibleZoomJobs.isEmpty();
+}
+
+bool RenderQueue::hasCurrentVisibleScrollJob() const
+{
+    return !m_visibleScrollJobs.isEmpty();
 }
 
 bool RenderQueue::isCurrentVisibleScrollJob(const WebCore::IntRect& rect) const
@@ -262,6 +273,16 @@ void RenderQueue::setCurrentRegularRenderJobBatchUnderPressure(bool b)
     m_currentRegularRenderJobsBatchUnderPressure = b;
 }
 
+void RenderQueue::eventQueueCycled()
+{
+    // Called by the backingstore when the event queue has cycled to allow the
+    // render queue to determine if the regular render jobs are under pressure
+    if (m_rectsAddedToRegularRenderJobsInCurrentCycle && m_currentRegularRenderJobsBatchRegion.isEmpty())
+        m_currentRegularRenderJobsBatchUnderPressure = true;
+
+    m_rectsAddedToRegularRenderJobsInCurrentCycle = false;
+}
+
 void RenderQueue::addToQueue(JobType type, const WebCore::IntRectList& rectList)
 {
     for (size_t i = 0; i < rectList.size(); ++i)
@@ -279,6 +300,9 @@ void RenderQueue::addToQueue(JobType type, const WebCore::IntRect& rect)
         break;
     case RegularRender:
         {
+            // Flag that we added rects in the current event queue cycle
+            m_rectsAddedToRegularRenderJobsInCurrentCycle = true;
+
             // We try and detect if this newly added rect intersects or is contained in the currently running
             // batch of render jobs.  If so, then we have to start the batch over since we decompose individual
             // rects into subrects and might have already rendered one of them.  If the webpage's content has
@@ -324,6 +348,9 @@ void RenderQueue::addToScrollZoomQueue(const RenderRect& rect, RenderRectList* r
                            rect.x(), rect.y(), rect.width(), rect.height());
 #endif
     rectList->append(rect);
+
+    if (hasCurrentVisibleZoomJob() || hasCurrentVisibleScrollJob())
+        m_parent->startRenderTimer(); // Start the render timer since we know we could have some checkerboard here...
 }
 
 void RenderQueue::quickSort(RenderRectList* queue)
@@ -425,6 +452,9 @@ void RenderQueue::visibleContentChanged(const WebCore::IntRect& visibleContent)
     if (m_nonVisibleScrollJobs.isEmpty() && !m_nonVisibleScrollJobsCompleted.isEmpty())
         nonVisibleScrollJobsCompleted();
 
+    if (!hasCurrentVisibleZoomJob() && !hasCurrentVisibleScrollJob())
+         m_parent->stopRenderTimer();
+
     // We shouldn't be empty because the early return above and the fact that this
     // method just shuffles rects from queue to queue hence the total number of
     // rects in the various queues should be conserved
@@ -486,6 +516,9 @@ void RenderQueue::clear(const WebCore::IntRect& rect, bool clearRegularRenderJob
 
     if (m_nonVisibleScrollJobs.isEmpty() && !m_nonVisibleScrollJobsCompleted.isEmpty())
         nonVisibleScrollJobsCompleted();
+
+    if (!hasCurrentVisibleZoomJob() && !hasCurrentVisibleScrollJob())
+         m_parent->stopRenderTimer();
 }
 
 void RenderQueue::clear()
@@ -500,13 +533,16 @@ void RenderQueue::clear()
     m_currentRegularRenderJobsBatchRegion = IntRectRegion();
     m_currentRegularRenderJobsBatchUnderPressure = false;
     m_regularRenderJobsNotRenderedRegion = IntRectRegion();
-
+    m_parent->stopRenderTimer();
     ASSERT(isEmpty());
 }
 
 void RenderQueue::clearVisibleZoom()
 {
     m_visibleZoomJobs.clear();
+
+    if (!hasCurrentVisibleZoomJob() && !hasCurrentVisibleScrollJob())
+         m_parent->stopRenderTimer();
 }
 
 bool RenderQueue::regularRenderJobsPreviouslyAttemptedButNotRendered(const WebCore::IntRect& rect)
@@ -541,7 +577,10 @@ void RenderQueue::render(bool shouldPerformRegularRenderJobs)
     else if (!m_visibleScrollJobs.isEmpty())
         renderVisibleScrollJob();
     else if (shouldPerformRegularRenderJobs && (!m_currentRegularRenderJobsBatch.isEmpty() || !m_regularRenderJobsRegion.isEmpty()))
-        renderRegularRenderJob();
+        if (currentRegularRenderJobBatchUnderPressure())
+            renderAllCurrentRegularRenderJobs();
+        else
+            renderRegularRenderJob();
     else if (!m_nonVisibleScrollJobs.isEmpty())
         renderNonVisibleScrollJob();
     else
@@ -606,6 +645,32 @@ void RenderQueue::renderAllCurrentRegularRenderJobs()
     m_currentRegularRenderJobsBatchUnderPressure = false;
     IntRect updateRect = m_parent->blitVisibleContents();
     m_parent->invalidateWindow(updateRect);
+
+    if (!regionNotRendered.isEmpty())
+        m_parent->updateTilesForScrollOrNotRenderedRegion();
+}
+
+void RenderQueue::startRegularRenderJobBatchIfNeeded()
+{
+    if (!m_currentRegularRenderJobsBatch.isEmpty())
+        return;
+
+    // Decompose the current regular render job region into render rect pieces
+    IntRectList regularRenderJobs = convertToRenderRectList(m_regularRenderJobsRegion.rects());
+
+    // The current batch...
+    m_currentRegularRenderJobsBatch = regularRenderJobs;
+
+    // Create a region object that will be checked when adding new rects before
+    // this batch has been completed
+    m_currentRegularRenderJobsBatchRegion = m_regularRenderJobsRegion;
+
+    // Clear the former region since it is now part of this batch
+    m_regularRenderJobsRegion = IntRectRegion();
+
+#if DEBUG_RENDER_QUEUE
+    Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "RenderQueue::startRegularRenderJobBatchIfNeeded batch size is %d!", m_currentRegularRenderJobsBatch.size());
+#endif
 }
 
 void RenderQueue::renderVisibleZoomJob()
@@ -634,6 +699,9 @@ void RenderQueue::renderVisibleZoomJob()
     Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "RenderQueue::renderVisibleZoomJob rect=(%d,%d %dx%d) elapsed=%f",
                            subRect.x(), subRect.y(), subRect.width(), subRect.height(), elapsed);
 #endif
+
+    if (!hasCurrentVisibleZoomJob() && !hasCurrentVisibleScrollJob())
+        m_parent->stopRenderTimer();
 }
 
 void RenderQueue::renderVisibleScrollJob()
@@ -678,6 +746,9 @@ void RenderQueue::renderVisibleScrollJob()
 
     if (m_visibleScrollJobs.isEmpty())
         visibleScrollJobsCompleted(true /*shouldBlit*/);
+
+    if (!hasCurrentVisibleZoomJob() && !hasCurrentVisibleScrollJob())
+        m_parent->stopRenderTimer();
 }
 
 void RenderQueue::renderRegularRenderJob()
@@ -689,26 +760,7 @@ void RenderQueue::renderRegularRenderJob()
 
     ASSERT(!m_currentRegularRenderJobsBatch.isEmpty() || !m_regularRenderJobsRegion.isEmpty());
 
-    // If there is no current batch of jobs, then create one
-    if (m_currentRegularRenderJobsBatch.isEmpty()) {
-
-        // Decompose the current regular render job region into render rect pieces
-        IntRectList regularRenderJobs = convertToRenderRectList(m_regularRenderJobsRegion.rects());
-
-        // The current batch...
-        m_currentRegularRenderJobsBatch = regularRenderJobs;
-
-        // Create a region object that will be checked when adding new rects before
-        // this batch has been completed
-        m_currentRegularRenderJobsBatchRegion = m_regularRenderJobsRegion;
-
-        // Clear the former region since it is now part of this batch
-        m_regularRenderJobsRegion = IntRectRegion();
-
-#if DEBUG_RENDER_QUEUE
-        Olympia::Platform::log(Olympia::Platform::LogLevelCritical, "RenderQueue::renderRegularRenderJob batch size is %d!", m_currentRegularRenderJobsBatch.size());
-#endif
-    }
+    startRegularRenderJobBatchIfNeeded();
 
     // Take the first job from the regular render job queue
     IntRect rect = m_currentRegularRenderJobsBatch.first();
@@ -744,10 +796,12 @@ void RenderQueue::renderRegularRenderJob()
         m_parent->invalidateWindow(updateRect);
     }
 
-
     // Make sure we didn't alter state of the queues that should have been empty
     // before this method was called
     ASSERT(m_visibleScrollJobs.isEmpty());
+
+    if (!regionNotRendered.isEmpty())
+        m_parent->updateTilesForScrollOrNotRenderedRegion();
 }
 
 void RenderQueue::renderNonVisibleScrollJob()

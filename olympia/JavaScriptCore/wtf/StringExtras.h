@@ -33,10 +33,9 @@
 #include <strings.h> 
 #endif 
 
-#if COMPILER(MSVC)
+#if COMPILER(MSVC) && !PLATFORM(OLYMPIA)
 // FIXME: why a COMPILER check instead of OS? also, these should be HAVE checks
 
-#if !PLATFORM(OLYMPIA)
 inline int snprintf(char* buffer, size_t count, const char* format, ...) 
 {
     int result;
@@ -46,7 +45,6 @@ inline int snprintf(char* buffer, size_t count, const char* format, ...)
     va_end(args);
     return result;
 }
-#endif
 
 #if COMPILER(MSVC7_OR_LOWER) || OS(WINCE)
 

@@ -95,7 +95,7 @@ void PatternOpenVG::setImage(PassRefPtr<TiledImageOpenVG> image, const FloatRect
 
         // Image can't be reused directly, copy pixels into a new image instead.
 #if PLATFORM(EGL)
-        EGLDisplayOpenVG::current()->sharedPlatformSurface()->makeCurrent();
+        EGLDisplayOpenVG::current()->sharedPlatformSurface()->makeResourceCreationContextCurrent();
 #endif
         const IntSize vgMaxImageSize(vgGeti(VG_MAX_IMAGE_WIDTH), vgGeti(VG_MAX_IMAGE_HEIGHT));
         ASSERT_VG_NO_ERROR();
@@ -142,7 +142,7 @@ void PatternOpenVG::setImage(PassRefPtr<TiledImageOpenVG> image, const FloatRect
 
     // Existing image/pixels could not be reused. Use (down)scaling to make it work.
 #if PLATFORM(EGL)
-    EGLDisplayOpenVG::current()->sharedPlatformSurface()->makeCurrent();
+    EGLDisplayOpenVG::current()->sharedPlatformSurface()->makeResourceCreationContextCurrent();
 #endif
     const IntSize vgMaxImageSize(vgGeti(VG_MAX_IMAGE_WIDTH), vgGeti(VG_MAX_IMAGE_HEIGHT));
     ASSERT_VG_NO_ERROR();

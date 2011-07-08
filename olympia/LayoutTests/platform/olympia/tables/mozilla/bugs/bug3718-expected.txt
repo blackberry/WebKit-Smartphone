@@ -3,16 +3,16 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584
-      RenderTable {TABLE} at (0,0) size 155x48 [border: (3px outset #808080)]
-        RenderTableSection {TBODY} at (3,3) size 149x42
-          RenderTableRow {TR} at (0,0) size 149x42
-            RenderTableCell {TD} at (0,0) size 149x42 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-              RenderBlock (anonymous) at (1,1) size 147x18
-                RenderText {#text} at (0,0) size 147x18
-                  text run at (0,0) width 147: "Family Essentials"
-              RenderTable {TABLE} at (1,19) size 30x22 [border: (1px outset #808080)]
-                RenderTableSection {TBODY} at (1,1) size 28x20
-                  RenderTableRow {TR} at (0,0) size 28x20
-                    RenderTableCell {TD} at (0,0) size 28x20 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-                      RenderText {#text} at (1,1) size 26x18
+      RenderTable {TABLE} at (0,0) size 142x46 [border: (3px outset #808080)]
+        RenderTableSection {TBODY} at (3,3) size 136x40
+          RenderTableRow {TR} at (0,0) size 136x40
+            RenderTableCell {TD} at (0,0) size 136x40 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderBlock (anonymous) at (1,1) size 134x17
+                RenderText {#text} at (0,0) size 134x17
+                  text run at (0,0) width 134: "Family Essentials"
+              RenderTable {TABLE} at (1,18) size 30x21 [border: (1px outset #808080)]
+                RenderTableSection {TBODY} at (1,1) size 28x19
+                  RenderTableRow {TR} at (0,0) size 28x19
+                    RenderTableCell {TD} at (0,0) size 28x19 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+                      RenderText {#text} at (1,1) size 26x17
                         text run at (1,1) width 26: "foo"

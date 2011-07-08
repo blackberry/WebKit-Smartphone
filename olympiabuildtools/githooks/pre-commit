@@ -4,6 +4,6 @@
 #
 
 set -e
-for check in `ls -1 $GIT_DIR/hooks/pre-commit-*` ; do
+for check in `ls -1 $GIT_DIR/hooks/pre-commit-* 2>/dev/null` ; do
     $check
 done

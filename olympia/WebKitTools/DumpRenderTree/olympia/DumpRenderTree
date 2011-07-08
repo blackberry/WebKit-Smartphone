@@ -109,7 +109,7 @@ sub dumpTests() {
     close INDEX;
 
     # Do not clean results if tests are already in progress
-    if (! -e $CURRENT_TEST_FILE && ! -e $DRT_DONE_FILE && -d "$SDCARD_DIR/results"){
+    if (! -e $CURRENT_TEST_FILE && ! -e $DRT_DONE_FILE && -d "$SDCARD_DIR/results") {
         print "INFO: Removing results/...\n";
         rmtree "$SDCARD_DIR/results";
     }
@@ -135,12 +135,28 @@ sub dumpTests() {
         copyLayouttests($layoutSource, $layoutDestination, @testDirectories);
     } else {
         # virtual SDCards links to LayoutTests
+        if (-d $layoutDestination) {
+            # ensure the LayoutTests point to $OLYMPIAROOT
+            $layoutDestination =~ s/\/+$//;
+            foreach (`junction "$layoutDestination"`) {
+                if (/Substitute Name:/) {
+                    # change the path to unix style
+                    s/.*Substitute Name:\s*/\//;
+                    s/:?\\/\//g;
+
+                    if (! /$ENV{'OLYMPIAROOT'}/) {
+                        print "WARNING: Removing LayoutTests/ junction as it does not point to your current \$OLYMPIAROOT...\n";
+                        system "junction -d \"$layoutDestination\"";
+                    }
+                }
+            }
+        }
         system "junction -s \"$layoutDestination\" \"$layoutSource\" " unless -d $layoutDestination;
     }
     my $ret = 0;
 
     # Stop here if SDCARD_PATH_IS_DEVICE
-    if ($SDCARD_PATH_IS_DEVICE){
+    if ($SDCARD_PATH_IS_DEVICE) {
         return $ret;
     }
 

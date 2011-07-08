@@ -1675,12 +1675,14 @@ int RenderBox::calcReplacedHeightUsing(Length height) const
             // In standard mode, we try to follow this rule.
             if (!style()->htmlHacks() && cb->style()->height().isAuto() && !isPositioned() && !cb->isRenderView() && !cb->isTableCell()) {
                 IntSize size = intrinsicSize();
+                int h = size.height();
                 // Try to keep aspect ratio.
-                int h = size.width() ? calcReplacedWidth() * size.height() / size.width() : size.height();
+                if (size.width() && (style()->width().isFixed() || style()->width().isPercent()))
+                    h = calcReplacedWidth() * size.height() / size.width();
                 if (h > 0)
                     return calcContentBoxHeight(h);
             }
-            
+
             int availableHeight = isPositioned() ? containingBlockHeightForPositioned(toRenderBoxModelObject(cb)) : toRenderBox(cb)->availableHeight();
 
             // It is necessary to use the border-box to match WinIE's broken
@@ -1783,7 +1785,13 @@ int RenderBox::containingBlockWidthForPositioned(const RenderBoxModelObject* con
 int RenderBox::containingBlockHeightForPositioned(const RenderBoxModelObject* containingBlock) const
 {   
     int heightResult = 0;
-    if (containingBlock->isBox())
+    FrameView* frameView = 0;
+    if (containingBlock->isRenderView())
+        frameView = toRenderView(containingBlock)->frameView();
+
+    if (frameView && !frameView->fixedReportedSize().isEmpty())
+        heightResult = frameView->reportedHeight();
+    else if (containingBlock->isBox())
          heightResult = toRenderBox(containingBlock)->height();
     else if (containingBlock->isRenderInline()) {
         ASSERT(containingBlock->isRelPositioned());

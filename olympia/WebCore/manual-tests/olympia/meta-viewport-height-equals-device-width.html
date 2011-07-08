@@ -4,7 +4,31 @@
 <style>
 body { margin: 0; padding: 0; }
 </style>
+<script src="meta-viewport-utilities.js"></script>
+<script>
+function updateOrientation() {
+    var deviceWidth = getDeviceWidth();
+    var height = document.documentElement.offsetHeight;
+    var square = document.getElementById("square");
+    var scale = getScale();
+
+    logStart(square)
+    log(square, "device-width: " + deviceWidth);
+    log(square, "actual height: " + height);
+    log(square, "scale: " + scale);
+
+    // This test can take several layouts to pass
+    logResultAndNotifyDoneOnSuccess(square, height === deviceWidth);
+
+    setTimeout(updateOrientation, 500);
+}
+
+window.onorientationchange = updateOrientation;
+window.onload = updateOrientation;
+window.onresize = updateOrientation;
+</script>
 <body>
-<p>This tests that the viewport meta property height can be set to the property value device-width. This test PASSED if you can read this text in every orientation. Otherwise, it FAILED.</p>
+<p>This tests that the viewport meta property height can be set to the property value device-width.</p>
+<div id="square"></div>
 </body>
 </html>

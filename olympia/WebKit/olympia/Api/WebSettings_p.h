@@ -15,13 +15,14 @@ namespace WebCore {
 namespace Olympia {
 namespace WebKit {
 
+class String;
 struct WebCoreSettingsState;
 struct OlympiaSettingsState;
 
 class WebSettingsPrivate {
 public:
-    WebSettingsPrivate();
-    WebSettingsPrivate(WebCore::Settings*);
+    WebSettingsPrivate(const String&);
+    WebSettingsPrivate(WebCore::Settings*, const String&);
     ~WebSettingsPrivate();
 
     /* Applies settings to the page settings */

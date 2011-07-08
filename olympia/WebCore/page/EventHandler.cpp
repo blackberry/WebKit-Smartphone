@@ -2776,14 +2776,7 @@ bool EventHandler::handleTouchEvent(const PlatformTouchEvent& event)
 
     for (unsigned i = 0; i < points.size(); ++i) {
         const PlatformTouchPoint& point = points[i];
-
-#if PLATFORM(OLYMPIA)
-        // For some reason this code uses pos as the window position when there is variable for screen position.
-        // Since for us pos is the global position and screenPos is the window position we use screenPos.
-        IntPoint pagePoint = documentPointForWindowPoint(m_frame, point.screenPos());
-#else
         IntPoint pagePoint = documentPointForWindowPoint(m_frame, point.pos());
-#endif
         HitTestResult result = hitTestResultAtPoint(pagePoint, /*allowShadowContent*/ false);
         Node* target = result.innerNode();
 
@@ -2802,11 +2795,7 @@ bool EventHandler::handleTouchEvent(const PlatformTouchEvent& event)
 
         if (m_frame != doc->frame()) {
             // pagePoint should always be relative to the target elements containing frame.
-#if PLATFORM(OLYMPIA)
-            pagePoint = documentPointForWindowPoint(doc->frame(), point.screenPos());
-#else
             pagePoint = documentPointForWindowPoint(doc->frame(), point.pos());
-#endif
         }
 
         int adjustedPageX = lroundf(pagePoint.x() / pageZoomFactor(m_frame));

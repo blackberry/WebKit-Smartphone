@@ -106,7 +106,12 @@ module HTMLDiff
       best_match_size = 0
       
       match_length_at = Hash.new { |h, index| h[index] = 0 }
-      
+
+      # Tests with large amounts of diffs take too long to process.
+      if end_in_old > 10000 or end_in_new > 10000
+        puts "WARNING: pretty diff not executed due to a large amount of comparison indexes: [#{end_in_old}] <> [#{end_in_new}]"
+        return nil
+      end
       start_in_old.upto(end_in_old - 1) do |index_in_old|
 
         new_match_length_at = Hash.new { |h, index| h[index] = 0 }

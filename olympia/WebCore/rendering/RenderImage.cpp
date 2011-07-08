@@ -363,27 +363,9 @@ void RenderImage::resetAnimation()
 static bool shouldDrawBorderWhileLoading(RenderImage* renderImage)
 {
     ASSERT(renderImage);
-    RenderView* renderView = renderImage->view();
-    if (!renderView)
-        return false;
-
-    FrameView* frameView = renderView->frameView();
-    if (!frameView)
-        return false;
-
-    Frame* frame = frameView->frame();
-    if (!frame)
-        return false;
-
-    Page* page = frame->page();
-    if (!page)
-        return false;
-
-    Settings* settings = page->settings();
-    if (!settings)
-        return false;
-
-    return settings->shouldDrawBorderWhileLoadingImages();
+    ASSERT(renderImage->document());
+    Settings* settings = renderImage->document()->settings();
+    return settings ? settings->shouldDrawBorderWhileLoadingImages() : false;
 }
 
 void RenderImage::paintReplaced(PaintInfo& paintInfo, int tx, int ty)
@@ -412,7 +394,13 @@ void RenderImage::paintReplaced(PaintInfo& paintInfo, int tx, int ty)
             drawBorder = (!img || img->isNull());
         } else {
             // draw the border only when loading is finished and there is still no image
-            drawBorder = (!hasImage() || errorOccurred());
+            drawBorder = (!hasImage() || errorOccurred()
+#if PLATFORM(OLYMPIA)
+                            // For the RIM-platform, we also draw the alternative text when network image loading is suppressed.
+                            // loading is suppressed.
+                            || (img->isNull() && document()->settings() && !document()->settings()->loadsImagesAutomatically())
+#endif
+                         );
         }
     }
 

@@ -1,4 +1,4 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"> 
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN">
 <html>
 <head>
 <title>Test for Buzilla Bug#37169</title>
@@ -39,10 +39,12 @@ function test()
 {
     description("This test checks that replaced elements with percentage heights computes to 'auto' in standard mode, if the height of the containing block is not specified explicitly.<br>See bug #37169.");
 
-    shouldBe("getWidth('image') == getHeight('image')", "true");
+    shouldBe("getWidth('image1') == getHeight('image1')", "true");
+
+    shouldBe("getHeight('image2') == '100px'", "true");
 
     isSuccessfullyParsed();
-    if (window.layoutTestController) { 
+    if (window.layoutTestController) {
         layoutTestController.notifyDone();
     }
 }
@@ -52,9 +54,12 @@ var successfullyParsed = true;
 </head>
 <body onload="test()">
 
-<p>
-<img id="image" src="resources/square-blue-100x100.png" alt="att.gif" style="width: 40%; height: 10%;"/>
-</p> 
+<div>
+<img id="image1" src="resources/square-blue-100x100.png" alt="att.gif" style="width: 20%; height: 10%;"/>
+</div>
+<div>
+<img id="image2" src="resources/square-blue-100x100.png" alt="att.gif" height="30%"/>
+</div>
 
 <p id="description"></p>
 <div id="console"></div>

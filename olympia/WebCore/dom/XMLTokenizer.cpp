@@ -50,6 +50,7 @@
 #include "ScriptElement.h"
 #include "ScriptSourceCode.h"
 #include "ScriptValue.h"
+#include "Settings.h"
 #include "TextResourceDecoder.h"
 #include "TreeDepthLimit.h"
 #include <wtf/text/CString.h>
@@ -319,7 +320,8 @@ void XMLTokenizer::notifyFinished(CachedResource* unusedResource)
 {
     ASSERT_UNUSED(unusedResource, unusedResource == m_pendingScript);
 #if PLATFORM(OLYMPIA)
-    ASSERT(m_pendingScript->accessCount() > 0 || cache()->disabled());
+    Settings* settings = m_doc ? m_doc->settings() : 0;
+    ASSERT(m_pendingScript->accessCount() > 0 || cache()->disabled() || !settings || !settings->useCache());
 #else
     ASSERT(m_pendingScript->accessCount() > 0);
 #endif

@@ -200,6 +200,14 @@ StorageNamespace* PageGroup::localStorage()
 
     return m_localStorage.get();
 }
+
+#if OS(OLYMPIA)
+void PageGroup::removeLocalStorage()
+{
+    m_localStorage = 0;
+}
+#endif
+
 #endif
 
 #if ENABLE(INDEXED_DATABASE)

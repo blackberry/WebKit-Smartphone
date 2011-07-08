@@ -32,6 +32,7 @@
 #include "SurfaceOpenVG.h"
 #include "TransformationMatrix.h"
 
+#include <vgu.h>
 #include <wtf/Assertions.h>
 #include <wtf/MathExtras.h>
 #include <wtf/UnusedParam.h>
@@ -346,7 +347,29 @@ FloatRect GraphicsContext::roundToDevicePixels(const FloatRect& rect)
     if (paintingDisabled())
         return FloatRect();
 
-    return FloatRect(enclosingIntRect(m_data->transformation().mapRect(rect)));
+    // It is not enough just to round to pixels in device space. The rotation part of the
+    // affine transform matrix to device space can mess with this conversion if we have a
+    // rotating image like the hands of the world clock widget. We just need the scale, so
+    // we get the affine transform matrix and extract the scale.
+    AffineTransform deviceTransform = m_data->transformation();
+    if (deviceTransform.isIdentity())
+        return rect;
+
+    double deviceScaleX = sqrtf(deviceTransform.a() * deviceTransform.a() + deviceTransform.b() * deviceTransform.b());
+    double deviceScaleY = sqrtf(deviceTransform.c() * deviceTransform.c() + deviceTransform.d() * deviceTransform.d());
+
+    FloatPoint deviceOrigin(rect.x() * deviceScaleX, rect.y() * deviceScaleY);
+    FloatPoint deviceLowerRight(rect.right() * deviceScaleX, rect.bottom() * deviceScaleY);
+
+    // Don't let the height or width round to 0 unless either was originally 0
+    if (deviceOrigin.y() == deviceLowerRight.y() && rect.height())
+        deviceLowerRight.setY(deviceLowerRight.y() + 1);
+    if (deviceOrigin.x() == deviceLowerRight.x() && rect.width())
+        deviceLowerRight.setX(deviceLowerRight.x() + 1);
+
+    FloatPoint roundedOrigin = FloatPoint(deviceOrigin.x() / deviceScaleX, deviceOrigin.y() / deviceScaleY);
+    FloatPoint roundedLowerRight = FloatPoint(deviceLowerRight.x() / deviceScaleX, deviceLowerRight.y() / deviceScaleY);
+    return FloatRect(roundedOrigin, roundedLowerRight - roundedOrigin);
 }
 
 void GraphicsContext::setPlatformShadow(const IntSize& size, int blur, const Color& color, ColorSpace colorSpace)
@@ -570,12 +593,18 @@ void GraphicsContext::addInnerRoundedRectClip(const IntRect& rect, int thickness
     if (paintingDisabled())
         return;
 
-    Path path;
-    path.addEllipse(rect);
-    path.addEllipse(FloatRect(rect.x() + thickness, rect.y() + thickness,
-        rect.width() - (thickness * 2), rect.height() - (thickness * 2)));
+    VGPath path = m_data->currentSurface()->cachedPath(SurfaceOpenVG::EmptyTemporaryPath);
+    VGUErrorCode errorCode = vguEllipse(path,
+        rect.x() + rect.width() / 2.0, rect.y() + rect.height() / 2.0,
+        rect.width(), rect.height());
+    ASSERT(errorCode == VGU_NO_ERROR);
 
-    m_data->clipPath(path, PainterOpenVG::IntersectClip, m_common->state.fillRule);
+    errorCode = vguEllipse(path,
+        rect.x() + rect.width() / 2.0, rect.y() + rect.height() / 2.0,
+        rect.width() - (thickness * 2), rect.height() - (thickness * 2));
+    ASSERT(errorCode == VGU_NO_ERROR);
+
+    m_data->clipPath(path, PainterOpenVG::IntersectClip, RULE_EVENODD);
 }
 
 void GraphicsContext::concatCTM(const AffineTransform& transformation)

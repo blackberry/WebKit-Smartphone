@@ -117,14 +117,11 @@ EGLDisplayOpenVG::~EGLDisplayOpenVG()
     eglMakeCurrent(m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     ASSERT_EGL_NO_ERROR();
 
+    HashMap<EGLSurface, SurfaceOpenVG*>::const_iterator end = m_platformSurfaces.end();
+    for (HashMap<EGLSurface, SurfaceOpenVG*>::const_iterator it = m_platformSurfaces.begin(); it != end; ++it)
+        (*it).second->detach();
+
     delete m_sharedPlatformSurface;
-
-    HashMap<EGLSurface, EGLint>::const_iterator end = m_surfaceConfigIds.end();
-    for (HashMap<EGLSurface, EGLint>::const_iterator it = m_surfaceConfigIds.begin(); it != end; ++it)
-        destroySurface((*it).first);
-
-    eglTerminate(m_display);
-    ASSERT_EGL_NO_ERROR();
 }
 
 void EGLDisplayOpenVG::setDefaultPbufferConfig(const EGLConfig& config)
@@ -227,11 +224,8 @@ SurfaceOpenVG* EGLDisplayOpenVG::sharedPlatformSurface()
         ASSERT_EGL_NO_ERROR();
         m_contexts.set(m_surfaceConfigIds.get(surface), context);
 
-        m_sharedPlatformSurface = new SurfaceOpenVG;
-        m_sharedPlatformSurface->m_eglDisplay = m_display;
-        m_sharedPlatformSurface->m_eglSurface = surface;
-        m_sharedPlatformSurface->m_eglContext = context;
-        m_platformSurfaces.set(surface, m_sharedPlatformSurface); // a.k.a. registerPlatformSurface()
+        m_sharedPlatformSurface = SurfaceOpenVG::adoptExistingSurface(
+            m_display, surface, context, SurfaceOpenVG::TakeSurfaceOwnership, EGL_PBUFFER_BIT);
     }
     return m_sharedPlatformSurface;
 }
@@ -328,7 +322,7 @@ bool EGLDisplayOpenVG::surfacesCompatible(const EGLSurface& surface, const EGLSu
     return m_surfaceConfigIds.contains(surface) && m_surfaceConfigIds.contains(otherSurface);
 }
 
-void EGLDisplayOpenVG::destroySurface(const EGLSurface& surface)
+void EGLDisplayOpenVG::removeSurface(const EGLSurface& surface, bool destroySurface)
 {
     ASSERT(surface != EGL_NO_SURFACE);
 
@@ -371,8 +365,10 @@ void EGLDisplayOpenVG::destroySurface(const EGLSurface& surface)
         }
     }
 
-    eglDestroySurface(m_display, surface);
-    ASSERT_EGL_NO_ERROR();
+    if (destroySurface) {
+        eglDestroySurface(m_display, surface);
+        ASSERT_EGL_NO_ERROR();
+    }
 }
 
 EGLContext EGLDisplayOpenVG::contextForSurface(const EGLSurface& surface)
@@ -384,6 +380,9 @@ EGLContext EGLDisplayOpenVG::contextForSurface(const EGLSurface& surface)
 
     eglBindAPI(EGL_OPENVG_API);
     ASSERT_EGL_NO_ERROR();
+
+    if (!m_sharedPlatformSurface) // shared context has not been created yet
+        sharedPlatformSurface(); // creates the shared surface & context
 
     EGLint surfaceConfigId;
 
@@ -404,9 +403,6 @@ EGLContext EGLDisplayOpenVG::contextForSurface(const EGLSurface& surface)
 
     if (m_contexts.contains(surfaceConfigId))
         return m_contexts.get(surfaceConfigId);
-
-    if (!m_sharedPlatformSurface) // shared context has not been created yet
-        sharedPlatformSurface(); // creates the shared surface & context
 
     EGLDisplay currentDisplay = eglGetCurrentDisplay();
     EGLSurface currentReadSurface = eglGetCurrentSurface(EGL_READ);

@@ -1,20 +1,20 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x95
-  RenderBlock {HTML} at (0,0) size 800x95
-    RenderBody {BODY} at (8,21) size 784x66
-      RenderBlock {H2} at (0,0) size 784x27
-        RenderText {#text} at (0,0) size 293x27
-          text run at (0,0) width 293: "table-column-group"
-      RenderTable {DIV} at (0,48) size 94x18
+layer at (0,0) size 800x88
+  RenderBlock {HTML} at (0,0) size 800x88
+    RenderBody {BODY} at (8,19) size 784x61
+      RenderBlock {H2} at (0,0) size 784x25
+        RenderText {#text} at (0,0) size 264x25
+          text run at (0,0) width 264: "table-column-group"
+      RenderTable {DIV} at (0,44) size 86x17
         RenderTableCol {DIV} at (0,0) size 0x0
           RenderTableCol {DIV} at (0,0) size 0x0
           RenderTableCol {DIV} at (0,0) size 0x0
-        RenderTableSection (anonymous) at (0,0) size 94x18
-          RenderTableRow {DIV} at (0,0) size 94x18
-            RenderTableCell {DIV} at (0,0) size 47x18 [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (0,0) size 47x18
-                text run at (0,0) width 47: "white"
-            RenderTableCell {DIV} at (47,0) size 47x18 [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (0,0) size 47x18
-                text run at (0,0) width 47: "white"
+        RenderTableSection (anonymous) at (0,0) size 86x17
+          RenderTableRow {DIV} at (0,0) size 86x17
+            RenderTableCell {DIV} at (0,0) size 43x17 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (0,0) size 43x17
+                text run at (0,0) width 43: "white"
+            RenderTableCell {DIV} at (43,0) size 43x17 [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (0,0) size 43x17
+                text run at (0,0) width 43: "white"

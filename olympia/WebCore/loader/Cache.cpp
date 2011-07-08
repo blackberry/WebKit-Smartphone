@@ -35,6 +35,7 @@
 #include "FrameView.h"
 #include "Image.h"
 #include "ResourceHandle.h"
+#include "Settings.h"
 #include "SecurityOrigin.h"
 #include <stdio.h>
 #include <wtf/CurrentTime.h>
@@ -113,6 +114,10 @@ CachedResource* Cache::requestResource(DocLoader* docLoader, CachedResource::Typ
             FrameLoader::reportLocalLoadFailed(doc->frame(), url.string());
         return 0;
     }
+
+#if OS(OLYMPIA)
+    Settings* settings = docLoader ? docLoader->doc()->settings() : 0;
+#endif
     
     if (!resource) {
         // The resource does not exist. Create it.
@@ -134,7 +139,11 @@ CachedResource* Cache::requestResource(DocLoader* docLoader, CachedResource::Typ
             return 0;
         }
 
+#if OS(OLYMPIA)
+        if (!disabled() && settings && settings->useCache())
+#else
         if (!disabled())
+#endif
             m_resources.set(url.string(), resource);  // The size will be added in later once the resource is loaded and calls back to us with the new size.
         else {
             // Kick the resource out of the cache, because the cache is disabled.
@@ -146,7 +155,11 @@ CachedResource* Cache::requestResource(DocLoader* docLoader, CachedResource::Typ
     if (resource->type() != type)
         return 0;
 
+#if OS(OLYMPIA)
+    if (!disabled() && settings && settings->useCache()) {
+#else
     if (!disabled()) {
+#endif
         // This will move the resource to the front of its LRU list and increase its access count.
         resourceAccessed(resource);
     }
@@ -156,6 +169,10 @@ CachedResource* Cache::requestResource(DocLoader* docLoader, CachedResource::Typ
     
 CachedCSSStyleSheet* Cache::requestUserCSSStyleSheet(DocLoader* docLoader, const String& url, const String& charset)
 {
+#if OS(OLYMPIA)
+    Settings* settings = docLoader ? docLoader->doc()->settings() : 0;
+#endif
+
     CachedCSSStyleSheet* userSheet;
     if (CachedResource* existing = resourceForURL(url)) {
         if (existing->type() != CachedResource::CSSStyleSheet)
@@ -169,13 +186,21 @@ CachedCSSStyleSheet* Cache::requestUserCSSStyleSheet(DocLoader* docLoader, const
         userSheet->setInCache(true);
         // Don't load incrementally, skip load checks, don't send resource load callbacks.
         userSheet->load(docLoader, false, SkipSecurityCheck, false);
+#if OS(OLYMPIA)
+        if (!disabled() && settings && settings->useCache())
+#else
         if (!disabled())
+#endif
             m_resources.set(url, userSheet);
         else
             userSheet->setInCache(false);
     }
 
+#if OS(OLYMPIA)
+    if (!disabled() && settings && settings->useCache()) {
+#else
     if (!disabled()) {
+#endif
         // This will move the resource to the front of its LRU list and increase its access count.
         resourceAccessed(userSheet);
     }

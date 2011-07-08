@@ -1,23 +1,23 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x157
-  RenderBlock {HTML} at (0,0) size 800x157
-    RenderBody {BODY} at (8,17) size 784x123
-      RenderBlock {P} at (0,0) size 784x18
-        RenderText {#text} at (0,0) size 363x18
-          text run at (0,0) width 363: "The borders below should be as described:"
-      RenderBlock {P} at (0,35) size 784x18
-        RenderInline {SPAN} at (0,0) size 165x28 [border: (5px dashed #000000)]
-          RenderText {#text} at (5,0) size 155x18
-            text run at (5,0) width 155: "Black and dashed."
+layer at (0,0) size 800x148
+  RenderBlock {HTML} at (0,0) size 800x148
+    RenderBody {BODY} at (8,16) size 784x116
+      RenderBlock {P} at (0,0) size 784x17
+        RenderText {#text} at (0,0) size 343x17
+          text run at (0,0) width 343: "The borders below should be as described:"
+      RenderBlock {P} at (0,33) size 784x17
+        RenderInline {SPAN} at (0,0) size 156x27 [border: (5px dashed #000000)]
+          RenderText {#text} at (5,0) size 146x17
+            text run at (5,0) width 146: "Black and dashed."
         RenderText {#text} at (0,0) size 0x0
-      RenderBlock {P} at (0,70) size 784x18
-        RenderInline {SPAN} at (0,0) size 188x28 [border: (5px groove #FFA500)]
-          RenderText {#text} at (5,0) size 178x18
-            text run at (5,0) width 178: "Orange and grooved."
+      RenderBlock {P} at (0,66) size 784x17
+        RenderInline {SPAN} at (0,0) size 181x27 [border: (5px groove #FFA500)]
+          RenderText {#text} at (5,0) size 171x17
+            text run at (5,0) width 171: "Orange and grooved."
         RenderText {#text} at (0,0) size 0x0
-      RenderBlock {P} at (0,105) size 784x18
-        RenderInline {SPAN} at (0,0) size 88x18
-          RenderText {#text} at (0,0) size 88x18
-            text run at (0,0) width 88: "No border."
+      RenderBlock {P} at (0,99) size 784x17
+        RenderInline {SPAN} at (0,0) size 85x17
+          RenderText {#text} at (0,0) size 85x17
+            text run at (0,0) width 85: "No border."
         RenderText {#text} at (0,0) size 0x0

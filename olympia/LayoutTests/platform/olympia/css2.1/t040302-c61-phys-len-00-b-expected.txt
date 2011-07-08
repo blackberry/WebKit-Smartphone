@@ -1,21 +1,21 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x215
-  RenderBlock {HTML} at (0,0) size 800x215
-    RenderBody {BODY} at (8,17) size 784x190
-      RenderBlock {P} at (0,0) size 784x18 [color=#000080]
-        RenderText {#text} at (0,0) size 428x18
-          text run at (0,0) width 428: "There should be two unbroken vertical bars below."
-      RenderBlock {P} at (0,35) size 784x36 [color=#000080]
-        RenderText {#text} at (0,0) size 769x36
-          text run at (0,0) width 540: "Hold up a credit card to your display. The distance between the "
-          text run at (540,0) width 229: "two vertical bars should be"
-          text run at (0,18) width 291: "exactly the length of a credit card "
-          text run at (291,18) width 102: "(85.60mm)."
-      RenderBlock {DIV} at (0,88) size 784x102 [border: (3px solid #000000)]
-        RenderBlock {DIV} at (326,0) size 458x17 [border: (3px solid #000000)]
-        RenderBlock {DIV} at (326,17) size 458x17 [border: (3px solid #000000)]
-        RenderBlock {DIV} at (326,34) size 458x17 [border: (3px solid #000000)]
-        RenderBlock {DIV} at (326,51) size 458x17 [border: (3px solid #000000)]
-        RenderBlock {DIV} at (326,68) size 458x17 [border: (3px solid #000000)]
-        RenderBlock {DIV} at (326,85) size 458x17 [border: (3px solid #000000)]
+layer at (0,0) size 800x203
+  RenderBlock {HTML} at (0,0) size 800x203
+    RenderBody {BODY} at (8,16) size 784x179
+      RenderBlock {P} at (0,0) size 784x17 [color=#000080]
+        RenderText {#text} at (0,0) size 405x17
+          text run at (0,0) width 405: "There should be two unbroken vertical bars below."
+      RenderBlock {P} at (0,33) size 784x34 [color=#000080]
+        RenderText {#text} at (0,0) size 726x34
+          text run at (0,0) width 511: "Hold up a credit card to your display. The distance between the "
+          text run at (511,0) width 215: "two vertical bars should be"
+          text run at (0,17) width 276: "exactly the length of a credit card "
+          text run at (276,17) width 94: "(85.60mm)."
+      RenderBlock {DIV} at (0,83) size 784x96 [border: (3px solid #000000)]
+        RenderBlock {DIV} at (326,0) size 458x16 [border: (3px solid #000000)]
+        RenderBlock {DIV} at (326,16) size 458x16 [border: (3px solid #000000)]
+        RenderBlock {DIV} at (326,32) size 458x16 [border: (3px solid #000000)]
+        RenderBlock {DIV} at (326,48) size 458x16 [border: (3px solid #000000)]
+        RenderBlock {DIV} at (326,64) size 458x16 [border: (3px solid #000000)]
+        RenderBlock {DIV} at (326,80) size 458x16 [border: (3px solid #000000)]

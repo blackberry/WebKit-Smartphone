@@ -11,6 +11,7 @@ namespace WebCore {
 
     extern const char WEBKITCREDITS[];
     extern const char BUILDINFO[];
+    extern const char BUILDTIME[];
 
     String configPage();
 

@@ -69,6 +69,10 @@ namespace WebCore {
 #if ENABLE(DOM_STORAGE)
         StorageNamespace* localStorage();
         bool hasLocalStorage() { return m_localStorage; }
+
+#if OS(OLYMPIA)
+        void removeLocalStorage();
+#endif
 #endif
 #if ENABLE(INDEXED_DATABASE)
         IndexedDatabase* indexedDatabase();

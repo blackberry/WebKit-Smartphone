@@ -1,18 +1,22 @@
-    <?php
-    //These are passed to this scipt via web iface
-    $type = $_GET['type'];
-    $dir = $_GET['dir'];
-    $name = $_GET['name'];
-    $what = $_GET['what'];
+<?php
+//These are passed to this scipt via web iface
+$type = $_GET['type'];
+$dir = $_GET['dir'];
+$name = $_GET['name'];
+$what = $_GET['what'];
 
-$home = "/home/buildbot/public_html/binaries";
 $allowedExtensions = array ('.sfi', '.dmp');
+$home = "/home/buildbot/public_html/binaries";
 $orderOfInstallation = array ('rim.*\.sfi', 'FSLinked\.dmp');
+$pid = getmypid();
 
 
 //     +++++ BATCH FILES +++++
 //Generate the batch file and include it in the archive.
 $fileContent = file_get_contents ("install_device.bat.template");
+
+//
+$fileContent = str_replace ("<PID>", $pid, $fileContent);
 
 //Now add each file in the [$home/$dir] path to the batch file.
 //The order of installation is important so that will be implemented here
@@ -53,12 +57,13 @@ foreach ($allFiles as $file) {
 
 $fileContent .= "GOTO End";
 
-//Write temp batch file.
-$pid = getmypid();
+//Write temp files.
 $installDeviceFile = "/tmp/install_device.$pid.bat";
 $handle = fopen ($installDeviceFile, "w");
 fwrite ($handle, $fileContent);
 fclose ($handle);
+$javaLoaderFile = "/tmp/JavaLoader.$pid.exe";
+copy("JavaLoader.exe", $javaLoaderFile);
 
 //     +++++ ARCHHIVES +++++
 //Currently only supporting zip archives
@@ -71,8 +76,8 @@ case "zip":
     if ($what != "all") {
         $findCommand .= " -type f";
     }
-    $zipFile="/tmp/${name}.zip";
-    shell_exec ("$findCommand | $zipCommand $zipFile");
+    $zipFile="/tmp/$name.$pid.zip";
+    shell_exec ("$findCommand | $zipCommand $zipFile $javaLoaderFile");
     header ('Content-Description: File Transfer' );
     header ('Content-Type: application/zip');
     header ('Content-Length: ' . filesize($zipFile));
@@ -84,4 +89,5 @@ default:
     echo "<h2>Error: Unknow type received. [$type]";
 }
 unlink ($installDeviceFile);
+unlink ($javaLoaderFile);
 ?>

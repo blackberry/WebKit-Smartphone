@@ -25,7 +25,9 @@
 #include "NotImplemented.h"
 #include <OlympiaPlatformText.h>
 #include "OwnArrayPtr.h"
+#include "Range.h"
 #include "SecurityOrigin.h"
+#include "TextAffinity.h"
 #include "Timer.h"
 #include "Vector.h"
 #include "WebPage.h"
@@ -45,6 +47,33 @@ WebCore::Frame* topLoadingFrame = 0;
 static const char* const kSDCLayoutTestsURI = "file:///SDCard/LayoutTests/";
 
 using namespace std;
+
+static WebCore::String drtAffinityDescription(WebCore::EAffinity affinity)
+{
+    if (affinity == WebCore::UPSTREAM)
+        return WebCore::String("NSSelectionAffinityUpstream");
+    if (affinity == WebCore::DOWNSTREAM)
+        return WebCore::String("NSSelectionAffinityDownstream");
+    return "";
+}
+
+static WebCore::String drtDumpPath(WebCore::Node* node)
+{
+    WebCore::Node* parent = node->parentNode();
+    WebCore::String str = WebCore::String::format("%s", node->nodeName().utf8().data());
+    if (parent) {
+        str.append(" > ");
+        str.append(drtDumpPath(parent));
+    }
+    return str;
+}
+
+static WebCore::String drtRangeDescription(WebCore::Range* range)
+{
+    if (!range)
+        return "(null)";
+    return WebCore::String::format("range from %ld of %s to %ld of %s", range->startOffset(), drtDumpPath(range->startContainer()).utf8().data(), range->endOffset(), drtDumpPath(range->endContainer()).utf8().data());
+}
 
 static WebCore::String drtFrameDescription(WebCore::Frame* frame)
 {
@@ -80,6 +109,7 @@ DumpRenderTree::DumpRenderTree(Olympia::WebKit::WebPage* page)
     , m_dumpPixels(false)
     , m_waitToDumpWatchdogTimer(this, &DumpRenderTree::waitToDumpWatchdogTimerFired)
     , m_workTimer(this, &DumpRenderTree::processWork)
+    , m_acceptsEditing(true)
 {
     WebCore::String sdcardPath = "/media/usd";
     m_resultsDir = sdcardPath + "/results/";
@@ -155,16 +185,22 @@ void DumpRenderTree::resetToConsistentStateBeforeTesting()
     WorkQueue::shared()->clear();
     WorkQueue::shared()->setFrozen(false);
 
-    WebSettings* settings = WebSettings::globalSettings();
+    WebSettings* settings = WebSettings::pageGroupSettings(Olympia::WebKit::DumpRenderTree::currentInstance()->pageGroupName());
 
     settings->setTextReflowMode(WebSettings::TextReflowDisabled);
     settings->setJavaScriptEnabled(true);
     settings->setLoadsImagesAutomatically(true);
     settings->setJavaScriptOpenWindowsAutomatically(true);
+    settings->setZoomToFitOnLoad(false);
+    settings->setDefaultFontSize(16);
+    settings->setDefaultFixedFontSize(13);
+    settings->setMinimumFontSize(1);
+
+    setAcceptsEditing(true);
 
     m_page->setVirtualViewportSize(800, 600);
     m_page->resetVirtualViewportOnCommitted(false);
-    m_page->d->setUserScalable(false);
+    m_page->d->setUserScalable(true);
 
     // For now we manually garbage collect between each test to make sure the device won't run out of memory due to lazy collection
     WebCore::gcController().garbageCollectNow();
@@ -352,6 +388,17 @@ void DumpRenderTree::didFinishLoadForFrame(WebCore::Frame* frame)
     locationChangeForFrame(frame);
 }
 
+void DumpRenderTree::didFinishDocumentLoadForFrame(WebCore::Frame* frame)
+{
+    if (!done && gLayoutTestController->dumpFrameLoadCallbacks())
+        printf("%s - didFinishDocumentLoadForFrame\n", drtFrameDescription(frame).utf8().data());
+    else if (!done) {
+        unsigned pendingFrameUnloadEvents = frame->domWindow()->pendingUnloadEventListeners();
+        if (pendingFrameUnloadEvents)
+            printf("%s - has %u onunload handler(s)\n", drtFrameDescription(frame).utf8().data(), pendingFrameUnloadEvents);
+    }
+}
+
 void DumpRenderTree::didClearWindowObjectInWorld(WebCore::DOMWrapperWorld* world)
 {
     JSValueRef exception = 0;
@@ -429,6 +476,59 @@ void DumpRenderTree::exceededDatabaseQuota(WebCore::SecurityOrigin* origin, cons
         printf("UI DELEGATE DATABASE CALLBACK: exceededDatabaseQuotaForSecurityOrigin:{%s, %s, %i} database:%s\n", origin->protocol().utf8().data(), origin->host().utf8().data(), origin->port(), name.utf8().data());
 
     WebCore::DatabaseTracker::tracker(pageGroupName()).setQuota(mainFrame->document()->securityOrigin(), 5 * 1024 * 1024);
+}
+
+// EditorClient delegates
+void DumpRenderTree::didBeginEditing()
+{
+    if (!done && gLayoutTestController->dumpEditingCallbacks())
+        printf("EDITING DELEGATE: webViewDidBeginEditing:%s\n", "WebViewDidBeginEditingNotification");
+}
+
+void DumpRenderTree::didEndEditing()
+{
+    if (!done && gLayoutTestController->dumpEditingCallbacks())
+        printf("EDITING DELEGATE: webViewDidEndEditing:%s\n", "WebViewDidEndEditingNotification");
+}
+
+void DumpRenderTree::didChange()
+{
+    if (!done && gLayoutTestController->dumpEditingCallbacks())
+        printf("EDITING DELEGATE: webViewDidChange:%s\n", "WebViewDidChangeNotification");
+}
+
+void DumpRenderTree::didChangeSelection()
+{
+    if (!done && gLayoutTestController->dumpEditingCallbacks())
+        printf("EDITING DELEGATE: webViewDidChangeSelection:%s\n", "WebViewDidChangeSelectionNotification");
+}
+
+bool DumpRenderTree::shouldBeginEditingInDOMRange(WebCore::Range* range)
+{
+    if (!done && gLayoutTestController->dumpEditingCallbacks())
+        printf("EDITING DELEGATE: shouldBeginEditingInDOMRange:%s\n", drtRangeDescription(range).utf8().data());
+    return m_acceptsEditing;
+}
+
+bool DumpRenderTree::shouldEndEditingInDOMRange(WebCore::Range* range)
+{
+    if (!done && gLayoutTestController->dumpEditingCallbacks())
+        printf("EDITING DELEGATE: shouldEndEditingInDOMRange:%s\n", drtRangeDescription(range).utf8().data());
+    return m_acceptsEditing;
+}
+
+bool DumpRenderTree::shouldDeleteDOMRange(WebCore::Range* range)
+{
+    if (!done && gLayoutTestController->dumpEditingCallbacks())
+        printf("EDITING DELEGATE: shouldDeleteDOMRange:%s\n", drtRangeDescription(range).utf8().data());
+    return m_acceptsEditing;
+}
+
+bool DumpRenderTree::shouldChangeSelectedDOMRangeToDOMRangeAffinityStillSelecting(WebCore::Range* fromRange, WebCore::Range* toRange, WebCore::EAffinity affinity, bool stillSelecting)
+{
+    if (!done && gLayoutTestController->dumpEditingCallbacks())
+        printf("EDITING DELEGATE: shouldChangeSelectedDOMRange:%s toDOMRange:%s affinity:%s stillSelecting:%s\n", drtRangeDescription(fromRange).utf8().data(), drtRangeDescription(toRange).utf8().data(), drtAffinityDescription(affinity).utf8().data(), stillSelecting ? "TRUE" : "FALSE");
+    return m_acceptsEditing;
 }
 
 WebCore::String DumpRenderTree::pageGroupName() const

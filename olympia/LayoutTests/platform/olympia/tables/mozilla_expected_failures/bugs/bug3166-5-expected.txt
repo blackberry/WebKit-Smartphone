@@ -3,18 +3,18 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584 [bgcolor=#FFFFFF]
-      RenderTable {TABLE} at (0,0) size 784x162 [border: (3px solid #008000)]
-        RenderBlock {CAPTION} at (0,0) size 778x24 [border: (3px solid #FFA500)]
-          RenderText {#text} at (338,3) size 102x18
-            text run at (338,3) width 102: "caption text"
-        RenderTableSection {TBODY} at (3,27) size 778x132
-          RenderTableRow {TR} at (0,2) size 778x128
-            RenderTableCell {TD} at (2,2) size 774x128 [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (1,1) size 748x126
-                text run at (1,1) width 748: "table text which should wrap table text which should wrap table text which should wrap"
-                text run at (1,19) width 748: "table text which should wrap table text which should wrap table text which should wrap"
-                text run at (1,37) width 748: "table text which should wrap table text which should wrap table text which should wrap"
-                text run at (1,55) width 748: "table text which should wrap table text which should wrap table text which should wrap"
-                text run at (1,73) width 748: "table text which should wrap table text which should wrap table text which should wrap"
-                text run at (1,91) width 748: "table text which should wrap table text which should wrap table text which should wrap"
-                text run at (1,109) width 748: "table text which should wrap table text which should wrap table text which should wrap"
+      RenderTable {TABLE} at (0,0) size 784x154 [border: (3px solid #008000)]
+        RenderBlock {CAPTION} at (0,0) size 778x23 [border: (3px solid #FFA500)]
+          RenderText {#text} at (341,3) size 95x17
+            text run at (341,3) width 95: "caption text"
+        RenderTableSection {TBODY} at (3,26) size 778x125
+          RenderTableRow {TR} at (0,2) size 778x121
+            RenderTableCell {TD} at (2,2) size 774x121 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 754x119
+                text run at (1,1) width 742: "table text which should wrap table text which should wrap table text which should wrap table"
+                text run at (1,18) width 733: "text which should wrap table text which should wrap table text which should wrap table text"
+                text run at (1,35) width 748: "which should wrap table text which should wrap table text which should wrap table text which"
+                text run at (1,52) width 754: "should wrap table text which should wrap table text which should wrap table text which should"
+                text run at (1,69) width 742: "wrap table text which should wrap table text which should wrap table text which should wrap"
+                text run at (1,86) width 742: "table text which should wrap table text which should wrap table text which should wrap table"
+                text run at (1,103) width 418: "text which should wrap table text which should wrap"

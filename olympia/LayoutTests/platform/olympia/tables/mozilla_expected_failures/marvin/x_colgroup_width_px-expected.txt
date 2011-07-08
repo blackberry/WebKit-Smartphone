@@ -1,22 +1,20 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x106
-  RenderBlock {html} at (0,0) size 800x106
-    RenderBody {body} at (8,17) size 784x81
-      RenderBlock {p} at (0,0) size 784x18
-        RenderText {#text} at (0,0) size 192x18
-          text run at (0,0) width 192: "COLGROUP WIDTH=px"
-      RenderTable {table} at (0,35) size 784x46 [border: (1px outset #808080)]
+layer at (0,0) size 800x84
+  RenderBlock {html} at (0,0) size 800x84
+    RenderBody {body} at (8,16) size 784x60
+      RenderBlock {p} at (0,0) size 784x17
+        RenderText {#text} at (0,0) size 183x17
+          text run at (0,0) width 183: "COLGROUP WIDTH=px"
+      RenderTable {table} at (0,33) size 750x27 [border: (1px outset #808080)]
         RenderTableCol {colgroup} at (0,0) size 0x0
           RenderTableCol {col} at (0,0) size 0x0
           RenderTableCol {col} at (0,0) size 0x0
-        RenderTableSection (anonymous) at (1,1) size 782x44
-          RenderTableRow {tr} at (0,2) size 782x40
-            RenderTableCell {td} at (2,2) size 388x40 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 339x36
-                text run at (2,2) width 339: "This column should have a width of 200"
-                text run at (2,20) width 50: "pixels"
-            RenderTableCell {td} at (392,2) size 388x40 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 339x36
-                text run at (2,2) width 339: "This column should have a width of 200"
-                text run at (2,20) width 50: "pixels"
+        RenderTableSection (anonymous) at (1,1) size 748x25
+          RenderTableRow {tr} at (0,2) size 748x21
+            RenderTableCell {td} at (2,2) size 371x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 367x17
+                text run at (2,2) width 367: "This column should have a width of 200 pixels"
+            RenderTableCell {td} at (375,2) size 371x21 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 367x17
+                text run at (2,2) width 367: "This column should have a width of 200 pixels"

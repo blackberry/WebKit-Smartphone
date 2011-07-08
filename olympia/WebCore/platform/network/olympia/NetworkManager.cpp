@@ -171,7 +171,6 @@ public:
         , m_loadAboutTimer(this, &NetworkJob::fireLoadAboutTimer)
         , m_deleteJobTimer(this, &NetworkJob::fireDeleteJobTimer)
         , m_streamFactory(0)
-        , m_debugger(0)
         , m_isFile(false)
         , m_isData(false)
         , m_isAbout(false)
@@ -188,7 +187,7 @@ public:
     {
     }
 
-    bool initialize(int playerId, const WebCore::String& pageGroupName, const KURL& url, const Platform::NetworkRequest& request, PassRefPtr<ResourceHandle> handle, Platform::NetworkStreamFactory* streamFactory, Platform::HttpStreamDebugger* debugger, int deferLoadingCount, int redirectCount)
+    bool initialize(int playerId, const WebCore::String& pageGroupName, const KURL& url, const Platform::NetworkRequest& request, PassRefPtr<ResourceHandle> handle, Platform::NetworkStreamFactory* streamFactory, int deferLoadingCount, int redirectCount)
     {
         m_playerId = playerId;
         m_pageGroupName = pageGroupName;
@@ -201,11 +200,10 @@ public:
         m_handle = handle;
 
         m_streamFactory = streamFactory;
-        m_debugger = debugger;
         m_redirectCount = redirectCount;
         m_deferLoadingCount = deferLoadingCount;
 
-        Platform::IStream* wrappedStream = m_streamFactory->createNetworkStream(request, m_playerId, m_debugger);
+        Platform::IStream* wrappedStream = m_streamFactory->createNetworkStream(request, m_playerId);
         if (!wrappedStream)
             return false;
         setWrappedStream(wrappedStream);
@@ -260,9 +258,13 @@ public:
         if (!aboutWhat.isEmpty()
                 && !equalIgnoringCase(aboutWhat, "blank")
                 && !equalIgnoringCase(aboutWhat, "credits")
+                && !equalIgnoringCase(aboutWhat, "version")
+#if !PUBLIC_BUILD
                 && (Platform::debugSetting() == 0
                     || (!equalIgnoringCase(aboutWhat, "config")
-                        && !equalIgnoringCase(aboutWhat, "build"))))
+                        && !equalIgnoringCase(aboutWhat, "build")))
+#endif
+                )
             return false;
 
         m_loadAboutTimer.startOneShot(0);
@@ -406,13 +408,6 @@ public:
             return;
 
         WebCore::String lowerKey = key.lower();
-
-        // for local files, only Content-Length and Last-Modified should be sent
-        if (m_isFile) {
-            if (lowerKey != "content-length" && lowerKey != "last-modified")
-                return;
-        }
-
         if (lowerKey == "content-type")
             m_contentType = value;
 
@@ -549,7 +544,7 @@ private:
         // Pass the ownership of the ResourceHandle to the new NetworkJob.
         RefPtr<ResourceHandle> handle = m_handle;
         m_handle = 0;
-        NetworkManager::instance()->startJob(m_playerId, m_pageGroupName, handle, newRequest, m_streamFactory, m_debugger, m_deferLoadingCount, m_redirectCount + 1);
+        NetworkManager::instance()->startJob(m_playerId, m_pageGroupName, handle, newRequest, m_streamFactory, m_deferLoadingCount, m_redirectCount + 1);
 
         return true;
     }
@@ -698,6 +693,12 @@ private:
             result.append(WebCore::String(WebCore::WEBKITCREDITS));
             result.append(WebCore::String("</body></html>"));
             handled = true;
+        } else if (equalIgnoringCase(aboutWhat, "version")) {
+            result.append(WebCore::String("<html><meta name=\"viewport\" content=\"width=device-width, user-scalable=no\"></head><body>"));
+            result.append(WebCore::String(WebCore::BUILDTIME));
+            result.append(WebCore::String("</body></html>"));
+            handled = true;
+#if !PUBLIC_BUILD
         } else if (Platform::debugSetting() > 0 && equalIgnoringCase(aboutWhat, "config")) {
             result = WebCore::configPage();
             handled = true;
@@ -706,6 +707,7 @@ private:
             result.append(WebCore::String(WebCore::BUILDINFO));
             result.append(WebCore::String("</pre></body></html>"));
             handled = true;
+#endif
         }
 
         CString resultString = result.utf8();
@@ -728,7 +730,6 @@ private:
     WebCore::String m_contentType;
     WebCore::String m_contentDisposition;
     Platform::NetworkStreamFactory* m_streamFactory;
-    Platform::HttpStreamDebugger* m_debugger;
     bool m_isFile;
     bool m_isData;
     bool m_isAbout;
@@ -909,11 +910,10 @@ bool NetworkManager::startJob(int playerId, PassRefPtr<ResourceHandle> job, cons
     if (!page)
         return false;
     Platform::NetworkStreamFactory* streamFactory = page->chrome()->platformPageClient()->networkStreamFactory();
-    Platform::HttpStreamDebugger* debugger = page->chrome()->platformPageClient()->httpStreamDebugger();
-    return startJob(playerId, page->groupName(), job, request, streamFactory, debugger, defersLoading ? 1 : 0);
+    return startJob(playerId, page->groupName(), job, request, streamFactory, defersLoading ? 1 : 0);
 }
 
-bool NetworkManager::startJob(int playerId, const WebCore::String& pageGroupName, PassRefPtr<ResourceHandle> job, const ResourceRequest& request, Platform::NetworkStreamFactory* streamFactory, Platform::HttpStreamDebugger* debugger, int deferLoadingCount, int redirectCount)
+bool NetworkManager::startJob(int playerId, const WebCore::String& pageGroupName, PassRefPtr<ResourceHandle> job, const ResourceRequest& request, Platform::NetworkStreamFactory* streamFactory, int deferLoadingCount, int redirectCount)
 {
     // make sure the ResourceHandle doesn't go out of scope while calling callbacks
     RefPtr<ResourceHandle> guardJob(job);
@@ -931,7 +931,7 @@ bool NetworkManager::startJob(int playerId, const WebCore::String& pageGroupName
     NetworkJob* networkJob = new NetworkJob;
     if (!networkJob)
         return false;
-    if (!networkJob->initialize(playerId, pageGroupName, url, platformRequest, guardJob, streamFactory, debugger, deferLoadingCount, redirectCount)) {
+    if (!networkJob->initialize(playerId, pageGroupName, url, platformRequest, guardJob, streamFactory, deferLoadingCount, redirectCount)) {
         delete networkJob;
         return false;
     }

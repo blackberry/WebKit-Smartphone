@@ -77,6 +77,8 @@ public:
 
     virtual void focusedNodeChanged(Node*) { }
 
+    virtual bool shouldForceDocumentStyleSelectorUpdate() { return false; }
+
     virtual Page* createWindow(Frame*, const FrameLoadRequest&, const WindowFeatures&) { return 0; }
     virtual void show() { }
 

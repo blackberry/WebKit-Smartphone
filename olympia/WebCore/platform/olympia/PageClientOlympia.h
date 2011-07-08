@@ -9,17 +9,20 @@
 
 namespace Olympia {
 namespace Platform {
-    class HttpStreamDebugger;
     class NetworkStreamFactory;
 }
+}
+
+namespace WebCore {
+    class FloatRect;
 }
 
 class PageClientOlympia {
 public:
     virtual void setCursor(WebCore::PlatformCursorHandle handle) = 0;
     virtual Olympia::Platform::NetworkStreamFactory* networkStreamFactory() = 0;
-    virtual Olympia::Platform::HttpStreamDebugger* httpStreamDebugger() = 0;
-    virtual bool runMessageLoopForJavaScript() = 0;
+    virtual WebCore::FloatRect screenAvailableRect() = 0;
+    virtual WebCore::FloatRect screenRect() = 0;
 };
 
 #endif

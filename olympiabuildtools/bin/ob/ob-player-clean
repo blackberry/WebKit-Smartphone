@@ -1,9 +1,5 @@
 #!/bin/bash
 
-pushd $BBNSLDIR/players
-
-pushd build
-rm -rf $CPUNAME-$OLYMPIABUILDCONFIGL
-popd
-popd
+rm -rf $PLAYERBUILDROOT
+rm -rf $PLAYERINSTALLPREFIX
 

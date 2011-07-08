@@ -1,40 +1,40 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x249
-  RenderBlock {HTML} at (0,0) size 800x249
-    RenderBody {BODY} at (8,17) size 784x224
-      RenderBlock {P} at (0,0) size 784x18
-        RenderText {#text} at (0,0) size 428x18
-          text run at (0,0) width 428: "There should be no red borders on the table below"
-      RenderTable {TABLE} at (0,35) size 182x189 [border: (2px none #808080)]
-        RenderTableSection {TBODY} at (2,2) size 177x184
-          RenderTableRow {TR} at (0,0) size 177x61
-            RenderTableCell {TD} at (0,18) size 52x25 [border: (3px inset #00FF00)] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (4,4) size 42x18
-                text run at (4,4) width 42: "inset"
-            RenderTableCell {TD} at (52,16) size 74x28 [border: (3px inset #00FF00) (5px inset #FF0000) (3px inset #00FF00)] [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (4,4) size 42x18
-                text run at (4,4) width 42: "inset"
-            RenderTableCell {TD} at (126,18) size 51x25 [border: (3px inset #00FF00)] [r=0 c=2 rs=1 cs=1]
-              RenderText {#text} at (4,4) size 42x18
-                text run at (4,4) width 42: "inset"
-          RenderTableRow {TR} at (0,61) size 177x63
-            RenderTableCell {TD} at (0,80) size 52x25 [border: (3px inset #00FF00) (5px inset #FF0000) (2px inset #00FF00)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (4,4) size 42x18
-                text run at (4,4) width 42: "inset"
-            RenderTableCell {TD} at (52,77) size 74x30 [border: (5px dashed #00FF00)] [r=1 c=1 rs=1 cs=1]
-              RenderText {#text} at (6,6) size 62x18
-                text run at (6,6) width 62: "dashed"
-            RenderTableCell {TD} at (126,80) size 51x25 [border: (3px inset #00FF00) (5px inset #FF0000)] [r=1 c=2 rs=1 cs=1]
-              RenderText {#text} at (6,4) size 42x18
-                text run at (6,4) width 42: "inset"
-          RenderTableRow {TR} at (0,124) size 177x60
-            RenderTableCell {TD} at (0,141) size 52x25 [border: (3px inset #00FF00)] [r=2 c=0 rs=1 cs=1]
-              RenderText {#text} at (4,4) size 42x18
-                text run at (4,4) width 42: "inset"
-            RenderTableCell {TD} at (52,140) size 74x27 [border: (5px inset #FF0000) (2px inset #00FF00)] [r=2 c=1 rs=1 cs=1]
-              RenderText {#text} at (4,6) size 42x18
-                text run at (4,6) width 42: "inset"
-            RenderTableCell {TD} at (126,141) size 51x25 [border: (3px inset #00FF00)] [r=2 c=2 rs=1 cs=1]
-              RenderText {#text} at (4,4) size 42x18
-                text run at (4,4) width 42: "inset"
+layer at (0,0) size 800x237
+  RenderBlock {HTML} at (0,0) size 800x237
+    RenderBody {BODY} at (8,16) size 784x213
+      RenderBlock {P} at (0,0) size 784x17
+        RenderText {#text} at (0,0) size 407x17
+          text run at (0,0) width 407: "There should be no red borders on the table below"
+      RenderTable {TABLE} at (0,33) size 170x180 [border: (2px none #808080)]
+        RenderTableSection {TBODY} at (2,2) size 165x175
+          RenderTableRow {TR} at (0,0) size 165x58
+            RenderTableCell {TD} at (0,17) size 48x24 [border: (3px inset #00FF00)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,4) size 38x17
+                text run at (4,4) width 38: "inset"
+            RenderTableCell {TD} at (48,15) size 70x27 [border: (3px inset #00FF00) (5px inset #FF0000) (3px inset #00FF00)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (4,4) size 38x17
+                text run at (4,4) width 38: "inset"
+            RenderTableCell {TD} at (118,17) size 47x24 [border: (3px inset #00FF00)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (4,4) size 38x17
+                text run at (4,4) width 38: "inset"
+          RenderTableRow {TR} at (0,58) size 165x60
+            RenderTableCell {TD} at (0,76) size 48x24 [border: (3px inset #00FF00) (5px inset #FF0000) (2px inset #00FF00)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,4) size 38x17
+                text run at (4,4) width 38: "inset"
+            RenderTableCell {TD} at (48,73) size 70x29 [border: (5px dashed #00FF00)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (6,6) size 58x17
+                text run at (6,6) width 58: "dashed"
+            RenderTableCell {TD} at (118,76) size 47x24 [border: (3px inset #00FF00) (5px inset #FF0000)] [r=1 c=2 rs=1 cs=1]
+              RenderText {#text} at (6,4) size 38x17
+                text run at (6,4) width 38: "inset"
+          RenderTableRow {TR} at (0,118) size 165x57
+            RenderTableCell {TD} at (0,134) size 48x24 [border: (3px inset #00FF00)] [r=2 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,4) size 38x17
+                text run at (4,4) width 38: "inset"
+            RenderTableCell {TD} at (48,133) size 70x26 [border: (5px inset #FF0000) (2px inset #00FF00)] [r=2 c=1 rs=1 cs=1]
+              RenderText {#text} at (4,6) size 38x17
+                text run at (4,6) width 38: "inset"
+            RenderTableCell {TD} at (118,134) size 47x24 [border: (3px inset #00FF00)] [r=2 c=2 rs=1 cs=1]
+              RenderText {#text} at (4,4) size 38x17
+                text run at (4,4) width 38: "inset"

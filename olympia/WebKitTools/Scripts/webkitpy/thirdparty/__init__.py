@@ -75,7 +75,7 @@ installer.install(url="http://pypi.python.org/packages/source/p/pep8/pep8-0.5.0.
 
 rietveld_dir = os.path.join(autoinstalled_dir, "rietveld")
 installer = AutoInstaller(target_dir=rietveld_dir)
-installer.install(url="http://webkit-rietveld.googlecode.com/svn/trunk/static/upload.py",
+installer.install(url="http://webkit-rietveld.googlecode.com/svn/trunk/upload.py",
                   target_name="upload.py")
 
 

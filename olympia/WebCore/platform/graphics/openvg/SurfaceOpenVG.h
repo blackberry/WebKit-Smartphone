@@ -48,6 +48,10 @@ class IntSize;
  */
 class SurfaceOpenVG : public Noncopyable {
 public:
+    enum SurfaceOwnership {
+        TakeSurfaceOwnership,
+        DontTakeSurfaceOwnership
+    };
     enum MakeCurrentMode {
         ApplyPainterStateOnSurfaceSwitch,
         DontApplyPainterState,
@@ -56,6 +60,8 @@ public:
     enum CachedPathDescriptor {
         CachedLinePath = 0, /// A line from (0,0) to (1,0).
         CachedRectPath,     /// A rectangle from (0,0) to (0,1), (1,1), (1,0), and back.
+        CachedCirclePath,   /// A perfect circle from (0,0) to (1,1), centered at (0.5, 0.5).
+        EmptyTemporaryPath, /// For short-term usage, to avoid creating temporary paths. Will be cleared on calling cachedPath().
         CachedPathCount     /// Enum value count, internal use only.
     };
 
@@ -74,7 +80,8 @@ public:
     static SurfaceOpenVG* currentSurface();
 
 #if PLATFORM(EGL)
-    friend class EGLDisplayOpenVG;
+    static SurfaceOpenVG* adoptExistingSurface(const EGLDisplay& display, const EGLSurface& surface, SurfaceOpenVG::SurfaceOwnership ownership, EGLint surfaceType = (EGL_WINDOW_BIT | EGL_PBUFFER_BIT | EGL_PIXMAP_BIT));
+    static SurfaceOpenVG* adoptExistingSurface(const EGLDisplay& display, const EGLSurface& surface, const EGLContext& context, SurfaceOpenVG::SurfaceOwnership ownership, EGLint surfaceType = (EGL_WINDOW_BIT | EGL_PBUFFER_BIT | EGL_PIXMAP_BIT));
 
     /**
      * Create a new EGL pbuffer surface with the specified size and config on
@@ -128,6 +135,9 @@ public:
      */
     bool isValid() const;
 
+    /** Remove the surface from all known structures, and destroy it if if was owned. */
+    void detach();
+
     int width() const;
     int height() const;
 
@@ -150,6 +160,18 @@ public:
      * happens on another surface.
      */
     void makeCompatibleCurrent();
+
+    /**
+     * Make a surface/context combination current that allows the
+     * creation of shared resources. For EGL, this means either the
+     * shared surface itself or a surface that uses the same EGL context.
+     *
+     * This method is meant to avoid context changes if they're not
+     * necessary, particularly tailored for the case where something
+     * compatible to the shared surface is requested while actual painting
+     * happens on another surface.
+     */
+    void makeResourceCreationContextCurrent();
 
     /**
      * Empty the OpenVG pipeline and make sure all the performed paint
@@ -180,12 +202,13 @@ private:
     PainterOpenVG* m_activePainter;
     static PainterOpenVG* s_currentPainter; // global currently active painter
     IntSize m_size; // cached so we don't need to fetch it from EGL
+    bool m_doesOwnSurface; // if false, the EGL surface won't be destroyed with the SurfaceOpenVG
 
     Vector<VGPath>& cachedPaths();
     Vector<VGPaint>& cachedPaints();
 
 #if PLATFORM(EGL)
-    SurfaceOpenVG(); // for EGLDisplayOpenVG
+    SurfaceOpenVG(); // for adoptExistingSurface()
 
     EGLDisplay m_eglDisplay;
     EGLSurface m_eglSurface;

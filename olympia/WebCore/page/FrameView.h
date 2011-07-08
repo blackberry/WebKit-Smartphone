@@ -275,9 +275,6 @@ private:
     virtual void getTickmarks(Vector<IntRect>&) const;
 
     void deferredRepaintTimerFired(Timer<FrameView>*);
-#if PLATFORM(OLYMPIA)
-    void deferredFixedElementsRepaintTimerFired(Timer<FrameView>*);
-#endif
     void doDeferredRepaints();
     void updateDeferredRepaintDelay();
     double adjustedDeferredRepaintDelay() const;
@@ -350,9 +347,6 @@ private:
     unsigned m_repaintCount;
     Vector<IntRect> m_repaintRects;
     Timer<FrameView> m_deferredRepaintTimer;
-#if PLATFORM(OLYMPIA)
-    Timer<FrameView> m_deferredFixedElementsRepaintTimer;
-#endif
     double m_deferredRepaintDelay;
     double m_lastPaintTime;
 

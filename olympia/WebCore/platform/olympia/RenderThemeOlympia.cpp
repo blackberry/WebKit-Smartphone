@@ -1,5 +1,6 @@
 /*
  * Copyright (C) Research In Motion Limited 2009-2010. All rights reserved.
+ * Copyright (C) 2006, 2007 Apple Inc.
  */
 
 #include "config.h"
@@ -96,7 +97,7 @@ PassRefPtr<RenderTheme> RenderTheme::themeForPage(Page* page)
 RenderThemeOlympia::RenderThemeOlympia()
     : RenderTheme()
     , m_shouldRepaintVerticalCaret(false)
-    , m_caretOutlineAppearanceEnabled(false)
+    , m_caretHighlightStyle(Olympia::Platform::HighlightCharacterCaret)
 {
 }
 
@@ -116,7 +117,7 @@ double RenderThemeOlympia::caretBlinkInterval() const
 
 void RenderThemeOlympia::adjustTextColorForCaretMarker(Color& color) const
 {
-    if (!m_caretOutlineAppearanceEnabled)
+    if (m_caretHighlightStyle == Olympia::Platform::HighlightCharacterCaret)
         color = Color::white;
 }
 
@@ -154,6 +155,19 @@ static void paintSolidCaret(GraphicsContext* context, const FloatRect& caretRect
     context->save();
     context->setFillGradient(createLinearGradient(caretTop, caretBottom, caretIntRect.topRight(), caretIntRect.bottomRight()));
     context->fillRect(caretRect);
+    context->restore();
+}
+
+static void paintOutlineCaret(GraphicsContext* context, const FloatRect& caretRect)
+{
+    context->save();
+    context->setStrokeStyle(SolidStroke);
+
+    // A stroke thickness of 0.25 seems to give a reasonable outline while not occluding narrow characters.
+    context->setStrokeThickness(0.25);
+
+    context->setStrokeColor(Color::black, DeviceColorSpace);
+    context->strokeRect(caretRect);
     context->restore();
 }
 
@@ -199,6 +213,9 @@ void RenderThemeOlympia::paintCaret(GraphicsContext* context, const IntRect& car
             paintSolidCaret(context, verticalCaretRect);
             m_shouldRepaintVerticalCaret = true;
         }
+    } else if (m_caretHighlightStyle == Olympia::Platform::ThinVerticalCaret) {
+        paintSolidCaret(context, caretRect); // caretRect is 1 px wide.
+        m_shouldRepaintVerticalCaret = true;
     } else if (canAddCaretMarker)
         addCaretMarkerAndRepaint(frame, caretTextRange.get());
 }
@@ -231,8 +248,9 @@ void RenderThemeOlympia::repaintCaret(RenderView* view, const IntRect& caretRect
     ASSERT(!ec);
 
     // The order of the following if-statements have been explicitly chosen so that we 1) either repaint
-    // the vertical caret or the caret marker (but not both) and 2) always repaint the vertical caret
-    // rectangle so as to clear it should we switch to the caret marker (indicated by m_shouldRepaintVerticalCaret).
+    // the vertical/thin vertical caret or the caret marker (but not both) and 2) always repaint the
+    // vertical/thin vertical caret rectangle so as to clear it should we switch to the caret marker
+    // (indicated by m_shouldRepaintVerticalCaret).
     bool willRepaintVerticalCaret = shouldRepaintVerticalCaret(caretTextRange.get());
     // FIXME: We should rename m_shouldRepaintVerticalCaret to m_lastCaretWasVerticalCaret.
     if (!selection->isCaret() || m_shouldRepaintVerticalCaret || willRepaintVerticalCaret) {
@@ -240,12 +258,15 @@ void RenderThemeOlympia::repaintCaret(RenderView* view, const IntRect& caretRect
         // because we may have started a selection from the end of the text field.
         Element* rootEditableElement = selection->rootEditableElement();
         if (rootEditableElement && rootEditableElement->renderer()) {
-            int verticalCaretWidth = lroundf(computeVerticalCaretWidth(rootEditableElement->renderer()->style()->font()));
-            // We need to re-compute the repaint rect for the caret since the width of our custom caret is larger
-            // than the standard WebKit caret.
             IntRect verticalCaretRepaintRect = caretRect;
-            verticalCaretRepaintRect.setWidth(verticalCaretWidth);
-            view->repaintViewRectangle(SelectionController::repaintRectForCaret(verticalCaretRepaintRect), false);
+            if (m_caretHighlightStyle != Olympia::Platform::ThinVerticalCaret) {
+                // Paint our wider-style vertical caret.
+                // We need to re-compute the repaint rect for the caret since the width is larger than the standard WebKit caret.
+                int verticalCaretWidth = lroundf(computeVerticalCaretWidth(rootEditableElement->renderer()->style()->font()));
+                verticalCaretRepaintRect.setWidth(verticalCaretWidth);
+                verticalCaretRepaintRect = SelectionController::repaintRectForCaret(verticalCaretRepaintRect);
+            }
+            view->repaintViewRectangle(verticalCaretRepaintRect, false);
         }
         m_shouldRepaintVerticalCaret = false;
     }
@@ -263,21 +284,19 @@ void RenderThemeOlympia::repaintCaret(RenderView* view, const IntRect& caretRect
 // Called by InlineTextBox::paintCaretMarker.
 void RenderThemeOlympia::paintCaretMarker(GraphicsContext* context, const FloatRect& caretRect, const Font&)
 {
-    if (!m_caretOutlineAppearanceEnabled) {
+    switch (m_caretHighlightStyle) {
+    case Olympia::Platform::HighlightCharacterCaret:
         paintSolidCaret(context, caretRect);
-        return;
+        break;
+    case Olympia::Platform::OutlineCharacterCaret:
+        paintOutlineCaret(context, caretRect);
+        break;
+    case Olympia::Platform::ThinVerticalCaret:
+        break; // The thin vertical caret does not stylize the caret marker text.
+    default:
+        ASSERT_NOT_REACHED();
+        break;
     }
-
-    // Paint outline caret.
-    context->save();
-    context->setStrokeStyle(SolidStroke);
-
-    // A stroke thickness of 0.25 seems to give a reasonable outline while not occluding narrow characters.
-    context->setStrokeThickness(0.25);
-
-    context->setStrokeColor(Color::black, DeviceColorSpace);
-    context->strokeRect(caretRect);
-    context->restore();
 }
 
 void RenderThemeOlympia::systemFont(int, FontDescription&) const
@@ -348,9 +367,48 @@ void RenderThemeOlympia::adjustSearchFieldStyle(CSSStyleSelector* css, RenderSty
     setButtonStyle(style);
 }
 
+void RenderThemeOlympia::adjustSearchFieldCancelButtonStyle(CSSStyleSelector*, RenderStyle* style, Element*) const
+{
+    static const float defaultControlFontPixelSize = 13;
+    static const float defaultCancelButtonSize = 9;
+    static const float minCancelButtonSize = 5;
+    static const float maxCancelButtonSize = 21;
+
+    // Scale the button size based on the font size
+    float fontScale = style->fontSize() / defaultControlFontPixelSize;
+    int cancelButtonSize = lroundf(std::min(std::max(minCancelButtonSize, defaultCancelButtonSize * fontScale), maxCancelButtonSize));
+    style->setWidth(Length(cancelButtonSize, Fixed));
+    style->setHeight(Length(cancelButtonSize, Fixed));
+}
+
 bool RenderThemeOlympia::paintSearchField(RenderObject* object, const RenderObject::PaintInfo& info, const IntRect& rect)
 {
     return paintTextField(object, info, rect);
+}
+
+bool RenderThemeOlympia::paintSearchFieldCancelButton(RenderObject* object, const RenderObject::PaintInfo& paintInfo, const IntRect& rect)
+{
+    IntRect bounds = rect;
+    ASSERT(object->parent());
+    if (!object->parent() || !object->parent()->isBox())
+        return false;
+
+    RenderBox* parentRenderBox = toRenderBox(object->parent());
+
+    IntRect parentBox = parentRenderBox->absoluteContentBox();
+
+    // Make sure the scaled button stays square and will fit in its parent's box
+    bounds.setHeight(std::min(parentBox.width(), std::min(parentBox.height(), bounds.height())));
+    bounds.setWidth(bounds.height());
+
+    // Center the button vertically.  Round up though, so if it has to be one pixel off-center, it will
+    // be one pixel closer to the bottom of the field.  This tends to look better with the text.
+    bounds.setY(parentBox.y() + (parentBox.height() - bounds.height() + 1) / 2);
+
+    static Image* cancelImage = Image::loadPlatformResource("searchCancel").releaseRef();
+    static Image* cancelPressedImage = Image::loadPlatformResource("searchCancelPressed").releaseRef();
+    paintInfo.context->drawImage(isPressed(object) ? cancelPressedImage : cancelImage, object->style()->colorSpace(), bounds);
+    return false;
 }
 
 void RenderThemeOlympia::adjustMenuListButtonStyle(CSSStyleSelector*, RenderStyle* style, Element*) const
@@ -371,6 +429,7 @@ void RenderThemeOlympia::adjustMenuListButtonStyle(CSSStyleSelector*, RenderStyl
     }
 
     style->setPaddingLeft(Length(paddingLeft, Fixed));
+    style->setCursor(CURSOR_WEBKIT_GRAB);
 }
 
 void RenderThemeOlympia::calculateButtonSize(RenderStyle* style) const
@@ -506,6 +565,7 @@ void RenderThemeOlympia::adjustCheckboxStyle(CSSStyleSelector*, RenderStyle* sty
     Length margin(marginSize, Fixed);
     style->setMarginBottom(margin);
     style->setMarginRight(margin);
+    style->setCursor(CURSOR_WEBKIT_GRAB);
 }
 
 void RenderThemeOlympia::adjustRadioStyle(CSSStyleSelector*, RenderStyle* style, Element*) const
@@ -515,6 +575,7 @@ void RenderThemeOlympia::adjustRadioStyle(CSSStyleSelector*, RenderStyle* style,
     Length margin(marginSize, Fixed);
     style->setMarginBottom(margin);
     style->setMarginRight(margin);
+    style->setCursor(CURSOR_WEBKIT_GRAB);
 }
 
 void RenderThemeOlympia::paintMenuListButtonGradientAndArrow(GraphicsContext* context, RenderObject* object, IntRect buttonRect, const Path& clipPath)

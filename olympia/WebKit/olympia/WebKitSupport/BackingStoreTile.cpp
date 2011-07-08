@@ -30,13 +30,13 @@ BackingStoreTile::BackingStoreTile(const WebCore::IntSize& size, bool checkered)
 
 BackingStoreTile::~BackingStoreTile()
 {
-    free(m_image);
+    Olympia::Platform::freeGraphicsMemory(m_image);
 }
 
 unsigned char* BackingStoreTile::image() const
 {
     if (!m_image)
-        m_image = (unsigned char*) malloc(m_size.height() * imageStride());
+        m_image = (unsigned char*) Olympia::Platform::allocateGraphicsMemory(m_size.height() * imageStride());
     return m_image;
 }
 

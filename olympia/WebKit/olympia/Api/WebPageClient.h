@@ -26,7 +26,6 @@ namespace Olympia {
 
     namespace Platform {
         class GeoTracker;
-        class HttpStreamDebugger;
         class IntPoint;
         class IntRect;
         class NetworkRequest;
@@ -57,11 +56,12 @@ namespace Olympia {
             virtual void notifyLoadFailedBeforeCommit(const unsigned short* originalUrl, unsigned int originalUrlLength, const unsigned short* finalUrl, unsigned int finalUrlLength, const unsigned short* networkToken, unsigned int networkTokenLength) = 0;
             virtual void notifyLoadToAnchor(const unsigned short* url, unsigned int urlLength, const unsigned short* networkToken, unsigned int networkTokenLength) = 0;
             virtual void notifyLoadProgress(int percentage) = 0;
-            virtual void notifyLoadReadyToRender() = 0;
+            virtual void notifyLoadReadyToRender(bool pageIsVisuallyNonEmpty) = 0;
             virtual void notifyLoadFinished(int status) = 0;
             virtual void notifyClientRedirect(const unsigned short* originalUrl, unsigned int originalUrlLength, const unsigned short* finalUrl, unsigned int finalUrlLength) = 0;
 
-            virtual void notifyDocumentCreatedForFrame(const WebFrame frame, const bool isMainFrame, const WebDOMDocument& document, const JSValueRef window) = 0;
+            virtual void notifyDocumentCreatedForFrame(const WebFrame frame, const bool isMainFrame, const WebDOMDocument& document, const JSContextRef context, const JSValueRef window) = 0;
+            virtual void notifyDocumentCreatedForFrameAsync(const WebFrame frame, const bool isMainFrame, const WebDOMDocument& document, const JSContextRef context, const JSValueRef window) = 0;
             virtual void notifyFrameDetached(const WebFrame frame) = 0;
 
             virtual void notifyRunLayoutTestsFinished() = 0;
@@ -83,12 +83,15 @@ namespace Olympia {
             virtual void zoomChanged(const bool isMinZoomed, const bool isMaxZoomed, const bool isAtInitialZoom, const double newZoom) const = 0;
 
             virtual void setPageTitle(const unsigned short* title, unsigned titleLength) = 0;
-            virtual void blitToCanvas(const int dstX, const int dstY, const int dstWidth, const int dstHeight,
-                                      const int srcX, const int srcY, const int srcWidth, const int srcHeight) = 0;
             virtual void blitToCanvas(const int dstX, const int dstY, const unsigned char* srcImage, const int srcStride,
                                       const int srcX, const int srcY, const int srcWidth, const int srcHeight) = 0;
             virtual void blitFromBufferToBuffer(unsigned char* dst, const int dstStride, const int dstX, const int dstY,
                                                 const unsigned char* src, const int srcStride, const int srcX, const int srcY, const int srcWidth, const int srcHeight) = 0;
+            virtual void stretchBlitToCanvas(const unsigned char* srcImage, const int srcStride,
+                                             const int srcX, const int srcY, const int srcWidth, const int srcHeight,
+                                             const int dstX, const int dstY, const int dstWidth, const int dstHeight) = 0;
+            virtual void stretchBlitFromBufferToBuffer(unsigned char* dst, const int dstStride, const Olympia::Platform::IntRect& dstRect,
+                                                       const unsigned char* src, const int srcStride, const Olympia::Platform::IntRect& srcRect) = 0;
             virtual void blendOntoCanvas(const int dstX, const int dstY, const unsigned char* srcImage, const int srcStride,
                                          const unsigned char* srcAlphaImage, const int srcAlphaStride, const char globalAlpha,
                                          const int srcX, const int srcY, const int srcWidth, const int srcHeight) = 0;
@@ -96,6 +99,8 @@ namespace Olympia {
             virtual void lockCanvas() = 0;
             virtual void unlockCanvas() = 0;
             virtual void clearCanvas() = 0;
+            virtual void clearCanvas(const Olympia::Platform::IntRect&, unsigned short color) = 0; // color is RGB565
+            virtual void clearBuffer(unsigned char* buffer, const int stride, const Olympia::Platform::IntRect&, unsigned short color) = 0; // color is RGB565
 
             virtual void inputFocusGained(unsigned int frameId, unsigned int inputFieldId, Olympia::Platform::OlympiaInputType type, unsigned int characterCount, unsigned int selectionStart, unsigned int selectionEnd) = 0;
             virtual void inputFocusLost(unsigned int frameId, unsigned int inputFieldId) = 0;
@@ -109,11 +114,9 @@ namespace Olympia {
 
             virtual void cursorChanged(Olympia::Platform::CursorType cursorType, const char* url, const int x, const int y) = 0;
 
-            virtual void requestGeolocationPermission(Olympia::Platform::GeoTracker*) = 0;
+            virtual void requestGeolocationPermission(Olympia::Platform::GeoTracker*, const char*) = 0;
             virtual void cancelGeolocationPermission(Olympia::Platform::GeoTracker*) = 0;
             virtual Olympia::Platform::NetworkStreamFactory* networkStreamFactory() = 0;
-            virtual Olympia::Platform::HttpStreamDebugger* httpStreamDebugger() = 0;
-            virtual bool runMessageLoopForJavaScript() = 0;
 
             virtual void handleStringPattern(const unsigned short* pattern, unsigned int length) = 0;
             virtual void handleExternalLink(const Platform::NetworkRequest&, const unsigned short* context, unsigned int contextLength) = 0;
@@ -123,8 +126,10 @@ namespace Olympia {
             virtual void openPopupList(bool multiple, const int size, const ScopeArray<String>& labels, bool* enableds, const int* itemType, bool* selecteds) = 0;
             virtual void popupListClosed(const int size, bool* selecteds) = 0;
             virtual void popupListClosed(const int index) = 0;
-            virtual void openDateTimePopup(const int type, const String& value, const String& min, const String& max, const double step) = 0; 
+            virtual void openDateTimePopup(const int type, const String& value, const String& min, const String& max, const double step) = 0;
             virtual void setDateTimeInput(const Olympia::WebKit::String& value) = 0;
+            virtual void openColorPopup(const String& value) = 0;
+            virtual void setColorInput(const String& value) = 0;
 
             virtual void contextChanged(const Context&) = 0;
 
@@ -137,6 +142,8 @@ namespace Olympia {
             virtual void pauseMedia(int) = 0;
 
             virtual WebPage* createWindow(int x, int y, int width, int height, unsigned flags) = 0;
+            virtual WebPage* recreateWebPage(int x, int y, int width, int height) = 0;
+
             virtual void scheduleCloseWindow() = 0;
 
             // Database interface.
@@ -154,6 +161,8 @@ namespace Olympia {
 
             // headers is a list of alternating key and value
             virtual void setMetaHeaders(const ScopeArray<String>& headers, unsigned int headersSize) = 0;
+
+            virtual void needMoreData() = 0;
         };
     }
 }

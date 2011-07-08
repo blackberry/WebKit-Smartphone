@@ -3,20 +3,20 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584
-      RenderTable {TABLE} at (0,0) size 700x46 [bgcolor=#FF0000] [border: (1px outset #808080)]
+      RenderTable {TABLE} at (0,0) size 642x44 [bgcolor=#FF0000] [border: (1px outset #808080)]
         RenderTableCol {COLGROUP} at (0,0) size 0x0
           RenderTableCol {COL} at (0,0) size 0x0
           RenderTableCol {COL} at (0,0) size 0x0
-        RenderTableSection {TBODY} at (1,1) size 698x44
-          RenderTableRow {TR} at (0,0) size 698x22
-            RenderTableCell {TD} at (0,0) size 698x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
-              RenderText {#text} at (2,2) size 694x18
-                text run at (2,2) width 694: "thelefttablecellis335pixwidewhiletherightoneisonly155pixwidehblahlahblahblahb"
-          RenderTableRow {TR} at (0,22) size 698x22
-            RenderTableCell {TD} at (0,22) size 477x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 5x18
+        RenderTableSection {TBODY} at (1,1) size 640x42
+          RenderTableRow {TR} at (0,0) size 640x21
+            RenderTableCell {TD} at (0,0) size 640x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderText {#text} at (2,2) size 636x17
+                text run at (2,2) width 636: "thelefttablecellis335pixwidewhiletherightoneisonly155pixwidehblahlahblahblahb"
+          RenderTableRow {TR} at (0,21) size 640x21
+            RenderTableCell {TD} at (0,21) size 437x21 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 5x17
                 text run at (2,2) width 5: " "
-            RenderTableCell {TD} at (477,22) size 221x22 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 5x18
+            RenderTableCell {TD} at (437,21) size 203x21 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 5x17
                 text run at (2,2) width 5: " "
-      RenderBlock {HR} at (0,54) size 492x2 [border: (1px inset #000000)]
+      RenderBlock {HR} at (0,52) size 492x2 [border: (1px inset #000000)]

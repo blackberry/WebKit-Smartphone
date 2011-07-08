@@ -3,55 +3,55 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584
-      RenderTable {TABLE} at (0,0) size 784x280 [border: (4px solid #0000FF)]
-        RenderTableSection {TBODY} at (4,4) size 776x272
-          RenderTableRow {TR} at (0,2) size 776x268
-            RenderTableCell {TD} at (2,2) size 561x146 [border: (1px solid #0000FF)] [r=0 c=0 rs=1 cs=1]
-              RenderTable {TABLE} at (2,2) size 557x142 [border: (4px solid #008000)]
-                RenderTableSection {TBODY} at (4,4) size 549x134
-                  RenderTableRow {TR} at (0,2) size 549x130
-                    RenderTableCell {TD} at (2,2) size 545x130 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
-                      RenderText {#text} at (2,2) size 533x126
-                        text run at (2,2) width 533: "this is a bunch of text. this is a bunch of text. this is a bunch of"
-                        text run at (2,20) width 498: "text. this is a bunch of text. this is a bunch of text. this is a"
-                        text run at (2,38) width 506: "bunch of text. this is a bunch of text. this is a bunch of text."
-                        text run at (2,56) width 533: "this is a bunch of text. this is a bunch of text. this is a bunch of"
-                        text run at (2,74) width 498: "text. this is a bunch of text. this is a bunch of text. this is a"
-                        text run at (2,92) width 506: "bunch of text. this is a bunch of text. this is a bunch of text."
-                        text run at (2,110) width 383: "this is a bunch of text. this is a bunch of text."
-            RenderTableCell {TD} at (565,2) size 209x268 [border: (1px solid #0000FF)] [r=0 c=1 rs=1 cs=1]
-              RenderTable {TABLE} at (2,2) size 205x264 [border: (4px solid #008000)]
-                RenderTableSection {TBODY} at (4,4) size 197x256
-                  RenderTableRow {TR} at (0,2) size 197x252
-                    RenderTableCell {TD} at (2,2) size 193x252 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
-                      RenderBlock (anonymous) at (2,2) size 189x18
-                        RenderText {#text} at (0,0) size 158x18
-                          text run at (0,0) width 158: "this cell is nowrap."
-                      RenderTable {TABLE} at (2,20) size 189x230 [border: (4px solid #FF0000)]
-                        RenderTableSection {TBODY} at (4,4) size 181x222
-                          RenderTableRow {TR} at (0,2) size 181x218
-                            RenderTableCell {TD} at (2,2) size 177x218 [border: (1px solid #FF0000)] [r=0 c=0 rs=1 cs=1]
-                              RenderBlock (anonymous) at (2,2) size 173x54
-                                RenderText {#text} at (0,0) size 173x54
-                                  text run at (0,0) width 160: "this text is in a cell"
-                                  text run at (0,18) width 173: "of a table, contained"
-                                  text run at (0,36) width 31: "in a"
-                              RenderBlock {P} at (2,73) size 173x18
-                                RenderInline {B} at (0,0) size 173x18
-                                  RenderText {#text} at (0,0) size 173x18
-                                    text run at (0,0) width 173: "cell with NOWRAP"
-                              RenderBlock (anonymous) at (2,108) size 173x108
-                                RenderText {#text} at (0,0) size 167x108
-                                  text run at (0,0) width 167: "but this text should"
-                                  text run at (0,18) width 54: "wrap! "
-                                  text run at (54,18) width 111: "only the bold"
-                                  text run at (0,36) width 129: "text should not"
-                                  text run at (0,54) width 141: "wrap be cause is"
-                                  text run at (0,72) width 135: "contained in a P"
-                                  text run at (0,90) width 122: "that's nowrap."
-      RenderBlock (anonymous) at (0,280) size 784x36
-        RenderBR {BR} at (0,0) size 0x18
-        RenderText {#text} at (0,18) size 436x18
-          text run at (0,18) width 436: "Tables have a thick border, cells have a thin border."
+      RenderTable {TABLE} at (0,0) size 784x267 [border: (4px solid #0000FF)]
+        RenderTableSection {TBODY} at (4,4) size 776x259
+          RenderTableRow {TR} at (0,2) size 776x255
+            RenderTableCell {TD} at (2,2) size 572x122 [border: (1px solid #0000FF)] [r=0 c=0 rs=1 cs=1]
+              RenderTable {TABLE} at (2,2) size 568x118 [border: (4px solid #008000)]
+                RenderTableSection {TBODY} at (4,4) size 560x110
+                  RenderTableRow {TR} at (0,2) size 560x106
+                    RenderTableCell {TD} at (2,2) size 556x106 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+                      RenderText {#text} at (2,2) size 538x102
+                        text run at (2,2) width 538: "this is a bunch of text. this is a bunch of text. this is a bunch of text."
+                        text run at (2,19) width 538: "this is a bunch of text. this is a bunch of text. this is a bunch of text."
+                        text run at (2,36) width 362: "this is a bunch of text. this is a bunch of text. "
+                        text run at (364,36) width 176: "this is a bunch of text."
+                        text run at (2,53) width 538: "this is a bunch of text. this is a bunch of text. this is a bunch of text."
+                        text run at (2,70) width 538: "this is a bunch of text. this is a bunch of text. this is a bunch of text."
+                        text run at (2,87) width 538: "this is a bunch of text. this is a bunch of text. this is a bunch of text."
+            RenderTableCell {TD} at (576,2) size 198x255 [border: (1px solid #0000FF)] [r=0 c=1 rs=1 cs=1]
+              RenderTable {TABLE} at (2,2) size 194x251 [border: (4px solid #008000)]
+                RenderTableSection {TBODY} at (4,4) size 186x243
+                  RenderTableRow {TR} at (0,2) size 186x239
+                    RenderTableCell {TD} at (2,2) size 182x239 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+                      RenderBlock (anonymous) at (2,2) size 178x17
+                        RenderText {#text} at (0,0) size 147x17
+                          text run at (0,0) width 147: "this cell is nowrap."
+                      RenderTable {TABLE} at (2,19) size 178x218 [border: (4px solid #FF0000)]
+                        RenderTableSection {TBODY} at (4,4) size 170x210
+                          RenderTableRow {TR} at (0,2) size 170x206
+                            RenderTableCell {TD} at (2,2) size 166x206 [border: (1px solid #FF0000)] [r=0 c=0 rs=1 cs=1]
+                              RenderBlock (anonymous) at (2,2) size 162x51
+                                RenderText {#text} at (0,0) size 147x51
+                                  text run at (0,0) width 147: "this text is in a cell"
+                                  text run at (0,17) width 81: "of a table,"
+                                  text run at (0,34) width 113: "contained in a"
+                              RenderBlock {P} at (2,69) size 162x17
+                                RenderInline {B} at (0,0) size 162x17
+                                  RenderText {#text} at (0,0) size 162x17
+                                    text run at (0,0) width 162: "cell with NOWRAP"
+                              RenderBlock (anonymous) at (2,102) size 162x102
+                                RenderText {#text} at (0,0) size 154x102
+                                  text run at (0,0) width 152: "but this text should"
+                                  text run at (0,17) width 51: "wrap! "
+                                  text run at (51,17) width 103: "only the bold"
+                                  text run at (0,34) width 119: "text should not"
+                                  text run at (0,51) width 134: "wrap be cause is"
+                                  text run at (0,68) width 128: "contained in a P"
+                                  text run at (0,85) width 114: "that's nowrap."
+      RenderBlock (anonymous) at (0,267) size 784x34
+        RenderBR {BR} at (0,0) size 0x17
+        RenderText {#text} at (0,17) size 414x17
+          text run at (0,17) width 414: "Tables have a thick border, cells have a thin border."
         RenderText {#text} at (0,0) size 0x0
         RenderText {#text} at (0,0) size 0x0

@@ -3,30 +3,30 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584 [bgcolor=#FFFFFF]
-      RenderBlock {P} at (0,0) size 784x39
-        RenderInline {B} at (0,0) size 610x39
-          RenderText {#text} at (0,0) size 224x18
-            text run at (0,0) width 224: "Testcase distilled from "
-          RenderInline {A} at (0,0) size 386x18 [color=#0000EE]
-            RenderText {#text} at (224,0) size 386x18
-              text run at (224,0) width 386: "http://www.linuxplanet.com/linuxplanet/"
-          RenderBR {BR} at (610,13) size 0x0
-          RenderText {#text} at (0,21) size 210x18
-            text run at (0,21) width 210: "First cell is coded as: "
-        RenderInline {CODE} at (0,0) size 360x21
-          RenderText {#text} at (210,18) size 360x21
-            text run at (210,18) width 360: "<TD><form>Weekly Poll<P></form></TD>"
-      RenderTable {TABLE} at (0,56) size 784x53
-        RenderTableSection {TBODY} at (0,0) size 784x53
-          RenderTableRow {TR} at (0,0) size 784x53
-            RenderTableCell {TD} at (0,0) size 61x53 [r=0 c=0 rs=1 cs=1]
-              RenderBlock {FORM} at (0,0) size 61x36
-                RenderBlock (anonymous) at (0,0) size 61x36
-                  RenderText {#text} at (0,0) size 61x36
-                    text run at (0,0) width 61: "Weekly"
-                    text run at (0,18) width 30: "Poll"
-                RenderBlock {P} at (0,53) size 61x0
-            RenderTableCell {TD} at (61,1) size 1x50 [r=0 c=1 rs=1 cs=1]
+      RenderBlock {P} at (0,0) size 784x34
+        RenderInline {B} at (0,0) size 571x34
+          RenderText {#text} at (0,0) size 212x17
+            text run at (0,0) width 212: "Testcase distilled from "
+          RenderInline {A} at (0,0) size 359x17 [color=#0000EE]
+            RenderText {#text} at (212,0) size 359x17
+              text run at (212,0) width 359: "http://www.linuxplanet.com/linuxplanet/"
+          RenderBR {BR} at (571,13) size 0x0
+          RenderText {#text} at (0,17) size 197x17
+            text run at (0,17) width 197: "First cell is coded as: "
+        RenderInline {CODE} at (0,0) size 288x17
+          RenderText {#text} at (197,17) size 288x17
+            text run at (197,17) width 288: "<TD><form>Weekly Poll<P></form></TD>"
+      RenderTable {TABLE} at (0,50) size 784x50
+        RenderTableSection {TBODY} at (0,0) size 784x50
+          RenderTableRow {TR} at (0,0) size 784x50
+            RenderTableCell {TD} at (0,0) size 57x50 [r=0 c=0 rs=1 cs=1]
+              RenderBlock {FORM} at (0,0) size 57x34
+                RenderBlock (anonymous) at (0,0) size 57x34
+                  RenderText {#text} at (0,0) size 57x34
+                    text run at (0,0) width 57: "Weekly"
+                    text run at (0,17) width 28: "Poll"
+                RenderBlock {P} at (0,50) size 57x0
+            RenderTableCell {TD} at (57,0) size 1x50 [r=0 c=1 rs=1 cs=1]
               RenderImage {IMG} at (0,0) size 1x50
-            RenderTableCell {TD} at (62,17) size 722x18 [r=0 c=2 rs=1 cs=1]
-              RenderBR {BR} at (0,0) size 0x18
+            RenderTableCell {TD} at (58,16) size 726x17 [r=0 c=2 rs=1 cs=1]
+              RenderBR {BR} at (0,0) size 0x17

@@ -3,58 +3,58 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584
-      RenderTable {TABLE} at (0,0) size 551x117 [border: (1px solid #808080) none]
-        RenderBlock {CAPTION} at (0,0) size 551x18
-          RenderText {#text} at (19,0) size 513x18
-            text run at (19,0) width 513: "Communicator 4.5 Installers for Mac and Windows Platforms"
-        RenderTableSection {TBODY} at (0,19) size 551x98
-          RenderTableRow {TR} at (0,2) size 551x22
-            RenderTableCell {TH} at (2,11) size 153x4 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-            RenderTableCell {TH} at (157,2) size 144x22 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 140x18
-                text run at (2,2) width 140: "Macintosh PPC"
-            RenderTableCell {TH} at (303,2) size 121x22 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 117x18
-                text run at (2,2) width 117: "Windows 95"
-            RenderTableCell {TH} at (426,2) size 123x22 [border: (1px inset #808080)] [r=0 c=3 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 119x18
-                text run at (2,2) width 119: "Windows NT"
-          RenderTableRow {TR} at (0,26) size 551x22
-            RenderTableCell {TD} at (2,26) size 153x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 98x18
-                text run at (2,2) width 98: "Base Install"
-            RenderTableCell {TD} at (157,26) size 144x22 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 29x18
-                text run at (2,2) width 29: "yes"
-            RenderTableCell {TD} at (303,26) size 121x22 [border: (1px inset #808080)] [r=1 c=2 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 29x18
-                text run at (2,2) width 29: "yes"
-            RenderTableCell {TD} at (426,26) size 123x22 [border: (1px inset #808080)] [r=1 c=3 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 29x18
-                text run at (2,2) width 29: "yes"
-          RenderTableRow {TR} at (0,50) size 551x22
-            RenderTableCell {TD} at (2,50) size 153x22 [border: (1px inset #808080)] [r=2 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 139x18
-                text run at (2,2) width 139: "Complete Install"
-            RenderTableCell {TD} at (157,50) size 144x22 [border: (1px inset #808080)] [r=2 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 29x18
-                text run at (2,2) width 29: "yes"
-            RenderTableCell {TD} at (303,50) size 121x22 [border: (1px inset #808080)] [r=2 c=2 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 29x18
-                text run at (2,2) width 29: "yes"
-            RenderTableCell {TD} at (426,50) size 123x22 [border: (1px inset #808080)] [r=2 c=3 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 29x18
-                text run at (2,2) width 29: "yes"
-          RenderTableRow {TR} at (0,74) size 551x22
-            RenderTableCell {TD} at (2,74) size 153x22 [border: (1px inset #808080)] [r=3 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 149x18
-                text run at (2,2) width 149: "Pro Edition Install"
-            RenderTableCell {TD} at (157,74) size 144x22 [border: (1px inset #808080)] [r=3 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 29x18
-                text run at (2,2) width 29: "yes"
-            RenderTableCell {TD} at (303,74) size 121x22 [border: (1px inset #808080)] [r=3 c=2 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 29x18
-                text run at (2,2) width 29: "yes"
-            RenderTableCell {TD} at (426,74) size 123x22 [border: (1px inset #808080)] [r=3 c=3 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 29x18
-                text run at (2,2) width 29: "yes"
+      RenderTable {TABLE} at (0,0) size 518x112 [border: (1px solid #808080) none]
+        RenderBlock {CAPTION} at (0,0) size 518x17
+          RenderText {#text} at (16,0) size 485x17
+            text run at (16,0) width 485: "Communicator 4.5 Installers for Mac and Windows Platforms"
+        RenderTableSection {TBODY} at (0,18) size 518x94
+          RenderTableRow {TR} at (0,2) size 518x21
+            RenderTableCell {TH} at (2,10) size 142x4 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+            RenderTableCell {TH} at (146,2) size 138x21 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 134x17
+                text run at (2,2) width 134: "Macintosh PPC"
+            RenderTableCell {TH} at (286,2) size 113x21 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 109x17
+                text run at (2,2) width 109: "Windows 95"
+            RenderTableCell {TH} at (401,2) size 115x21 [border: (1px inset #808080)] [r=0 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 111x17
+                text run at (2,2) width 111: "Windows NT"
+          RenderTableRow {TR} at (0,25) size 518x21
+            RenderTableCell {TD} at (2,25) size 142x21 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 91x17
+                text run at (2,2) width 91: "Base Install"
+            RenderTableCell {TD} at (146,25) size 138x21 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 27x17
+                text run at (2,2) width 27: "yes"
+            RenderTableCell {TD} at (286,25) size 113x21 [border: (1px inset #808080)] [r=1 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 27x17
+                text run at (2,2) width 27: "yes"
+            RenderTableCell {TD} at (401,25) size 115x21 [border: (1px inset #808080)] [r=1 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 27x17
+                text run at (2,2) width 27: "yes"
+          RenderTableRow {TR} at (0,48) size 518x21
+            RenderTableCell {TD} at (2,48) size 142x21 [border: (1px inset #808080)] [r=2 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 129x17
+                text run at (2,2) width 129: "Complete Install"
+            RenderTableCell {TD} at (146,48) size 138x21 [border: (1px inset #808080)] [r=2 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 27x17
+                text run at (2,2) width 27: "yes"
+            RenderTableCell {TD} at (286,48) size 113x21 [border: (1px inset #808080)] [r=2 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 27x17
+                text run at (2,2) width 27: "yes"
+            RenderTableCell {TD} at (401,48) size 115x21 [border: (1px inset #808080)] [r=2 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 27x17
+                text run at (2,2) width 27: "yes"
+          RenderTableRow {TR} at (0,71) size 518x21
+            RenderTableCell {TD} at (2,71) size 142x21 [border: (1px inset #808080)] [r=3 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 138x17
+                text run at (2,2) width 138: "Pro Edition Install"
+            RenderTableCell {TD} at (146,71) size 138x21 [border: (1px inset #808080)] [r=3 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 27x17
+                text run at (2,2) width 27: "yes"
+            RenderTableCell {TD} at (286,71) size 113x21 [border: (1px inset #808080)] [r=3 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 27x17
+                text run at (2,2) width 27: "yes"
+            RenderTableCell {TD} at (401,71) size 115x21 [border: (1px inset #808080)] [r=3 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 27x17
+                text run at (2,2) width 27: "yes"

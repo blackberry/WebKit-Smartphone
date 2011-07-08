@@ -18,10 +18,15 @@
 namespace Olympia {
 namespace WebKit {
 
+class String;
+
 void globalInitialize();
 void collectJavascriptGarbageNow();
 void clearCookieCache();
 void clearMemoryCaches();
+void clearAppCache(const String& pageGroupName);
+void clearLocalStorage(const String& pageGroupName);
+void clearDatabase(const String& pageGroupName);
 void updateOnlineStatus(bool online);
 
 }

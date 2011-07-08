@@ -137,9 +137,6 @@ FrameView::FrameView(Frame* frame)
     , m_wasScrolledByUser(false)
     , m_inProgrammaticScroll(false)
     , m_deferredRepaintTimer(this, &FrameView::deferredRepaintTimerFired)
-#if PLATFORM(OLYMPIA)
-    , m_deferredFixedElementsRepaintTimer(this, &FrameView::deferredFixedElementsRepaintTimerFired)
-#endif
     , m_shouldUpdateWhileOffscreen(true)
     , m_deferSetNeedsLayouts(0)
     , m_setNeedsLayoutWasDeferred(false)
@@ -682,8 +679,13 @@ void FrameView::layout(bool allowSubtree)
     }
 
     // Viewport-dependent media queries may cause us to need completely different style information.
-    // Check that here.  We also update this if javascript is not enabled.
-    if (document->styleSelector()->affectedByViewportChange() || !m_frame->settings()->isJavaScriptEnabled())
+    // Check that here.  Allow the chrome client to force an update if JavaScript is disabled and
+    // this is not an input driven update.
+    // shouldForceDocumentStyleSelectorUpdate is required as a result of RIM Bug #546 which resulted in
+    // RIM Bug #1082 that is addressed by skipping if input is being processed.
+    Page* page = frame() ? frame()->page() : 0;
+    if (document->styleSelector()->affectedByViewportChange() ||
+        (page && page->chrome() && page->chrome()->client() && page->chrome()->client()->shouldForceDocumentStyleSelectorUpdate()))
         document->updateStyleSelector();
 
     // Always ensure our style info is up-to-date.  This can happen in situations where
@@ -884,7 +886,6 @@ void FrameView::layout(bool allowSubtree)
 #if PLATFORM(OLYMPIA)
     // Note: This is required for Olympia's zoom on load algorithm, but I don't anticipate this
     // will be upstreamed anytime soon...
-    Page* page = frame() ? frame()->page() : 0;
     if (page)
         page->chrome()->layoutFinished(frame());
 #endif
@@ -1111,19 +1112,8 @@ void FrameView::setScrollPosition(const IntPoint& scrollPoint)
 void FrameView::scrollPositionChanged()
 {
     frame()->eventHandler()->sendScrollEvent();
-#if PLATFORM(OLYMPIA)
-    m_deferredFixedElementsRepaintTimer.startOneShot(1.0);
-#else
-    repaintFixedElementsAfterScrolling();
-#endif
-}
-
-#if PLATFORM(OLYMPIA)
-void FrameView::deferredFixedElementsRepaintTimerFired(Timer<FrameView>*)
-{
     repaintFixedElementsAfterScrolling();
 }
-#endif
 
 void FrameView::repaintFixedElementsAfterScrolling()
 {
@@ -1150,6 +1140,9 @@ void FrameView::repaintFixedElementsAfterScrolling()
 #else
     // ... and here.
 #endif
+
+    if (fixedReportedSizeChanged())
+        setFixedReportedSizeChanged(false);
 }
 
 HostWindow* FrameView::hostWindow() const

@@ -3,16 +3,15 @@
 <meta name="viewport" content="initial-scale=2.0">
 <style>
 body { margin: 0; padding: 0; }
-.square { width: 180px; /* "device screen size" / initial-scale */ height: 480px; display: inline-block;}
-#green-square { background-color: green; }
-#red-square { background-color: red; }
+.square { height: 480px; display: inline-block; vertical-align: top; }
+#green-square { width: 180px; /* "device screen size" / maximum-scale */ background-color: green; }
+#yellow-square { width: 60px; background-color: yellow; }
+#red-square { width: 120px; background-color: red; }
 </style>
 </head>
 <body>
-<!-- This tests assumes that the width of the device (in direction north) is 380 pixels. -->
+<!-- This tests assumes that the width of the device (in direction north) is 360 pixels. -->
 <!-- This test can be used to verify that when only initial-scale is specified the viewport width is taken to be the "actual visible width" / initial-scale.-->
-<!-- This test PASSED if the background of the page is entirely green when loaded in direction north. -->
-<!-- Note, this test is expected to fail on a RIM device since it does not zoom on rotate. See RIM Bug #252. -->
-<div id="green-square" class="square"></div><div id="red-square" class="square"></div>
+<div id="green-square" class="square">This test PASSED if the background of the page is entirely green when loaded in direction north. This test PASSED if the background of the page is green and yellow when loaded in direction east or west.</div><div id="yellow-square" class="square"></div><div id="red-square" class="square"></div>
 </body>
 </html>

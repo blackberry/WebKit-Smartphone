@@ -1,15 +1,15 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x87
-  RenderBlock {HTML} at (0,0) size 800x87
-    RenderBody {BODY} at (8,17) size 784x53
-      RenderBlock {P} at (0,0) size 784x18 [color=#000080]
-        RenderText {#text} at (0,0) size 341x18
-          text run at (0,0) width 341: "This Paragraph should be in Small Caps."
-      RenderBlock {P} at (0,35) size 784x18 [color=#000080]
-        RenderText {#text} at (0,0) size 339x18
-          text run at (0,0) width 339: "This Sentence should be in Small Caps. "
-        RenderInline {SPAN} at (0,0) size 280x18
-          RenderText {#text} at (339,0) size 280x18
-            text run at (339,0) width 280: "This Sentence should be Normal."
+layer at (0,0) size 800x82
+  RenderBlock {HTML} at (0,0) size 800x82
+    RenderBody {BODY} at (8,16) size 784x50
+      RenderBlock {P} at (0,0) size 784x17 [color=#000080]
+        RenderText {#text} at (0,0) size 321x17
+          text run at (0,0) width 321: "This Paragraph should be in Small Caps."
+      RenderBlock {P} at (0,33) size 784x17 [color=#000080]
+        RenderText {#text} at (0,0) size 317x17
+          text run at (0,0) width 317: "This Sentence should be in Small Caps. "
+        RenderInline {SPAN} at (0,0) size 264x17
+          RenderText {#text} at (317,0) size 264x17
+            text run at (317,0) width 264: "This Sentence should be Normal."
         RenderText {#text} at (0,0) size 0x0

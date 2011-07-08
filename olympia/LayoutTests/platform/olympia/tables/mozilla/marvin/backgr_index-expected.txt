@@ -1,255 +1,250 @@
-layer at (0,0) size 827x2208
+layer at (0,0) size 827x1829
   RenderView at (0,0) size 800x600
-layer at (0,0) size 827x2208
-  RenderBlock {HTML} at (0,0) size 800x2208
-    RenderBody {BODY} at (8,22) size 784x2169 [color=#00FF00] [bgcolor=#333333]
-      RenderBlock {H1} at (0,0) size 784x41
-        RenderText {#text} at (0,0) size 660x41
-          text run at (0,0) width 660: "CSS2 Table Backgrounds Test Suite"
-      RenderBlock {H2} at (0,63) size 784x32
-        RenderText {#text} at (0,0) size 80x32
-          text run at (0,0) width 80: "Notes"
-      RenderBlock {P} at (0,116) size 784x126
-        RenderText {#text} at (0,0) size 720x42
-          text run at (0,0) width 720: "This test suite is not endorsed or approved by the W3C or anyone besides"
-          text run at (0,21) width 450: "fantasai. It tests conformance to fantasai's "
-        RenderInline {A} at (0,0) size 750x42 [color=#FFFF00]
-          RenderText {#text} at (450,21) size 750x42
-            text run at (450,21) width 300: "table background clarification"
-            text run at (0,42) width 80: "proposal"
-        RenderText {#text} at (80,42) size 750x84
-          text run at (80,42) width 670: ", not the official CSS2 specification. The intent is to demonstrate"
-          text run at (0,63) width 740: "the proposal's effects under various styling conditions and to clarify any"
-          text run at (0,84) width 670: "ambiguity in the proposal in preparation for a better-worded errata"
-          text run at (0,105) width 730: "suggestion. It's not particularly well-designed, but it is comprehensive."
-      RenderBlock {P} at (0,259) size 784x63
-        RenderText {#text} at (0,0) size 750x63
-          text run at (0,0) width 740: "This test suite (this page and all pages linked from the table of contents"
-          text run at (0,21) width 750: "below) and its background images (listed below) are in the public domain by"
-          text run at (0,42) width 460: "assertion of their author. No rights reserved."
-      RenderBlock {P} at (0,339) size 784x21
-        RenderText {#text} at (0,0) size 490x21
-          text run at (0,0) width 490: "The images used as backgrounds are the following:"
-      RenderBlock {UL} at (0,377) size 784x757
-        RenderListItem {LI} at (40,0) size 744x35
-          RenderListMarker at (-18,14) size 7x21: bullet
+layer at (0,0) size 827x1829
+  RenderBlock {HTML} at (0,0) size 800x1829
+    RenderBody {BODY} at (8,17) size 784x1799 [color=#00FF00] [bgcolor=#333333]
+      RenderBlock {H1} at (0,0) size 784x32
+        RenderText {#text} at (0,0) size 528x32
+          text run at (0,0) width 528: "CSS2 Table Backgrounds Test Suite"
+      RenderBlock {H2} at (0,49) size 784x24
+        RenderText {#text} at (0,0) size 60x24
+          text run at (0,0) width 60: "Notes"
+      RenderBlock {P} at (0,89) size 784x85
+        RenderText {#text} at (0,0) size 728x34
+          text run at (0,0) width 728: "This test suite is not endorsed or approved by the W3C or anyone besides fantasai. It tests"
+          text run at (0,17) width 208: "conformance to fantasai's "
+        RenderInline {A} at (0,0) size 312x17 [color=#FFFF00]
+          RenderText {#text} at (208,17) size 312x17
+            text run at (208,17) width 312: "table background clarification proposal"
+        RenderText {#text} at (520,17) size 776x68
+          text run at (520,17) width 184: ", not the official CSS2"
+          text run at (0,34) width 704: "specification. The intent is to demonstrate the proposal's effects under various styling"
+          text run at (0,51) width 776: "conditions and to clarify any ambiguity in the proposal in preparation for a better-worded errata"
+          text run at (0,68) width 584: "suggestion. It's not particularly well-designed, but it is comprehensive."
+      RenderBlock {P} at (0,187) size 784x51
+        RenderText {#text} at (0,0) size 776x51
+          text run at (0,0) width 712: "This test suite (this page and all pages linked from the table of contents below) and its"
+          text run at (0,17) width 776: "background images (listed below) are in the public domain by assertion of their author. No rights"
+          text run at (0,34) width 72: "reserved."
+      RenderBlock {P} at (0,251) size 784x17
+        RenderText {#text} at (0,0) size 392x17
+          text run at (0,0) width 392: "The images used as backgrounds are the following:"
+      RenderBlock {UL} at (0,281) size 784x750
+        RenderListItem {LI} at (40,0) size 744x34
+          RenderListMarker at (-16,17) size 6x17: bullet
           RenderImage {IMG} at (0,0) size 80x30
           RenderText {#text} at (0,0) size 0x0
-        RenderListItem {LI} at (40,35) size 744x85
-          RenderListMarker at (-18,64) size 7x21: bullet
+        RenderListItem {LI} at (40,34) size 744x84
+          RenderListMarker at (-16,67) size 6x17: bullet
           RenderImage {IMG} at (0,0) size 30x80
           RenderText {#text} at (0,0) size 0x0
-        RenderListItem {LI} at (40,120) size 744x637
-          RenderListMarker at (-18,0) size 7x21: bullet
-          RenderImage {IMG} at (0,21) size 779x611
+        RenderListItem {LI} at (40,118) size 744x632
+          RenderListMarker at (-16,0) size 6x17: bullet
+          RenderImage {IMG} at (0,17) size 779x611
           RenderText {#text} at (0,0) size 0x0
-      RenderBlock {P} at (0,1151) size 784x21
-        RenderText {#text} at (0,0) size 420x21
-          text run at (0,0) width 420: "They are in GIF format, with transparency."
-      RenderBlock {P} at (0,1189) size 784x42
-        RenderText {#text} at (0,0) size 730x42
-          text run at (0,0) width 730: "Each color band in the rainbow backgrounds is 20 pixels wide. Each stripe"
-          text run at (0,21) width 410: "within the color band is two pixels wide."
-      RenderBlock {P} at (0,1248) size 784x42
-        RenderText {#text} at (0,0) size 780x42
-          text run at (0,0) width 780: "The aqua and purple band is 10 pixels wide. Each stripe within the band is two"
-          text run at (0,21) width 120: "pixels wide."
-      RenderBlock {P} at (0,1307) size 784x42
-        RenderText {#text} at (0,0) size 750x42
-          text run at (0,0) width 750: "Many image background rules in this test suite are backed up with a 'black'"
-          text run at (0,21) width 170: "background color."
-      RenderBlock {P} at (0,1366) size 784x84
-        RenderText {#text} at (0,0) size 290x21
-          text run at (0,0) width 290: "This test suite assumes that "
-        RenderInline {STRONG} at (0,0) size 750x63
-          RenderText {#text} at (290,0) size 750x42
-            text run at (290,0) width 460: "the border edge for a table element in a table"
-            text run at (0,21) width 300: "with collapsed borders is the "
-          RenderInline {EM} at (0,0) size 66x21
-            RenderText {#text} at (300,21) size 66x21
-              text run at (300,21) width 66: "middle"
-          RenderText {#text} at (366,21) size 746x42
-            text run at (366,21) width 380: " of the border around the element, not"
-            text run at (0,42) width 240: "the outer or inner edge."
-        RenderText {#text} at (240,42) size 770x42
-          text run at (240,42) width 530: " (This also needs to be addressed by CSS2.1.) It also"
-          text run at (0,63) width 510: "assumes support for proper ordering of tables with "
-        RenderInline {CODE} at (0,0) size 70x21
-          RenderText {#text} at (510,63) size 70x21
-            text run at (510,63) width 70: "<tfoot>"
-        RenderText {#text} at (580,63) size 10x21
-          text run at (580,63) width 10: "."
-      RenderBlock {H2} at (0,1471) size 784x32
-        RenderText {#text} at (0,0) size 272x32
-          text run at (0,0) width 272: "Table of Contents"
-      RenderBlock {OL} at (0,1524) size 784x645
-        RenderListItem {LI} at (40,0) size 744x147
-          RenderBlock (anonymous) at (0,0) size 744x21
-            RenderListMarker at (-35,0) size 30x21: "A"
-            RenderText {#text} at (0,0) size 150x21
-              text run at (0,0) width 150: "Background Area"
-          RenderBlock {OL} at (0,21) size 744x126
-            RenderListItem {LI} at (40,0) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "1"
-              RenderInline {A} at (0,0) size 210x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 210x21
-                  text run at (0,0) width 210: "Background on 'table'"
+      RenderBlock {P} at (0,1044) size 784x17
+        RenderText {#text} at (0,0) size 336x17
+          text run at (0,0) width 336: "They are in GIF format, with transparency."
+      RenderBlock {P} at (0,1074) size 784x34
+        RenderText {#text} at (0,0) size 784x34
+          text run at (0,0) width 784: "Each color band in the rainbow backgrounds is 20 pixels wide. Each stripe within the color band is"
+          text run at (0,17) width 128: "two pixels wide."
+      RenderBlock {P} at (0,1121) size 784x17
+        RenderText {#text} at (0,0) size 728x17
+          text run at (0,0) width 728: "The aqua and purple band is 10 pixels wide. Each stripe within the band is two pixels wide."
+      RenderBlock {P} at (0,1151) size 784x17
+        RenderText {#text} at (0,0) size 744x17
+          text run at (0,0) width 744: "Many image background rules in this test suite are backed up with a 'black' background color."
+      RenderBlock {P} at (0,1181) size 784x51
+        RenderText {#text} at (0,0) size 232x17
+          text run at (0,0) width 232: "This test suite assumes that "
+        RenderInline {STRONG} at (0,0) size 784x34
+          RenderText {#text} at (232,0) size 784x34
+            text run at (232,0) width 552: "the border edge for a table element in a table with collapsed borders"
+            text run at (0,17) width 56: "is the "
+          RenderInline {EM} at (0,0) size 54x17
+            RenderText {#text} at (56,17) size 54x17
+              text run at (56,17) width 54: "middle"
+          RenderText {#text} at (110,17) size 504x17
+            text run at (110,17) width 504: " of the border around the element, not the outer or inner edge."
+        RenderText {#text} at (614,17) size 774x34
+          text run at (614,17) width 160: " (This also needs to"
+          text run at (0,34) width 672: "be addressed by CSS2.1.) It also assumes support for proper ordering of tables with "
+        RenderInline {CODE} at (0,0) size 56x17
+          RenderText {#text} at (672,34) size 56x17
+            text run at (672,34) width 56: "<tfoot>"
+        RenderText {#text} at (728,34) size 8x17
+          text run at (728,34) width 8: "."
+      RenderBlock {H2} at (0,1248) size 784x24
+        RenderText {#text} at (0,0) size 204x24
+          text run at (0,0) width 204: "Table of Contents"
+      RenderBlock {OL} at (0,1288) size 784x511
+        RenderListItem {LI} at (40,0) size 744x119
+          RenderBlock (anonymous) at (0,0) size 744x17
+            RenderListMarker at (-28,0) size 24x17: "A"
+            RenderText {#text} at (0,0) size 120x17
+              text run at (0,0) width 120: "Background Area"
+          RenderBlock {OL} at (0,17) size 744x102
+            RenderListItem {LI} at (40,0) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "1"
+              RenderInline {A} at (0,0) size 168x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 168x17
+                  text run at (0,0) width 168: "Background on 'table'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,21) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "2"
-              RenderInline {A} at (0,0) size 310x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 310x21
-                  text run at (0,0) width 310: "Background on 'table-row-group'"
+            RenderListItem {LI} at (40,17) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "2"
+              RenderInline {A} at (0,0) size 248x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 248x17
+                  text run at (0,0) width 248: "Background on 'table-row-group'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,42) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "3"
-              RenderInline {A} at (0,0) size 340x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 340x21
-                  text run at (0,0) width 340: "Background on 'table-column-group'"
+            RenderListItem {LI} at (40,34) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "3"
+              RenderInline {A} at (0,0) size 272x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 272x17
+                  text run at (0,0) width 272: "Background on 'table-column-group'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,63) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "4"
-              RenderInline {A} at (0,0) size 250x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 250x21
-                  text run at (0,0) width 250: "Background on 'table-row'"
+            RenderListItem {LI} at (40,51) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "4"
+              RenderInline {A} at (0,0) size 200x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 200x17
+                  text run at (0,0) width 200: "Background on 'table-row'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,84) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "5"
-              RenderInline {A} at (0,0) size 280x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 280x21
-                  text run at (0,0) width 280: "Background on 'table-column'"
+            RenderListItem {LI} at (40,68) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "5"
+              RenderInline {A} at (0,0) size 224x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 224x17
+                  text run at (0,0) width 224: "Background on 'table-column'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,105) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "6"
-              RenderInline {A} at (0,0) size 260x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 260x21
-                  text run at (0,0) width 260: "Background on 'table-cell'"
+            RenderListItem {LI} at (40,85) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "6"
+              RenderInline {A} at (0,0) size 208x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 208x17
+                  text run at (0,0) width 208: "Background on 'table-cell'"
               RenderText {#text} at (0,0) size 0x0
-        RenderListItem {LI} at (40,147) size 744x147
-          RenderBlock (anonymous) at (0,0) size 744x21
-            RenderListMarker at (-35,0) size 30x21: "B"
-            RenderText {#text} at (0,0) size 190x21
-              text run at (0,0) width 190: "Background Position"
-          RenderBlock {OL} at (0,21) size 744x126
-            RenderListItem {LI} at (40,0) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "1"
-              RenderInline {A} at (0,0) size 210x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 210x21
-                  text run at (0,0) width 210: "Background on 'table'"
+        RenderListItem {LI} at (40,119) size 744x119
+          RenderBlock (anonymous) at (0,0) size 744x17
+            RenderListMarker at (-28,0) size 24x17: "B"
+            RenderText {#text} at (0,0) size 152x17
+              text run at (0,0) width 152: "Background Position"
+          RenderBlock {OL} at (0,17) size 744x102
+            RenderListItem {LI} at (40,0) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "1"
+              RenderInline {A} at (0,0) size 168x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 168x17
+                  text run at (0,0) width 168: "Background on 'table'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,21) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "2"
-              RenderInline {A} at (0,0) size 310x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 310x21
-                  text run at (0,0) width 310: "Background on 'table-row-group'"
+            RenderListItem {LI} at (40,17) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "2"
+              RenderInline {A} at (0,0) size 248x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 248x17
+                  text run at (0,0) width 248: "Background on 'table-row-group'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,42) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "3"
-              RenderInline {A} at (0,0) size 340x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 340x21
-                  text run at (0,0) width 340: "Background on 'table-column-group'"
+            RenderListItem {LI} at (40,34) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "3"
+              RenderInline {A} at (0,0) size 272x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 272x17
+                  text run at (0,0) width 272: "Background on 'table-column-group'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,63) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "4"
-              RenderInline {A} at (0,0) size 250x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 250x21
-                  text run at (0,0) width 250: "Background on 'table-row'"
+            RenderListItem {LI} at (40,51) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "4"
+              RenderInline {A} at (0,0) size 200x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 200x17
+                  text run at (0,0) width 200: "Background on 'table-row'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,84) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "5"
-              RenderInline {A} at (0,0) size 280x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 280x21
-                  text run at (0,0) width 280: "Background on 'table-column'"
+            RenderListItem {LI} at (40,68) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "5"
+              RenderInline {A} at (0,0) size 224x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 224x17
+                  text run at (0,0) width 224: "Background on 'table-column'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,105) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "6"
-              RenderInline {A} at (0,0) size 260x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 260x21
-                  text run at (0,0) width 260: "Background on 'table-cell'"
+            RenderListItem {LI} at (40,85) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "6"
+              RenderInline {A} at (0,0) size 208x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 208x17
+                  text run at (0,0) width 208: "Background on 'table-cell'"
               RenderText {#text} at (0,0) size 0x0
-        RenderListItem {LI} at (40,294) size 744x63
-          RenderBlock (anonymous) at (0,0) size 744x21
-            RenderListMarker at (-35,0) size 30x21: "C"
-            RenderText {#text} at (0,0) size 170x21
-              text run at (0,0) width 170: "Background Layers"
-          RenderBlock {OL} at (0,21) size 744x42
-            RenderListItem {LI} at (40,0) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "1"
-              RenderInline {A} at (0,0) size 170x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 170x21
-                  text run at (0,0) width 170: "empty-cells: show"
+        RenderListItem {LI} at (40,238) size 744x51
+          RenderBlock (anonymous) at (0,0) size 744x17
+            RenderListMarker at (-28,0) size 24x17: "C"
+            RenderText {#text} at (0,0) size 136x17
+              text run at (0,0) width 136: "Background Layers"
+          RenderBlock {OL} at (0,17) size 744x34
+            RenderListItem {LI} at (40,0) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "1"
+              RenderInline {A} at (0,0) size 136x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 136x17
+                  text run at (0,0) width 136: "empty-cells: show"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,21) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "2"
-              RenderInline {A} at (0,0) size 170x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 170x21
-                  text run at (0,0) width 170: "empty-cells: hide"
+            RenderListItem {LI} at (40,17) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "2"
+              RenderInline {A} at (0,0) size 136x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 136x17
+                  text run at (0,0) width 136: "empty-cells: hide"
               RenderText {#text} at (0,0) size 0x0
-        RenderListItem {LI} at (40,357) size 744x288
-          RenderBlock (anonymous) at (0,0) size 744x21
-            RenderListMarker at (-35,0) size 30x21: "D"
-            RenderText {#text} at (0,0) size 230x21
-              text run at (0,0) width 230: "Background with Borders"
-          RenderBlock {OL} at (0,21) size 744x189
-            RenderListItem {LI} at (40,0) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "1"
-              RenderInline {A} at (0,0) size 210x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 210x21
-                  text run at (0,0) width 210: "Background on 'table'"
+        RenderListItem {LI} at (40,289) size 744x222
+          RenderBlock (anonymous) at (0,0) size 744x17
+            RenderListMarker at (-28,0) size 24x17: "D"
+            RenderText {#text} at (0,0) size 184x17
+              text run at (0,0) width 184: "Background with Borders"
+          RenderBlock {OL} at (0,17) size 744x153
+            RenderListItem {LI} at (40,0) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "1"
+              RenderInline {A} at (0,0) size 168x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 168x17
+                  text run at (0,0) width 168: "Background on 'table'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,21) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "2"
-              RenderInline {A} at (0,0) size 310x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 310x21
-                  text run at (0,0) width 310: "Background on 'table-row-group'"
+            RenderListItem {LI} at (40,17) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "2"
+              RenderInline {A} at (0,0) size 248x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 248x17
+                  text run at (0,0) width 248: "Background on 'table-row-group'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,42) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "3"
-              RenderInline {A} at (0,0) size 340x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 340x21
-                  text run at (0,0) width 340: "Background on 'table-column-group'"
+            RenderListItem {LI} at (40,34) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "3"
+              RenderInline {A} at (0,0) size 272x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 272x17
+                  text run at (0,0) width 272: "Background on 'table-column-group'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,63) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "4"
-              RenderInline {A} at (0,0) size 250x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 250x21
-                  text run at (0,0) width 250: "Background on 'table-row'"
+            RenderListItem {LI} at (40,51) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "4"
+              RenderInline {A} at (0,0) size 200x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 200x17
+                  text run at (0,0) width 200: "Background on 'table-row'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,84) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "5"
-              RenderInline {A} at (0,0) size 280x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 280x21
-                  text run at (0,0) width 280: "Background on 'table-column'"
+            RenderListItem {LI} at (40,68) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "5"
+              RenderInline {A} at (0,0) size 224x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 224x17
+                  text run at (0,0) width 224: "Background on 'table-column'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,105) size 704x21
-              RenderListMarker at (-35,0) size 30x21: "6"
-              RenderInline {A} at (0,0) size 260x21 [color=#FFFF00]
-                RenderText {#text} at (0,0) size 260x21
-                  text run at (0,0) width 260: "Background on 'table-cell'"
+            RenderListItem {LI} at (40,85) size 704x17
+              RenderListMarker at (-28,0) size 24x17: "6"
+              RenderInline {A} at (0,0) size 208x17 [color=#FFFF00]
+                RenderText {#text} at (0,0) size 208x17
+                  text run at (0,0) width 208: "Background on 'table-cell'"
               RenderText {#text} at (0,0) size 0x0
-            RenderListItem {LI} at (40,126) size 704x63
-              RenderBlock (anonymous) at (0,0) size 704x21
-                RenderListMarker at (-35,0) size 30x21: "7"
-                RenderText {#text} at (0,0) size 130x21
-                  text run at (0,0) width 130: "Special Tests"
-              RenderBlock {OL} at (0,21) size 704x42
-                RenderListItem {LI} at (40,0) size 664x21
-                  RenderListMarker at (-35,0) size 30x21: "1"
-                  RenderInline {A} at (0,0) size 70x21 [color=#FFFF00]
-                    RenderText {#text} at (0,0) size 70x21
-                      text run at (0,0) width 70: "Opacity"
+            RenderListItem {LI} at (40,102) size 704x51
+              RenderBlock (anonymous) at (0,0) size 704x17
+                RenderListMarker at (-28,0) size 24x17: "7"
+                RenderText {#text} at (0,0) size 104x17
+                  text run at (0,0) width 104: "Special Tests"
+              RenderBlock {OL} at (0,17) size 704x34
+                RenderListItem {LI} at (40,0) size 664x17
+                  RenderListMarker at (-28,0) size 24x17: "1"
+                  RenderInline {A} at (0,0) size 56x17 [color=#FFFF00]
+                    RenderText {#text} at (0,0) size 56x17
+                      text run at (0,0) width 56: "Opacity"
                   RenderText {#text} at (0,0) size 0x0
-                RenderListItem {LI} at (40,21) size 664x21
-                  RenderListMarker at (-35,0) size 30x21: "2"
-                  RenderInline {A} at (0,0) size 170x21 [color=#FFFF00]
-                    RenderText {#text} at (0,0) size 170x21
-                      text run at (0,0) width 170: "Fixed Backgrounds"
+                RenderListItem {LI} at (40,17) size 664x17
+                  RenderListMarker at (-28,0) size 24x17: "2"
+                  RenderInline {A} at (0,0) size 136x17 [color=#FFFF00]
+                    RenderText {#text} at (0,0) size 136x17
+                      text run at (0,0) width 136: "Fixed Backgrounds"
                   RenderText {#text} at (0,0) size 0x0
-          RenderBlock {DIV} at (0,210) size 744x36
-            RenderInline {A} at (0,0) size 88x21 [color=#FFFF00]
+          RenderBlock {DIV} at (0,170) size 744x35
+            RenderInline {A} at (0,0) size 88x17 [color=#FFFF00]
               RenderImage {IMG} at (0,0) size 88x31
             RenderText {#text} at (0,0) size 0x0
-          RenderBlock {ADDRESS} at (0,246) size 744x42
-            RenderText {#text} at (0,0) size 660x42
-              text run at (0,0) width 660: "CSS2 Table Backgrounds Test Suite designed and written by fantasai"
-              text run at (0,21) width 210: "<fantasai@escape.com>"
+          RenderBlock {ADDRESS} at (0,205) size 744x17
+            RenderText {#text} at (0,0) size 704x17
+              text run at (0,0) width 704: "CSS2 Table Backgrounds Test Suite designed and written by fantasai <fantasai@escape.com>"

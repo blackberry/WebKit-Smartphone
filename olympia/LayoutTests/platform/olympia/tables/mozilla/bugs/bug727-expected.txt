@@ -4,18 +4,18 @@ layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584
       RenderBlock {HR} at (296,0) size 192x2 [border: (1px inset #000000)]
-      RenderTable {TABLE} at (0,10) size 350x88 [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 348x86
-          RenderTableRow {TR} at (0,2) size 348x22
-            RenderTableCell {TD} at (2,2) size 344x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
-              RenderText {#text} at (2,2) size 256x18
-                text run at (2,2) width 256: "MozillaZine.org Is Now Active!"
-          RenderTableRow {TR} at (0,26) size 348x58
-            RenderTableCell {TD} at (2,44) size 194x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 5x18
+      RenderTable {TABLE} at (0,10) size 350x84 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 348x82
+          RenderTableRow {TR} at (0,2) size 348x21
+            RenderTableCell {TD} at (2,2) size 344x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderText {#text} at (2,2) size 239x17
+                text run at (2,2) width 239: "MozillaZine.org Is Now Active!"
+          RenderTableRow {TR} at (0,25) size 348x55
+            RenderTableCell {TD} at (2,42) size 194x21 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 5x17
                 text run at (2,2) width 5: " "
-            RenderTableCell {TD} at (198,26) size 148x58 [bgcolor=#FF9900] [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 144x54
-                text run at (2,2) width 80: "Thursday"
-                text run at (2,20) width 144: "September 17th,"
-                text run at (2,38) width 58: "1998>"
+            RenderTableCell {TD} at (198,25) size 148x55 [bgcolor=#FF9900] [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 135x51
+                text run at (2,2) width 75: "Thursday"
+                text run at (2,19) width 135: "September 17th,"
+                text run at (2,36) width 53: "1998>"

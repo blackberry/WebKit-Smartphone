@@ -67,13 +67,17 @@ namespace Olympia {
 
             bool isEmpty(bool shouldPerformRegularRenderJobs = true) const;
 
+            bool hasCurrentRegularRenderJob() const;
             bool hasCurrentVisibleZoomJob() const;
+            bool hasCurrentVisibleScrollJob() const;
             bool isCurrentVisibleScrollJob(const WebCore::IntRect& rect) const;
             bool isCurrentVisibleScrollJobCompleted(const WebCore::IntRect& rect) const;
             bool isCurrentRegularRenderJob(const WebCore::IntRect& rect) const;
 
             bool currentRegularRenderJobBatchUnderPressure() const;
             void setCurrentRegularRenderJobBatchUnderPressure(bool b);
+
+            void eventQueueCycled();
 
             void addToQueue(JobType type, const WebCore::IntRect&);
             void addToQueue(JobType type, const WebCore::IntRectList&);
@@ -91,6 +95,8 @@ namespace Olympia {
             void renderAllCurrentRegularRenderJobs();
 
         private:
+            void startRegularRenderJobBatchIfNeeded();
+
             /* Render an item from the queue */
             void renderVisibleZoomJob();
             void renderVisibleScrollJob();
@@ -122,6 +128,7 @@ namespace Olympia {
             WebCore::IntRectRegion m_regularRenderJobsRegion;
             WebCore::IntRectList m_currentRegularRenderJobsBatch;
             WebCore::IntRectRegion m_currentRegularRenderJobsBatchRegion;
+            bool m_rectsAddedToRegularRenderJobsInCurrentCycle;
             bool m_currentRegularRenderJobsBatchUnderPressure;
 
             // Holds the region of the page that we attempt to render, but the

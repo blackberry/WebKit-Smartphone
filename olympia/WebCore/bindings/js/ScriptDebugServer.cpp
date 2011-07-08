@@ -41,6 +41,7 @@
 #include "JavaScriptCallFrame.h"
 #include "Page.h"
 #include "PageGroup.h"
+#include "PageGroupLoadDeferrer.h"
 #include "PluginView.h"
 #include "ScriptBreakpoint.h"
 #include "ScriptController.h"
@@ -448,15 +449,14 @@ void ScriptDebugServer::pauseIfNeeded(Page* page)
     TimerBase::fireTimersInNestedEventLoop();
 
 #if PLATFORM(OLYMPIA)
-    m_doneProcessingDebuggerEvents = false;
-    while (!m_doneProcessingDebuggerEvents && page->chrome()->platformPageClient()->runMessageLoopForJavaScript())
-        ;
-#else
+    // This is needed to prevent our page from being deleted in the message loop!
+    PageGroupLoadDeferrer deferrer(page, true);
+#endif
+
     EventLoop loop;
     m_doneProcessingDebuggerEvents = false;
     while (!m_doneProcessingDebuggerEvents && !loop.ended())
         loop.cycle();
-#endif
 
     setJavaScriptPaused(page->group(), false);
 

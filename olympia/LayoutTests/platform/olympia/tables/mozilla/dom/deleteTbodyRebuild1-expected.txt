@@ -3,47 +3,47 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584
-      RenderBlock (anonymous) at (0,0) size 784x72
-        RenderText {#text} at (0,0) size 779x36
-          text run at (0,0) width 779: "It should never be the case that deleting a tbody causes a rebuild of the cell map since cells"
-          text run at (0,18) width 434: "cannot span out of tbodies. However, this is a bug. "
-        RenderBR {BR} at (434,31) size 0x0
-        RenderBR {BR} at (0,36) size 0x18
-        RenderText {#text} at (0,54) size 291x18
-          text run at (0,54) width 291: "The 2 tables should look the same"
-      RenderTable {TABLE} at (0,72) size 78x52 [bgcolor=#FFA500] [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 76x50
-          RenderTableRow {TR} at (0,2) size 76x22
-            RenderTableCell {TD} at (2,2) size 35x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 31x18
-                text run at (2,2) width 31: "c31"
-            RenderTableCell {TD} at (39,2) size 35x22 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 31x18
-                text run at (2,2) width 31: "c32"
-          RenderTableRow {TR} at (0,26) size 76x22
-            RenderTableCell {TD} at (2,26) size 35x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 31x18
-                text run at (2,2) width 31: "c41"
-            RenderTableCell {TD} at (39,26) size 35x22 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 31x18
-                text run at (2,2) width 31: "c42"
-      RenderBlock (anonymous) at (0,124) size 784x18
-        RenderBR {BR} at (0,0) size 0x18
-      RenderTable {TABLE} at (0,142) size 78x52 [bgcolor=#FFA500] [border: (1px outset #808080)]
-        RenderTableSection {TBODY} at (1,1) size 76x50
-          RenderTableRow {TR} at (0,2) size 76x22
-            RenderTableCell {TD} at (2,2) size 35x22 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 31x18
-                text run at (2,2) width 31: "c31"
-            RenderTableCell {TD} at (39,2) size 35x22 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 31x18
-                text run at (2,2) width 31: "c32"
-          RenderTableRow {TR} at (0,26) size 76x22
-            RenderTableCell {TD} at (2,26) size 35x22 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 31x18
-                text run at (2,2) width 31: "c41"
-            RenderTableCell {TD} at (39,26) size 35x22 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
-              RenderText {#text} at (2,2) size 31x18
-                text run at (2,2) width 31: "c42"
-      RenderBlock (anonymous) at (0,194) size 784x18
-        RenderBR {BR} at (0,0) size 0x18
+      RenderBlock (anonymous) at (0,0) size 784x68
+        RenderText {#text} at (0,0) size 734x34
+          text run at (0,0) width 734: "It should never be the case that deleting a tbody causes a rebuild of the cell map since cells"
+          text run at (0,17) width 409: "cannot span out of tbodies. However, this is a bug. "
+        RenderBR {BR} at (409,30) size 0x0
+        RenderBR {BR} at (0,34) size 0x17
+        RenderText {#text} at (0,51) size 274x17
+          text run at (0,51) width 274: "The 2 tables should look the same"
+      RenderTable {TABLE} at (0,68) size 74x50 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 72x48
+          RenderTableRow {TR} at (0,2) size 72x21
+            RenderTableCell {TD} at (2,2) size 33x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 29x17
+                text run at (2,2) width 29: "c31"
+            RenderTableCell {TD} at (37,2) size 33x21 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 29x17
+                text run at (2,2) width 29: "c32"
+          RenderTableRow {TR} at (0,25) size 72x21
+            RenderTableCell {TD} at (2,25) size 33x21 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 29x17
+                text run at (2,2) width 29: "c41"
+            RenderTableCell {TD} at (37,25) size 33x21 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 29x17
+                text run at (2,2) width 29: "c42"
+      RenderBlock (anonymous) at (0,118) size 784x17
+        RenderBR {BR} at (0,0) size 0x17
+      RenderTable {TABLE} at (0,135) size 74x50 [bgcolor=#FFA500] [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 72x48
+          RenderTableRow {TR} at (0,2) size 72x21
+            RenderTableCell {TD} at (2,2) size 33x21 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 29x17
+                text run at (2,2) width 29: "c31"
+            RenderTableCell {TD} at (37,2) size 33x21 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 29x17
+                text run at (2,2) width 29: "c32"
+          RenderTableRow {TR} at (0,25) size 72x21
+            RenderTableCell {TD} at (2,25) size 33x21 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 29x17
+                text run at (2,2) width 29: "c41"
+            RenderTableCell {TD} at (37,25) size 33x21 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,2) size 29x17
+                text run at (2,2) width 29: "c42"
+      RenderBlock (anonymous) at (0,185) size 784x17
+        RenderBR {BR} at (0,0) size 0x17

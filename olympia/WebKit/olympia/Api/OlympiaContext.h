@@ -14,7 +14,7 @@ class String;
 
 class Context {
 public:
-    enum ContextType { ContextTypeText, ContextTypeUrl, ContextTypeImageSrc, ContextTypeImageAltText, ContextTypeNotSelectable, ContextTypePattern };
+    enum ContextType { ContextTypeText, ContextTypeUrl, ContextTypeImageSrc, ContextTypeImageAltText, ContextTypeNotSelectable, ContextTypePattern, ContextTypeInput, ContextTypeFocusable };
 
     Context() {}
 

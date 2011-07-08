@@ -12,6 +12,7 @@
 #include "Database.h"
 #include "DatabaseSync.h"
 #include "DatabaseTrackerManager.h"
+#include "HashMap.h"
 #include "OlympiaPlatformSettings.h"
 #include "PlatformString.h"
 #include "Settings.h"
@@ -67,9 +68,19 @@ enum WebSetting {
     LocalStorageQuota,
     LocalStoragePath,
     IsEmailMode,
+    UseWebKitCache,
     ShouldRenderAnimationsOnScroll,
-    OverZoomColor
+    OverZoomColor,
+    IsFrameFlatteningEnabled
 };
+
+typedef WTF::HashMap<WebCore::String, WebSettings*> WebSettingsMap;
+
+static WebSettingsMap& settingsMap() {
+    static WebSettingsMap& s_map = *(new WebSettingsMap);
+
+    return s_map;
+}
 
 struct WebCoreSettingsState {
     WebCoreSettingsState()
@@ -82,6 +93,8 @@ struct WebCoreSettingsState {
         , canJavaScriptOpenWindowsAutomatically(false)
         , arePluginsEnabled(false)
         , isJavaEnabled(false)
+        , isFrameFlatteningEnabled(false)
+        , useWebKitCache(true)
         , defaultFixedFontSize(13)
         , defaultFontSize(16)
         , minimumFontSize(8)
@@ -115,7 +128,9 @@ struct WebCoreSettingsState {
     bool canJavaScriptOpenWindowsAutomatically;
     bool arePluginsEnabled;
     bool isJavaEnabled;
+    bool useWebKitCache;
     bool doesGetFocusNodeContext;
+    bool isFrameFlatteningEnabled;
 
     int defaultFixedFontSize;
     int defaultFontSize;
@@ -236,22 +251,25 @@ static const MIMETypeAssociationMap mimeTypeAssociationMap[] = {
 
 static HashSet<WebCore::String>* s_supportedObjectMIMETypes;
 
-WebSettingsPrivate::WebSettingsPrivate()
+WebSettingsPrivate::WebSettingsPrivate(const String& pageGroupName)
     : m_settings(0)
     , m_webCoreSettingsState(new WebCoreSettingsState)
     , m_olympiaSettingsState(new OlympiaSettingsState)
     , m_screenWidth(0)
     , m_screenHeight(0)
 {
+    m_webCoreSettingsState->pageGroupName = pageGroupName;
 }
 
-WebSettingsPrivate::WebSettingsPrivate(WebCore::Settings* settings)
+WebSettingsPrivate::WebSettingsPrivate(WebCore::Settings* settings, const String& pageGroupName)
     : m_settings(settings)
     , m_webCoreSettingsState(new WebCoreSettingsState)
     , m_olympiaSettingsState(new OlympiaSettingsState)
 {
+    m_webCoreSettingsState->pageGroupName = pageGroupName;
+
     // Add ourselves to the list of page settings
-    WebSettings::globalSettings()->d->m_pageSettings.append(this);
+    WebSettings::pageGroupSettings(pageGroupName)->d->m_pageSettings.append(this);
 
     // Initialize our settings to the global defaults
     apply(AllSettings, true /*global*/);
@@ -260,8 +278,8 @@ WebSettingsPrivate::WebSettingsPrivate(WebCore::Settings* settings)
 WebSettingsPrivate::~WebSettingsPrivate()
 {
     if (!isGlobal()) {
-        size_t pos = WebSettings::globalSettings()->d->m_pageSettings.find(this);
-        WebSettings::globalSettings()->d->m_pageSettings.remove(pos);
+        size_t pos = WebSettings::pageGroupSettings(m_webCoreSettingsState->pageGroupName)->d->m_pageSettings.find(this);
+        WebSettings::pageGroupSettings(m_webCoreSettingsState->pageGroupName)->d->m_pageSettings.remove(pos);
     }
 
     delete m_webCoreSettingsState;
@@ -280,7 +298,7 @@ void WebSettingsPrivate::apply(int setting, bool global)
             m_pageSettings.at(i)->apply(setting, global);
     } else {
         // Apply the WebCore::Settings to this page's settings
-        WebCoreSettingsState* webcoreSettingsState = global ? WebSettings::globalSettings()->d->m_webCoreSettingsState : m_webCoreSettingsState;
+        WebCoreSettingsState* webcoreSettingsState = global ? WebSettings::pageGroupSettings(m_webCoreSettingsState->pageGroupName)->d->m_webCoreSettingsState : m_webCoreSettingsState;
 
         if (setting == AllSettings || setting == LoadsImagesAutomatically)
             m_settings->setLoadsImagesAutomatically(webcoreSettingsState->loadsImagesAutomatically);
@@ -330,6 +348,9 @@ void WebSettingsPrivate::apply(int setting, bool global)
         if (setting == AllSettings || setting == FirstScheduledLayoutDelay)
             m_settings->setFirstScheduledLayoutDelay(webcoreSettingsState->firstScheduledLayoutDelay);
 
+        if (setting == AllSettings || setting == UseWebKitCache)
+            m_settings->setUseCache(webcoreSettingsState->useWebKitCache);
+
 #if ENABLE(DATABASE)
         if (setting == AllSettings || setting == LocalStoragePath)
             m_settings->setLocalStorageDatabasePath(webcoreSettingsState->localStoragePath);
@@ -349,6 +370,9 @@ void WebSettingsPrivate::apply(int setting, bool global)
             m_settings->setLocalStorageQuota(webcoreSettingsState->localStorageQuota);
 #endif
 
+        if (setting == AllSettings || setting == IsFrameFlatteningEnabled)
+            m_settings->setFrameFlatteningEnabled(webcoreSettingsState->isFrameFlatteningEnabled);
+
         // These are *NOT* exposed via the API so just always set them if this
         // is global and we're setting all the settings...
         if (setting == AllSettings && global) {
@@ -356,7 +380,7 @@ void WebSettingsPrivate::apply(int setting, bool global)
         }
 
         // Apply the Olympia settings to this page's settings
-        OlympiaSettingsState* olympiaSettingsState = global ? WebSettings::globalSettings()->d->m_olympiaSettingsState : m_olympiaSettingsState;
+        OlympiaSettingsState* olympiaSettingsState = global ? WebSettings::pageGroupSettings(m_webCoreSettingsState->pageGroupName)->d->m_olympiaSettingsState : m_olympiaSettingsState;
 
         if (setting == AllSettings || setting == UserAgentString)
             m_olympiaSettingsState->userAgentString = olympiaSettingsState->userAgentString;
@@ -417,21 +441,28 @@ void WebSettingsPrivate::apply(int setting, bool global)
     }
 }
 
-WebSettings* WebSettings::globalSettings()
+WebSettings* WebSettings::pageGroupSettings(const String& pageGroupName)
 {
-    static WebSettings* s_instance = 0;
-    if (!s_instance)
-        s_instance = new WebSettings;
-    return s_instance;
+    if (pageGroupName.isEmpty())
+        return 0;
+
+    WebSettingsMap& map = settingsMap();
+    WebSettingsMap::iterator iter = map.find(pageGroupName);
+    if (iter != map.end())
+        return iter->second;
+
+    WebSettings* setting = new WebSettings(pageGroupName);
+    map.add(pageGroupName, setting);
+    return setting;
 }
 
-WebSettings::WebSettings()
-    : d(new WebSettingsPrivate)
+WebSettings::WebSettings(const String& pageGroupName)
+    : d(new WebSettingsPrivate(pageGroupName))
 {
 }
 
-WebSettings::WebSettings(WebCore::Settings* settings)
-    : d(new WebSettingsPrivate(settings))
+WebSettings::WebSettings(WebCore::Settings* settings, const String& pageGroupName)
+    : d(new WebSettingsPrivate(settings, pageGroupName))
 {
 }
 
@@ -553,6 +584,17 @@ void WebSettings::setStandardFontFamily(const char* s)
 {
     d->m_webCoreSettingsState->standardFontFamily = s;
     d->apply(StandardFontFamily, d->isGlobal());
+}
+
+bool WebSettings::isFrameFlatteningEnabled() const
+{
+    return d->isGlobal() ? d->m_webCoreSettingsState->isFrameFlatteningEnabled : d->m_settings->frameFlatteningEnabled();
+}
+
+void WebSettings::setFrameFlatteningEnabled(bool enable)
+{
+    d->m_webCoreSettingsState->isFrameFlatteningEnabled = enable;
+    d->apply(IsFrameFlatteningEnabled, d->isGlobal());
 }
 
 // User agent
@@ -695,32 +737,32 @@ String WebSettings::getNormalizedMIMEType(const String& type)
 
 int WebSettings::screenWidth()
 {
-    return globalSettings()->d->m_screenWidth;
+    return d->m_screenWidth;
 }
 
 int WebSettings::screenHeight()
 {
-    return globalSettings()->d->m_screenHeight;
+    return d->m_screenHeight;
 }
 
 void WebSettings::setScreenWidth(int width)
 {
-    globalSettings()->d->m_screenWidth = width;
+    d->m_screenWidth = width;
 }
 
 void WebSettings::setScreenHeight(int height)
 {
-    globalSettings()->d->m_screenHeight = height;
+    d->m_screenHeight = height;
 }
 
 IntSize WebSettings::applicationViewSize()
 {
-    return globalSettings()->d->m_applicationViewSize;
+    return d->m_applicationViewSize;
 }
 
 void WebSettings::setApplicationViewSize(const IntSize& applicationViewSize)
 {
-    globalSettings()->d->m_applicationViewSize = applicationViewSize;
+    d->m_applicationViewSize = applicationViewSize;
 }
 
 
@@ -938,18 +980,6 @@ String WebSettings::pageGroupName() const
     return d->m_webCoreSettingsState->pageGroupName;
 }
 
-void WebSettings::setPageGroupName(const String& name)
-{
-    // We do not allow changing pageGroupName for global setting, as it doesn't
-    // make sense, we also don't allow name changing after it is set, because
-    // WebKit doesn't support changing the directory of cacheStorage and
-    // DatabaseTracker at runtime.
-    if (d->isGlobal() || name.isEmpty() || !d->m_webCoreSettingsState->pageGroupName.isEmpty())
-        return;
-
-    d->m_webCoreSettingsState->pageGroupName = name;
-}
-
 bool WebSettings::isEmailMode() const
 {
     return d->m_olympiaSettingsState->isEmailMode;
@@ -981,6 +1011,17 @@ void WebSettings::setOverZoomColor(int color)
 {
     d->m_olympiaSettingsState->overZoomColor = color;
     d->apply(OverZoomColor, d->isGlobal());
+}
+
+bool WebSettings::useWebKitCache() const
+{
+    return d->m_webCoreSettingsState->useWebKitCache;
+}
+
+void WebSettings::setUseWebKitCache(bool use)
+{
+    d->m_webCoreSettingsState->useWebKitCache = use;
+    d->apply(UseWebKitCache, d->isGlobal());
 }
 
 }

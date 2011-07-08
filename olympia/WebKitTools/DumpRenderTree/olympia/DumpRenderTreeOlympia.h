@@ -12,8 +12,10 @@
 #include "wtf/Vector.h"
 
 namespace WebCore {
+enum EAffinity;
 class Frame;
 class DOMWrapperWorld;
+class Range;
 class SecurityOrigin;
 }
 
@@ -41,6 +43,7 @@ public:
     void setWaitToDumpWatchdog(double interval);
     void processWork(WebCore::Timer<DumpRenderTree>*);
 
+    WebPage* page() { return m_page; }
     WebCore::String pageGroupName() const;
 
     // FrameLoaderClient delegates
@@ -49,6 +52,7 @@ public:
     void didFailProvisionalLoadForFrame(WebCore::Frame* frame);
     void didFailLoadForFrame(WebCore::Frame* frame);
     void didFinishLoadForFrame(WebCore::Frame* frame);
+    void didFinishDocumentLoadForFrame(WebCore::Frame* frame);
     void didClearWindowObjectInWorld(WebCore::DOMWrapperWorld* world);
     void didReceiveTitleForFrame(const WebCore::String& title, WebCore::Frame* frame);
 
@@ -60,6 +64,18 @@ public:
     bool runBeforeUnloadConfirmPanel(const WebCore::String& message);
     void setStatusText(const WebCore::String& status);
     void exceededDatabaseQuota(WebCore::SecurityOrigin* origin, const WebCore::String& name);
+
+    // EditorClient delegates
+    void setAcceptsEditing(bool acceptsEditing) { m_acceptsEditing = acceptsEditing; }
+
+    void didBeginEditing();
+    void didEndEditing();
+    void didChange();
+    void didChangeSelection();
+    bool shouldBeginEditingInDOMRange(WebCore::Range* range);
+    bool shouldEndEditingInDOMRange(WebCore::Range* range);
+    bool shouldDeleteDOMRange(WebCore::Range* range);
+    bool shouldChangeSelectedDOMRangeToDOMRangeAffinityStillSelecting(WebCore::Range* fromRange, WebCore::Range* toRange, WebCore::EAffinity affinity, bool stillSelecting);
 
 private:
     static DumpRenderTree* s_currentInstance;
@@ -90,6 +106,7 @@ private:
     WebCore::Timer<DumpRenderTree> m_waitToDumpWatchdogTimer;
     WebCore::Timer<DumpRenderTree> m_workTimer;
 
+    bool m_acceptsEditing;
 };
 }
 }

@@ -34,6 +34,7 @@ OlympiaAnimationBase::OlympiaAnimationBase()
 #endif
     , m_shapingFunction(Linear)
     , m_buffer(0)
+    , m_bufferStride(0)
 {
 }
 
@@ -180,7 +181,8 @@ bool OlympiaAnimationBase::initializeBuffer(const WebCore::IntSize& size)
     if (m_buffer)
         return false;
 
-    m_buffer = new SurfaceOpenVG(size, EGLDisplayOpenVG::current()->display());
+    m_buffer = new unsigned short[size.width() * size.height() * 2];
+    m_bufferStride = size.width() * 2;
 
     return true;
 }
@@ -189,6 +191,7 @@ void OlympiaAnimationBase::destroyBuffer()
 {
     delete m_buffer;
     m_buffer = 0;
+    m_bufferStride = 0;
 }
 
 }

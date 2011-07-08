@@ -199,6 +199,8 @@ win32-*|olympia-* {
     INCLUDEPATH += $$(BBNSLINSTALLPREFIX)/include/webkitplatform
     INCLUDEPATH += $$(BBNSLINSTALLPREFIX)/include/posix
     INCLUDEPATH += $$(BBNSLINSTALLPREFIX)/include/sqlite
+    INCLUDEPATH += $$(BBNSLINSTALLPREFIX)/include/slipstream/libimage/public/cpp/include/common
+    INCLUDEPATH += $$(BBNSLINSTALLPREFIX)/include/slipstream/libimage/public/cpp/include/rxi
 
     contains(DEFINES, ENABLE_OLYMPIA_DEBUG_MEMORY=1) {
         LIBS += -L$$(BBNDKROOT)/bbndk-webkit/MemoryLeakTracker/Release
@@ -247,6 +249,7 @@ INCLUDEPATH = \
 #    $$PWD/platform/image-decoders/ico \
     $$PWD/platform/image-decoders/jpeg \
     $$PWD/platform/image-decoders/png \
+    $$PWD/platform/image-decoders/rxi \
 #    $$PWD/platform/image-decoders/xbm \
     $$PWD/platform/network \
     $$PWD/platform/sql \
@@ -969,6 +972,7 @@ SOURCES += \
     platform/image-decoders/jpeg/JPEGImageDecoder.cpp \
     platform/image-decoders/png/PNGImageDecoder.cpp \
 #    platform/image-decoders/xbm/XBMImageDecoder.cpp \
+    platform/image-decoders/rxi/RxIImageDecoder.cpp \
     platform/image-encoders/JPEGImageEncoder.cpp \
     platform/image-encoders/PNGImageEncoder.cpp \
     platform/KURL.cpp \

@@ -189,7 +189,12 @@ void SearchFieldCancelButtonElement::defaultEventHandler(Event* evt)
             }
     } else if (evt->type() == eventNames().mouseupEvent && evt->isMouseEvent() && static_cast<MouseEvent*>(evt)->button() == LeftButton) {
         if (m_capturing && renderer() && renderer()->visibleToHitTesting()) {
+#if !PLATFORM(OLYMPIA)
+            // FIXME: It's always false on OLYMPIA platform. This problem depends on RIM bug #1067.
             if (hovered()) {
+#else
+            if (evt->target() == this) {
+#endif
                 input->setValue("");
                 input->onSearch();
                 evt->setDefaultHandled();

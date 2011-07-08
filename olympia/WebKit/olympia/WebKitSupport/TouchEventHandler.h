@@ -34,7 +34,7 @@ public:
     void setDidMoveFinger(bool moved) { m_didMoveFinger = moved; }
 
 private:
-    WebCore::IntPoint getFatFingerPos(const WebCore::IntPoint winPos);
+    WebCore::IntPoint getFatFingerPos(const WebCore::IntPoint contentPos);
     void touchPressedTimeout(WebCore::Timer<WebPagePrivate>*);
 
     WebPagePrivate* m_webPage;
@@ -46,9 +46,8 @@ private:
 
     bool m_touchDownTimerStarted;
 
-    WebCore::IntPoint m_touchDownPoint; // Screen Position
     WebCore::IntPoint m_fatFingerPoint; // Content Position
-    WebCore::IntPoint m_lastTouchPoint; // Screen Position
+    WebCore::IntPoint m_lastScreenPoint; // Screen Position
 
     WebCore::Timer<TouchEventHandler>* m_touchDownTimer;
     RefPtr<WebCore::Node> m_subframeNode;

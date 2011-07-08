@@ -92,6 +92,7 @@ bool TouchEventHandler::handleTouchEvent(Olympia::Platform::TouchEvent& event)
     // Clear stuff if canceled and consume event.
     // FIXME: Look into clearing focus node even if javascript consumes cancel event.
     if (event.m_type == Olympia::Platform::TouchEvent::TouchCancel) {
+        m_webPage->m_mainFrame->eventHandler()->setMousePressed(false);
         m_webPage->clearFocusNode();
         m_didCancelTouch = true;
         m_subframeNode = 0;
@@ -107,9 +108,8 @@ bool TouchEventHandler::handleTouchEvent(Olympia::Platform::TouchEvent& event)
         setDidMoveFinger(false);
         setDidZoomPage(false);
         m_didCancelTouch = false;
-        m_touchDownPoint = event.m_points[0].m_screenPos;
-        m_lastTouchPoint = event.m_points[0].m_screenPos;
-        m_fatFingerPoint = event.m_points[0].m_pos;
+        m_lastScreenPoint = event.m_points[0].m_screenPos;
+        m_fatFingerPoint = m_webPage->mapFromViewportToContents(event.m_points[0].m_pos);
         m_subframeNode = 0;
         m_touchDownTimerStarted = true;
         m_touchDownTimer->startOneShot(touchDownTimeout);
@@ -117,7 +117,7 @@ bool TouchEventHandler::handleTouchEvent(Olympia::Platform::TouchEvent& event)
     } else if (event.m_singleType == Olympia::Platform::TouchEvent::SingleReleased) {
         m_subframeNode = 0;
         // Create Mouse Event.
-        WebCore::PlatformMouseEvent mouseEvent(m_webPage->mapFromContentsToViewport(m_fatFingerPoint), m_fatFingerPoint, WebCore::MouseEventMoved, 1, WebCore::TouchScreen);
+        WebCore::PlatformMouseEvent mouseEvent(m_webPage->mapFromContentsToViewport(m_fatFingerPoint), m_lastScreenPoint, WebCore::MouseEventMoved, 1, WebCore::TouchScreen);
 
         // Update the mouse position with a MouseMoved event
         m_webPage->handleMouseEvent(mouseEvent);
@@ -135,10 +135,12 @@ bool TouchEventHandler::handleTouchEvent(Olympia::Platform::TouchEvent& event)
 
     } else if (event.m_singleType == Olympia::Platform::TouchEvent::SingleMoved) {
         // If there is a subframe or div to scroll try scrolling it otherwise returns false and let chrome scroll the page.
-        if (!m_subframeNode)
-            m_subframeNode = m_webPage->m_mainFrame->eventHandler()->hitTestResultAtPoint(event.m_points[0].m_pos, false).innerNode();
-        WebCore::IntSize delta = m_lastTouchPoint - event.m_points[0].m_screenPos;
-        m_lastTouchPoint = event.m_points[0].m_screenPos;
+        if (!m_subframeNode) {
+            HitTestResult result = m_webPage->m_mainFrame->eventHandler()->hitTestResultAtPoint(m_webPage->mapFromViewportToContents(event.m_points[0].m_pos), false);
+            m_subframeNode = result.innerNode();
+        }
+        WebCore::IntSize delta = m_webPage->mapToTransformed(m_lastScreenPoint) - m_webPage->mapToTransformed(event.m_points[0].m_screenPos);
+        m_lastScreenPoint = event.m_points[0].m_screenPos;
         return m_webPage->scrollNodeRecursively(m_subframeNode.get(), delta);
     }
     return true;
@@ -148,14 +150,14 @@ void TouchEventHandler::touchPressedTimeout(WebCore::Timer<TouchEventHandler>*)
 {
     m_touchDownTimerStarted = false;
     if (!m_didZoomPage && !m_didScrollPage && !m_didCancelTouch) {
-
-        Node* node = m_webPage->m_mainFrame->eventHandler()->hitTestResultAtPoint(m_fatFingerPoint, false).innerNode();
+        HitTestResult result = m_webPage->m_mainFrame->eventHandler()->hitTestResultAtPoint(m_fatFingerPoint, false);
+        Node* node = result.innerNode();
         if (!(node && node->isFocusable()))
             m_fatFingerPoint = getFatFingerPos(m_fatFingerPoint);
 
         // Convert touch event to a mouse event
         // First update the mouse position with a MouseMoved event
-        WebCore::PlatformMouseEvent mouseEvent(m_webPage->mapFromContentsToViewport(m_fatFingerPoint), m_fatFingerPoint, WebCore::MouseEventMoved, 1, WebCore::TouchScreen);
+        WebCore::PlatformMouseEvent mouseEvent(m_webPage->mapFromContentsToViewport(m_fatFingerPoint), m_lastScreenPoint, WebCore::MouseEventMoved, 1, WebCore::TouchScreen);
         m_webPage->handleMouseEvent(mouseEvent);
 
         // Then send the MousePressed event
@@ -164,21 +166,21 @@ void TouchEventHandler::touchPressedTimeout(WebCore::Timer<TouchEventHandler>*)
     }
 }
 
-WebCore::IntPoint TouchEventHandler::getFatFingerPos(const WebCore::IntPoint pos)
+WebCore::IntPoint TouchEventHandler::getFatFingerPos(const WebCore::IntPoint contentPos)
 {
     Document* doc = m_webPage->m_mainFrame->document();
     if (!doc)
-        return pos;
+        return contentPos;
 
     // The layout needs to be up-to-date to determine if a node is focusable.
     doc->updateLayoutIgnorePendingStylesheets();
 
     Node* startNode = doc->nextFocusableNode(0, 0);
     if (!startNode)
-        return pos;
+        return contentPos;
 
     // Create fingerRect.
-    WebCore::IntPoint screenPoint = m_webPage->mapToTransformed(pos);
+    WebCore::IntPoint screenPoint = m_webPage->mapToTransformed(contentPos);
     // screenFingerRect is a square with length fatFingerRad*2 pixels on the physical screen.
     WebCore::IntRect screenFingerRect(screenPoint.x() - fatFingerRad, screenPoint.y() - fatFingerRad, fatFingerRad * 2, fatFingerRad * 2);
     WebCore::IntRect fingerRect = m_webPage->mapFromTransformed(screenFingerRect);
@@ -191,8 +193,8 @@ WebCore::IntPoint TouchEventHandler::getFatFingerPos(const WebCore::IntPoint pos
     do {
         WebCore::IntRect curRect = curNode->getRect();
         if (fingerRect.intersects(curNode->getRect())) {
-            WebCore::IntPoint closestPoint = closestPointInRect(curNode->getRect(), pos);
-            int dist = distanceBetweenPoints(closestPoint, pos);
+            WebCore::IntPoint closestPoint = closestPointInRect(curNode->getRect(), contentPos);
+            int dist = distanceBetweenPoints(closestPoint, contentPos);
             if (!bestNode || dist < bestDistance) {
                 bestNode = curNode;
                 bestDistance = dist;
@@ -202,7 +204,7 @@ WebCore::IntPoint TouchEventHandler::getFatFingerPos(const WebCore::IntPoint pos
         curNode = doc->nextFocusableNode(curNode, 0);
     } while (curNode && curNode != startNode);
 
-    if (bestNode && bestPoint != pos) {
+    if (bestNode && bestPoint != contentPos) {
         if (bestNode->hasTagName(HTMLNames::inputTag)) {
             HTMLInputElement* input = static_cast<HTMLInputElement*>(bestNode);
             if (input && (input->isTextButton() || input->isRadioButton() || input->inputType() == HTMLInputElement::CHECKBOX)) {
@@ -217,7 +219,7 @@ WebCore::IntPoint TouchEventHandler::getFatFingerPos(const WebCore::IntPoint pos
         }
         return bestPoint;
     }
-    return pos;
+    return contentPos;
 }
 
 }

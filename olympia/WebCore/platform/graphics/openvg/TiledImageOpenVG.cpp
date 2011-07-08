@@ -139,7 +139,7 @@ IntRect TiledImageOpenVG::tileRect(int xIndex, int yIndex) const
 
 void TiledImageOpenVG::detachTiles()
 {
-    makeSharedContextCurrent(); // because we create new images
+    makeResourceCreationContextCurrent(); // because we create new images
 
     int numTiles = m_tiles.size();
     VGImage newTile, originalTile;
