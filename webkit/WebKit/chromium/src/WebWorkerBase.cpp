@@ -63,7 +63,7 @@ namespace {
 // call back to the worker context.
 class AllowDatabaseMainThreadBridge : public ThreadSafeShared<AllowDatabaseMainThreadBridge> {
 public:
-    static PassRefPtr<AllowDatabaseMainThreadBridge> create(WebWorkerBase* worker, const WebCore::String& mode, WebCommonWorkerClient* commonClient, WebFrame* frame, const WebCore::String& name, const WebCore::String& displayName, unsigned long estimatedSize)
+    static PassRefPtr<AllowDatabaseMainThreadBridge> create(WebWorkerBase* worker, const WTF::String& mode, WebCommonWorkerClient* commonClient, WebFrame* frame, const WTF::String& name, const WTF::String& displayName, unsigned long estimatedSize)
     {
         return adoptRef(new AllowDatabaseMainThreadBridge(worker, mode, commonClient, frame, name, displayName, estimatedSize));
     }
@@ -89,14 +89,14 @@ public:
     }
 
 private:
-    AllowDatabaseMainThreadBridge(WebWorkerBase* worker, const WebCore::String& mode, WebCommonWorkerClient* commonClient, WebFrame* frame, const WebCore::String& name, const WebCore::String& displayName, unsigned long estimatedSize)
+    AllowDatabaseMainThreadBridge(WebWorkerBase* worker, const WTF::String& mode, WebCommonWorkerClient* commonClient, WebFrame* frame, const WTF::String& name, const WTF::String& displayName, unsigned long estimatedSize)
         : m_worker(worker)
         , m_mode(mode)
     {
         worker->dispatchTaskToMainThread(createCallbackTask(&allowDatabaseTask, commonClient, frame, String(name), String(displayName), estimatedSize, this));
     }
 
-    static void allowDatabaseTask(WebCore::ScriptExecutionContext* context, WebCommonWorkerClient* commonClient, WebFrame* frame, const WebCore::String name, const WebCore::String displayName, unsigned long estimatedSize, PassRefPtr<AllowDatabaseMainThreadBridge> bridge)
+    static void allowDatabaseTask(WebCore::ScriptExecutionContext* context, WebCommonWorkerClient* commonClient, WebFrame* frame, const WTF::String name, const WTF::String displayName, unsigned long estimatedSize, PassRefPtr<AllowDatabaseMainThreadBridge> bridge)
     {
         if (!commonClient)
             bridge->signalCompleted(false);
@@ -112,7 +112,7 @@ private:
     bool m_result;
     Mutex m_mutex;
     WebWorkerBase* m_worker;
-    WebCore::String m_mode;
+    WTF::String m_mode;
 };
 }
 
@@ -165,7 +165,7 @@ void WebWorkerBase::initializeLoader(const WebURL& url)
     // loading requests from the worker context to the rest of WebKit and Chromium
     // infrastructure.
     ASSERT(!m_webView);
-    m_webView = WebView::create(0);
+    m_webView = WebView::create(0, 0);
     m_webView->settings()->setOfflineWebApplicationCacheEnabled(WebRuntimeFeatures::isApplicationCacheEnabled());
     m_webView->initializeMainFrame(this);
 
@@ -185,7 +185,7 @@ void WebWorkerBase::initializeLoader(const WebURL& url)
 
 void WebWorkerBase::dispatchTaskToMainThread(PassOwnPtr<ScriptExecutionContext::Task> task)
 {
-    return callOnMainThread(invokeTaskMethod, task.release());
+    callOnMainThread(invokeTaskMethod, task.leakPtr());
 }
 
 void WebWorkerBase::invokeTaskMethod(void* param)

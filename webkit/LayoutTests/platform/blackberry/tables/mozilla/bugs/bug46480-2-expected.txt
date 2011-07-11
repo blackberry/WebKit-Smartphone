@@ -1,0 +1,66 @@
+layer at (0,0) size 800x693
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x693
+  RenderBlock {HTML} at (0,0) size 800x693
+    RenderBody {BODY} at (8,19) size 784x666 [bgcolor=#FFFFFF]
+      RenderBlock {H2} at (0,0) size 784x32
+        RenderText {#text} at (0,2) size 65x28
+          text run at (0,2) width 65: "Test A"
+      RenderBlock {DIV} at (0,51) size 784x67 [color=#008000]
+        RenderTable {TABLE} at (0,0) size 280x67 [border: (10px solid #008000)]
+          RenderTableSection {TBODY} at (10,10) size 260x47
+            RenderTableRow {TR} at (0,2) size 260x43 [color=#0000FF]
+              RenderTableCell {TD} at (2,2) size 54x43 [border: (10px solid #0000FF)] [r=0 c=0 rs=1 cs=1]
+                RenderText {#text} at (11,12) size 32x19
+                  text run at (11,12) width 32: "Field"
+              RenderTableCell {TD} at (58,2) size 200x43 [border: (10px solid #0000FF)] [r=0 c=1 rs=1 cs=1]
+                RenderText {#text} at (11,12) size 178x19
+                  text run at (11,12) width 178: "Records for Cropping Years"
+      RenderBlock {H2} at (0,137) size 784x32
+        RenderText {#text} at (0,2) size 64x28
+          text run at (0,2) width 64: "Test B"
+      RenderTable {TABLE} at (0,188) size 280x67 [border: (10px solid #000000)]
+        RenderTableSection {TBODY} at (10,10) size 260x47
+          RenderTableRow {TR} at (0,2) size 260x43 [color=#0000FF]
+            RenderTableCell {TD} at (2,2) size 54x43 [border: (10px solid #0000FF)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (11,12) size 32x19
+                text run at (11,12) width 32: "Field"
+            RenderTableCell {TD} at (58,2) size 200x43 [border: (10px solid #0000FF)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (11,12) size 178x19
+                text run at (11,12) width 178: "Records for Cropping Years"
+      RenderBlock {H2} at (0,274) size 784x32
+        RenderText {#text} at (0,2) size 65x28
+          text run at (0,2) width 65: "Test C"
+      RenderTable {TABLE} at (0,325) size 280x67 [color=#0000FF] [border: (10px solid #0000FF)]
+        RenderTableSection {TBODY} at (10,10) size 260x47
+          RenderTableRow {TR} at (0,2) size 260x43
+            RenderTableCell {TD} at (2,2) size 54x43 [border: (10px solid #0000FF)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (11,12) size 32x19
+                text run at (11,12) width 32: "Field"
+            RenderTableCell {TD} at (58,2) size 200x43 [border: (10px solid #0000FF)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (11,12) size 178x19
+                text run at (11,12) width 178: "Records for Cropping Years"
+      RenderBlock {H2} at (0,411) size 784x32
+        RenderText {#text} at (0,2) size 65x28
+          text run at (0,2) width 65: "Test D"
+      RenderTable {TABLE} at (0,462) size 280x67 [color=#0000FF] [border: (10px solid #0000FF)]
+        RenderTableSection {TBODY} at (10,10) size 260x47
+          RenderTableRow {TR} at (0,2) size 260x43
+            RenderTableCell {TD} at (2,2) size 54x43 [border: (10px solid #0000FF)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (11,12) size 32x19
+                text run at (11,12) width 32: "Field"
+            RenderTableCell {TD} at (58,2) size 200x43 [border: (10px solid #0000FF)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (11,12) size 178x19
+                text run at (11,12) width 178: "Records for Cropping Years"
+      RenderBlock {H2} at (0,548) size 784x32
+        RenderText {#text} at (0,2) size 64x28
+          text run at (0,2) width 64: "Test E"
+      RenderTable {TABLE} at (0,599) size 280x67 [color=#0000FF] [border: (10px solid #0000FF)]
+        RenderTableSection {TBODY} at (10,10) size 260x47
+          RenderTableRow {TR} at (0,2) size 260x43
+            RenderTableCell {TD} at (2,2) size 54x43 [border: (10px solid #0000FF)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (11,12) size 32x19
+                text run at (11,12) width 32: "Field"
+            RenderTableCell {TD} at (58,2) size 200x43 [border: (10px solid #0000FF)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (11,12) size 178x19
+                text run at (11,12) width 178: "Records for Cropping Years"

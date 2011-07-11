@@ -30,6 +30,7 @@
 
 #include <algorithm>
 #include <wtf/FastAllocBase.h>
+#include <wtf/Forward.h>
 
 #if PLATFORM(CG)
 typedef struct CGPath PlatformPath;
@@ -59,6 +60,7 @@ typedef BRegion PlatformPath;
 namespace WebCore {
     class PlatformPath;
 }
+typedef WebCore::PlatformPath PlatformPath;
 #else
 typedef void PlatformPath;
 #endif
@@ -77,7 +79,6 @@ namespace WebCore {
     class FloatRect;
     class FloatSize;
     class GraphicsContext;
-    class String;
     class StrokeStyleApplier;
 
     enum WindRule {
@@ -124,6 +125,7 @@ namespace WebCore {
         // Gets the current point of the current path, which is conceptually the final point reached by the path so far.
         // Note the Path can be empty (isEmpty() == true) and still have a current point.
         bool hasCurrentPoint() const;
+        FloatPoint currentPoint() const;
 
         void moveTo(const FloatPoint&);
         void addLineTo(const FloatPoint&);
@@ -154,6 +156,10 @@ namespace WebCore {
 
     private:
         PlatformPathPtr m_path;
+
+#if PLATFORM(QT)
+        int m_lastMoveToIndex;
+#endif
     };
 
 }

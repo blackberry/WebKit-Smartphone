@@ -22,12 +22,15 @@
 #ifndef EWebKit_h
 #define EWebKit_h
 
+#include "ewk_contextmenu.h"
+#include "ewk_cookies.h"
 #include "ewk_eapi.h"
 #include "ewk_frame.h"
 #include "ewk_history.h"
 #include "ewk_main.h"
 #include "ewk_settings.h"
 #include "ewk_view.h"
+#include "ewk_window_features.h"
 
 #include <Evas.h>
 

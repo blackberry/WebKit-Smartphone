@@ -31,7 +31,9 @@
 #include "config.h"
 #include "DatabaseObserver.h"
 
-#include "Database.h"
+#if ENABLE(DATABASE)
+
+#include "AbstractDatabase.h"
 #include "Document.h"
 #include "ScriptExecutionContext.h"
 #include "WebDatabase.h"
@@ -65,22 +67,24 @@ bool DatabaseObserver::canEstablishDatabase(ScriptExecutionContext* scriptExecut
     return true;
 }
 
-void DatabaseObserver::databaseOpened(Database* database)
+void DatabaseObserver::databaseOpened(AbstractDatabase* database)
 {
-    ASSERT(isMainThread());
+    ASSERT(database->scriptExecutionContext()->isContextThread());
     WebDatabase::observer()->databaseOpened(WebDatabase(database));
 }
 
-void DatabaseObserver::databaseModified(Database* database)
+void DatabaseObserver::databaseModified(AbstractDatabase* database)
 {
-    ASSERT(isMainThread());
+    ASSERT(database->scriptExecutionContext()->isContextThread());
     WebDatabase::observer()->databaseModified(WebDatabase(database));
 }
 
-void DatabaseObserver::databaseClosed(Database* database)
+void DatabaseObserver::databaseClosed(AbstractDatabase* database)
 {
-    ASSERT(isMainThread());
+    ASSERT(database->scriptExecutionContext()->isContextThread());
     WebDatabase::observer()->databaseClosed(WebDatabase(database));
 }
 
 } // namespace WebCore
+
+#endif // ENABLE(DATABASE)

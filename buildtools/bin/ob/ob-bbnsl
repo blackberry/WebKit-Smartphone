@@ -1,5 +1,6 @@
 #!/bin/bash
 
-validate_OSDIR
-validate_TIDDIR
+validate_OSDIR || return 1 2>/dev/null || exit 1;
+validate_TIDDIR || return 1 2>/dev/null || exit 1;
+
 ob-bbnsl-direct

@@ -35,14 +35,15 @@
 #include "Lookup.h"
 #include "PropertyNameArray.h"
 #include "StringBuilder.h"
+#include "StringConcatenate.h"
 #include <wtf/MathExtras.h>
 
 namespace JSC {
 
 ASSERT_CLASS_FITS_IN_CELL(JSONObject);
 
-static JSValue JSC_HOST_CALL JSONProtoFuncParse(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL JSONProtoFuncStringify(ExecState*, JSObject*, JSValue, const ArgList&);
+static EncodedJSValue JSC_HOST_CALL JSONProtoFuncParse(ExecState*);
+static EncodedJSValue JSC_HOST_CALL JSONProtoFuncStringify(ExecState*);
 
 }
 
@@ -163,8 +164,8 @@ static inline UString gap(ExecState* exec, JSValue space)
 
     // If the space value is a string, use it as the gap string, otherwise use no gap string.
     UString spaces = space.getString(exec);
-    if (spaces.size() > maxGapLength) {
-        spaces = spaces.substr(0, maxGapLength);
+    if (spaces.length() > maxGapLength) {
+        spaces = spaces.substringSharingImpl(0, maxGapLength);
     }
     return spaces;
 }
@@ -280,14 +281,14 @@ JSValue Stringifier::stringify(JSValue value)
 
 void Stringifier::appendQuotedString(StringBuilder& builder, const UString& value)
 {
-    int length = value.size();
+    int length = value.length();
 
     // String length plus 2 for quote marks plus 8 so we can accomodate a few escaped characters.
     builder.reserveCapacity(builder.size() + length + 2 + 8);
 
     builder.append('"');
 
-    const UChar* data = value.data();
+    const UChar* data = value.characters();
     for (int i = 0; i < length; ++i) {
         int start = i;
         while (i < length && (data[i] > 0x1F && data[i] != '"' && data[i] != '\\'))
@@ -405,7 +406,7 @@ Stringifier::StringifyResult Stringifier::appendStringifiedValue(StringBuilder& 
         if (!isfinite(numericValue))
             builder.append("null");
         else
-            builder.append(UString::from(numericValue));
+            builder.append(UString::number(numericValue));
         return StringifySucceeded;
     }
 
@@ -425,7 +426,7 @@ Stringifier::StringifyResult Stringifier::appendStringifiedValue(StringBuilder& 
 
     // Handle cycle detection, and put the holder on the stack.
     if (!m_holderCycleDetector.add(object).second) {
-        throwError(m_exec, TypeError, "JSON.stringify cannot serialize cyclic structures.");
+        throwError(m_exec, createTypeError(m_exec, "JSON.stringify cannot serialize cyclic structures."));
         return StringifyFailed;
     }
     bool holderStackWasEmpty = m_holderStack.isEmpty();
@@ -443,7 +444,7 @@ Stringifier::StringifyResult Stringifier::appendStringifiedValue(StringBuilder& 
                 return StringifyFailed;
             if (!--tickCount) {
                 if (localTimeoutChecker.didTimeOut(m_exec)) {
-                    m_exec->setException(createInterruptedExecutionException(&m_exec->globalData()));
+                    throwError(m_exec, createInterruptedExecutionException(&m_exec->globalData()));
                     return StringifyFailed;
                 }
                 tickCount = localTimeoutChecker.ticksUntilNextCheck();
@@ -463,17 +464,17 @@ inline bool Stringifier::willIndent() const
 inline void Stringifier::indent()
 {
     // Use a single shared string, m_repeatedGap, so we don't keep allocating new ones as we indent and unindent.
-    unsigned newSize = m_indent.size() + m_gap.size();
-    if (newSize > m_repeatedGap.size())
+    unsigned newSize = m_indent.length() + m_gap.length();
+    if (newSize > m_repeatedGap.length())
         m_repeatedGap = makeString(m_repeatedGap, m_gap);
-    ASSERT(newSize <= m_repeatedGap.size());
-    m_indent = m_repeatedGap.substr(0, newSize);
+    ASSERT(newSize <= m_repeatedGap.length());
+    m_indent = m_repeatedGap.substringSharingImpl(0, newSize);
 }
 
 inline void Stringifier::unindent()
 {
-    ASSERT(m_indent.size() >= m_gap.size());
-    m_indent = m_repeatedGap.substr(0, m_indent.size() - m_gap.size());
+    ASSERT(m_indent.length() >= m_gap.length());
+    m_indent = m_repeatedGap.substringSharingImpl(0, m_indent.length() - m_gap.length());
 }
 
 inline void Stringifier::startNewLine(StringBuilder& builder) const
@@ -679,10 +680,8 @@ NEVER_INLINE JSValue Walker::walk(JSValue unfiltered)
             case ArrayStartState: {
                 ASSERT(inValue.isObject());
                 ASSERT(isJSArray(&m_exec->globalData(), asObject(inValue)) || asObject(inValue)->inherits(&JSArray::info));
-                if (objectStack.size() + arrayStack.size() > maximumFilterRecursion) {
-                    m_exec->setException(createStackOverflowError(m_exec));
-                    return jsUndefined();
-                }
+                if (objectStack.size() + arrayStack.size() > maximumFilterRecursion)
+                    return throwError(m_exec, createStackOverflowError(m_exec));
 
                 JSArray* array = asArray(inValue);
                 arrayStack.append(array);
@@ -692,10 +691,8 @@ NEVER_INLINE JSValue Walker::walk(JSValue unfiltered)
             arrayStartVisitMember:
             case ArrayStartVisitMember: {
                 if (!--tickCount) {
-                    if (localTimeoutChecker.didTimeOut(m_exec)) {
-                        m_exec->setException(createInterruptedExecutionException(&m_exec->globalData()));
-                        return jsUndefined();
-                    }
+                    if (localTimeoutChecker.didTimeOut(m_exec))
+                        return throwError(m_exec, createInterruptedExecutionException(&m_exec->globalData()));
                     tickCount = localTimeoutChecker.ticksUntilNextCheck();
                 }
 
@@ -726,7 +723,7 @@ NEVER_INLINE JSValue Walker::walk(JSValue unfiltered)
             }
             case ArrayEndVisitMember: {
                 JSArray* array = arrayStack.last();
-                JSValue filteredValue = callReviver(array, jsString(m_exec, UString::from(indexStack.last())), outValue);
+                JSValue filteredValue = callReviver(array, jsString(m_exec, UString::number(indexStack.last())), outValue);
                 if (filteredValue.isUndefined())
                     array->deleteProperty(m_exec, indexStack.last());
                 else {
@@ -744,10 +741,8 @@ NEVER_INLINE JSValue Walker::walk(JSValue unfiltered)
             case ObjectStartState: {
                 ASSERT(inValue.isObject());
                 ASSERT(!isJSArray(&m_exec->globalData(), asObject(inValue)) && !asObject(inValue)->inherits(&JSArray::info));
-                if (objectStack.size() + arrayStack.size() > maximumFilterRecursion) {
-                    m_exec->setException(createStackOverflowError(m_exec));
-                    return jsUndefined();
-                }
+                if (objectStack.size() + arrayStack.size() > maximumFilterRecursion)
+                    return throwError(m_exec, createStackOverflowError(m_exec));
 
                 JSObject* object = asObject(inValue);
                 objectStack.append(object);
@@ -759,10 +754,8 @@ NEVER_INLINE JSValue Walker::walk(JSValue unfiltered)
             objectStartVisitMember:
             case ObjectStartVisitMember: {
                 if (!--tickCount) {
-                    if (localTimeoutChecker.didTimeOut(m_exec)) {
-                        m_exec->setException(createInterruptedExecutionException(&m_exec->globalData()));
-                        return jsUndefined();
-                    }
+                    if (localTimeoutChecker.didTimeOut(m_exec))
+                        return throwError(m_exec, createInterruptedExecutionException(&m_exec->globalData()));
                     tickCount = localTimeoutChecker.ticksUntilNextCheck();
                 }
 
@@ -825,10 +818,8 @@ NEVER_INLINE JSValue Walker::walk(JSValue unfiltered)
         stateStack.removeLast();
 
         if (!--tickCount) {
-            if (localTimeoutChecker.didTimeOut(m_exec)) {
-                m_exec->setException(createInterruptedExecutionException(&m_exec->globalData()));
-                return jsUndefined();
-            }
+            if (localTimeoutChecker.didTimeOut(m_exec))
+                return throwError(m_exec, createInterruptedExecutionException(&m_exec->globalData()));
             tickCount = localTimeoutChecker.ticksUntilNextCheck();
         }
     }
@@ -839,40 +830,40 @@ NEVER_INLINE JSValue Walker::walk(JSValue unfiltered)
 }
 
 // ECMA-262 v5 15.12.2
-JSValue JSC_HOST_CALL JSONProtoFuncParse(ExecState* exec, JSObject*, JSValue, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL JSONProtoFuncParse(ExecState* exec)
 {
-    if (args.isEmpty())
-        return throwError(exec, GeneralError, "JSON.parse requires at least one parameter");
-    JSValue value = args.at(0);
+    if (!exec->argumentCount())
+        return throwVMError(exec, createError(exec, "JSON.parse requires at least one parameter"));
+    JSValue value = exec->argument(0);
     UString source = value.toString(exec);
     if (exec->hadException())
-        return jsNull();
+        return JSValue::encode(jsNull());
     
     LiteralParser jsonParser(exec, source, LiteralParser::StrictJSON);
     JSValue unfiltered = jsonParser.tryLiteralParse();
     if (!unfiltered)
-        return throwError(exec, SyntaxError, "Unable to parse JSON string");
+        return throwVMError(exec, createSyntaxError(exec, "Unable to parse JSON string"));
     
-    if (args.size() < 2)
-        return unfiltered;
+    if (exec->argumentCount() < 2)
+        return JSValue::encode(unfiltered);
     
-    JSValue function = args.at(1);
+    JSValue function = exec->argument(1);
     CallData callData;
-    CallType callType = function.getCallData(callData);
+    CallType callType = getCallData(function, callData);
     if (callType == CallTypeNone)
-        return unfiltered;
-    return Walker(exec, asObject(function), callType, callData).walk(unfiltered);
+        return JSValue::encode(unfiltered);
+    return JSValue::encode(Walker(exec, asObject(function), callType, callData).walk(unfiltered));
 }
 
 // ECMA-262 v5 15.12.3
-JSValue JSC_HOST_CALL JSONProtoFuncStringify(ExecState* exec, JSObject*, JSValue, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL JSONProtoFuncStringify(ExecState* exec)
 {
-    if (args.isEmpty())
-        return throwError(exec, GeneralError, "No input to stringify");
-    JSValue value = args.at(0);
-    JSValue replacer = args.at(1);
-    JSValue space = args.at(2);
-    return Stringifier(exec, replacer, space).stringify(value);
+    if (!exec->argumentCount())
+        return throwVMError(exec, createError(exec, "No input to stringify"));
+    JSValue value = exec->argument(0);
+    JSValue replacer = exec->argument(1);
+    JSValue space = exec->argument(2);
+    return JSValue::encode(Stringifier(exec, replacer, space).stringify(value));
 }
 
 UString JSONStringify(ExecState* exec, JSValue value, unsigned indent)

@@ -155,6 +155,11 @@ IntSize BitmapImage::currentFrameSize() const
     return m_source.frameSizeAtIndex(m_currentFrame);
 }
 
+bool BitmapImage::getHotSpot(IntPoint& hotSpot) const
+{
+    return m_source.getHotSpot(hotSpot);
+}
+
 bool BitmapImage::dataChanged(bool allDataReceived)
 {
     // Because we're modifying the current frame, clear its (now possibly
@@ -404,7 +409,9 @@ bool BitmapImage::internalAdvanceAnimation(bool skippingFrames)
         // Get the repetition count again.  If we weren't able to get a
         // repetition count before, we should have decoded the whole image by
         // now, so it should now be available.
-        if (repetitionCount(true) && m_repetitionsComplete >= m_repetitionCount) {
+        // Note that we don't need to special-case cAnimationLoopOnce here
+        // because it is 0 (see comments on its declaration in ImageSource.h).
+        if (repetitionCount(true) != cAnimationLoopInfinite && m_repetitionsComplete > m_repetitionCount) {
             m_animationFinished = true;
             m_desiredFrameStartTime = 0;
             --m_currentFrame;

@@ -27,18 +27,34 @@ namespace WTF {
     template<typename T> class ListRefPtr;
     template<typename T> class OwnArrayPtr;
     template<typename T> class OwnPtr;
+    template<typename T> class PassOwnArrayPtr;
     template<typename T> class PassOwnPtr;
     template<typename T> class PassRefPtr;
     template<typename T> class RefPtr;
     template<typename T, size_t inlineCapacity> class Vector;
+
+    class AtomicString;
+    class AtomicStringImpl;
+    class CString;
+    class String;
+    class StringBuffer;
+    class StringImpl;
 }
 
 using WTF::ListRefPtr;
 using WTF::OwnArrayPtr;
 using WTF::OwnPtr;
+using WTF::PassOwnArrayPtr;
 using WTF::PassOwnPtr;
 using WTF::PassRefPtr;
 using WTF::RefPtr;
 using WTF::Vector;
+
+using WTF::AtomicString;
+using WTF::AtomicStringImpl;
+using WTF::CString;
+using WTF::String;
+using WTF::StringBuffer;
+using WTF::StringImpl;
 
 #endif // WTF_Forward_h

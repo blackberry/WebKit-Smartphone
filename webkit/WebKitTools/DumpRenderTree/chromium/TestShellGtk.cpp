@@ -33,6 +33,7 @@
 
 #include "webkit/support/webkit_support.h"
 #include <fontconfig/fontconfig.h>
+#include <gtk/gtk.h>
 #include <signal.h>
 
 static void AlarmHandler(int signatl)
@@ -185,7 +186,25 @@ void TestShell::waitTestFinished()
     signal(SIGALRM, SIG_DFL);
 }
 
-void platformInit()
+void platformInit(int* argc, char*** argv)
 {
+    // FIXME: It's better call gtk_init() only when we run plugin tests.
+    // See http://groups.google.com/a/chromium.org/group/chromium-dev/browse_thread/thread/633ea167cde196ca#
+    gtk_init(argc, argv);
+
     setupFontconfig();
+}
+
+void openStartupDialog()
+{
+    GtkWidget* dialog = gtk_message_dialog_new(
+        0, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_OK, "Attach to me?");
+    gtk_window_set_title(GTK_WINDOW(dialog), "DumpRenderTree");
+    gtk_dialog_run(GTK_DIALOG(dialog)); // Runs a nested message loop.
+    gtk_widget_destroy(dialog);
+}
+
+bool checkLayoutTestSystemDependencies()
+{
+    return true;
 }

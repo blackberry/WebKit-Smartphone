@@ -1,10 +1,10 @@
 /*
  * Copyright (c) 2008, Google Inc. All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
- * 
+ *
  *     * Redistributions of source code must retain the above copyright
  * notice, this list of conditions and the following disclaimer.
  *     * Redistributions in binary form must reproduce the above
@@ -14,7 +14,7 @@
  *     * Neither the name of Google Inc. nor the names of its
  * contributors may be used to endorse or promote products derived from
  * this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -30,27 +30,35 @@
 
 #include "config.h"
 
+#include "PlatformContextSkia.h"
+
+#include "AffineTransform.h"
+#include "DrawingBuffer.h"
+#include "GLES2Canvas.h"
 #include "GraphicsContext.h"
+#include "GraphicsContext3D.h"
 #include "ImageBuffer.h"
 #include "NativeImageSkia.h"
-#include "PlatformContextSkia.h"
+#include "SharedGraphicsContext3D.h"
 #include "SkiaUtils.h"
+#include "Texture.h"
+#include "TilingData.h"
 
 #include "skia/ext/image_operations.h"
 #include "skia/ext/platform_canvas.h"
 
 #include "SkBitmap.h"
 #include "SkColorPriv.h"
-#include "SkShader.h"
 #include "SkDashPathEffect.h"
+#include "SkShader.h"
 
 #include <wtf/MathExtras.h>
+#include <wtf/OwnArrayPtr.h>
 #include <wtf/Vector.h>
 
-namespace WebCore 
-{
+namespace WebCore {
+
 extern bool isPathSkiaSafe(const SkMatrix& transform, const SkPath& path);
-}
 
 // State -----------------------------------------------------------------------
 
@@ -72,7 +80,7 @@ struct PlatformContextSkia::State {
     SkShader* m_fillShader;
 
     // Stroke.
-    WebCore::StrokeStyle m_strokeStyle;
+    StrokeStyle m_strokeStyle;
     SkColor m_strokeColor;
     SkShader* m_strokeShader;
     float m_strokeThickness;
@@ -89,17 +97,20 @@ struct PlatformContextSkia::State {
     // color to produce a new output color.
     SkColor applyAlpha(SkColor) const;
 
-#if OS(LINUX) || OS(WINDOWS)
     // If non-empty, the current State is clipped to this image.
     SkBitmap m_imageBufferClip;
     // If m_imageBufferClip is non-empty, this is the region the image is clipped to.
-    WebCore::FloatRect m_clip;
-#endif
+    FloatRect m_clip;
 
     // This is a list of clipping paths which are currently active, in the
     // order in which they were pushed.
     WTF::Vector<SkPath> m_antiAliasClipPaths;
+    InterpolationQuality m_interpolationQuality;
 
+    // If we currently have a canvas (non-antialiased path) clip applied.
+    bool m_canvasClipApplied;
+
+    PlatformContextSkia::State cloneInheritedProperties();
 private:
     // Not supported.
     void operator=(const State&);
@@ -113,8 +124,8 @@ PlatformContextSkia::State::State()
     , m_looper(0)
     , m_fillColor(0xFF000000)
     , m_fillShader(0)
-    , m_strokeStyle(WebCore::SolidStroke)
-    , m_strokeColor(WebCore::Color::black)
+    , m_strokeStyle(SolidStroke)
+    , m_strokeColor(Color::black)
     , m_strokeShader(0)
     , m_strokeThickness(0)
     , m_dashRatio(3)
@@ -122,7 +133,9 @@ PlatformContextSkia::State::State()
     , m_lineCap(SkPaint::kDefault_Cap)
     , m_lineJoin(SkPaint::kDefault_Join)
     , m_dash(0)
-    , m_textDrawingMode(WebCore::cTextFill)
+    , m_textDrawingMode(cTextFill)
+    , m_interpolationQuality(InterpolationHigh)
+    , m_canvasClipApplied(false)
 {
 }
 
@@ -143,10 +156,11 @@ PlatformContextSkia::State::State(const State& other)
     , m_lineJoin(other.m_lineJoin)
     , m_dash(other.m_dash)
     , m_textDrawingMode(other.m_textDrawingMode)
-#if OS(LINUX) || OS(WINDOWS)
     , m_imageBufferClip(other.m_imageBufferClip)
     , m_clip(other.m_clip)
-#endif
+    , m_antiAliasClipPaths(other.m_antiAliasClipPaths)
+    , m_interpolationQuality(other.m_interpolationQuality)
+    , m_canvasClipApplied(other.m_canvasClipApplied)
 {
     // Up the ref count of these. saveRef does nothing if 'this' is NULL.
     m_looper->safeRef();
@@ -161,6 +175,17 @@ PlatformContextSkia::State::~State()
     m_dash->safeUnref();
     m_fillShader->safeUnref();
     m_strokeShader->safeUnref();
+}
+
+// Returns a new State with all of this object's inherited properties copied.
+PlatformContextSkia::State PlatformContextSkia::State::cloneInheritedProperties()
+{
+    PlatformContextSkia::State state(*this);
+
+    // Everything is inherited except for the clip paths.
+    state.m_antiAliasClipPaths.clear();
+
+    return state;
 }
 
 SkColor PlatformContextSkia::State::applyAlpha(SkColor c) const
@@ -180,9 +205,10 @@ SkColor PlatformContextSkia::State::applyAlpha(SkColor c) const
 // Danger: canvas can be NULL.
 PlatformContextSkia::PlatformContextSkia(skia::PlatformCanvas* canvas)
     : m_canvas(canvas)
-#if OS(WINDOWS)
     , m_drawingToImageBuffer(false)
-#endif
+    , m_useGPU(false)
+    , m_gpuCanvas(0)
+    , m_backingStoreState(None)
 {
     m_stateStack.append(State());
     m_state = &m_stateStack.last();
@@ -190,6 +216,8 @@ PlatformContextSkia::PlatformContextSkia(skia::PlatformCanvas* canvas)
 
 PlatformContextSkia::~PlatformContextSkia()
 {
+    if (m_gpuCanvas)
+        m_gpuCanvas->drawingBuffer()->setWillPublishCallback(0);
 }
 
 void PlatformContextSkia::setCanvas(skia::PlatformCanvas* canvas)
@@ -197,7 +225,6 @@ void PlatformContextSkia::setCanvas(skia::PlatformCanvas* canvas)
     m_canvas = canvas;
 }
 
-#if OS(WINDOWS)
 void PlatformContextSkia::setDrawingToImageBuffer(bool value)
 {
     m_drawingToImageBuffer = value;
@@ -207,26 +234,24 @@ bool PlatformContextSkia::isDrawingToImageBuffer() const
 {
     return m_drawingToImageBuffer;
 }
-#endif
 
 void PlatformContextSkia::save()
 {
-    m_stateStack.append(*m_state);
+    ASSERT(!hasImageResamplingHint());
+
+    m_stateStack.append(m_state->cloneInheritedProperties());
     m_state = &m_stateStack.last();
 
-#if OS(LINUX) || OS(WINDOWS)
     // The clip image only needs to be applied once. Reset the image so that we
     // don't attempt to clip multiple times.
     m_state->m_imageBufferClip.reset();
-#endif
 
     // Save our native canvas.
     canvas()->save();
 }
 
-#if OS(LINUX) || OS(WINDOWS)
-void PlatformContextSkia::beginLayerClippedToImage(const WebCore::FloatRect& rect,
-                                                   const WebCore::ImageBuffer* imageBuffer)
+void PlatformContextSkia::beginLayerClippedToImage(const FloatRect& rect,
+                                                   const ImageBuffer* imageBuffer)
 {
     // Skia doesn't support clipping to an image, so we create a layer. The next
     // time restore is invoked the layer and |imageBuffer| are combined to
@@ -253,7 +278,6 @@ void PlatformContextSkia::beginLayerClippedToImage(const WebCore::FloatRect& rec
         m_state->m_imageBufferClip = *bitmap;
     }
 }
-#endif
 
 void PlatformContextSkia::clipPathAntiAliased(const SkPath& clipPath)
 {
@@ -272,12 +296,10 @@ void PlatformContextSkia::clipPathAntiAliased(const SkPath& clipPath)
 
 void PlatformContextSkia::restore()
 {
-#if OS(LINUX) || OS(WINDOWS)
     if (!m_state->m_imageBufferClip.empty()) {
         applyClipFromImage(m_state->m_clip, m_state->m_imageBufferClip);
         canvas()->restore();
     }
-#endif
 
     if (!m_state->m_antiAliasClipPaths.isEmpty())
         applyAntiAliasedClipPaths(m_state->m_antiAliasClipPaths);
@@ -298,12 +320,12 @@ void PlatformContextSkia::drawRect(SkRect rect)
         canvas()->drawRect(rect, paint);
     }
 
-    if (m_state->m_strokeStyle != WebCore::NoStroke &&
-        (m_state->m_strokeColor & 0xFF000000)) {
+    if (m_state->m_strokeStyle != NoStroke
+        && (m_state->m_strokeColor & 0xFF000000)) {
         // We do a fill of four rects to simulate the stroke of a border.
         SkColor oldFillColor = m_state->m_fillColor;
 
-        // setFillColor() will set the shader to NULL, so save a ref to it now. 
+        // setFillColor() will set the shader to NULL, so save a ref to it now.
         SkShader* oldFillShader = m_state->m_fillShader;
         oldFillShader->safeRef();
         setFillColor(m_state->m_strokeColor);
@@ -361,13 +383,13 @@ float PlatformContextSkia::setupPaintForStroking(SkPaint* paint, SkRect* rect, i
         paint->setPathEffect(m_state->m_dash);
     else {
         switch (m_state->m_strokeStyle) {
-        case WebCore::NoStroke:
-        case WebCore::SolidStroke:
+        case NoStroke:
+        case SolidStroke:
             break;
-        case WebCore::DashedStroke:
+        case DashedStroke:
             width = m_state->m_dashRatio * width;
             // Fall through.
-        case WebCore::DottedStroke:
+        case DottedStroke:
             // Truncate the width, since we don't want fuzzy dots or dashes.
             int dashLength = static_cast<int>(width);
             // Subtract off the endcaps, since they're rendered separately.
@@ -428,7 +450,7 @@ void PlatformContextSkia::setXfermodeMode(SkXfermode::Mode pdm)
 void PlatformContextSkia::setFillColor(SkColor color)
 {
     m_state->m_fillColor = color;
-    setFillShader(NULL);
+    setFillShader(0);
 }
 
 SkDrawLooper* PlatformContextSkia::getDrawLooper() const
@@ -436,12 +458,12 @@ SkDrawLooper* PlatformContextSkia::getDrawLooper() const
     return m_state->m_looper;
 }
 
-WebCore::StrokeStyle PlatformContextSkia::getStrokeStyle() const
+StrokeStyle PlatformContextSkia::getStrokeStyle() const
 {
     return m_state->m_strokeStyle;
 }
 
-void PlatformContextSkia::setStrokeStyle(WebCore::StrokeStyle strokeStyle)
+void PlatformContextSkia::setStrokeStyle(StrokeStyle strokeStyle)
 {
     m_state->m_strokeStyle = strokeStyle;
 }
@@ -449,7 +471,7 @@ void PlatformContextSkia::setStrokeStyle(WebCore::StrokeStyle strokeStyle)
 void PlatformContextSkia::setStrokeColor(SkColor strokeColor)
 {
     m_state->m_strokeColor = strokeColor;
-    setStrokeShader(NULL);
+    setStrokeShader(0);
 }
 
 float PlatformContextSkia::getStrokeThickness() const
@@ -483,10 +505,10 @@ float PlatformContextSkia::getAlpha() const
 
 void PlatformContextSkia::setTextDrawingMode(int mode)
 {
-  // cTextClip is never used, so we assert that it isn't set:
-  // https://bugs.webkit.org/show_bug.cgi?id=21898
-  ASSERT((mode & WebCore::cTextClip) == 0);
-  m_state->m_textDrawingMode = mode;
+    // cTextClip is never used, so we assert that it isn't set:
+    // https://bugs.webkit.org/show_bug.cgi?id=21898
+    ASSERT(!(mode & cTextClip));
+    m_state->m_textDrawingMode = mode;
 }
 
 void PlatformContextSkia::setUseAntialiasing(bool enable)
@@ -525,6 +547,12 @@ SkPath PlatformContextSkia::currentPathInLocalCoordinates() const
     return localPath;
 }
 
+void PlatformContextSkia::canvasClipPath(const SkPath& path)
+{
+    m_state->m_canvasClipApplied = true;
+    m_canvas->clipPath(path);
+}
+
 void PlatformContextSkia::setFillRule(SkPath::FillType fr)
 {
     m_path.setFillType(fr);
@@ -537,6 +565,16 @@ void PlatformContextSkia::setFillShader(SkShader* fillShader)
         m_state->m_fillShader = fillShader;
         m_state->m_fillShader->safeRef();
     }
+}
+
+InterpolationQuality PlatformContextSkia::interpolationQuality() const
+{
+    return m_state->m_interpolationQuality;
+}
+
+void PlatformContextSkia::setInterpolationQuality(InterpolationQuality interpolationQuality)
+{
+    m_state->m_interpolationQuality = interpolationQuality;
 }
 
 void PlatformContextSkia::setDashPathEffect(SkDashPathEffect* dash)
@@ -563,8 +601,30 @@ bool PlatformContextSkia::isPrinting()
     return m_canvas->getTopPlatformDevice().IsVectorial();
 }
 
-#if OS(LINUX) || OS(WINDOWS)
-void PlatformContextSkia::applyClipFromImage(const WebCore::FloatRect& rect, const SkBitmap& imageBuffer)
+void PlatformContextSkia::getImageResamplingHint(IntSize* srcSize, FloatSize* dstSize) const
+{
+    *srcSize = m_imageResamplingHintSrcSize;
+    *dstSize = m_imageResamplingHintDstSize;
+}
+
+void PlatformContextSkia::setImageResamplingHint(const IntSize& srcSize, const FloatSize& dstSize)
+{
+    m_imageResamplingHintSrcSize = srcSize;
+    m_imageResamplingHintDstSize = dstSize;
+}
+
+void PlatformContextSkia::clearImageResamplingHint()
+{
+    m_imageResamplingHintSrcSize = IntSize();
+    m_imageResamplingHintDstSize = FloatSize();
+}
+
+bool PlatformContextSkia::hasImageResamplingHint() const
+{
+    return !m_imageResamplingHintSrcSize.isEmpty() && !m_imageResamplingHintDstSize.isEmpty();
+}
+
+void PlatformContextSkia::applyClipFromImage(const FloatRect& rect, const SkBitmap& imageBuffer)
 {
     // NOTE: this assumes the image mask contains opaque black for the portions that are to be shown, as such we
     // only look at the alpha when compositing. I'm not 100% sure this is what WebKit expects for image clipping.
@@ -572,7 +632,6 @@ void PlatformContextSkia::applyClipFromImage(const WebCore::FloatRect& rect, con
     paint.setXfermodeMode(SkXfermode::kDstIn_Mode);
     m_canvas->drawBitmap(imageBuffer, SkFloatToScalar(rect.x()), SkFloatToScalar(rect.y()), &paint);
 }
-#endif
 
 void PlatformContextSkia::applyAntiAliasedClipPaths(WTF::Vector<SkPath>& paths)
 {
@@ -610,3 +669,182 @@ void PlatformContextSkia::applyAntiAliasedClipPaths(WTF::Vector<SkPath>& paths)
 
     m_canvas->restore();
 }
+
+bool PlatformContextSkia::canAccelerate() const
+{
+    return !m_state->m_fillShader // Can't accelerate with a fill gradient or pattern.
+        && !m_state->m_looper // Can't accelerate with a shadow.
+        && !m_state->m_canvasClipApplied; // Can't accelerate with a clip to path applied.
+}
+
+class WillPublishCallbackImpl : public DrawingBuffer::WillPublishCallback {
+public:
+    static PassOwnPtr<WillPublishCallback> create(PlatformContextSkia* pcs)
+    {
+        return adoptPtr(new WillPublishCallbackImpl(pcs));
+    }
+
+    virtual void willPublish()
+    {
+        m_pcs->prepareForHardwareDraw();
+    }
+
+private:
+    explicit WillPublishCallbackImpl(PlatformContextSkia* pcs)
+        : m_pcs(pcs)
+    {
+    }
+
+    PlatformContextSkia* m_pcs;
+};
+
+void PlatformContextSkia::setSharedGraphicsContext3D(SharedGraphicsContext3D* context, DrawingBuffer* drawingBuffer, const WebCore::IntSize& size)
+{
+    if (context && drawingBuffer) {
+        m_useGPU = true;
+        m_gpuCanvas = new GLES2Canvas(context, drawingBuffer, size);
+        m_uploadTexture.clear();
+        drawingBuffer->setWillPublishCallback(WillPublishCallbackImpl::create(this));
+    } else {
+        syncSoftwareCanvas();
+        m_uploadTexture.clear();
+        m_gpuCanvas.clear();
+        m_useGPU = false;
+    }
+}
+
+void PlatformContextSkia::prepareForSoftwareDraw() const
+{
+    if (!m_useGPU)
+        return;
+
+    if (m_backingStoreState == Hardware) {
+        // Depending on the blend mode we need to do one of a few things:
+
+        // * For associative blend modes, we can draw into an initially empty
+        // canvas and then composite the results on top of the hardware drawn
+        // results before the next hardware draw or swapBuffers().
+
+        // * For non-associative blend modes we have to do a readback and then
+        // software draw.  When we re-upload in this mode we have to blow
+        // away whatever is in the hardware backing store (do a copy instead
+        // of a compositing operation).
+
+        if (m_state->m_xferMode == SkXfermode::kSrcOver_Mode) {
+            // Note that we have rendering results in both the hardware and software backing stores.
+            m_backingStoreState = Mixed;
+        } else {
+            readbackHardwareToSoftware();
+            // When we switch back to hardware copy the results, don't composite.
+            m_backingStoreState = Software;
+        }
+    } else if (m_backingStoreState == Mixed) {
+        if (m_state->m_xferMode != SkXfermode::kSrcOver_Mode) {
+            // Have to composite our currently software drawn data...
+            uploadSoftwareToHardware(CompositeSourceOver);
+            // then do a readback so we can hardware draw stuff.
+            readbackHardwareToSoftware();
+            m_backingStoreState = Software;
+        }
+    } else if (m_backingStoreState == None) {
+        m_backingStoreState = Software;
+    }
+}
+
+void PlatformContextSkia::prepareForHardwareDraw() const
+{
+    if (!m_useGPU)
+        return;
+
+    if (m_backingStoreState == Software) {
+        // Last drawn in software; upload everything we've drawn.
+        uploadSoftwareToHardware(CompositeCopy);
+    } else if (m_backingStoreState == Mixed) {
+        // Stuff in software/hardware, composite the software stuff on top of
+        // the hardware stuff.
+        uploadSoftwareToHardware(CompositeSourceOver);
+    }
+    m_backingStoreState = Hardware;
+}
+
+void PlatformContextSkia::syncSoftwareCanvas() const
+{
+    if (!m_useGPU)
+        return;
+
+    if (m_backingStoreState == Hardware)
+        readbackHardwareToSoftware();
+    else if (m_backingStoreState == Mixed) {
+        // Have to composite our currently software drawn data..
+        uploadSoftwareToHardware(CompositeSourceOver);
+        // then do a readback.
+        readbackHardwareToSoftware();
+        m_backingStoreState = Software;
+    }
+    m_backingStoreState = Software;
+}
+
+void PlatformContextSkia::markDirtyRect(const IntRect& rect)
+{
+    if (!m_useGPU)
+        return;
+
+    switch (m_backingStoreState) {
+    case Software:
+    case Mixed:
+        m_softwareDirtyRect.unite(rect);
+        return;
+    case Hardware:
+        return;
+    default:
+        ASSERT_NOT_REACHED();
+    }
+}
+
+void PlatformContextSkia::uploadSoftwareToHardware(CompositeOperator op) const
+{
+    const SkBitmap& bitmap = m_canvas->getDevice()->accessBitmap(false);
+    SkAutoLockPixels lock(bitmap);
+    SharedGraphicsContext3D* context = m_gpuCanvas->context();
+    if (!m_uploadTexture || m_uploadTexture->tiles().totalSizeX() < bitmap.width() || m_uploadTexture->tiles().totalSizeY() < bitmap.height())
+        m_uploadTexture = context->createTexture(Texture::BGRA8, bitmap.width(), bitmap.height());
+
+    m_uploadTexture->updateSubRect(bitmap.getPixels(), m_softwareDirtyRect);
+    AffineTransform identity;
+    gpuCanvas()->drawTexturedRect(m_uploadTexture.get(), m_softwareDirtyRect, m_softwareDirtyRect, identity, 1.0, DeviceColorSpace, op);
+    // Clear out the region of the software canvas we just uploaded.
+    m_canvas->save();
+    m_canvas->resetMatrix();
+    SkRect bounds = m_softwareDirtyRect;
+    m_canvas->clipRect(bounds, SkRegion::kReplace_Op);
+    m_canvas->drawARGB(0, 0, 0, 0, SkXfermode::kClear_Mode);
+    m_canvas->restore();
+    m_softwareDirtyRect.setWidth(0); // Clear dirty rect.
+}
+
+void PlatformContextSkia::readbackHardwareToSoftware() const
+{
+    const SkBitmap& bitmap = m_canvas->getDevice()->accessBitmap(true);
+    SkAutoLockPixels lock(bitmap);
+    int width = bitmap.width(), height = bitmap.height();
+    OwnArrayPtr<uint32_t> buf(new uint32_t[width]);
+    SharedGraphicsContext3D* context = m_gpuCanvas->context();
+    m_gpuCanvas->bindFramebuffer();
+    // Flips the image vertically.
+    for (int y = 0; y < height; ++y) {
+        uint32_t* pixels = bitmap.getAddr32(0, y);
+        if (context->supportsBGRA())
+            context->readPixels(0, height - 1 - y, width, 1, GraphicsContext3D::BGRA_EXT, GraphicsContext3D::UNSIGNED_BYTE, pixels);
+        else {
+            context->readPixels(0, height - 1 - y, width, 1, GraphicsContext3D::RGBA, GraphicsContext3D::UNSIGNED_BYTE, pixels);
+            for (int i = 0; i < width; ++i) {
+                uint32_t pixel = pixels[i];
+                // Swizzles from RGBA -> BGRA.
+                pixels[i] = pixel & 0xFF00FF00 | ((pixel & 0x00FF0000) >> 16) | ((pixel & 0x000000FF) << 16);
+            }
+        }
+    }
+    m_softwareDirtyRect.unite(IntRect(0, 0, width, height)); // Mark everything as dirty.
+}
+
+} // namespace WebCore

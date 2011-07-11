@@ -27,7 +27,10 @@
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClientGtk.h"
+#include "FrameNetworkingContextGtk.h"
 #include "GtkVersioning.h"
+#include "HTMLMediaElement.h"
+#include "HTMLNames.h"
 #include "HitTestResult.h"
 #include "IconDatabase.h"
 #include "Logging.h"
@@ -41,12 +44,18 @@
 #include "ResourceResponse.h"
 #include "SecurityOrigin.h"
 #include "TextEncodingRegistry.h"
+#include "WebKitDOMBinding.h"
 #include "webkitnetworkresponse.h"
 #include "webkitsoupauthdialog.h"
+#include "webkitversion.h"
 #include <libintl.h>
 #include <runtime/InitializeThreading.h>
 #include <stdlib.h>
 #include <wtf/Threading.h>
+
+#if ENABLE(VIDEO)
+#include "FullscreenVideoController.h"
+#endif
 
 #if ENABLE(DATABASE)
 #include "DatabaseTracker.h"
@@ -129,9 +138,9 @@ WebCore::ResourceResponse core(WebKitNetworkResponse* response)
     return ResourceResponse();
 }
 
-WebCore::EditingBehavior core(WebKitEditingBehavior type)
+WebCore::EditingBehaviorType core(WebKitEditingBehavior type)
 {
-    return (WebCore::EditingBehavior)type;
+    return (WebCore::EditingBehaviorType)type;
 }
 
 WebKitHitTestResult* kit(const WebCore::HitTestResult& result)
@@ -140,6 +149,7 @@ WebKitHitTestResult* kit(const WebCore::HitTestResult& result)
     GOwnPtr<char> linkURI(0);
     GOwnPtr<char> imageURI(0);
     GOwnPtr<char> mediaURI(0);
+    WebKitDOMNode* node = 0;
 
     if (!result.absoluteLinkURL().isEmpty()) {
         context |= WEBKIT_HIT_TEST_RESULT_CONTEXT_LINK;
@@ -162,12 +172,16 @@ WebKitHitTestResult* kit(const WebCore::HitTestResult& result)
     if (result.isContentEditable())
         context |= WEBKIT_HIT_TEST_RESULT_CONTEXT_EDITABLE;
 
+    if (result.innerNonSharedNode())
+        node = static_cast<WebKitDOMNode*>(kit(result.innerNonSharedNode()));
+
     return WEBKIT_HIT_TEST_RESULT(g_object_new(WEBKIT_TYPE_HIT_TEST_RESULT,
-                                           "link-uri", linkURI.get(),
-                                           "image-uri", imageURI.get(),
-                                           "media-uri", mediaURI.get(),
-                                           "context", context,
-                                           NULL));
+                                               "link-uri", linkURI.get(),
+                                               "image-uri", imageURI.get(),
+                                               "media-uri", mediaURI.get(),
+                                               "context", context,
+                                               "inner-node", node,
+                                               NULL));
 }
 
 PasteboardHelperGtk* pasteboardHelperInstance()
@@ -192,11 +206,14 @@ static GtkWidget* currentToplevelCallback(WebKitSoupAuthDialog* feature, SoupMes
     if (!d)
         return NULL;
 
-    WebCore::Frame* frame = d->m_frame;
-    if (!frame)
+    WebKit::FrameNetworkingContextGtk* context = static_cast<WebKit::FrameNetworkingContextGtk*>(d->m_context.get());
+    if (!context)
         return NULL;
 
-    GtkWidget* toplevel =  gtk_widget_get_toplevel(GTK_WIDGET(frame->page()->chrome()->platformPageClient()));
+    if (!context->coreFrame())
+        return NULL;
+
+    GtkWidget* toplevel =  gtk_widget_get_toplevel(GTK_WIDGET(context->coreFrame()->page()->chrome()->platformPageClient()));
     if (gtk_widget_is_toplevel(toplevel))
         return toplevel;
     else
@@ -207,6 +224,45 @@ static void closeIconDatabaseOnExit()
 {
     iconDatabase()->close();
 }
+
+#ifdef HAVE_GSETTINGS
+static bool isSchemaAvailable(const char* schemaID)
+{
+    const char* const* availableSchemas = g_settings_list_schemas();
+    char* const* iter = const_cast<char* const*>(availableSchemas);
+
+    while (*iter) {
+        if (g_str_equal(schemaID, *iter))
+            return true;
+        iter++;
+    }
+
+    return false;
+}
+
+GSettings* inspectorGSettings()
+{
+    static GSettings* settings = 0;
+
+    if (settings)
+        return settings;
+
+    const gchar* schemaID = "org.webkitgtk-"WEBKITGTK_API_VERSION_STRING".inspector";
+
+    // Unfortunately GSettings will abort the process execution if the
+    // schema is not installed, which is the case for when running
+    // tests, or even the introspection dump at build time, so check
+    // if we have the schema before trying to initialize it.
+    if (!isSchemaAvailable(schemaID)) {
+        g_warning("GSettings schema not found - settings will not be used or saved.");
+        return 0;
+    }
+
+    settings = g_settings_new(schemaID);
+
+    return settings;
+}
+#endif
 
 void webkit_init()
 {
@@ -275,3 +331,33 @@ void webkit_reset_origin_access_white_lists()
 {
     SecurityOrigin::resetOriginAccessWhitelists();
 }
+
+
+void webkitWebViewEnterFullscreen(WebKitWebView* webView, Node* node)
+{
+    if (!node->hasTagName(HTMLNames::videoTag))
+        return;
+
+#if ENABLE(VIDEO)
+    HTMLMediaElement* videoElement = static_cast<HTMLMediaElement*>(node);
+    WebKitWebViewPrivate* priv = webView->priv;
+
+    // First exit Fullscreen for the old mediaElement.
+    if (priv->fullscreenVideoController)
+        priv->fullscreenVideoController->exitFullscreen();
+
+    priv->fullscreenVideoController = new FullscreenVideoController;
+    priv->fullscreenVideoController->setMediaElement(videoElement);
+    priv->fullscreenVideoController->enterFullscreen();
+#endif
+}
+
+void webkitWebViewExitFullscreen(WebKitWebView* webView)
+{
+#if ENABLE(VIDEO)
+    WebKitWebViewPrivate* priv = webView->priv;
+    if (priv->fullscreenVideoController)
+        priv->fullscreenVideoController->exitFullscreen();
+#endif
+}
+

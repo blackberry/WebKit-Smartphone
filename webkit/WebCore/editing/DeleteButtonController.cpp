@@ -186,8 +186,8 @@ void DeleteButtonController::respondToChangedSelection(const VisibleSelection& o
 
 void DeleteButtonController::createDeletionUI()
 {
-    RefPtr<HTMLDivElement> container = new HTMLDivElement(divTag, m_target->document());
-    container->setAttribute(container->idAttributeName(), containerElementIdentifier);
+    RefPtr<HTMLDivElement> container = HTMLDivElement::create(m_target->document());
+    container->setIdAttribute(containerElementIdentifier);
 
     CSSMutableStyleDeclaration* style = container->getInlineStyleDecl();
     style->setProperty(CSSPropertyWebkitUserDrag, CSSValueNone);
@@ -201,8 +201,8 @@ void DeleteButtonController::createDeletionUI()
     style->setProperty(CSSPropertyBottom, "0");
     style->setProperty(CSSPropertyLeft, "0");
 
-    RefPtr<HTMLDivElement> outline = new HTMLDivElement(divTag, m_target->document());
-    outline->setAttribute(outline->idAttributeName(), outlineElementIdentifier);
+    RefPtr<HTMLDivElement> outline = HTMLDivElement::create(m_target->document());
+    outline->setIdAttribute(outlineElementIdentifier);
 
     const int borderWidth = 4;
     const int borderRadius = 6;
@@ -224,8 +224,8 @@ void DeleteButtonController::createDeletionUI()
     if (ec)
         return;
 
-    RefPtr<DeleteButton> button = new DeleteButton(m_target->document());
-    button->setAttribute(button->idAttributeName(), buttonElementIdentifier);
+    RefPtr<DeleteButton> button = DeleteButton::create(m_target->document());
+    button->setIdAttribute(buttonElementIdentifier);
 
     const int buttonWidth = 30;
     const int buttonHeight = 30;

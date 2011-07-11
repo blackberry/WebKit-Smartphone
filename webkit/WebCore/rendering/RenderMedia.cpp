@@ -33,6 +33,7 @@
 #include "HTMLNames.h"
 #include "MediaControlElements.h"
 #include "MouseEvent.h"
+#include "Page.h"
 #include "RenderTheme.h"
 #include <wtf/CurrentTime.h>
 #include <wtf/MathExtras.h>
@@ -56,6 +57,7 @@ RenderMedia::RenderMedia(HTMLMediaElement* video)
     , m_opacityAnimationFrom(0)
     , m_opacityAnimationTo(1.0f)
 {
+    setImageResource(RenderImageResource::create());
 }
 
 RenderMedia::RenderMedia(HTMLMediaElement* video, const IntSize& intrinsicSize)
@@ -68,6 +70,7 @@ RenderMedia::RenderMedia(HTMLMediaElement* video, const IntSize& intrinsicSize)
     , m_opacityAnimationFrom(0)
     , m_opacityAnimationTo(1.0f)
 {
+    setImageResource(RenderImageResource::create());
     setIntrinsicSize(intrinsicSize);
 }
 
@@ -135,6 +138,8 @@ void RenderMedia::styleDidChange(StyleDifference diff, const RenderStyle* oldSty
             m_timeRemainingDisplay->updateStyle();
         if (m_volumeSliderContainer)
             m_volumeSliderContainer->updateStyle();
+        if (m_volumeSliderMuteButton)
+            m_volumeSliderMuteButton->updateStyle();
         if (m_volumeSlider)
             m_volumeSlider->updateStyle();
     }
@@ -170,84 +175,84 @@ void RenderMedia::layout()
 void RenderMedia::createControlsShadowRoot()
 {
     ASSERT(!m_controlsShadowRoot);
-    m_controlsShadowRoot = new MediaControlShadowRootElement(document(), mediaElement());
+    m_controlsShadowRoot = MediaControlShadowRootElement::create(mediaElement());
     addChild(m_controlsShadowRoot->renderer());
 }
 
 void RenderMedia::createPanel()
 {
     ASSERT(!m_panel);
-    m_panel = new MediaControlElement(document(), MEDIA_CONTROLS_PANEL, mediaElement());
+    m_panel = MediaControlElement::create(mediaElement(), MEDIA_CONTROLS_PANEL);
     m_panel->attachToParent(m_controlsShadowRoot.get());
 }
 
 void RenderMedia::createMuteButton()
 {
     ASSERT(!m_muteButton);
-    m_muteButton = new MediaControlMuteButtonElement(document(), mediaElement());
+    m_muteButton = MediaControlMuteButtonElement::create(mediaElement(), MediaControlMuteButtonElement::Controller);
     m_muteButton->attachToParent(m_panel.get());
 }
 
 void RenderMedia::createPlayButton()
 {
     ASSERT(!m_playButton);
-    m_playButton = new MediaControlPlayButtonElement(document(), mediaElement());
+    m_playButton = MediaControlPlayButtonElement::create(mediaElement());
     m_playButton->attachToParent(m_panel.get());
 }
 
 void RenderMedia::createSeekBackButton()
 {
     ASSERT(!m_seekBackButton);
-    m_seekBackButton = new MediaControlSeekButtonElement(document(), mediaElement(), false);
+    m_seekBackButton = MediaControlSeekButtonElement::create(mediaElement(), MEDIA_CONTROLS_SEEK_BACK_BUTTON);
     m_seekBackButton->attachToParent(m_panel.get());
 }
 
 void RenderMedia::createSeekForwardButton()
 {
     ASSERT(!m_seekForwardButton);
-    m_seekForwardButton = new MediaControlSeekButtonElement(document(), mediaElement(), true);
+    m_seekForwardButton = MediaControlSeekButtonElement::create(mediaElement(), MEDIA_CONTROLS_SEEK_FORWARD_BUTTON);
     m_seekForwardButton->attachToParent(m_panel.get());
 }
 
 void RenderMedia::createRewindButton()
 {
     ASSERT(!m_rewindButton);
-    m_rewindButton = new MediaControlRewindButtonElement(document(), mediaElement());
+    m_rewindButton = MediaControlRewindButtonElement::create(mediaElement());
     m_rewindButton->attachToParent(m_panel.get());
 }
 
 void RenderMedia::createReturnToRealtimeButton()
 {
     ASSERT(!m_returnToRealtimeButton);
-    m_returnToRealtimeButton = new MediaControlReturnToRealtimeButtonElement(document(), mediaElement());
+    m_returnToRealtimeButton = MediaControlReturnToRealtimeButtonElement::create(mediaElement());
     m_returnToRealtimeButton->attachToParent(m_panel.get());
 }
 
 void RenderMedia::createToggleClosedCaptionsButton()
 {
     ASSERT(!m_toggleClosedCaptionsButton);
-    m_toggleClosedCaptionsButton = new MediaControlToggleClosedCaptionsButtonElement(document(), mediaElement());
+    m_toggleClosedCaptionsButton = MediaControlToggleClosedCaptionsButtonElement::create(mediaElement());
     m_toggleClosedCaptionsButton->attachToParent(m_panel.get());
 }
 
 void RenderMedia::createStatusDisplay()
 {
     ASSERT(!m_statusDisplay);
-    m_statusDisplay = new MediaControlStatusDisplayElement(document(), mediaElement());
+    m_statusDisplay = MediaControlStatusDisplayElement::create(mediaElement());
     m_statusDisplay->attachToParent(m_panel.get());
 }
 
 void RenderMedia::createTimelineContainer()
 {
     ASSERT(!m_timelineContainer);
-    m_timelineContainer = new MediaControlTimelineContainerElement(document(), mediaElement());
+    m_timelineContainer = MediaControlTimelineContainerElement::create(mediaElement());
     m_timelineContainer->attachToParent(m_panel.get());
 }
 
 void RenderMedia::createTimeline()
 {
     ASSERT(!m_timeline);
-    m_timeline = new MediaControlTimelineElement(document(), mediaElement());
+    m_timeline = MediaControlTimelineElement::create(mediaElement());
     m_timeline->setAttribute(precisionAttr, "float");
     m_timeline->attachToParent(m_timelineContainer.get());
 }
@@ -255,38 +260,46 @@ void RenderMedia::createTimeline()
 void RenderMedia::createVolumeSliderContainer()
 {
     ASSERT(!m_volumeSliderContainer);
-    m_volumeSliderContainer = new MediaControlVolumeSliderContainerElement(document(), mediaElement());
+    m_volumeSliderContainer = MediaControlVolumeSliderContainerElement::create(mediaElement());
     m_volumeSliderContainer->attachToParent(m_panel.get());
 }
 
 void RenderMedia::createVolumeSlider()
 {
     ASSERT(!m_volumeSlider);
-    m_volumeSlider = new MediaControlVolumeSliderElement(document(), mediaElement());
+    m_volumeSlider = MediaControlVolumeSliderElement::create(mediaElement());
     m_volumeSlider->setAttribute(precisionAttr, "float");
     m_volumeSlider->setAttribute(maxAttr, "1");
     m_volumeSlider->setAttribute(valueAttr, String::number(mediaElement()->volume()));
     m_volumeSlider->attachToParent(m_volumeSliderContainer.get());
 }
 
+void RenderMedia::createVolumeSliderMuteButton()
+{
+    ASSERT(!m_volumeSliderMuteButton);
+    m_volumeSliderMuteButton = MediaControlMuteButtonElement::create(mediaElement(), MediaControlMuteButtonElement::VolumeSlider);
+    m_volumeSliderMuteButton->attachToParent(m_volumeSliderContainer.get());
+    
+}
+
 void RenderMedia::createCurrentTimeDisplay()
 {
     ASSERT(!m_currentTimeDisplay);
-    m_currentTimeDisplay = new MediaControlTimeDisplayElement(document(), MEDIA_CONTROLS_CURRENT_TIME_DISPLAY, mediaElement());
+    m_currentTimeDisplay = MediaControlTimeDisplayElement::create(mediaElement(), MEDIA_CONTROLS_CURRENT_TIME_DISPLAY);
     m_currentTimeDisplay->attachToParent(m_timelineContainer.get());
 }
 
 void RenderMedia::createTimeRemainingDisplay()
 {
     ASSERT(!m_timeRemainingDisplay);
-    m_timeRemainingDisplay = new MediaControlTimeDisplayElement(document(), MEDIA_CONTROLS_TIME_REMAINING_DISPLAY, mediaElement());
+    m_timeRemainingDisplay = MediaControlTimeDisplayElement::create(mediaElement(), MEDIA_CONTROLS_TIME_REMAINING_DISPLAY);
     m_timeRemainingDisplay->attachToParent(m_timelineContainer.get());
 }
 
 void RenderMedia::createFullscreenButton()
 {
     ASSERT(!m_fullscreenButton);
-    m_fullscreenButton = new MediaControlFullscreenButtonElement(document(), mediaElement());
+    m_fullscreenButton = MediaControlFullscreenButtonElement::create(mediaElement());
     m_fullscreenButton->attachToParent(m_panel.get());
 }
     
@@ -316,6 +329,7 @@ void RenderMedia::updateControls()
             m_fullscreenButton = 0;
             m_volumeSliderContainer = 0;
             m_volumeSlider = 0;
+            m_volumeSliderMuteButton = 0;
             m_controlsShadowRoot = 0;
             m_toggleClosedCaptionsButton = 0;
         }
@@ -345,8 +359,10 @@ void RenderMedia::updateControls()
             createFullscreenButton();
             createMuteButton();
             createVolumeSliderContainer();
-            if (m_volumeSliderContainer)
+            if (m_volumeSliderContainer) {
                 createVolumeSlider();
+                createVolumeSliderMuteButton();
+            }
             m_panel->attach();
         }
     }
@@ -396,6 +412,8 @@ void RenderMedia::updateControls()
         m_fullscreenButton->update();
     if (m_volumeSlider)
         m_volumeSlider->update();
+    if (m_volumeSliderMuteButton)
+        m_volumeSliderMuteButton->update();
 
     updateTimeDisplay();
     updateControlVisibility();
@@ -499,13 +517,13 @@ void RenderMedia::updateVolumeSliderContainer(bool visible)
 
         RefPtr<RenderStyle> s = m_volumeSliderContainer->styleForElement();
         int height = s->height().isPercent() ? 0 : s->height().value();
-        int x = m_muteButton->renderBox()->offsetLeft();
-        int y = m_muteButton->renderBox()->offsetTop() - height;
-        FloatPoint absPoint = m_muteButton->renderer()->localToAbsolute(FloatPoint(x, y), true, true);
-        if (absPoint.y() < 0)
-            y = m_muteButton->renderBox()->offsetTop() + m_muteButton->renderBox()->height();
-        m_volumeSliderContainer->setVisible(true);
+        int width = s->width().isPercent() ? 0 : s->width().value();
+        IntPoint offset = document()->page()->theme()->volumeSliderOffsetFromMuteButton(m_muteButton->renderer()->node(), IntSize(width, height));
+        int x = offset.x() + m_muteButton->renderBox()->offsetLeft();
+        int y = offset.y() + m_muteButton->renderBox()->offsetTop();
+
         m_volumeSliderContainer->setPosition(x, y);
+        m_volumeSliderContainer->setVisible(true);
         m_volumeSliderContainer->update();
         m_volumeSlider->update();
     } else if (!visible && m_volumeSliderContainer->isVisible()) {
@@ -519,8 +537,15 @@ void RenderMedia::forwardEvent(Event* event)
     if (event->isMouseEvent() && m_controlsShadowRoot) {
         MouseEvent* mouseEvent = static_cast<MouseEvent*>(event);
         IntPoint point(mouseEvent->absoluteLocation());
+
+        bool defaultHandled = false;
+        if (m_volumeSliderMuteButton && m_volumeSliderMuteButton->hitTest(point)) {
+            m_volumeSliderMuteButton->defaultEventHandler(event);
+            defaultHandled = event->defaultHandled();
+        }
+
         bool showVolumeSlider = false;
-        if (m_muteButton && m_muteButton->hitTest(point)) {
+        if (!defaultHandled && m_muteButton && m_muteButton->hitTest(point)) {
             m_muteButton->defaultEventHandler(event);
             if (event->type() != eventNames().mouseoutEvent)
                 showVolumeSlider = true;

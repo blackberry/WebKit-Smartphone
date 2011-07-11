@@ -29,14 +29,15 @@
 #if ENABLE(3D_CANVAS)
 
 #include "WebGLGetInfo.h"
-#include "WebGLBuffer.h"
-#include "FloatArray.h"
-#include "WebGLFramebuffer.h"
+
+#include "Float32Array.h"
 #include "Int32Array.h"
+#include "Uint8Array.h"
+#include "WebGLBuffer.h"
+#include "WebGLFramebuffer.h"
 #include "WebGLProgram.h"
 #include "WebGLRenderbuffer.h"
 #include "WebGLTexture.h"
-#include "Uint8Array.h"
 
 namespace WebCore {
 
@@ -44,6 +45,16 @@ WebGLGetInfo::WebGLGetInfo(bool value)
     : m_type(kTypeBool)
     , m_bool(value)
 {
+}
+
+WebGLGetInfo::WebGLGetInfo(const bool* value, int size)
+    : m_type(kTypeBoolArray)
+{
+    if (!value || size <=0)
+        return;
+    m_boolArray.resize(size);
+    for (int ii = 0; ii < size; ++ii)
+        m_boolArray[ii] = value[ii];
 }
 
 WebGLGetInfo::WebGLGetInfo(float value)
@@ -81,7 +92,7 @@ WebGLGetInfo::WebGLGetInfo(PassRefPtr<WebGLBuffer> value)
 {
 }
 
-WebGLGetInfo::WebGLGetInfo(PassRefPtr<FloatArray> value)
+WebGLGetInfo::WebGLGetInfo(PassRefPtr<Float32Array> value)
     : m_type(kTypeWebGLFloatArray)
     , m_webglFloatArray(value)
 {
@@ -138,6 +149,12 @@ bool WebGLGetInfo::getBool() const
     return m_bool;
 }
 
+const Vector<bool>& WebGLGetInfo::getBoolArray() const
+{
+    ASSERT(getType() == kTypeBoolArray);
+    return m_boolArray;
+}
+
 float WebGLGetInfo::getFloat() const
 {
     ASSERT(getType() == kTypeFloat);
@@ -168,7 +185,7 @@ PassRefPtr<WebGLBuffer> WebGLGetInfo::getWebGLBuffer() const
     return m_webglBuffer;
 }
 
-PassRefPtr<FloatArray> WebGLGetInfo::getWebGLFloatArray() const
+PassRefPtr<Float32Array> WebGLGetInfo::getWebGLFloatArray() const
 {
     ASSERT(getType() == kTypeWebGLFloatArray);
     return m_webglFloatArray;

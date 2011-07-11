@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -77,17 +78,17 @@ public:
 
     virtual void setResizable(bool);
 
-    virtual void addMessageToConsole(WebCore::MessageSource source, WebCore::MessageType type, WebCore::MessageLevel level, const WebCore::String& message, unsigned line, const WebCore::String& url);
+    virtual void addMessageToConsole(WebCore::MessageSource source, WebCore::MessageType type, WebCore::MessageLevel level, const WTF::String& message, unsigned line, const WTF::String& url);
 
     virtual bool canRunBeforeUnloadConfirmPanel();
-    virtual bool runBeforeUnloadConfirmPanel(const WebCore::String& message, WebCore::Frame* frame);
+    virtual bool runBeforeUnloadConfirmPanel(const WTF::String& message, WebCore::Frame* frame);
 
     virtual void closeWindowSoon();
 
-    virtual void runJavaScriptAlert(WebCore::Frame*, const WebCore::String&);
-    virtual bool runJavaScriptConfirm(WebCore::Frame*, const WebCore::String&);
-    virtual bool runJavaScriptPrompt(WebCore::Frame*, const WebCore::String& message, const WebCore::String& defaultValue, WebCore::String& result);
-    virtual void setStatusbarText(const WebCore::String&);
+    virtual void runJavaScriptAlert(WebCore::Frame*, const WTF::String&);
+    virtual bool runJavaScriptConfirm(WebCore::Frame*, const WTF::String&);
+    virtual bool runJavaScriptPrompt(WebCore::Frame*, const WTF::String& message, const WTF::String& defaultValue, WTF::String& result);
+    virtual void setStatusbarText(const WTF::String&);
     virtual bool shouldInterruptJavaScript();
 
     virtual bool tabsToLinks() const;
@@ -105,17 +106,20 @@ public:
 
     virtual void scrollbarsModeDidChange() const { }
     virtual void mouseDidMoveOverElement(const WebCore::HitTestResult&, unsigned modifierFlags);
+    virtual bool shouldMissingPluginMessageBeButton() const;
+    virtual void missingPluginButtonClicked(WebCore::Element*) const;
 
-    virtual void setToolTip(const WebCore::String&, WebCore::TextDirection);
+    virtual void setToolTip(const WTF::String&, WebCore::TextDirection);
 
     virtual void print(WebCore::Frame*);
 
 #if ENABLE(DATABASE)
-    virtual void exceededDatabaseQuota(WebCore::Frame*, const WebCore::String&);
+    virtual void exceededDatabaseQuota(WebCore::Frame*, const WTF::String&);
 #endif
 
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
     virtual void reachedMaxAppCacheSize(int64_t spaceNeeded);
+    virtual void reachedApplicationCacheOriginQuota(WebCore::SecurityOrigin*);
 #endif
 
     virtual void populateVisitedLinks();
@@ -126,9 +130,10 @@ public:
     virtual bool paintCustomScrollCorner(WebCore::GraphicsContext*, const WebCore::FloatRect&);
 
     virtual void runOpenPanel(WebCore::Frame*, PassRefPtr<WebCore::FileChooser>);
-    virtual void chooseIconForFiles(const Vector<WebCore::String>&, WebCore::FileChooser*);
+    virtual void chooseIconForFiles(const Vector<WTF::String>&, WebCore::FileChooser*);
 
-    virtual bool setCursor(WebCore::PlatformCursorHandle cursor);
+    virtual void setCursor(const WebCore::Cursor&);
+    virtual void setLastSetCursorToCurrentCursor();
 
     WebView* webView() const { return m_webView; }
 
@@ -161,6 +166,10 @@ public:
 #if ENABLE(NOTIFICATIONS)
     virtual WebCore::NotificationPresenter* notificationPresenter() const { return reinterpret_cast<WebCore::NotificationPresenter*>(m_notificationsDelegate.get()); }
 #endif
+
+    virtual bool selectItemWritingDirectionIsNatural();
+    virtual PassRefPtr<WebCore::PopupMenu> createPopupMenu(WebCore::PopupMenuClient*) const;
+    virtual PassRefPtr<WebCore::SearchPopupMenu> createSearchPopupMenu(WebCore::PopupMenuClient*) const;
 
 private:
     COMPtr<IWebUIDelegate> uiDelegate();

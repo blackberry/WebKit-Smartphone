@@ -1,7 +1,7 @@
 /**
  * This file is part of the theme implementation for form controls in WebCore.
  *
- * Copyright (C) 2005, 2006, 2007, 2008, 2009 Apple Computer, Inc.
+ * Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010 Apple Computer, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -42,6 +42,10 @@
 #if ENABLE(METER_TAG)
 #include "HTMLMeterElement.h"
 #include "RenderMeter.h"
+#endif
+
+#if ENABLE(INPUT_SPEECH)
+#include "RenderInputSpeech.h"
 #endif
 
 // The methods in this file are shared by all themes on every platform.
@@ -238,16 +242,24 @@ void RenderTheme::adjustStyle(CSSStyleSelector* selector, RenderStyle* style, El
         case ProgressBarPart:
             return adjustProgressBarStyle(selector, style, e);
 #endif
-#if ENABLE(Meter_TAG)
+#if ENABLE(METER_TAG)
         case MeterPart:
+        case RelevancyLevelIndicatorPart:
+        case ContinuousCapacityLevelIndicatorPart:
+        case DiscreteCapacityLevelIndicatorPart:
+        case RatingLevelIndicatorPart:
             return adjustMeterStyle(selector, style, e);
+#endif
+#if ENABLE(INPUT_SPEECH)
+        case InputSpeechButtonPart:
+            return adjustInputFieldSpeechButtonStyle(selector, style, e);
 #endif
         default:
             break;
     }
 }
 
-bool RenderTheme::paint(RenderObject* o, const RenderObject::PaintInfo& paintInfo, const IntRect& r)
+bool RenderTheme::paint(RenderObject* o, const PaintInfo& paintInfo, const IntRect& r)
 {
     // If painting is disabled, but we aren't updating control tints, then just bail.
     // If we are updating control tints, just schedule a repaint if the theme supports tinting
@@ -302,6 +314,10 @@ bool RenderTheme::paint(RenderObject* o, const RenderObject::PaintInfo& paintInf
             return paintMenuList(o, paintInfo, r);
 #if ENABLE(METER_TAG)
         case MeterPart:
+        case RelevancyLevelIndicatorPart:
+        case ContinuousCapacityLevelIndicatorPart:
+        case DiscreteCapacityLevelIndicatorPart:
+        case RatingLevelIndicatorPart:
             return paintMeter(o, paintInfo, r);
 #endif
 #if ENABLE(PROGRESS_TAG)
@@ -339,6 +355,8 @@ bool RenderTheme::paint(RenderObject* o, const RenderObject::PaintInfo& paintInf
             if (o->parent()->isSlider())
                 return paintMediaSliderThumb(o, paintInfo, r);
             break;
+        case MediaVolumeSliderMuteButtonPart:
+            return paintMediaMuteButton(o, paintInfo, r);
         case MediaVolumeSliderContainerPart:
             return paintMediaVolumeSliderContainer(o, paintInfo, r);
         case MediaVolumeSliderPart:
@@ -368,6 +386,10 @@ bool RenderTheme::paint(RenderObject* o, const RenderObject::PaintInfo& paintInf
             return paintSearchFieldResultsDecoration(o, paintInfo, r);
         case SearchFieldResultsButtonPart:
             return paintSearchFieldResultsButton(o, paintInfo, r);
+#if ENABLE(INPUT_SPEECH)
+        case InputSpeechButtonPart:
+            return paintInputFieldSpeechButton(o, paintInfo, r);
+#endif
         default:
             break;
     }
@@ -375,7 +397,7 @@ bool RenderTheme::paint(RenderObject* o, const RenderObject::PaintInfo& paintInf
     return true; // We don't support the appearance, so let the normal background/border paint.
 }
 
-bool RenderTheme::paintBorderOnly(RenderObject* o, const RenderObject::PaintInfo& paintInfo, const IntRect& r)
+bool RenderTheme::paintBorderOnly(RenderObject* o, const PaintInfo& paintInfo, const IntRect& r)
 {
     if (paintInfo.context->paintingDisabled())
         return false;
@@ -400,6 +422,10 @@ bool RenderTheme::paintBorderOnly(RenderObject* o, const RenderObject::PaintInfo
         case MenulistPart:
 #if ENABLE(METER_TAG)
         case MeterPart:
+        case RelevancyLevelIndicatorPart:
+        case ContinuousCapacityLevelIndicatorPart:
+        case DiscreteCapacityLevelIndicatorPart:
+        case RatingLevelIndicatorPart:
 #endif
 #if ENABLE(PROGRESS_TAG)
         case ProgressBarPart:
@@ -412,6 +438,9 @@ bool RenderTheme::paintBorderOnly(RenderObject* o, const RenderObject::PaintInfo
         case SearchFieldDecorationPart:
         case SearchFieldResultsDecorationPart:
         case SearchFieldResultsButtonPart:
+#if ENABLE(INPUT_SPEECH)
+        case InputSpeechButtonPart:
+#endif
         default:
             break;
     }
@@ -419,7 +448,7 @@ bool RenderTheme::paintBorderOnly(RenderObject* o, const RenderObject::PaintInfo
     return false;
 }
 
-bool RenderTheme::paintDecorations(RenderObject* o, const RenderObject::PaintInfo& paintInfo, const IntRect& r)
+bool RenderTheme::paintDecorations(RenderObject* o, const PaintInfo& paintInfo, const IntRect& r)
 {
     if (paintInfo.context->paintingDisabled())
         return false;
@@ -441,6 +470,10 @@ bool RenderTheme::paintDecorations(RenderObject* o, const RenderObject::PaintInf
         case MenulistPart:
 #if ENABLE(METER_TAG)
         case MeterPart:
+        case RelevancyLevelIndicatorPart:
+        case ContinuousCapacityLevelIndicatorPart:
+        case DiscreteCapacityLevelIndicatorPart:
+        case RatingLevelIndicatorPart:
 #endif
 #if ENABLE(PROGRESS_TAG)
         case ProgressBarPart:
@@ -454,6 +487,9 @@ bool RenderTheme::paintDecorations(RenderObject* o, const RenderObject::PaintInf
         case SearchFieldDecorationPart:
         case SearchFieldResultsDecorationPart:
         case SearchFieldResultsButtonPart:
+#if ENABLE(INPUT_SPEECH)
+        case InputSpeechButtonPart:
+#endif
         default:
             break;
     }
@@ -516,6 +552,15 @@ String RenderTheme::formatMediaControlsCurrentTime(float currentTime, float /*du
 String RenderTheme::formatMediaControlsRemainingTime(float currentTime, float duration) const
 {
     return formatMediaControlsTime(currentTime - duration);
+}
+
+IntPoint RenderTheme::volumeSliderOffsetFromMuteButton(Node* muteButton, const IntSize& size) const
+{
+    int y = -size.height();
+    FloatPoint absPoint = muteButton->renderer()->localToAbsolute(FloatPoint(muteButton->renderBox()->offsetLeft(), y), true, true);
+    if (absPoint.y() < 0)
+        y = muteButton->renderBox()->height();
+    return IntPoint(0, y);
 }
 
 #endif
@@ -653,6 +698,11 @@ bool RenderTheme::isControlStyled(const RenderStyle* style, const BorderData& bo
         case ListboxPart:
         case MenulistPart:
         case ProgressBarPart:
+        case MeterPart:
+        case RelevancyLevelIndicatorPart:
+        case ContinuousCapacityLevelIndicatorPart:
+        case DiscreteCapacityLevelIndicatorPart:
+        case RatingLevelIndicatorPart:
         // FIXME: Uncomment this when making search fields style-able.
         // case SearchFieldPart:
         case TextFieldPart:
@@ -796,7 +846,7 @@ bool RenderTheme::isSpinUpButtonPartPressed(const RenderObject* o) const
         || !static_cast<Element*>(node)->isSpinButtonElement())
         return false;
     SpinButtonElement* element = static_cast<SpinButtonElement*>(node);
-    return element->onUpButton();
+    return element->upDownState() == SpinButtonElement::Up;
 }
 
 bool RenderTheme::isReadOnlyControl(const RenderObject* o) const
@@ -809,19 +859,22 @@ bool RenderTheme::isReadOnlyControl(const RenderObject* o) const
 
 bool RenderTheme::isHovered(const RenderObject* o) const
 {
-    if (!o->node())
+    Node* node = o->node();
+    if (!node)
         return false;
-    return o->node()->hovered();
+    if (!node->isElementNode() || !static_cast<Element*>(node)->isSpinButtonElement())
+        return node->hovered();
+    SpinButtonElement* element = static_cast<SpinButtonElement*>(node);
+    return element->hovered() && element->upDownState() != SpinButtonElement::Indeterminate;
 }
 
 bool RenderTheme::isSpinUpButtonPartHovered(const RenderObject* o) const
 {
     Node* node = o->node();
-    if (!node || !node->active() || !node->isElementNode()
-        || !static_cast<Element*>(node)->isSpinButtonElement())
+    if (!node || !node->isElementNode() || !static_cast<Element*>(node)->isSpinButtonElement())
         return false;
     SpinButtonElement* element = static_cast<SpinButtonElement*>(node);
-    return element->onUpButton();
+    return element->upDownState() == SpinButtonElement::Up;
 }
 
 bool RenderTheme::isDefault(const RenderObject* o) const
@@ -905,59 +958,39 @@ void RenderTheme::adjustMenuListStyle(CSSStyleSelector*, RenderStyle*, Element*)
 {
 }
 
+#if ENABLE(INPUT_SPEECH)
+void RenderTheme::adjustInputFieldSpeechButtonStyle(CSSStyleSelector* selector, RenderStyle* style, Element* element) const
+{
+    RenderInputSpeech::adjustInputFieldSpeechButtonStyle(selector, style, element);
+}
+
+bool RenderTheme::paintInputFieldSpeechButton(RenderObject* object, const PaintInfo& paintInfo, const IntRect& rect)
+{
+    return RenderInputSpeech::paintInputFieldSpeechButton(object, paintInfo, rect);
+}
+#endif
+
 #if ENABLE(METER_TAG)
 void RenderTheme::adjustMeterStyle(CSSStyleSelector*, RenderStyle* style, Element*) const
 {
     style->setBoxShadow(0);
 }
 
-bool RenderTheme::paintMeter(RenderObject* renderObject, const RenderObject::PaintInfo& paintInfo, const IntRect& rect)
+IntSize RenderTheme::meterSizeForBounds(const RenderMeter*, const IntRect& bounds) const
 {
-    // Some platforms do not have a native gauge widget, so we draw here a default implementation.
-    RenderMeter* renderMeter = toRenderMeter(renderObject);
-    RenderStyle* style = renderObject->style();
-    int left = style->borderLeft().width() + style->paddingLeft().value();
-    int top = style->borderTop().width() + style->paddingTop().value();
-    int right = style->borderRight().width() + style->paddingRight().value();
-    int bottom = style->borderBottom().width() + style->paddingBottom().value();
-    FloatRect innerRect(rect.x() + left, rect.y() + top, rect.width() - left - right, rect.height() - top - bottom);
+    return bounds.size();
+}
 
-    HTMLMeterElement* element = static_cast<HTMLMeterElement*>(renderMeter->node());
-    double min = element->min();
-    double max = element->max();
-    double value = element->value();
-
-    if (min >= max) {
-        paintInfo.context->fillRect(innerRect, Color::black, style->colorSpace());
-        return false;
-    }
-
-    // Paint the background first
-    paintInfo.context->fillRect(innerRect, Color::lightGray, style->colorSpace());
-
-    FloatRect valueRect;
-
-    if (rect.width() < rect.height()) {
-        // Vertical gauge
-        double scale = innerRect.height() / (max - min);
-        valueRect.setLocation(FloatPoint(innerRect.x(), innerRect.y() + narrowPrecisionToFloat((max - value) * scale)));
-        valueRect.setSize(FloatSize(innerRect.width(), narrowPrecisionToFloat((value - min) * scale)));
-    } else if (renderMeter->style()->direction() == RTL) {
-        // right to left horizontal gauge
-        double scale = innerRect.width() / (max - min);
-        valueRect.setLocation(FloatPoint(innerRect.x() + narrowPrecisionToFloat((max - value) * scale), innerRect.y()));
-        valueRect.setSize(FloatSize(narrowPrecisionToFloat((value - min) * scale), innerRect.height()));
-    } else {
-        // left to right horizontal gauge
-        double scale = innerRect.width() / (max - min);
-        valueRect.setLocation(innerRect.location());
-        valueRect.setSize(FloatSize(narrowPrecisionToFloat((value - min) * scale), innerRect.height()));
-    }
-    if (!valueRect.isEmpty())
-        paintInfo.context->fillRect(valueRect, Color::black, style->colorSpace());
-
+bool RenderTheme::supportsMeter(ControlPart, bool) const
+{
     return false;
 }
+
+bool RenderTheme::paintMeter(RenderObject*, const PaintInfo&, const IntRect&)
+{
+    return true;
+}
+
 #endif
 
 #if ENABLE(PROGRESS_TAG)
@@ -1023,6 +1056,8 @@ void RenderTheme::platformColorsDidChange()
     m_inactiveListBoxSelectionForegroundColor = Color();
     m_activeListBoxSelectionBackgroundColor = Color();
     m_inactiveListBoxSelectionForegroundColor = Color();
+
+    Page::scheduleForcedStyleRecalcForAllPages();
 }
 
 Color RenderTheme::systemColor(int cssValueId) const

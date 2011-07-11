@@ -29,8 +29,9 @@
  */
 
 #include "config.h"
-
 #include "ScriptProfiler.h"
+
+#include "InspectorValues.h"
 #include "ScriptString.h"
 
 #include <v8-profiler.h>
@@ -46,8 +47,22 @@ void ScriptProfiler::start(ScriptState* state, const String& title)
 PassRefPtr<ScriptProfile> ScriptProfiler::stop(ScriptState* state, const String& title)
 {
     v8::HandleScope hs;
-    const v8::CpuProfile* profile = v8::CpuProfiler::StopProfiling(v8String(title));
+    const v8::CpuProfile* profile = state ?
+        v8::CpuProfiler::StopProfiling(v8String(title), state->context()->GetSecurityToken()) :
+        v8::CpuProfiler::StopProfiling(v8String(title));
     return profile ? ScriptProfile::create(profile) : 0;
+}
+
+PassRefPtr<ScriptHeapSnapshot> ScriptProfiler::takeHeapSnapshot(const String& title)
+{
+    v8::HandleScope hs;
+    const v8::HeapSnapshot* snapshot = v8::HeapProfiler::TakeSnapshot(v8String(title), v8::HeapSnapshot::kAggregated);
+    return snapshot ? ScriptHeapSnapshot::create(snapshot) : 0;
+}
+
+bool ScriptProfiler::isProfilerAlwaysEnabled()
+{
+    return true;
 }
 
 } // namespace WebCore

@@ -32,7 +32,7 @@
 
 namespace WebCore {
 
-    class DocLoader;
+    class CachedResourceLoader;
     class TextResourceDecoder;
 
     class CachedCSSStyleSheet : public CachedResource {
@@ -50,8 +50,6 @@ namespace WebCore {
         virtual String encoding() const;
         virtual void data(PassRefPtr<SharedBuffer> data, bool allDataReceived);
         virtual void error();
-
-        virtual bool schedule() const { return true; }
 
         void checkNotify();
     

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2008, Google Inc. All rights reserved.
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
+ * Copyright (C) 2010 Torch Mobile (Beijing) Co. Ltd. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -35,10 +36,12 @@
 #include "Base64.h"
 #include "BitmapImage.h"
 #include "BitmapImageSingleFrameSkia.h"
+#include "DrawingBuffer.h"
+#include "GLES2Canvas.h"
 #include "GraphicsContext.h"
 #include "ImageData.h"
-#include "PlatformContextSkia.h"
 #include "PNGImageEncoder.h"
+#include "PlatformContextSkia.h"
 #include "SkColorPriv.h"
 #include "SkiaUtils.h"
 
@@ -66,9 +69,7 @@ ImageBuffer::ImageBuffer(const IntSize& size, ImageColorSpace imageColorSpace, b
 
     m_data.m_platformContext.setCanvas(&m_data.m_canvas);
     m_context.set(new GraphicsContext(&m_data.m_platformContext));
-#if OS(WINDOWS)
     m_context->platformContext()->setDrawingToImageBuffer(true);
-#endif
 
     // Make the background transparent. It would be nice if this wasn't
     // required, but the canvas is currently filled with the magic transparency
@@ -86,20 +87,48 @@ GraphicsContext* ImageBuffer::context() const
     return m_context.get();
 }
 
-Image* ImageBuffer::image() const
+bool ImageBuffer::drawsUsingCopy() const
 {
-    if (!m_image) {
-        // This creates a COPY of the image and will cache that copy. This means
-        // that if subsequent operations take place on the context, neither the
-        // currently-returned image, nor the results of future image() calls,
-        // will contain that operation.
-        //
-        // This seems silly, but is the way the CG port works: image() is
-        // intended to be used only when rendering is "complete."
-        m_image = BitmapImageSingleFrameSkia::create(
-            *m_data.m_platformContext.bitmap());
+    return false;
+}
+
+PassRefPtr<Image> ImageBuffer::copyImage() const
+{
+    m_context->platformContext()->syncSoftwareCanvas();
+    return BitmapImageSingleFrameSkia::create(*m_data.m_platformContext.bitmap(), true);
+}
+
+void ImageBuffer::clip(GraphicsContext* context, const FloatRect& rect) const
+{
+    context->platformContext()->beginLayerClippedToImage(rect, this);
+}
+
+void ImageBuffer::draw(GraphicsContext* context, ColorSpace styleColorSpace, const FloatRect& destRect, const FloatRect& srcRect,
+                       CompositeOperator op, bool useLowQualityScale)
+{
+    if (m_data.m_platformContext.useGPU() && context->platformContext()->useGPU()) {
+        if (context->platformContext()->canAccelerate()) {
+            DrawingBuffer* sourceDrawingBuffer = m_data.m_platformContext.gpuCanvas()->drawingBuffer();
+            unsigned sourceTexture = sourceDrawingBuffer->getRenderingResultsAsTexture();
+            FloatRect destRectFlipped(destRect);
+            destRectFlipped.setY(destRect.y() + destRect.height());
+            destRectFlipped.setHeight(-destRect.height());
+            context->platformContext()->prepareForHardwareDraw();
+            context->platformContext()->gpuCanvas()->drawTexturedRect(sourceTexture, m_size, srcRect, destRectFlipped, styleColorSpace, op);
+            return;
+        }
+        m_data.m_platformContext.syncSoftwareCanvas();
     }
-    return m_image.get();
+
+    RefPtr<Image> image = BitmapImageSingleFrameSkia::create(*m_data.m_platformContext.bitmap(), context == m_context);
+    context->drawImage(image.get(), styleColorSpace, destRect, srcRect, op, useLowQualityScale);
+}
+
+void ImageBuffer::drawPattern(GraphicsContext* context, const FloatRect& srcRect, const AffineTransform& patternTransform,
+                              const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator op, const FloatRect& destRect)
+{
+    RefPtr<Image> image = BitmapImageSingleFrameSkia::create(*m_data.m_platformContext.bitmap(), context == m_context);
+    image->drawPattern(context, srcRect, patternTransform, phase, styleColorSpace, op, destRect);
 }
 
 void ImageBuffer::platformTransformColorSpace(const Vector<int>& lookUpTable)
@@ -127,6 +156,13 @@ PassRefPtr<ImageData> getImageData(const IntRect& rect, const SkBitmap& bitmap,
                                    const IntSize& size)
 {
     RefPtr<ImageData> result = ImageData::create(rect.width(), rect.height());
+
+    if (bitmap.config() == SkBitmap::kNo_Config) {
+        // This is an empty SkBitmap that could not be configured.
+        ASSERT(!size.width() || !size.height());
+        return result;
+    }
+
     unsigned char* data = result->data()->data()->data();
 
     if (rect.x() < 0 || rect.y() < 0 ||
@@ -190,11 +226,13 @@ PassRefPtr<ImageData> getImageData(const IntRect& rect, const SkBitmap& bitmap,
 
 PassRefPtr<ImageData> ImageBuffer::getUnmultipliedImageData(const IntRect& rect) const
 {
+    context()->platformContext()->syncSoftwareCanvas();
     return getImageData<Unmultiplied>(rect, *context()->platformContext()->bitmap(), m_size);
 }
 
 PassRefPtr<ImageData> ImageBuffer::getPremultipliedImageData(const IntRect& rect) const
 {
+    context()->platformContext()->syncSoftwareCanvas();
     return getImageData<Premultiplied>(rect, *context()->platformContext()->bitmap(), m_size);
 }
 
@@ -260,7 +298,7 @@ void ImageBuffer::putPremultipliedImageData(ImageData* source, const IntRect& so
     putImageData<Premultiplied>(source, sourceRect, destPoint, *context()->platformContext()->bitmap(), m_size);
 }
 
-String ImageBuffer::toDataURL(const String&) const
+String ImageBuffer::toDataURL(const String&, const double*) const
 {
     // Encode the image into a vector.
     Vector<unsigned char> pngEncodedData;

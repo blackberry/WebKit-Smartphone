@@ -36,14 +36,7 @@
 namespace WebCore {
 
 struct MaskerData {
-    MaskerData()
-        : emptyMask(false)
-    {
-    }
-
     OwnPtr<ImageBuffer> maskImage;
-    FloatRect maskRect;
-    bool emptyMask;
 };
 
 class RenderSVGResourceMasker : public RenderSVGResourceContainer {
@@ -53,11 +46,10 @@ public:
 
     virtual const char* renderName() const { return "RenderSVGResourceMasker"; }
 
-    virtual void invalidateClients();
-    virtual void invalidateClient(RenderObject*);
-
+    virtual void removeAllClientsFromCache(bool markForInvalidation = true);
+    virtual void removeClientFromCache(RenderObject*, bool markForInvalidation = true);
     virtual bool applyResource(RenderObject*, RenderStyle*, GraphicsContext*&, unsigned short resourceMode);
-    virtual FloatRect resourceBoundingBox(const FloatRect&);
+    virtual FloatRect resourceBoundingBox(RenderObject*);
 
     SVGUnitTypes::SVGUnitType maskUnits() const { return toUnitType(static_cast<SVGMaskElement*>(node())->maskUnits()); }
     SVGUnitTypes::SVGUnitType maskContentUnits() const { return toUnitType(static_cast<SVGMaskElement*>(node())->maskContentUnits()); }
@@ -66,10 +58,10 @@ public:
     static RenderSVGResourceType s_resourceType;
 
 private:
-    void createMaskImage(MaskerData*, const SVGMaskElement*, RenderObject*);
+    void drawContentIntoMaskImage(MaskerData*, const SVGMaskElement*, RenderObject*);
     void calculateMaskContentRepaintRect();
 
-    FloatRect m_maskBoundaries;
+    FloatRect m_maskContentBoundaries;
     HashMap<RenderObject*, MaskerData*> m_masker;
 };
 

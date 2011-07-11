@@ -1,23 +1,23 @@
 /*
-    Copyright (C) 2004, 2005, 2006, 2007 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006 Rob Buis <buis@kde.org>
-                  2009 Dirk Schulze <krit@webkit.org>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006, 2007 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006 Rob Buis <buis@kde.org>
+ * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -26,6 +26,7 @@
 
 #include "Attribute.h"
 #include "FilterEffect.h"
+#include "RenderSVGResourceFilterPrimitive.h"
 #include "SVGLength.h"
 #include "SVGNames.h"
 #include "SVGStyledElement.h"
@@ -33,8 +34,8 @@
 
 namespace WebCore {
 
-SVGFilterPrimitiveStandardAttributes::SVGFilterPrimitiveStandardAttributes(const QualifiedName& tagName, Document* doc)
-    : SVGStyledElement(tagName, doc)
+SVGFilterPrimitiveStandardAttributes::SVGFilterPrimitiveStandardAttributes(const QualifiedName& tagName, Document* document)
+    : SVGStyledElement(tagName, document)
     , m_x(LengthModeWidth, "0%")
     , m_y(LengthModeHeight, "0%")
     , m_width(LengthModeWidth, "100%")
@@ -42,10 +43,6 @@ SVGFilterPrimitiveStandardAttributes::SVGFilterPrimitiveStandardAttributes(const
 {
     // Spec: If the x/y attribute is not specified, the effect is as if a value of "0%" were specified.
     // Spec: If the width/height attribute is not specified, the effect is as if a value of "100%" were specified.
-}
-
-SVGFilterPrimitiveStandardAttributes::~SVGFilterPrimitiveStandardAttributes()
-{
 }
 
 void SVGFilterPrimitiveStandardAttributes::parseMappedAttribute(Attribute* attr)
@@ -63,6 +60,18 @@ void SVGFilterPrimitiveStandardAttributes::parseMappedAttribute(Attribute* attr)
         setResultBaseValue(value);
     else
         return SVGStyledElement::parseMappedAttribute(attr);
+}
+
+void SVGFilterPrimitiveStandardAttributes::svgAttributeChanged(const QualifiedName& attrName)
+{
+    SVGStyledElement::svgAttributeChanged(attrName);
+
+    if (attrName == SVGNames::xAttr
+        || attrName == SVGNames::yAttr
+        || attrName == SVGNames::widthAttr
+        || attrName == SVGNames::heightAttr
+        || attrName == SVGNames::resultAttr)
+        invalidate();
 }
 
 void SVGFilterPrimitiveStandardAttributes::synchronizeProperty(const QualifiedName& attrName)
@@ -88,6 +97,14 @@ void SVGFilterPrimitiveStandardAttributes::synchronizeProperty(const QualifiedNa
         synchronizeHeight();
     else if (attrName == SVGNames::resultAttr)
         synchronizeResult();
+}
+
+void SVGFilterPrimitiveStandardAttributes::childrenChanged(bool changedByParser, Node* beforeChange, Node* afterChange, int childCountDelta)
+{
+    SVGStyledElement::childrenChanged(changedByParser, beforeChange, afterChange, childCountDelta);
+
+    if (!changedByParser)
+        invalidate();
 }
 
 void SVGFilterPrimitiveStandardAttributes::setStandardAttributes(bool primitiveBoundingBoxMode, FilterEffect* filterEffect) const
@@ -118,6 +135,11 @@ void SVGFilterPrimitiveStandardAttributes::setStandardAttributes(bool primitiveB
                                height().value(this));
 
     filterEffect->setEffectBoundaries(effectBBox);
+}
+
+RenderObject* SVGFilterPrimitiveStandardAttributes::createRenderer(RenderArena* arena, RenderStyle*)
+{
+    return new (arena) RenderSVGResourceFilterPrimitive(this);
 }
 
 }

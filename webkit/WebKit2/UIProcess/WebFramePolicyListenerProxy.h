@@ -26,38 +26,27 @@
 #ifndef WebFramePolicyListenerProxy_h
 #define WebFramePolicyListenerProxy_h
 
-#include <WebCore/FrameLoaderTypes.h>
-#include <wtf/PassRefPtr.h>
-#include <wtf/RefCounted.h>
-#include <wtf/RefPtr.h>
+#include "WebFrameListenerProxy.h"
 
 namespace WebKit {
 
-class WebFrameProxy;
-
-class WebFramePolicyListenerProxy : public RefCounted<WebFramePolicyListenerProxy> {
+class WebFramePolicyListenerProxy : public WebFrameListenerProxy {
 public:
+    static const Type APIType = TypeFramePolicyListener;
+
     static PassRefPtr<WebFramePolicyListenerProxy> create(WebFrameProxy* frame, uint64_t listenerID)
     {
         return adoptRef(new WebFramePolicyListenerProxy(frame, listenerID));
     }
-    ~WebFramePolicyListenerProxy();
 
     void use();
     void download();
     void ignore();
 
-    void invalidate();
-
-    uint64_t listenerID() const { return m_listenerID; }
-
 private:
     WebFramePolicyListenerProxy(WebFrameProxy*, uint64_t listenerID);
 
-    void receivedPolicyDecision(WebCore::PolicyAction);
-
-    RefPtr<WebFrameProxy> m_frame;
-    uint64_t m_listenerID;
+    virtual Type type() const { return APIType; }
 };
 
 } // namespace WebKit

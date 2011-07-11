@@ -24,10 +24,19 @@
 
 #include "CSSHelper.h"
 #include "CachedImage.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "Document.h"
 #include "Element.h"
+#include "HTMLNames.h"
+#include "HTMLObjectElement.h"
 #include "RenderImage.h"
+
+#if ENABLE(SVG)
+#include "RenderSVGImage.h"
+#endif
+#if ENABLE(VIDEO)
+#include "RenderVideo.h"
+#endif
 
 #if !ASSERT_DISABLED
 // ImageLoader objects are allocated as members of other objects, so generic pointer check would always fail.
@@ -128,11 +137,8 @@ void ImageLoader::setImage(CachedImage* newImage)
             oldImage->removeClient(this);
     }
 
-    if (RenderObject* renderer = m_element->renderer()) {
-        if (!renderer->isImage())
-            return;
-        toRenderImage(renderer)->resetAnimation();
-    }
+    if (RenderImageResource* imageResource = renderImageResource())
+        imageResource->resetAnimation();
 }
 
 void ImageLoader::updateFromElement()
@@ -155,15 +161,15 @@ void ImageLoader::updateFromElement()
     CachedImage* newImage = 0;
     if (!(attr.isNull() || (attr.isEmpty() && document->baseURI().isLocalFile()))) {
         if (m_loadManually) {
-            bool autoLoadOtherImages = document->docLoader()->autoLoadImages();
-            document->docLoader()->setAutoLoadImages(false);
+            bool autoLoadOtherImages = document->cachedResourceLoader()->autoLoadImages();
+            document->cachedResourceLoader()->setAutoLoadImages(false);
             newImage = new CachedImage(sourceURI(attr));
             newImage->setLoading(true);
-            newImage->setDocLoader(document->docLoader());
-            document->docLoader()->m_documentResources.set(newImage->url(), newImage);
-            document->docLoader()->setAutoLoadImages(autoLoadOtherImages);
+            newImage->setCachedResourceLoader(document->cachedResourceLoader());
+            document->cachedResourceLoader()->m_documentResources.set(newImage->url(), newImage);
+            document->cachedResourceLoader()->setAutoLoadImages(autoLoadOtherImages);
         } else
-            newImage = document->docLoader()->requestImage(sourceURI(attr));
+            newImage = document->cachedResourceLoader()->requestImage(sourceURI(attr));
 
         // If we do not have an image here, it means that a cross-site
         // violation occurred.
@@ -193,11 +199,8 @@ void ImageLoader::updateFromElement()
             oldImage->removeClient(this);
     }
 
-    if (RenderObject* renderer = m_element->renderer()) {
-        if (!renderer->isImage())
-            return;
-        toRenderImage(renderer)->resetAnimation();
-    }
+    if (RenderImageResource* imageResource = renderImageResource())
+        imageResource->resetAnimation();
 }
 
 void ImageLoader::updateFromElementIgnoringPreviousError()
@@ -221,20 +224,42 @@ void ImageLoader::notifyFinished(CachedResource*)
     loadEventSender().dispatchEventSoon(this);
 }
 
+RenderImageResource* ImageLoader::renderImageResource()
+{
+    RenderObject* renderer = m_element->renderer();
+
+    if (!renderer)
+        return 0;
+
+    if (renderer->isImage())
+        return toRenderImage(renderer)->imageResource();
+
+#if ENABLE(SVG)
+    if (renderer->isSVGImage())
+        return toRenderSVGImage(renderer)->imageResource();
+#endif
+
+#if ENABLE(VIDEO)
+    if (renderer->isVideo())
+        return toRenderVideo(renderer)->imageResource();
+#endif
+
+    return 0;
+}
+
 void ImageLoader::updateRenderer()
 {
-    if (RenderObject* renderer = m_element->renderer()) {
-        if (!renderer->isImage() && !renderer->isVideo())
-            return;
-        RenderImage* imageRenderer = toRenderImage(renderer);
-        
-        // Only update the renderer if it doesn't have an image or if what we have
-        // is a complete image.  This prevents flickering in the case where a dynamic
-        // change is happening between two images.
-        CachedImage* cachedImage = imageRenderer->cachedImage();
-        if (m_image != cachedImage && (m_imageComplete || !cachedImage))
-            imageRenderer->setCachedImage(m_image.get());
-    }
+    RenderImageResource* imageResource = renderImageResource();
+
+    if (!imageResource)
+        return;
+
+    // Only update the renderer if it doesn't have an image or if what we have
+    // is a complete image.  This prevents flickering in the case where a dynamic
+    // change is happening between two images.
+    CachedImage* cachedImage = imageResource->cachedImage();
+    if (m_image != cachedImage && (m_imageComplete || !cachedImage))
+        imageResource->setCachedImage(m_image.get());
 }
 
 void ImageLoader::dispatchPendingBeforeLoadEvent()
@@ -255,6 +280,9 @@ void ImageLoader::dispatchPendingBeforeLoadEvent()
         m_image = 0;
     }
     loadEventSender().cancelEvent(this);
+    
+    if (m_element->hasTagName(HTMLNames::objectTag))
+        static_cast<HTMLObjectElement*>(m_element)->renderFallbackContent();
 }
 
 void ImageLoader::dispatchPendingLoadEvent()

@@ -170,6 +170,17 @@ void RenderDataGrid::paintColumnHeader(DataGridColumn*, PaintInfo&, int, int)
 }
 
 // Scrolling implementation functions
+int RenderDataGrid::scrollSize(ScrollbarOrientation orientation) const
+{
+    return ((orientation == VerticallScrollbar) && m_vBar) ? (m_vBar->totalSize() - m_vBar->visibleSize()) : 0;
+}
+
+void RenderDataGrid::setScrollOffsetFromAnimation(const IntPoint& offset)
+{
+    if (m_vBar)
+        m_vBar->setValue(offset.y(), Scrollbar::FromScrollAnimator);
+}
+
 void RenderDataGrid::valueChanged(Scrollbar*)
 {
     // FIXME: Implement.
@@ -182,7 +193,7 @@ void RenderDataGrid::invalidateScrollbarRect(Scrollbar*, const IntRect&)
 
 bool RenderDataGrid::isActive() const
 {
-    Page* page = document()->frame()->page();
+    Page* page = frame()->page();
     return page && page->focusController()->isActive();
 }
 

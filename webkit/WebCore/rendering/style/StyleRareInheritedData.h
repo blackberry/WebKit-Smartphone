@@ -25,11 +25,11 @@
 #ifndef StyleRareInheritedData_h
 #define StyleRareInheritedData_h
 
-#include "AtomicString.h"
 #include "Color.h"
 #include "Length.h"
 #include <wtf/RefCounted.h>
 #include <wtf/PassRefPtr.h>
+#include <wtf/text/AtomicString.h>
 
 namespace WebCore {
 
@@ -77,7 +77,11 @@ public:
     unsigned resize : 2; // EResize
     unsigned userSelect : 1;  // EUserSelect
     unsigned colorSpace : 1; // ColorSpace
-    
+    unsigned hyphens : 2; // Hyphens
+
+    AtomicString hyphenationString;
+    AtomicString hyphenationLocale;
+
 private:
     StyleRareInheritedData();
     StyleRareInheritedData(const StyleRareInheritedData&);

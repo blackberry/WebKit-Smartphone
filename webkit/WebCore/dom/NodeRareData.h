@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2008, 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2008 David Smith <catfish.man@gmail.com>
  *
  * This library is free software; you can redistribute it and/or
@@ -24,15 +24,13 @@
 
 #include "ClassNodeList.h"
 #include "DynamicNodeList.h"
-#include "EventListener.h"
 #include "NameNodeList.h"
 #include "QualifiedName.h"
-#include "RegisteredEventListener.h"
-#include "StringHash.h"
 #include "TagNodeList.h"
 #include <wtf/HashSet.h>
-#include <wtf/PassOwnPtr.h>
 #include <wtf/OwnPtr.h>
+#include <wtf/PassOwnPtr.h>
+#include <wtf/text/StringHash.h>
 
 namespace WebCore {
 
@@ -76,6 +74,10 @@ public:
         , m_tabIndexWasSetExplicitly(false)
         , m_isFocused(false)
         , m_needsFocusAppearanceUpdateSoonAfterAttach(false)
+    {
+    }
+
+    virtual ~NodeRareData()
     {
     }
 
@@ -125,6 +127,6 @@ private:
     bool m_needsFocusAppearanceUpdateSoonAfterAttach : 1;
 };
 
-} //namespace
+} // namespace WebCore
 
-#endif
+#endif // NodeRareData_h

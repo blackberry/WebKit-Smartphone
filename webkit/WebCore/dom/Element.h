@@ -3,7 +3,7 @@
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Peter Kelly (pmk@post.com)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -25,21 +25,17 @@
 #ifndef Element_h
 #define Element_h
 
-#include "ContainerNode.h"
 #include "Document.h"
-#include "HTMLNames.h"
-#include "MappedAttributeEntry.h"
+#include "FragmentScriptingPermission.h"
 #include "NamedNodeMap.h"
-#include "QualifiedName.h"
 #include "ScrollTypes.h"
 
 namespace WebCore {
 
-class Attr;
 class Attribute;
-class CSSStyleDeclaration;
 class ClientRect;
 class ClientRectList;
+class DOMStringMap;
 class ElementRareData;
 class IntSize;
 
@@ -98,21 +94,27 @@ public:
     DEFINE_ATTRIBUTE_EVENT_LISTENER(touchend);
     DEFINE_ATTRIBUTE_EVENT_LISTENER(touchcancel);
 #endif
+#if ENABLE(FULLSCREEN_API)
+    DEFINE_ATTRIBUTE_EVENT_LISTENER(webkitfullscreenchange);
+#endif
 
-    virtual PassRefPtr<DocumentFragment> createContextualFragment(const String&, FragmentScriptingPermission = FragmentScriptingAllowed);
+    virtual PassRefPtr<DocumentFragment> deprecatedCreateContextualFragment(const String&, FragmentScriptingPermission = FragmentScriptingAllowed);
 
     bool hasAttribute(const QualifiedName&) const;
     const AtomicString& getAttribute(const QualifiedName&) const;
     void setAttribute(const QualifiedName&, const AtomicString& value, ExceptionCode&);
     void removeAttribute(const QualifiedName&, ExceptionCode&);
 
+    // Typed getters and setters for language bindings.
+    int getIntegralAttribute(const QualifiedName& attributeName) const;
+    void setIntegralAttribute(const QualifiedName& attributeName, int value);
+    unsigned getUnsignedIntegralAttribute(const QualifiedName& attributeName) const;
+    void setUnsignedIntegralAttribute(const QualifiedName& attributeName, unsigned value);
+
     // Call this to get the value of an attribute that is known not to be the style
     // attribute or one of the SVG animatable attributes.
     bool fastHasAttribute(const QualifiedName&) const;
     const AtomicString& fastGetAttribute(const QualifiedName&) const;
-
-    // Call this to get the value of the id attribute. Faster than calling fastGetAttribute.
-    const AtomicString& getIDAttribute() const;
 
     bool hasAttributes() const;
 
@@ -125,7 +127,14 @@ public:
     void setAttribute(const AtomicString& name, const AtomicString& value, ExceptionCode&);
     void setAttributeNS(const AtomicString& namespaceURI, const AtomicString& qualifiedName, const AtomicString& value, ExceptionCode&, FragmentScriptingPermission = FragmentScriptingAllowed);
 
-    const QualifiedName& idAttributeName() const;
+    bool isIdAttributeName(const QualifiedName&) const;
+    const AtomicString& getIdAttribute() const;
+    void setIdAttribute(const AtomicString&);
+
+    // Call this to get the value of the id attribute for style resolution purposes.
+    // The value will already be lowercased if the document is in compatibility mode,
+    // so this function is not suitable for non-style uses.
+    const AtomicString& idForStyleResolution() const;
 
     void scrollIntoView(bool alignToTop = true);
     void scrollIntoViewIfNeeded(bool centerIfNeeded = true);
@@ -192,15 +201,13 @@ public:
     // use a static AtomicString value instead to avoid the conversion overhead.
     void setCStringAttribute(const QualifiedName&, const char* cStringValue);
 
-    virtual NamedNodeMap* attributes() const;
-    NamedNodeMap* attributes(bool readonly) const;
+    NamedNodeMap* attributes(bool readonly = false) const;
 
     // This method is called whenever an attribute is added, changed or removed.
     virtual void attributeChanged(Attribute*, bool preserveDecls = false);
 
-    // not part of the DOM
     void setAttributeMap(PassRefPtr<NamedNodeMap>, FragmentScriptingPermission = FragmentScriptingAllowed);
-    NamedNodeMap* attributeMap() const { return namedAttrMap.get(); }
+    NamedNodeMap* attributeMap() const { return m_attributeMap.get(); }
 
     virtual void copyNonAttributeProperties(const Element* /*source*/) { }
 
@@ -211,13 +218,18 @@ public:
 
     RenderStyle* computedStyle(PseudoId = NOPSEUDO);
 
+    AtomicString computeInheritedLanguage() const;
+
     void dispatchAttrRemovalEvent(Attribute*);
     void dispatchAttrAdditionEvent(Attribute*);
 
     virtual void accessKeyAction(bool /*sendToAnyEvent*/) { }
 
     virtual bool isURLAttribute(Attribute*) const;
+
     KURL getURLAttribute(const QualifiedName&) const;
+    KURL getNonEmptyURLAttribute(const QualifiedName&) const;
+
     virtual const QualifiedName& imageSourceAttributeName() const;
     virtual String target() const { return String(); }
 
@@ -257,6 +269,9 @@ public:
 
     bool webkitMatchesSelector(const String& selectors, ExceptionCode&);
 
+    DOMStringMap* dataset();
+    DOMStringMap* optionalDataset() const;
+
     virtual bool isFormControlElement() const { return false; }
     virtual bool isEnabledFormControl() const { return true; }
     virtual bool isReadOnlyFormControl() const { return false; }
@@ -267,6 +282,7 @@ public:
     virtual bool isDefaultButtonForForm() const { return false; }
     virtual bool willValidate() const { return false; }
     virtual bool isValidFormControlElement() { return false; }
+    virtual bool hasUnacceptableValue() const { return false; }
 
     virtual bool formControlValueMatchesRenderer() const { return false; }
     virtual void setFormControlValueMatchesRenderer(bool) { }
@@ -279,6 +295,18 @@ public:
     virtual void restoreFormControlState(const String&) { }
 
     virtual void dispatchFormControlChangeEvent() { }
+
+#if ENABLE(SVG)
+    virtual bool childShouldCreateRenderer(Node*) const; 
+#endif
+    
+#if ENABLE(FULLSCREEN_API)
+    enum {
+        ALLOW_KEYBOARD_INPUT = 1
+    };
+    
+    void webkitRequestFullScreen(unsigned short flags);
+#endif
 
 protected:
     Element(const QualifiedName& tagName, Document* document, ConstructionType type)
@@ -304,7 +332,6 @@ private:
     virtual bool childTypeAllowed(NodeType);
 
     virtual PassRefPtr<Attribute> createAttribute(const QualifiedName&, const AtomicString& value);
-    const QualifiedName& rareIDAttributeName() const;
     
 #ifndef NDEBUG
     virtual void formatForDebugger(char* buffer, unsigned length) const;
@@ -330,6 +357,7 @@ private:
     // cloneNode is private so that non-virtual cloneElementWithChildren and cloneElementWithoutChildren
     // are used instead.
     virtual PassRefPtr<Node> cloneNode(bool deep);
+    virtual PassRefPtr<Element> cloneElementWithoutAttributesAndChildren() const;
 
     QualifiedName m_tagName;
     virtual NodeRareData* createRareData();
@@ -337,8 +365,8 @@ private:
     ElementRareData* rareData() const;
     ElementRareData* ensureRareData();
     
-protected:
-    mutable RefPtr<NamedNodeMap> namedAttrMap;
+private:
+    mutable RefPtr<NamedNodeMap> m_attributeMap;
 };
     
 inline bool Node::hasTagName(const QualifiedName& name) const
@@ -362,11 +390,6 @@ inline Element* Node::parentElement() const
     return parent && parent->isElementNode() ? static_cast<Element*>(parent) : 0;
 }
 
-inline const QualifiedName& Element::idAttributeName() const
-{
-    return hasRareData() ? rareIDAttributeName() : HTMLNames::idAttr;
-}
-
 inline NamedNodeMap* Element::attributes(bool readonly) const
 {
     if (!isStyleAttributeValid())
@@ -377,9 +400,9 @@ inline NamedNodeMap* Element::attributes(bool readonly) const
         updateAnimatedSVGAttribute(anyQName());
 #endif
 
-    if (!readonly && !namedAttrMap)
+    if (!readonly && !m_attributeMap)
         createAttributeMap();
-    return namedAttrMap.get();
+    return m_attributeMap.get();
 }
 
 inline void Element::updateId(const AtomicString& oldId, const AtomicString& newId)
@@ -399,18 +422,43 @@ inline void Element::updateId(const AtomicString& oldId, const AtomicString& new
 
 inline bool Element::fastHasAttribute(const QualifiedName& name) const
 {
-    return namedAttrMap && namedAttrMap->getAttributeItem(name);
+    return m_attributeMap && m_attributeMap->getAttributeItem(name);
 }
 
 inline const AtomicString& Element::fastGetAttribute(const QualifiedName& name) const
 {
-    if (namedAttrMap) {
-        if (Attribute* attribute = namedAttrMap->getAttributeItem(name))
+    if (m_attributeMap) {
+        if (Attribute* attribute = m_attributeMap->getAttributeItem(name))
             return attribute->value();
     }
     return nullAtom;
 }
 
-} //namespace
+inline const AtomicString& Element::idForStyleResolution() const
+{
+    ASSERT(hasID());
+    return m_attributeMap->idForStyleResolution();
+}
+
+inline bool Element::isIdAttributeName(const QualifiedName& attributeName) const
+{
+    // FIXME: This check is probably not correct for the case where the document has an id attribute
+    // with a non-null namespace, because it will return false, a false negative, if the prefixes
+    // don't match but the local name and namespace both do. However, since this has been like this
+    // for a while and the code paths may be hot, we'll have to measure performance if we fix it.
+    return attributeName == document()->idAttributeName();
+}
+
+inline const AtomicString& Element::getIdAttribute() const
+{
+    return fastGetAttribute(document()->idAttributeName());
+}
+
+inline void Element::setIdAttribute(const AtomicString& value)
+{
+    setAttribute(document()->idAttributeName(), value);
+}
+
+} // namespace
 
 #endif

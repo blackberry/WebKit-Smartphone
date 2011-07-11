@@ -53,16 +53,15 @@
 #include "MediaPlayerPrivateQuickTimeVisualContext.h"
 #include "MediaPlayerPrivateQuicktimeWin.h"
 #elif PLATFORM(QT)
-// QtMultimedia support is disabled currently.
-#if 1 || (QT_VERSION < 0x040700)
-#include "MediaPlayerPrivatePhonon.h"
-#else
+#if USE(QT_MULTIMEDIA)
 #include "MediaPlayerPrivateQt.h"
+#else
+#include "MediaPlayerPrivatePhonon.h"
 #endif
 #elif PLATFORM(CHROMIUM)
 #include "MediaPlayerPrivateChromium.h"
 #elif PLATFORM(OLYMPIA)
-#include "MediaPlayerPrivateOlympia.h"
+#include "MediaPlayerPrivateBlackBerry.h"
 #endif
 
 namespace WebCore {
@@ -131,6 +130,7 @@ public:
 #if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
     virtual void deliverNotification(MediaPlayerProxyNotificationType) { }
     virtual void setMediaPlayerProxy(WebMediaPlayerProxy*) { }
+    virtual void setControls(bool) { }
 #endif
 
     virtual bool hasSingleSecurityOrigin() const { return true; }
@@ -173,7 +173,7 @@ static Vector<MediaPlayerFactory*>& installedMediaEngines()
 
 #if PLATFORM(WIN)
         MediaPlayerPrivateQuickTimeVisualContext::registerMediaEngine(addMediaEngine);
-#elif !PLATFORM(GTK)
+#elif !PLATFORM(GTK) && !PLATFORM(EFL)
         // FIXME: currently all the MediaEngines are named
         // MediaPlayerPrivate. This code will need an update when bug
         // 36663 is adressed.
@@ -194,6 +194,24 @@ static void addMediaEngine(CreateMediaEnginePlayer constructor, MediaEngineSuppo
     installedMediaEngines().append(new MediaPlayerFactory(constructor, getSupportedTypes, supportsType));
 }
 
+static const AtomicString& applicationOctetStream()
+{
+    DEFINE_STATIC_LOCAL(const AtomicString, applicationOctetStream, ("application/octet-stream"));
+    return applicationOctetStream;
+}
+
+static const AtomicString& textPlain()
+{
+    DEFINE_STATIC_LOCAL(const AtomicString, textPlain, ("text/plain"));
+    return textPlain;
+}
+
+static const AtomicString& codecs()
+{
+    DEFINE_STATIC_LOCAL(const AtomicString, codecs, ("codecs"));
+    return codecs;
+}
+
 static MediaPlayerFactory* chooseBestEngineForTypeAndCodecs(const String& type, const String& codecs)
 {
     Vector<MediaPlayerFactory*>& engines = installedMediaEngines();
@@ -201,6 +219,14 @@ static MediaPlayerFactory* chooseBestEngineForTypeAndCodecs(const String& type, 
     if (engines.isEmpty())
         return 0;
 
+    // 4.8.10.3 MIME types - In the absence of a specification to the contrary, the MIME type "application/octet-stream" 
+    // when used with parameters, e.g. "application/octet-stream;codecs=theora", is a type that the user agent knows 
+    // it cannot render.
+    if (type == applicationOctetStream()) {
+        if (!codecs.isEmpty())
+            return 0;
+    }
+    
     MediaPlayerFactory* engine = 0;
     MediaPlayer::SupportsType supported = MediaPlayer::IsNotSupported;
 
@@ -249,13 +275,13 @@ MediaPlayer::~MediaPlayer()
 
 void MediaPlayer::load(const String& url, const ContentType& contentType)
 {
-    String type = contentType.type();
-    String codecs = contentType.parameter("codecs");
+    String type = contentType.type().lower();
+    String typeCodecs = contentType.parameter(codecs());
 
-    // if we don't know the MIME type, see if the extension can help
-    if (type.isEmpty() || type == "application/octet-stream" || type == "text/plain") {
-        int pos = url.reverseFind('.');
-        if (pos >= 0) {
+    // If the MIME type is unhelpful, see if the type registry has a match for the file extension.
+    if (type.isEmpty() || type == applicationOctetStream() || type == textPlain()) {
+        size_t pos = url.reverseFind('.');
+        if (pos != notFound) {
             String extension = url.substring(pos + 1);
             String mediaType = MIMETypeRegistry::getMediaMIMETypeForExtension(extension);
             if (!mediaType.isEmpty())
@@ -265,14 +291,17 @@ void MediaPlayer::load(const String& url, const ContentType& contentType)
 
     MediaPlayerFactory* engine = 0;
     if (!type.isEmpty())
-        engine = chooseBestEngineForTypeAndCodecs(type, codecs);
+        engine = chooseBestEngineForTypeAndCodecs(type, typeCodecs);
 
-    // if we didn't find an engine that claims the MIME type, just use the first engine
-    if (!engine && !installedMediaEngines().isEmpty())
+    // If we didn't find an engine and no MIME type is specified, just use the first engine.
+    if (!engine && type.isEmpty() && !installedMediaEngines().isEmpty())
         engine = installedMediaEngines()[0];
     
-    // don't delete and recreate the player unless it comes from a different engine
-    if (engine && m_currentMediaEngine != engine) {
+    // Don't delete and recreate the player unless it comes from a different engine
+    if (!engine) {
+        m_currentMediaEngine = engine;
+        m_private.clear();
+    } else if (m_currentMediaEngine != engine) {
         m_currentMediaEngine = engine;
         m_private.clear();
         m_private.set(engine->constructor(this));
@@ -292,6 +321,11 @@ void MediaPlayer::load(const String& url, const ContentType& contentType)
 bool MediaPlayer::hasAvailableVideoFrame() const
 {
     return m_private->hasAvailableVideoFrame();
+}
+    
+void MediaPlayer::prepareForRendering()
+{
+    return m_private->prepareForRendering();
 }
     
 bool MediaPlayer::canLoadPoster() const
@@ -524,14 +558,19 @@ void MediaPlayer::paintCurrentFrameInContext(GraphicsContext* p, const IntRect& 
 
 MediaPlayer::SupportsType MediaPlayer::supportsType(ContentType contentType)
 {
-    String type = contentType.type();
-    String codecs = contentType.parameter("codecs");
-    MediaPlayerFactory* engine = chooseBestEngineForTypeAndCodecs(type, codecs);
+    String type = contentType.type().lower();
+    String typeCodecs = contentType.parameter(codecs());
 
+    // 4.8.10.3 MIME types - The canPlayType(type) method must return the empty string if type is a type that the 
+    // user agent knows it cannot render or is the type "application/octet-stream"
+    if (type == applicationOctetStream())
+        return IsNotSupported;
+
+    MediaPlayerFactory* engine = chooseBestEngineForTypeAndCodecs(type, typeCodecs);
     if (!engine)
         return IsNotSupported;
 
-    return engine->supportsTypeAndCodecs(type, codecs);
+    return engine->supportsTypeAndCodecs(type, typeCodecs);
 }
 
 void MediaPlayer::getSupportedTypes(HashSet<String>& types)
@@ -561,6 +600,21 @@ void MediaPlayer::setMediaPlayerProxy(WebMediaPlayerProxy* proxy)
     m_playerProxy = proxy;
     m_private->setMediaPlayerProxy(proxy);
 }
+
+void MediaPlayer::setControls(bool controls)
+{
+    m_private->setControls(controls);
+}    
+
+void MediaPlayer::enterFullscreen()
+{
+    m_private->enterFullscreen();
+}    
+
+void MediaPlayer::exitFullscreen()
+{
+    m_private->exitFullscreen();
+}    
 #endif
 
 #if USE(ACCELERATED_COMPOSITING)
@@ -640,6 +694,12 @@ void MediaPlayer::rateChanged()
 {
     if (m_mediaPlayerClient)
         m_mediaPlayerClient->mediaPlayerRateChanged(this);
+}
+
+void MediaPlayer::playbackStateChanged()
+{
+    if (m_mediaPlayerClient)
+        m_mediaPlayerClient->mediaPlayerPlaybackStateChanged(this);
 }
 
 }

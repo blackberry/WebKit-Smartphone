@@ -1,5 +1,5 @@
 /*
- * Copyright 2006, 2007, 2008, 2010 Apple Inc. All rights reserved.
+ * Copyright 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -59,30 +59,27 @@ typedef struct _NSRect NSRect;
 @class QTMovie;
 @class QTMovieView;
 #else
-typedef struct NSArray NSArray;
-typedef struct NSButtonCell NSButtonCell;
-typedef struct NSData NSData;
-typedef struct NSDate NSDate;
-typedef struct NSEvent NSEvent;
-typedef struct NSFont NSFont;
-typedef struct NSImage NSImage;
-typedef struct NSMenu NSMenu;
-typedef struct NSMutableArray NSMutableArray;
-typedef struct NSMutableURLRequest NSMutableURLRequest;
-typedef struct NSURLRequest NSURLRequest;
-typedef struct NSString NSString;
-typedef struct NSTextFieldCell NSTextFieldCell;
-typedef struct NSURLConnection NSURLConnection;
-typedef struct NSURLResponse NSURLResponse;
-typedef struct NSView NSView;
-typedef struct objc_object *id;
-typedef struct QTMovie QTMovie;
-typedef struct QTMovieView QTMovieView;
+class NSArray;
+class NSButtonCell;
+class NSData;
+class NSDate;
+class NSEvent;
+class NSFont;
+class NSImage;
+class NSMenu;
+class NSMutableArray;
+class NSMutableURLRequest;
+class NSURLRequest;
+class NSString;
+class NSTextFieldCell;
+class NSURLConnection;
+class NSURLResponse;
+class NSView;
+class QTMovie;
+class QTMovieView;
 #endif
 
-#ifdef __cplusplus
 extern "C" {
-#endif
 
 // In alphabetical order.
 
@@ -117,13 +114,14 @@ extern ATSUFontID (*wkGetNSFontATSUFontId)(NSFont*);
 extern double (*wkGetNSURLResponseCalculatedExpiration)(NSURLResponse *response);
 extern NSDate *(*wkGetNSURLResponseLastModifiedDate)(NSURLResponse *response);
 extern BOOL (*wkGetNSURLResponseMustRevalidate)(NSURLResponse *response);
-extern void (*wkGetWheelEventDeltas)(NSEvent*, float* deltaX, float* deltaY, float* wheelTicksX, float* wheelTicksY, BOOL* continuous);
+extern void (*wkGetWheelEventDeltas)(NSEvent*, float* deltaX, float* deltaY, BOOL* continuous);
 extern BOOL (*wkHitTestMediaUIPart)(int part, int themeStyle, CGRect bounds, CGPoint point);
 extern void (*wkMeasureMediaUIPart)(int part, int themeStyle, CGRect *bounds, CGSize *naturalSize);
 extern BOOL (*wkMediaControllerThemeAvailable)(int themeStyle);
 extern void (*wkPopupMenu)(NSMenu*, NSPoint location, float width, NSView*, int selectedItem, NSFont*);
 extern unsigned (*wkQTIncludeOnlyModernMediaFileTypes)(void);
 extern int (*wkQTMovieDataRate)(QTMovie*);
+extern void (*wkQTMovieDisableComponent)(uint32_t[5]);
 extern float (*wkQTMovieMaxTimeLoaded)(QTMovie*);
 extern NSString *(*wkQTMovieMaxTimeLoadedChangeNotification)(void);
 extern float (*wkQTMovieMaxTimeSeekable)(QTMovie*);
@@ -173,12 +171,12 @@ extern BOOL (*wkUseSharedMediaUI)();
 
 #if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
 extern NSMutableArray *(*wkNoteOpenPanelFiles)(NSArray *);
+extern void* wkGetHyphenationLocationBeforeIndex;
 #else
 extern void* wkNoteOpenPanelFiles;
+extern CFIndex (*wkGetHyphenationLocationBeforeIndex)(CFStringRef string, CFIndex index);
 #endif
 
-#ifdef __cplusplus
 }
-#endif
 
 #endif

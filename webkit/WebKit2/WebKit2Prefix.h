@@ -29,7 +29,19 @@
 #include <wtf/FastMalloc.h>
 #endif
 
-#if defined(__APPLE__)
+#if defined(BUILDING_QT__)
+
+#define WTF_USE_JSC 1
+#define WTF_USE_V8 0
+
+#define JS_EXPORTDATA
+#define JS_EXPORTCLASS
+
+#elif defined(__APPLE__)
+
+#if !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+#define ENABLE_WEB_PROCESS_SANDBOX 1
+#endif
 
 #import <CoreGraphics/CoreGraphics.h>
 
@@ -71,6 +83,9 @@
 
 #include <WebCore/config.h>
 #include <windows.h>
+
+#if PLATFORM(CG)
 #include <CoreGraphics/CoreGraphics.h>
+#endif
 
 #endif /* defined(WIN32) || defined(_WIN32) */

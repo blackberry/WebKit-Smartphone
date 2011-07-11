@@ -1,23 +1,23 @@
 /*
-    Copyright (C) 2004, 2005 Nikolas Zimmermann <wildfox@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-    Copyright (C) 2006 Samuel Weinig (sam.weinig@gmial.com)
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ * Copyright (C) 2006 Samuel Weinig <sam.weinig@gmial.com>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #ifndef SVGPaint_h
 #define SVGPaint_h
@@ -64,19 +64,17 @@ namespace WebCore {
             return adoptRef(new SVGPaint(uri, color));
         }
 
-        virtual ~SVGPaint();
-
         // 'SVGPaint' functions
         SVGPaintType paintType() const { return m_paintType; }
         String uri() const;
 
         void setUri(const String&);
         void setPaint(SVGPaintType, const String& uri, const String& rgbPaint, const String& iccPaint, ExceptionCode&);
-
-        virtual String cssText() const;
         
         static SVGPaint* defaultFill();
         static SVGPaint* defaultStroke();
+
+        bool matchesTargetURI(const String& referenceId);
 
     private:
         SVGPaint();
@@ -88,6 +86,8 @@ namespace WebCore {
 
         virtual bool isSVGPaint() const { return true; }
 
+        virtual String cssText() const;
+
         SVGPaintType m_paintType;
         String m_uri;
     };
@@ -96,5 +96,3 @@ namespace WebCore {
 
 #endif // ENABLE(SVG)
 #endif // SVGPaint_h
-
-// vim:ts=4:noet

@@ -20,7 +20,10 @@
 #ifndef ImageBufferData_h
 #define ImageBufferData_h
 
+#include "TiledImageOpenVG.h"
+
 #include <openvg.h>
+#include <wtf/RefPtr.h>
 #include <wtf/Vector.h>
 
 namespace WebCore {
@@ -47,6 +50,7 @@ public:
 
     VGImageFormat m_format;
     SurfaceOpenVG* m_surface;
+    RefPtr<TiledImageOpenVG> m_tiledImage;
 };
 
 } // namespace WebCore

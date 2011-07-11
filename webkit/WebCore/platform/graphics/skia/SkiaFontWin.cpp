@@ -220,13 +220,13 @@ void SkiaWinOutlineCache::removePathsForFont(HFONT hfont)
         deleteOutline(outlineCache.find(*i));
 }
 
-bool windowsCanHandleDrawTextShadow(WebCore::GraphicsContext *context)
+bool windowsCanHandleDrawTextShadow(GraphicsContext *context)
 {
-    IntSize shadowSize;
-    int shadowBlur;
+    FloatSize shadowOffset;
+    float shadowBlur;
     Color shadowColor;
 
-    bool hasShadow = context->getShadow(shadowSize, shadowBlur, shadowColor);
+    bool hasShadow = context->getShadow(shadowOffset, shadowBlur, shadowColor);
     return (hasShadow && (shadowBlur == 0) && (shadowColor.alpha() == 255) && (context->fillColor().alpha() == 255));
 }
 
@@ -323,7 +323,7 @@ bool paintSkiaText(GraphicsContext* context,
     }
 
     // Stroking on top (if necessary).
-    if ((textMode & WebCore::cTextStroke)
+    if ((textMode & cTextStroke)
         && platformContext->getStrokeStyle() != NoStroke
         && platformContext->getStrokeThickness() > 0) {
 

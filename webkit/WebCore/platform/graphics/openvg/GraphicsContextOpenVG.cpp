@@ -259,7 +259,7 @@ void GraphicsContext::drawFocusRing(const Vector<IntRect>& rects, int width, int
     // FIXME: We should outline the edge of the full region.
     PaintOpenVG currentFillPaint = m_data->fillPaint();
     CompositeOperator currentOp = m_data->compositeOperation();
-    m_data->setFillColor(0xffa3c8fe);
+    m_data->setFillColor(color);
     m_data->setCompositeOperation(CompositePlusDarker);
 
     for (unsigned i = 0; i < rects.size(); i++) {
@@ -311,10 +311,7 @@ void GraphicsContext::drawLineForText(const IntPoint& origin, int width, bool pr
     if (width <= 0)
         return;
 
-    StrokeStyle oldStyle = m_data->strokeStyle();
-    m_data->setStrokeStyle(SolidStroke);
     drawLine(origin, origin + IntSize(width, 0));
-    m_data->setStrokeStyle(oldStyle);
 
     UNUSED_PARAM(printing);
 }
@@ -323,7 +320,7 @@ void GraphicsContext::drawLineForText(const IntPoint& origin, int width, bool pr
 static const RGBA32 spellingUnderline = 0xFFFF0000;
 static const RGBA32 grammarUnderline = 0xFF008000;
 
-void GraphicsContext::drawLineForMisspellingOrBadGrammar(const IntPoint& origin, int width, bool grammar)
+void GraphicsContext::drawLineForTextChecking(const IntPoint& origin, int width, TextCheckingLineStyle style)
 {
     if (paintingDisabled())
         return;
@@ -334,7 +331,7 @@ void GraphicsContext::drawLineForMisspellingOrBadGrammar(const IntPoint& origin,
     StrokeStyle currentStyle = m_data->strokeStyle();
     PaintOpenVG currentPaint = m_data->strokePaint();
     m_data->setStrokeStyle(DottedStroke);
-    m_data->setStrokeColor(grammar ? grammarUnderline : spellingUnderline);
+    m_data->setStrokeColor(style ? grammarUnderline : spellingUnderline);
 
     drawLine(origin, origin + IntSize(width, 0));
 
@@ -372,7 +369,7 @@ FloatRect GraphicsContext::roundToDevicePixels(const FloatRect& rect)
     return FloatRect(roundedOrigin, roundedLowerRight - roundedOrigin);
 }
 
-void GraphicsContext::setPlatformShadow(const IntSize& size, int blur, const Color& color, ColorSpace colorSpace)
+void GraphicsContext::setPlatformShadow(const FloatSize& size, float blur, const Color& color, ColorSpace colorSpace)
 {
     if (paintingDisabled())
         return;
@@ -387,7 +384,7 @@ void GraphicsContext::setPlatformShadow(const IntSize& size, int blur, const Col
         // Y axis, but the HTML5 canvas spec does not. So we now flip the
         // height since it was flipped in CanvasRenderingContext in order to
         // work with CG.
-        m_data->setShadow(IntSize(size.width(), -size.height()), blur, color);
+        m_data->setShadow(FloatSize(size.width(), -size.height()), blur, color);
     } else
         m_data->setShadow(size, blur, color);
 
@@ -578,14 +575,14 @@ void GraphicsContext::clipOutEllipseInRect(const IntRect& rect)
     m_data->clipPath(path, PainterOpenVG::SubtractClip, m_common->state.fillRule);
 }
 
-void GraphicsContext::clipToImageBuffer(const FloatRect& rect, const ImageBuffer* imageBuffer)
+void GraphicsContext::clipConvexPolygon(size_t numPoints, const FloatPoint* points, bool antialias)
 {
     if (paintingDisabled())
         return;
 
     notImplemented();
-    UNUSED_PARAM(rect);
-    UNUSED_PARAM(imageBuffer);
+    UNUSED_PARAM(numPoints);
+    UNUSED_PARAM(points);
 }
 
 void GraphicsContext::addInnerRoundedRectClip(const IntRect& rect, int thickness)

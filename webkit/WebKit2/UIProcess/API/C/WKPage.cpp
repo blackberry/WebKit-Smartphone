@@ -27,13 +27,20 @@
 #include "WKPagePrivate.h"
 
 #include "WKAPICast.h"
+#include "WebBackForwardList.h"
+#include "WebData.h"
 #include "WebPageProxy.h"
 
-#if __BLOCKS__
+#ifdef __BLOCKS__
 #include <Block.h>
 #endif
 
 using namespace WebKit;
+
+WKTypeID WKPageGetTypeID()
+{
+    return toRef(WebPageProxy::APIType);
+}
 
 WKPageNamespaceRef WKPageGetPageNamespace(WKPageRef pageRef)
 {
@@ -42,7 +49,12 @@ WKPageNamespaceRef WKPageGetPageNamespace(WKPageRef pageRef)
 
 void WKPageLoadURL(WKPageRef pageRef, WKURLRef URLRef)
 {
-    toWK(pageRef)->loadURL(toWK(URLRef));
+    toWK(pageRef)->loadURL(toWK(URLRef)->string());
+}
+
+void WKPageLoadURLRequest(WKPageRef pageRef, WKURLRequestRef urlRequestRef)
+{
+    toWK(pageRef)->loadURLRequest(toWK(urlRequestRef));    
 }
 
 void WKPageStopLoading(WKPageRef pageRef)
@@ -52,7 +64,12 @@ void WKPageStopLoading(WKPageRef pageRef)
 
 void WKPageReload(WKPageRef pageRef)
 {
-    toWK(pageRef)->reload();
+    toWK(pageRef)->reload(false);
+}
+
+void WKPageReloadFromOrigin(WKPageRef pageRef)
+{
+    toWK(pageRef)->reload(true);
 }
 
 bool WKPageTryClose(WKPageRef pageRef)
@@ -90,9 +107,19 @@ bool WKPageCanGoBack(WKPageRef pageRef)
     return toWK(pageRef)->canGoBack();
 }
 
-WKStringRef WKPageGetTitle(WKPageRef pageRef)
+void WKPageGoToBackForwardListItem(WKPageRef pageRef, WKBackForwardListItemRef itemRef)
 {
-    return toRef(toWK(pageRef)->pageTitle().impl());
+    toWK(pageRef)->goToBackForwardItem(toWK(itemRef));
+}
+
+WKBackForwardListRef WKPageGetBackForwardList(WKPageRef pageRef)
+{
+    return toRef(toWK(pageRef)->backForwardList());
+}
+
+WKStringRef WKPageCopyTitle(WKPageRef pageRef)
+{
+    return toCopiedRef(toWK(pageRef)->pageTitle());
 }
 
 WKFrameRef WKPageGetMainFrame(WKPageRef pageRef)
@@ -100,92 +127,138 @@ WKFrameRef WKPageGetMainFrame(WKPageRef pageRef)
     return toRef(toWK(pageRef)->mainFrame());
 }
 
+double WKPageGetEstimatedProgress(WKPageRef pageRef)
+{
+    return toWK(pageRef)->estimatedProgress();
+}
+
+void WKPageSetCustomUserAgent(WKPageRef pageRef, WKStringRef userAgentRef)
+{
+    toWK(pageRef)->setCustomUserAgent(toWK(userAgentRef)->string());
+}
+
 void WKPageTerminate(WKPageRef pageRef)
 {
     toWK(pageRef)->terminateProcess();
 }
 
-void WKPageSetPageLoaderClient(WKPageRef pageRef, WKPageLoaderClient* wkClient)
+WKDataRef WKPageCopySessionState(WKPageRef pageRef)
 {
-    if (wkClient && !wkClient->version)
-        toWK(pageRef)->initializeLoaderClient(wkClient);
+    RefPtr<WebData> state = toWK(pageRef)->sessionState();
+    return toRef(state.release().releaseRef());
 }
 
-void WKPageSetPagePolicyClient(WKPageRef pageRef, WKPagePolicyClient * wkClient)
+void WKPageRestoreFromSessionState(WKPageRef pageRef, WKDataRef sessionStateData)
 {
-    if (wkClient && !wkClient->version)
-        toWK(pageRef)->initializePolicyClient(wkClient);
+    toWK(pageRef)->restoreFromSessionState(toWK(sessionStateData));
 }
 
-void WKPageSetPageUIClient(WKPageRef pageRef, WKPageUIClient * wkClient)
+double WKPageGetTextZoomFactor(WKPageRef pageRef)
 {
-    if (wkClient && !wkClient->version)
-        toWK(pageRef)->initializeUIClient(wkClient);
+    return toWK(pageRef)->textZoomFactor();
 }
 
-void WKPageSetPageHistoryClient(WKPageRef pageRef, WKPageHistoryClient * wkClient)
+void WKPageSetTextZoomFactor(WKPageRef pageRef, double zoomFactor)
 {
-    if (wkClient && !wkClient->version)
-        toWK(pageRef)->initializeHistoryClient(wkClient);
+    toWK(pageRef)->setTextZoomFactor(zoomFactor);
 }
 
-void WKPageRunJavaScriptInMainFrame(WKPageRef pageRef, WKStringRef scriptRef, void* context, WKPageRunJavaScriptFunction callback, WKPageRunJavaScriptDisposeFunction disposeFunction)
+double WKPageGetPageZoomFactor(WKPageRef pageRef)
 {
-    toWK(pageRef)->runJavaScriptInMainFrame(toWK(scriptRef), ScriptReturnValueCallback::create(context, callback, disposeFunction));
+    return toWK(pageRef)->pageZoomFactor();
 }
 
-#if __BLOCKS__
-static void callRunJavaScriptBlockAndRelease(WKStringRef resultValue, void* context)
+void WKPageSetPageZoomFactor(WKPageRef pageRef, double zoomFactor)
+{
+    toWK(pageRef)->setPageZoomFactor(zoomFactor);
+}
+
+void WKPageSetPageAndTextZoomFactors(WKPageRef pageRef, double pageZoomFactor, double textZoomFactor)
+{
+    toWK(pageRef)->setPageAndTextZoomFactors(pageZoomFactor, textZoomFactor);
+}
+
+void WKPageSetPageLoaderClient(WKPageRef pageRef, const WKPageLoaderClient* wkClient)
+{
+    if (wkClient && wkClient->version)
+        return;
+    toWK(pageRef)->initializeLoaderClient(wkClient);
+}
+
+void WKPageSetPagePolicyClient(WKPageRef pageRef, const WKPagePolicyClient* wkClient)
+{
+    if (wkClient && wkClient->version)
+        return;
+    toWK(pageRef)->initializePolicyClient(wkClient);
+}
+
+void WKPageSetPageFormClient(WKPageRef pageRef, const WKPageFormClient* wkClient)
+{
+    if (wkClient && wkClient->version)
+        return;
+    toWK(pageRef)->initializeFormClient(wkClient);
+}
+
+void WKPageSetPageUIClient(WKPageRef pageRef, const WKPageUIClient * wkClient)
+{
+    if (wkClient && wkClient->version)
+        return;
+    toWK(pageRef)->initializeUIClient(wkClient);
+}
+
+void WKPageRunJavaScriptInMainFrame(WKPageRef pageRef, WKStringRef scriptRef, void* context, WKPageRunJavaScriptFunction callback)
+{
+    toWK(pageRef)->runJavaScriptInMainFrame(toWK(scriptRef)->string(), ScriptReturnValueCallback::create(context, callback));
+}
+
+#ifdef __BLOCKS__
+static void callRunJavaScriptBlockAndRelease(WKStringRef resultValue, WKErrorRef error, void* context)
 {
     WKPageRunJavaScriptBlock block = (WKPageRunJavaScriptBlock)context;
-    block(resultValue);
-    Block_release(block);
-}
-
-static void disposeRunJavaScriptBlock(void* context)
-{
-    WKPageRunJavaScriptBlock block = (WKPageRunJavaScriptBlock)context;
+    block(resultValue, error);
     Block_release(block);
 }
 
 void WKPageRunJavaScriptInMainFrame_b(WKPageRef pageRef, WKStringRef scriptRef, WKPageRunJavaScriptBlock block)
 {
-    WKPageRunJavaScriptInMainFrame(pageRef, scriptRef, Block_copy(block), callRunJavaScriptBlockAndRelease, disposeRunJavaScriptBlock);
+    WKPageRunJavaScriptInMainFrame(pageRef, scriptRef, Block_copy(block), callRunJavaScriptBlockAndRelease);
 }
 #endif
 
-void WKPageRenderTreeExternalRepresentation(WKPageRef pageRef, void *context, WKPageRenderTreeExternalRepresentationFunction callback, WKPageRenderTreeExternalRepresentationDisposeFunction disposeFunction)
+void WKPageRenderTreeExternalRepresentation(WKPageRef pageRef, void* context, WKPageRenderTreeExternalRepresentationFunction callback)
 {
-    toWK(pageRef)->getRenderTreeExternalRepresentation(RenderTreeExternalRepresentationCallback::create(context, callback, disposeFunction));
+    toWK(pageRef)->getRenderTreeExternalRepresentation(RenderTreeExternalRepresentationCallback::create(context, callback));
 }
 
-#if __BLOCKS__
-static void callRenderTreeExternalRepresentationBlockAndDispose(WKStringRef resultValue, void* context)
+#ifdef __BLOCKS__
+static void callRenderTreeExternalRepresentationBlockAndDispose(WKStringRef resultValue, WKErrorRef error, void* context)
 {
     WKPageRenderTreeExternalRepresentationBlock block = (WKPageRenderTreeExternalRepresentationBlock)context;
-    block(resultValue);
-    Block_release(block);
-}
-
-static void disposeRenderTreeExternalRepresentationBlock(void* context)
-{
-    WKPageRenderTreeExternalRepresentationBlock block = (WKPageRenderTreeExternalRepresentationBlock)context;
+    block(resultValue, error);
     Block_release(block);
 }
 
 void WKPageRenderTreeExternalRepresentation_b(WKPageRef pageRef, WKPageRenderTreeExternalRepresentationBlock block)
 {
-    WKPageRenderTreeExternalRepresentation(pageRef, Block_copy(block), callRenderTreeExternalRepresentationBlockAndDispose, disposeRenderTreeExternalRepresentationBlock);
+    WKPageRenderTreeExternalRepresentation(pageRef, Block_copy(block), callRenderTreeExternalRepresentationBlockAndDispose);
 }
 #endif
 
-WKPageRef WKPageRetain(WKPageRef pageRef)
+void WKPageGetSourceForFrame(WKPageRef pageRef, WKFrameRef frameRef, void *context, WKPageGetSourceForFrameFunction callback)
 {
-    toWK(pageRef)->ref();
-    return pageRef;
+    toWK(pageRef)->getSourceForFrame(toWK(frameRef), FrameSourceCallback::create(context, callback));
 }
 
-void WKPageRelease(WKPageRef pageRef)
+#ifdef __BLOCKS__
+static void callGetSourceForFrameBlockBlockAndDispose(WKStringRef resultValue, WKErrorRef error, void* context)
 {
-    toWK(pageRef)->deref();
+    WKPageGetSourceForFrameBlock block = (WKPageGetSourceForFrameBlock)context;
+    block(resultValue, error);
+    Block_release(block);
 }
+
+void WKPageGetSourceForFrame_b(WKPageRef pageRef, WKFrameRef frameRef, WKPageGetSourceForFrameBlock block)
+{
+    WKPageGetSourceForFrame(pageRef, frameRef, Block_copy(block), callGetSourceForFrameBlockBlockAndDispose);
+}
+#endif

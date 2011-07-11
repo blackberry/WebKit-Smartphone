@@ -38,9 +38,9 @@
 namespace WebCore { class Node; }
 
 namespace WebKit {
+class WebDOMEventListener;
+class WebDOMEventListenerPrivate;
 class WebDocument;
-class WebEventListener;
-class WebEventListenerPrivate;
 class WebFrame;
 class WebNodeList;
 
@@ -61,7 +61,10 @@ public:
     WEBKIT_API void assign(const WebNode&);
 
     WEBKIT_API bool equals(const WebNode&) const;
-
+    // Required for using WebNodes in std maps.  Note the order used is
+    // arbitrary and should not be expected to have any specific meaning.
+    WEBKIT_API bool lessThan(const WebNode&) const;
+    
     bool isNull() const { return m_private.isNull(); }
 
     enum NodeType {
@@ -94,8 +97,8 @@ public:
     WEBKIT_API WebString createMarkup() const;
     WEBKIT_API bool isTextNode() const;
     WEBKIT_API bool isElementNode() const;
-    WEBKIT_API void addEventListener(const WebString& eventType, WebEventListener* listener, bool useCapture);
-    WEBKIT_API void removeEventListener(const WebString& eventType, WebEventListener* listener, bool useCapture);
+    WEBKIT_API void addEventListener(const WebString& eventType, WebDOMEventListener* listener, bool useCapture);
+    WEBKIT_API void removeEventListener(const WebString& eventType, WebDOMEventListener* listener, bool useCapture);
     WEBKIT_API void simulateClick();
     WEBKIT_API WebNodeList getElementsByTagName(const WebString&) const;
 
@@ -124,7 +127,6 @@ public:
     operator WTF::PassRefPtr<WebCore::Node>() const;
 #endif
 
-protected:
 #if WEBKIT_IMPLEMENTATION
     template<typename T> T* unwrap()
     {
@@ -137,6 +139,7 @@ protected:
     }
 #endif
 
+protected:
     WebPrivatePtr<WebCore::Node> m_private;
 };
 
@@ -148,6 +151,11 @@ inline bool operator==(const WebNode& a, const WebNode& b)
 inline bool operator!=(const WebNode& a, const WebNode& b)
 {
     return !(a == b);
+}
+
+inline bool operator<(const WebNode& a, const WebNode& b)
+{
+    return a.lessThan(b);
 }
 
 } // namespace WebKit

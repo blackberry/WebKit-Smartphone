@@ -63,7 +63,7 @@ void HTMLAppletElement::parseMappedAttribute(Attribute* attr)
             document->addNamedItem(newName);
         }
         m_name = newName;
-    } else if (attr->name() == idAttributeName()) {
+    } else if (isIdAttributeName(attr->name())) {
         const AtomicString& newId = attr->value();
         if (inDocument() && document()->isHTMLDocument()) {
             HTMLDocument* document = static_cast<HTMLDocument*>(this->document());
@@ -118,7 +118,7 @@ RenderObject* HTMLAppletElement::createRenderer(RenderArena*, RenderStyle* style
         if (!codeBase.isNull())
             args.set("codeBase", codeBase);
 
-        const AtomicString& name = getAttribute(document()->isHTMLDocument() ? nameAttr : idAttributeName());
+        const AtomicString& name = document()->isHTMLDocument() ? getAttribute(nameAttr) : getIdAttribute();
         if (!name.isNull())
             args.set("name", name);
         const AtomicString& archive = getAttribute(archiveAttr);
@@ -166,26 +166,6 @@ void HTMLAppletElement::finishParsingChildren()
     HTMLPlugInElement::finishParsingChildren();
     if (renderer())
         renderer()->setNeedsLayout(true); // This will cause it to create its widget & the Java applet
-}
-
-String HTMLAppletElement::hspace() const
-{
-    return getAttribute(hspaceAttr);
-}
-
-void HTMLAppletElement::setHspace(const String &value)
-{
-    setAttribute(hspaceAttr, value);
-}
-
-String HTMLAppletElement::vspace() const
-{
-    return getAttribute(vspaceAttr);
-}
-
-void HTMLAppletElement::setVspace(const String &value)
-{
-    setAttribute(vspaceAttr, value);
 }
 
 }

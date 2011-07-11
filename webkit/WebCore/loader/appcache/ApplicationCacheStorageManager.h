@@ -19,7 +19,10 @@ class ApplicationCacheStorage;
 class ApplicationCacheStorageManager : public Noncopyable {
 public:
     ApplicationCacheStorage& cacheStorage(const String& groupName);
-
+#if OS(OLYMPIA)
+    static void reopenAll();
+    static void closeAll();
+#endif // OS(OLYMPIA)
 private:
     ApplicationCacheStorageManager();
     ~ApplicationCacheStorageManager();

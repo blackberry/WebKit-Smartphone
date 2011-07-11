@@ -1,5 +1,4 @@
 # <rdar://problem/5313536> frame-loading-via-document-write.html sometimes fails on Leopard
-fast/dom/frame-loading-via-document-write.html
 http/tests/security/frame-loading-via-document-write.html
 
 # <rdar://problem/5686552> svg/css/glyph-orientation-rounding-test.xhtml sometimes fails
@@ -21,7 +20,6 @@ transforms/3d
 # Skip test that tries to print layer tree because this will fail when HW comp is turned off
 # This can be reenabled when we fix https://bugs.webkit.org/show_bug.cgi?id=36984
 compositing/geometry/preserve-3d-switching.html
-compositing/iframes/composited-iframe.html
 compositing/layer-creation/overflow-scroll-overlap.html
 
 # These tests requires fullscreen <video> support
@@ -32,8 +30,12 @@ media/media-fullscreen-not-in-document.html
 accessibility/aria-list-and-listitem.html
 accessibility/aria-hidden-with-elements.html
 platform/mac/accessibility/aria-treegrid.html
+platform/mac/accessibility/inherited-presentational-lists.html
 platform/mac/accessibility/stale-table-rows.html
 platform/mac/accessibility/parent-of-table-row-is-table.html
+platform/mac/accessibility/aria-expanded-notifications.html
+platform/mac/accessibility/table-with-row-col-of-headers.html
+platform/mac/accessibility/table-with-zebra-rows.html
 
 # This test requires ogg codecs
 media/media-can-play-ogg.html
@@ -48,6 +50,8 @@ media/audio-delete-while-slider-thumb-clicked.html
 media/audio-delete-while-step-button-clicked.html
 media/video-controls-visible-audio-only.html
 media/video-controls-zoomed.html
+media/video-zoom-controls.html
+media/video-volume.html
 
 # Disable flakey webgl test to make the bots green again.
 # https://bugs.webkit.org/show_bug.cgi?id=33924
@@ -71,6 +75,28 @@ http/tests/media/video-play-stall-seek.html
 # IndexedDB is not yet enabled.
 storage/indexeddb
 
-# Disable the test until the mesa renderer is integrated.
-# https://bugs.webkit.org/show_bug.cgi?id=39128
+# Disable the tests until the mesa renderer is integrated.
+# https://bugs.webkit.org/show_bug.cgi?id=41545
 fast/canvas/webgl/texture-npot.html
+
+# Disable an SVG test that causes an assertion failure in debug-mode WebKit under 10.5.
+# https://bugs.webkit.org/show_bug.cgi?id=41808
+svg/filters/filter-empty-g.svg
+
+# Results depend on user defaults.
+# https://bugs.webkit.org/show_bug.cgi?id=43296
+fast/text/hyphenate-locale.html
+
+# Disable media test which fails on the Leopard Commit Bot
+# as well as presumably other leopard installs.
+# See https://bugs.webkit.org/show_bug.cgi?id=35271
+http/tests/media/video-seekable-stall.html
+
+# Disable tests which started failing after r66961
+# Failures look like an underlying platform issue
+# https://bugs.webkit.org/show_bug.cgi?id=45546
+media/video-width-height.html
+media/video-autoplay.html
+media/video-aspect-ratio.html
+media/video-play-pause-events.html
+media/video-width-height.html

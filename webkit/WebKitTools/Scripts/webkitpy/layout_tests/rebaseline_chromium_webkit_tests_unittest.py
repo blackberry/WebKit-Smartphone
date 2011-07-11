@@ -29,6 +29,7 @@
 
 """Unit tests for rebaseline_chromium_webkit_tests.py."""
 
+import os
 import unittest
 
 from webkitpy.layout_tests import port
@@ -83,6 +84,34 @@ class TestGetHostPortObject(unittest.TestCase):
         # Restore the normal port.get() function.
         port.get = old_get
 
+
+class TestRebaseliner(unittest.TestCase):
+    def make_rebaseliner(self):
+        options = MockOptions()
+        host_port_obj = port.get('test', options)
+        target_options = options
+        target_port_obj = port.get('test', target_options)
+        platform = 'test'
+        return rebaseline_chromium_webkit_tests.Rebaseliner(
+            host_port_obj, target_port_obj, platform, options)
+
+    def test_noop(self):
+        # this method tests that was can at least instantiate an object, even
+        # if there is nothing to do.
+        rebaseliner = self.make_rebaseliner()
+        self.assertNotEqual(rebaseliner, None)
+
+    def test_diff_baselines_txt(self):
+        rebaseliner = self.make_rebaseliner()
+        path = os.path.join(rebaseliner._port.layout_tests_dir(),
+                             "passes", "text-expected.txt")
+        self.assertFalse(rebaseliner._diff_baselines(path, path))
+
+    def test_diff_baselines_png(self):
+        rebaseliner = self.make_rebaseliner()
+        path = os.path.join(rebaseliner._port.layout_tests_dir(),
+                            "passes", "image-expected.png")
+        self.assertFalse(rebaseliner._diff_baselines(path, path))
 
 if __name__ == '__main__':
     unittest.main()

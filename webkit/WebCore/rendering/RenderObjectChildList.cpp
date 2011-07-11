@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2009 Apple Inc.  All rights reserved.
+ * Copyright (C) 2009, 2010 Apple Inc. All rights reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,7 +30,8 @@
 #include "AXObjectCache.h"
 #include "RenderBlock.h"
 #include "RenderCounter.h"
-#include "RenderImageGeneratedContent.h"
+#include "RenderImage.h"
+#include "RenderImageResourceStyleImage.h"
 #include "RenderInline.h"
 #include "RenderLayer.h"
 #include "RenderListItem.h"
@@ -44,7 +46,11 @@ void RenderObjectChildList::destroyLeftoverChildren()
     while (firstChild()) {
         if (firstChild()->isListMarker() || (firstChild()->style()->styleType() == FIRST_LETTER && !firstChild()->isText()))
             firstChild()->remove();  // List markers are owned by their enclosing list and so don't get destroyed by this container. Similarly, first letters are destroyed by their remaining text fragment.
-        else {
+        else if (firstChild()->isRunIn() && firstChild()->node()) {
+            firstChild()->node()->setRenderer(0);
+            firstChild()->node()->setNeedsStyleRecalc();
+            firstChild()->destroy();
+        } else {
             // Destroy any anonymous children remaining in the render tree, as well as implicit (shadow) DOM elements like those used in the engine-based text fields.
             if (firstChild()->node())
                 firstChild()->node()->setRenderer(0);
@@ -62,9 +68,12 @@ RenderObject* RenderObjectChildList::removeChildNode(RenderObject* owner, Render
     // disappears gets repainted properly.
     if (!owner->documentBeingDestroyed() && fullRemove && oldChild->m_everHadLayout) {
         oldChild->setNeedsLayoutAndPrefWidthsRecalc();
-        oldChild->repaint();
+        if (oldChild->isBody())
+            owner->view()->repaint();
+        else
+            oldChild->repaint();
     }
-        
+
     // If we have a line box wrapper, delete it.
     if (oldChild->isBox())
         toRenderBox(oldChild)->deleteLineBoxWrapper();
@@ -89,6 +98,11 @@ RenderObject* RenderObjectChildList::removeChildNode(RenderObject* owner, Render
 
         if (oldChild->isPositioned() && owner->childrenInline())
             owner->dirtyLinesFromChangedChild(oldChild);
+
+#if ENABLE(SVG)
+        // Update cached boundaries in SVG renderers, if a child is removed.
+        owner->setNeedsBoundariesUpdate();
+#endif
     }
     
     // If oldChild is the start or end of the selection, then clear the selection to
@@ -171,7 +185,7 @@ void RenderObjectChildList::appendChildNode(RenderObject* owner, RenderObject* n
 void RenderObjectChildList::insertChildNode(RenderObject* owner, RenderObject* child, RenderObject* beforeChild, bool fullInsert)
 {
     if (!beforeChild) {
-        appendChildNode(owner, child);
+        appendChildNode(owner, child, fullInsert);
         return;
     }
 
@@ -422,12 +436,14 @@ void RenderObjectChildList::updateBeforeAfterContent(RenderObject* owner, Pseudo
                 renderer->setStyle(pseudoElementStyle);
                 break;
             case CONTENT_OBJECT: {
-                RenderImageGeneratedContent* image = new (owner->renderArena()) RenderImageGeneratedContent(owner->document()); // anonymous object
+                RenderImage* image = new (owner->renderArena()) RenderImage(owner->document()); // anonymous object
                 RefPtr<RenderStyle> style = RenderStyle::create();
                 style->inheritFrom(pseudoElementStyle);
                 image->setStyle(style.release());
                 if (StyleImage* styleImage = content->image())
-                    image->setStyleImage(styleImage);
+                    image->setImageResource(RenderImageResourceStyleImage::create(styleImage));
+                else
+                    image->setImageResource(RenderImageResource::create());
                 renderer = image;
                 break;
             }

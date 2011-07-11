@@ -1,5 +1,5 @@
 /*
- * Copyright 2010, The Android Open Source Project
+ * Copyright (C) 2010 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,29 +26,64 @@
 #include "config.h"
 #include "DeviceOrientation.h"
 
-#if ENABLE(DEVICE_ORIENTATION)
-
-#include "DeviceOrientationClient.h"
-#include "DeviceOrientationEvent.h"
-#include <wtf/UnusedParam.h>
-
 namespace WebCore {
 
-DeviceOrientation::DeviceOrientation(Page* page, DeviceOrientationClient* client)
-    : m_page(page)
-    , m_client(client)
+PassRefPtr<DeviceOrientation> DeviceOrientation::create()
+{
+    return adoptRef(new DeviceOrientation);
+}
+
+PassRefPtr<DeviceOrientation> DeviceOrientation::create(bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma)
+{
+    return adoptRef(new DeviceOrientation(canProvideAlpha, alpha, canProvideBeta, beta, canProvideGamma, gamma));
+}
+
+
+DeviceOrientation::DeviceOrientation()
+    : m_canProvideAlpha(false)
+    , m_canProvideBeta(false)
+    , m_canProvideGamma(false)
 {
 }
 
-void DeviceOrientation::onDeviceOrientationChange(double alpha, double beta, double gamma)
+DeviceOrientation::DeviceOrientation(bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma)
+    : m_canProvideAlpha(canProvideAlpha)
+    , m_canProvideBeta(canProvideBeta)
+    , m_canProvideGamma(canProvideGamma)
+    , m_alpha(alpha)
+    , m_beta(beta)
+    , m_gamma(gamma)
 {
-    // FIXME: Fire DeviceOrientationEvents on the window object of all frames
-    // that are listening to orientation.
-    UNUSED_PARAM(alpha);
-    UNUSED_PARAM(beta);
-    UNUSED_PARAM(gamma);
+}
+
+double DeviceOrientation::alpha() const
+{
+    return m_alpha;
+}
+
+double DeviceOrientation::beta() const
+{
+    return m_beta;
+}
+
+double DeviceOrientation::gamma() const
+{
+    return m_gamma;
+}
+
+bool DeviceOrientation::canProvideAlpha() const
+{
+    return m_canProvideAlpha;
+}
+
+bool DeviceOrientation::canProvideBeta() const
+{
+    return m_canProvideBeta;
+}
+
+bool DeviceOrientation::canProvideGamma() const
+{
+    return m_canProvideGamma;
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(DEVICE_ORIENTATION)

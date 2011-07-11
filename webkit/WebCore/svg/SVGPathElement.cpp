@@ -1,22 +1,22 @@
 /*
-    Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -25,8 +25,9 @@
 
 #include "Attribute.h"
 #include "RenderPath.h"
+#include "RenderSVGResource.h"
 #include "SVGNames.h"
-#include "SVGParserUtilities.h"
+#include "SVGPathParserFactory.h"
 #include "SVGPathSegArc.h"
 #include "SVGPathSegClosePath.h"
 #include "SVGPathSegCurvetoCubic.h"
@@ -37,21 +38,20 @@
 #include "SVGPathSegLinetoHorizontal.h"
 #include "SVGPathSegLinetoVertical.h"
 #include "SVGPathSegList.h"
+#include "SVGPathSegListBuilder.h"
 #include "SVGPathSegMoveto.h"
 #include "SVGSVGElement.h"
 
 namespace WebCore {
 
-SVGPathElement::SVGPathElement(const QualifiedName& tagName, Document* doc)
-    : SVGStyledTransformableElement(tagName, doc)
-    , SVGTests()
-    , SVGLangSpace()
-    , SVGExternalResourcesRequired()
+inline SVGPathElement::SVGPathElement(const QualifiedName& tagName, Document* document)
+    : SVGStyledTransformableElement(tagName, document)
 {
 }
 
-SVGPathElement::~SVGPathElement()
+PassRefPtr<SVGPathElement> SVGPathElement::create(const QualifiedName& tagName, Document* document)
 {
+    return adoptRef(new SVGPathElement(tagName, document));
 }
 
 float SVGPathElement::getTotalLength()
@@ -67,9 +67,12 @@ FloatPoint SVGPathElement::getPointAtLength(float length)
     return toPathData().pointAtLength(length, ok);
 }
 
-unsigned long SVGPathElement::getPathSegAtLength(float length, ExceptionCode& ec)
+unsigned long SVGPathElement::getPathSegAtLength(float length)
 {
-    return pathSegList()->getPathSegAtLength(length, ec);
+    SVGPathParserFactory* factory = SVGPathParserFactory::self();
+    unsigned long pathSeg = 0;
+    factory->getSVGPathSegAtLengthFromSVGPathSegList(pathSegList(), length, pathSeg);
+    return pathSeg;
 }
 
 PassRefPtr<SVGPathSegClosePath> SVGPathElement::createSVGPathSegClosePath()
@@ -172,7 +175,8 @@ void SVGPathElement::parseMappedAttribute(Attribute* attr)
     if (attr->name() == SVGNames::dAttr) {
         ExceptionCode ec;
         pathSegList()->clear(ec);
-        if (!pathSegListFromSVGData(pathSegList(), attr->value(), true))
+        SVGPathParserFactory* factory = SVGPathParserFactory::self();
+        if (!factory->buildSVGPathSegListFromString(attr->value(), pathSegList(), NormalizedParsing))
             document()->accessSVGExtensions()->reportError("Problem parsing d=\"" + attr->value() + "\"");
     } else if (attr->name() == SVGNames::pathLengthAttr) {
         setPathLengthBaseValue(attr->value().toFloat());
@@ -199,13 +203,13 @@ void SVGPathElement::svgAttributeChanged(const QualifiedName& attrName)
 
     if (attrName == SVGNames::dAttr) {
         renderer->setNeedsPathUpdate();
-        renderer->setNeedsLayout(true);
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
         return;
     }
 
     if (SVGStyledTransformableElement::isKnownAttribute(attrName)) {
         renderer->setNeedsTransformUpdate();
-        renderer->setNeedsLayout(true);
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
         return;
     }
 
@@ -213,7 +217,7 @@ void SVGPathElement::svgAttributeChanged(const QualifiedName& attrName)
         || SVGTests::isKnownAttribute(attrName)
         || SVGLangSpace::isKnownAttribute(attrName)
         || SVGExternalResourcesRequired::isKnownAttribute(attrName))
-        renderer->setNeedsLayout(true);
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
 }
 
 void SVGPathElement::synchronizeProperty(const QualifiedName& attrName)
@@ -260,7 +264,10 @@ SVGPathSegList* SVGPathElement::animatedNormalizedPathSegList() const
 
 Path SVGPathElement::toPathData() const
 {
-    return pathSegList()->toPathData();
+    Path result;
+    SVGPathParserFactory* factory = SVGPathParserFactory::self();
+    factory->buildPathFromSVGPathSegList(pathSegList(), result);
+    return result;
 }
 
 }

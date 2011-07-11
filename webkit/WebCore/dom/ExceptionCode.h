@@ -61,7 +61,7 @@ namespace WebCore {
 
         // Introduced in File API:
         // http://www.w3.org/TR/file-upload/#dfn-fileerror
-#if ENABLE(FILE_READER) || ENABLE(FILE_WRITER)
+#if ENABLE(BLOB) || ENABLE(FILE_WRITER)
         NOT_READABLE_ERR = 24,
         ENCODING_ERR = 26,
 #endif
@@ -78,8 +78,11 @@ namespace WebCore {
 #if ENABLE(SVG)
         , SVGExceptionType
 #endif
-    };        
-    
+#if ENABLE(DATABASE)
+        , SQLExceptionType
+#endif
+    };
+
 
     struct ExceptionCodeDescription {
         const char* typeName; // has spaces and is suitable for use in exception description strings; maximum length is 10 characters

@@ -28,6 +28,7 @@
 #include "FloatRect.h"
 #include "IntRect.h"
 #include "IntSize.h"
+#include "FloatSize.h"
 #include "NotImplemented.h"
 #include "PaintOpenVG.h"
 #include "PlatformPathOpenVG.h"
@@ -129,7 +130,7 @@ struct PlatformPainterState {
     DashArray strokeDashArray;
     float strokeDashOffset;
 
-    IntSize shadowOffset;
+    FloatSize shadowOffset;
     float shadowBlur;
     Color shadowColor;
 
@@ -486,6 +487,13 @@ void PainterOpenVG::begin(SurfaceOpenVG* surface)
 
     m_currentSurface->setActivePainter(this);
     m_currentSurface->makeCurrent();
+
+    if (m_currentSurface->doesApplyFlipTransformationOnPainterCreation()) {
+        AffineTransform flipTransformation;
+        flipTransformation.flipY();
+        flipTransformation.translate(0, -m_currentSurface->height());
+        setSurfaceTransformation(flipTransformation);
+    }
 }
 
 void PainterOpenVG::end()
@@ -550,7 +558,7 @@ void PainterOpenVG::blitToSurface()
 
 void PainterOpenVG::beginTransparencyLayer(float opacity)
 {
-    static const VGImageFormat surfaceImageFormat = VG_sRGBA_8888_PRE;
+    static const VGImageFormat surfaceImageFormat = WEBKIT_OPENVG_NATIVE_IMAGE_FORMAT_s_8888;
 
     ASSERT(m_state);
 
@@ -636,10 +644,10 @@ void PainterOpenVG::endTransparencyLayer(int blurRadius)
         layer->surfaceImage = blurredTileImage;
     }
 
+    Color shadowColor = m_state->shadowColor;
     AffineTransform originalTransformation = m_state->surfaceTransformation;
     CompositeOperator op = m_state->compositeOperation;
     float opacity = m_state->opacity;
-    Color shadowColor = m_state->shadowColor;
 
     m_state->compositeOperation = CompositeSourceOver;
     m_state->opacity = layer->opacity;
@@ -994,7 +1002,7 @@ bool PainterOpenVG::shadowEnabled() const
     return m_state->shadowColor.isValid();
 }
 
-void PainterOpenVG::setShadow(const IntSize& offset, float blur, const Color& color)
+void PainterOpenVG::setShadow(const FloatSize& offset, float blur, const Color& color)
 {
     ASSERT(m_state);
 
@@ -1008,7 +1016,7 @@ void PainterOpenVG::setShadow(const IntSize& offset, float blur, const Color& co
 
 void PainterOpenVG::clearShadow()
 {
-    m_state->shadowOffset = IntSize();
+    m_state->shadowOffset = FloatSize();
     m_state->shadowBlur = 0.0;
     m_state->shadowColor = Color();
 }
@@ -1302,11 +1310,18 @@ void PainterOpenVG::transformAndFillPath(VGPath path, const FloatRect& rect)
     localTransformation.setE(rect.x());
     localTransformation.setF(rect.y());
 
-    // Make sure the path don't disappear when zooming out a lot.
-    if (rect.width() * fabs(m_state->surfaceTransformation.a()) < 1.0)
-        localTransformation.setA(1.0 / fabs(m_state->surfaceTransformation.a()));
-    if (rect.height() * fabs(m_state->surfaceTransformation.d()) < 1.0)
-        localTransformation.setD(1.0 / fabs(m_state->surfaceTransformation.d()));
+
+    // Make sure the path don't disappear when zooming out a lot,
+    // so link underlines are still visible.
+    // Only do this if the transform is a simple scaling transform.
+    // If there's a rotation component, a and d do not necessarily
+    // contain the current scale factors.
+    if (m_state->surfaceTransformation.b() == 0 && m_state->surfaceTransformation.c() == 0) {
+        if (rect.width() * fabs(m_state->surfaceTransformation.a()) < 1.0)
+            localTransformation.setA(1.0 / fabs(m_state->surfaceTransformation.a()));
+        if (rect.height() * fabs(m_state->surfaceTransformation.d()) < 1.0)
+            localTransformation.setD(1.0 / fabs(m_state->surfaceTransformation.d()));
+    }
 
     AffineTransform transformation = m_state->surfaceTransformation;
     transformation.multLeft(localTransformation);
@@ -1391,7 +1406,7 @@ void PainterOpenVG::drawRoundedRect(const FloatRect& rect, const IntSize& topLef
 
     if (shadowEnabled() && !m_drawingShadow) {
         beginDrawShadow();
-        drawRect(rect, specifiedPaintModes);
+        drawRoundedRect(rect, topLeft, topRight, bottomLeft, bottomRight, specifiedPaintModes);
         endDrawShadow();
     } else
         m_currentSurface->makeCurrent();

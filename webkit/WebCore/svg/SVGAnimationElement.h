@@ -1,25 +1,25 @@
 /*
-    Copyright (C) 2004, 2005 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006 Rob Buis <buis@kde.org>
-    Copyright (C) 2007 Eric Seidel <eric@webkit.org>
-    Copyright (C) 2008 Apple Inc. All rights reserved.
-    Copyright (C) 2008 Cameron McCormack <cam@mcc.id.au>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006 Rob Buis <buis@kde.org>
+ * Copyright (C) 2007 Eric Seidel <eric@webkit.org>
+ * Copyright (C) 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2008 Cameron McCormack <cam@mcc.id.au>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #ifndef SVGAnimationElement_h
 #define SVGAnimationElement_h
@@ -44,13 +44,6 @@ namespace WebCore {
                                 public SVGExternalResourcesRequired,
                                 public ElementTimeControl {
     public:
-        SVGAnimationElement(const QualifiedName&, Document*);
-        virtual ~SVGAnimationElement();
-
-        virtual void parseMappedAttribute(Attribute*);
-        virtual void attributeChanged(Attribute*, bool preserveDecls);
-        virtual void synchronizeProperty(const QualifiedName&);
-
         // SVGAnimationElement
         float getStartTime() const;
         float getCurrentTime() const;
@@ -65,6 +58,10 @@ namespace WebCore {
         static bool attributeIsCSS(const String& attributeName);
 
     protected:
+        SVGAnimationElement(const QualifiedName&, Document*);
+
+        virtual void parseMappedAttribute(Attribute*);
+
         enum CalcMode { CalcModeDiscrete, CalcModeLinear, CalcModePaced, CalcModeSpline };
         CalcMode calcMode() const;
         
@@ -93,6 +90,9 @@ namespace WebCore {
         virtual void endedActiveInterval();
         
     private:
+        virtual void attributeChanged(Attribute*, bool preserveDecls);
+        virtual void synchronizeProperty(const QualifiedName&);
+
         virtual bool calculateFromAndToValues(const String& fromString, const String& toString) = 0;
         virtual bool calculateFromAndByValues(const String& fromString, const String& byString) = 0;
         virtual void calculateAnimatedValue(float percentage, unsigned repeat, SVGSMILElement* resultElement) = 0;
@@ -104,8 +104,8 @@ namespace WebCore {
         float calculatePercentFromKeyPoints(float percent) const;
         void currentValuesFromKeyPoints(float percent, float& effectivePercent, String& from, String& to) const;
         float calculatePercentForSpline(float percent, unsigned splineIndex) const;
+        unsigned calculateKeyTimesIndex(float percent) const;
         
-    protected:
         // SVGExternalResourcesRequired
         DECLARE_ANIMATED_PROPERTY(SVGAnimationElement, SVGNames::externalResourcesRequiredAttr, bool, ExternalResourcesRequired, externalResourcesRequired)
 

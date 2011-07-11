@@ -948,6 +948,17 @@ void GraphicsContext::drawConvexPolygon(size_t npoints, const FloatPoint* points
     }
 }
 
+void GraphicsContext::clipConvexPolygon(size_t numPoints, const FloatPoint* points, bool antialiased)
+{
+    if (paintingDisabled())
+        return;
+
+    if (numPoints <= 1)
+        return;
+    
+    // FIXME: IMPLEMENT!!
+}
+
 void GraphicsContext::fillRect(const FloatRect& rect, const Color& color, ColorSpace colorSpace)
 {
     if (paintingDisabled() || !m_data->m_opacity)
@@ -1051,7 +1062,7 @@ void GraphicsContext::drawLineForText(const IntPoint& origin, int width, bool pr
     setStrokeStyle(oldStyle);
 }
 
-void GraphicsContext::drawLineForMisspellingOrBadGrammar(const IntPoint&, int width, bool grammar)
+void GraphicsContext::drawLineForTextChecking(const IntPoint&, int width, TextCheckingLineStyle style)
 {
     notImplemented();
 }
@@ -1149,12 +1160,12 @@ void GraphicsContext::concatCTM(const AffineTransform& transform)
     m_data->concatCTM(transform);
 }
 
-TransformationMatrix& GraphicsContext::affineTransform()
+AffineTransform& GraphicsContext::affineTransform()
 {
     return m_data->m_transform;
 }
 
-const TransformationMatrix& GraphicsContext::affineTransform() const
+const AffineTransform& GraphicsContext::affineTransform() const
 {
     return m_data->m_transform;
 }
@@ -1249,16 +1260,16 @@ void GraphicsContext::fillRoundedRect(const IntRect& fillRect, const IntSize& to
     if (!m_data->m_dc)
         return;
 
-    IntSize shadowSize;
-    int shadowBlur = 0;
+    FloatSize shadowOffset;
+    float shadowBlur = 0;
     Color shadowColor;
         
-    getShadow(shadowSize, shadowBlur, shadowColor);
+    getShadow(shadowOffset, shadowBlur, shadowColor);
     
     IntRect dstRect = fillRect;
     
-    dstRect.move(shadowSize);
-    dstRect.inflate(shadowBlur);
+    dstRect.move(stableRound(shadowOffset.width()), stableRound(shadowOffset.height()));
+    dstRect.inflate(stableRound(shadowBlur));
     dstRect = m_data->mapRect(dstRect);
   
     FloatSize newTopLeft(m_data->mapSize(topLeft));
@@ -1502,7 +1513,7 @@ void GraphicsContext::fillRect(const FloatRect& r, const Gradient* gradient)
     int width = rect.width();
     int height = rect.height();
     FloatSize d = gradient->p1() - gradient->p0();
-    bool vertical = abs(d.height()) > abs(d.width());
+    bool vertical = fabs(d.height()) > fabs(d.width());
     for (size_t i = 0; i < numStops; ++i) {
         const Gradient::ColorStop& stop = stops[i];
         int iTv = i ? 2 * i - 1 : 0;
@@ -1537,20 +1548,19 @@ AffineTransform GraphicsContext::getCTM() const
     return m_data->m_transform;
 }
 
-void GraphicsContext::clipToImageBuffer(const FloatRect&, const ImageBuffer*)
-{
-    notImplemented();
-}
-
 void GraphicsContext::fillRect(const FloatRect& rect)
 {
+    savePlatformState();
+
     if (m_common->state.fillGradient)
         fillRect(rect, m_common->state.fillGradient.get());
     else
         fillRect(rect, fillColor(), DeviceColorSpace);
+
+    restorePlatformState();
 }
 
-void GraphicsContext::setPlatformShadow(const IntSize&, int, const Color&, ColorSpace)
+void GraphicsContext::setPlatformShadow(const FloatSize&, float, const Color&, ColorSpace)
 {
     notImplemented();
 }
@@ -1672,17 +1682,17 @@ void GraphicsContext::drawText(const SimpleFontData* fontData, const GlyphBuffer
         return;
     }
 
-    IntSize shadowSize;
-    int shadowBlur = 0;
+    FloatSize shadowOffset;
+    float shadowBlur = 0;
     Color shadowColor;
     bool hasShadow = textDrawingMode() == cTextFill
-        && getShadow(shadowSize, shadowBlur, shadowColor)
+        && getShadow(shadowOffset, shadowBlur, shadowColor)
         && shadowColor.alpha();
     COLORREF shadowRGBColor;
     FloatPoint trShadowPoint;
     if (hasShadow) {
         shadowRGBColor = RGB(shadowColor.red(), shadowColor.green(), shadowColor.blue());
-        trShadowPoint = m_data->mapPoint(startPoint + shadowSize);
+        trShadowPoint = m_data->mapPoint(startPoint + shadowOffset);
     }
 
     HGDIOBJ hOldFont = SelectObject(m_data->m_dc, hFont);
@@ -1853,7 +1863,7 @@ void GraphicsContext::paintTextField(const IntRect& rect, unsigned state)
     FillRect(dc, &rectWin, reinterpret_cast<HBRUSH>(((state & DFCS_INACTIVE) ? COLOR_BTNFACE : COLOR_WINDOW) + 1));
 }
 
-void GraphicsContext::drawBitmap(SharedBitmap* bmp, const IntRect& dstRectIn, const IntRect& srcRect, CompositeOperator compositeOp)
+void GraphicsContext::drawBitmap(SharedBitmap* bmp, const IntRect& dstRectIn, const IntRect& srcRect, ColorSpace styleColorSpace, CompositeOperator compositeOp)
 {
     if (!m_data->m_opacity)
         return;
@@ -1876,7 +1886,7 @@ void GraphicsContext::drawBitmap(SharedBitmap* bmp, const IntRect& dstRectIn, co
 }
 
 void GraphicsContext::drawBitmapPattern(SharedBitmap* bmp, const FloatRect& tileRectIn, const AffineTransform& patternTransform,
-                const FloatPoint& phase, CompositeOperator op, const FloatRect& destRectIn, const IntSize& origSourceSize)
+                const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator op, const FloatRect& destRectIn, const IntSize& origSourceSize)
 {
     if (!m_data->m_opacity)
         return;
@@ -1897,7 +1907,7 @@ void GraphicsContext::drawBitmapPattern(SharedBitmap* bmp, const FloatRect& tile
     AffineTransform transform = m_data->m_transform;
     transform.translate(moved.width(), moved.height());
 
-    bmp->drawPattern(dc, transform, tileRectIn, patternTransform, phase, op, destRectIn, origSourceSize);
+    bmp->drawPattern(dc, transform, tileRectIn, patternTransform, phase, styleColorSpace, op, destRectIn, origSourceSize);
 
     if (!bmp->hasAlpha())
         transparentDC.fillAlphaChannel();

@@ -29,8 +29,8 @@
 #ifndef AnimationBase_h
 #define AnimationBase_h
 
-#include "AtomicString.h"
 #include <wtf/HashMap.h>
+#include <wtf/text/AtomicString.h>
 
 namespace WebCore {
 
@@ -42,7 +42,7 @@ class Element;
 class Node;
 class RenderObject;
 class RenderStyle;
-class TimingFunction;
+struct TimingFunction;
 
 class AnimationBase : public RefCounted<AnimationBase> {
     friend class CompositeAnimation;
@@ -69,6 +69,7 @@ public:
         AnimationStateLooping,              // response received, animation running, loop timer running, waiting for fire
         AnimationStateEnding,               // received, animation running, end timer running, waiting for fire
         AnimationStatePausedWaitTimer,      // in pause mode when animation started
+        AnimationStatePausedWaitStyleAvailable, // in pause mode when waiting for style setup
         AnimationStatePausedWaitResponse,   // animation paused when in STARTING state
         AnimationStatePausedRun,            // animation paused when in LOOPING or ENDING state
         AnimationStateDone,                 // end timer fired, animation finished and removed
@@ -144,9 +145,10 @@ public:
 
     // Does this animation/transition involve the given property?
     virtual bool affectsProperty(int /*property*/) const { return false; }
-    bool isAnimatingProperty(int property, bool isRunningNow) const
+
+    bool isAnimatingProperty(int property, bool acceleratedOnly, bool isRunningNow) const
     {
-        if (m_fallbackAnimating)
+        if (acceleratedOnly && !m_isAccelerated)
             return false;
             
         if (isRunningNow)
@@ -197,7 +199,7 @@ protected:
 
     void goIntoEndingOrLoopingState();
 
-    bool isFallbackAnimating() const { return m_fallbackAnimating; }
+    bool isAccelerated() const { return m_isAccelerated; }
 
     static bool propertiesEqual(int prop, const RenderStyle* a, const RenderStyle* b);
     static int getPropertyAtIndex(int, bool& isShorthand);
@@ -220,7 +222,7 @@ protected:
 
     RefPtr<Animation> m_animation;
     CompositeAnimation* m_compAnim;
-    bool m_fallbackAnimating;       // true when animating an accelerated property but have to fall back to software
+    bool m_isAccelerated;
     bool m_transformFunctionListValid;
     double m_totalDuration, m_nextIterationDuration;
     

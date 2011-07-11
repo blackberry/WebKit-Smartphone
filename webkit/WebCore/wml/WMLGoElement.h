@@ -22,7 +22,7 @@
 #define WMLGoElement_h
 
 #if ENABLE(WML)
-#include "FormDataBuilder.h"
+#include "FormSubmission.h"
 #include "WMLTaskElement.h"
 
 namespace WebCore {
@@ -33,6 +33,8 @@ class WMLPostfieldElement;
 
 class WMLGoElement : public WMLTaskElement {
 public:
+    static PassRefPtr<WMLGoElement> create(const QualifiedName&, Document*);
+
     WMLGoElement(const QualifiedName& tagName, Document*);
 
     void registerPostfieldElement(WMLPostfieldElement*);
@@ -48,7 +50,7 @@ private:
     PassRefPtr<FormData> createFormData(const CString& boundary);
 
     Vector<WMLPostfieldElement*> m_postfieldElements;
-    FormDataBuilder m_formDataBuilder;
+    FormSubmission::Attributes m_formAttributes;
 };
 
 }

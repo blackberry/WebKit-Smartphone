@@ -36,14 +36,12 @@ namespace WebCore {
 
 class AnimationBase;
 class AnimationControllerPrivate;
-class AtomicString;
 class Document;
 class Element;
 class Frame;
 class Node;
 class RenderObject;
 class RenderStyle;
-class String;
 
 class AnimationController {
 public:
@@ -61,7 +59,8 @@ public:
     bool pauseTransitionAtTime(RenderObject*, const String& property, double t); // To be used only for testing
     unsigned numberOfActiveAnimations() const; // To be used only for testing
     
-    bool isAnimatingPropertyOnRenderer(RenderObject*, CSSPropertyID, bool isRunningNow = true) const;
+    bool isRunningAnimationOnRenderer(RenderObject*, CSSPropertyID, bool isRunningNow = true) const;
+    bool isRunningAcceleratedAnimationOnRenderer(RenderObject*, CSSPropertyID, bool isRunningNow = true) const;
 
     void suspendAnimations(Document*);
     void resumeAnimations(Document*);

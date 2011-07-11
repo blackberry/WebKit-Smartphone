@@ -24,9 +24,9 @@
 #include "qwebpage_p.h"
 #include "qwebplugindatabase_p.h"
 
+#include "AbstractDatabase.h"
 #include "Cache.h"
 #include "CrossOriginPreflightResultCache.h"
-#include "Database.h"
 #include "FontCache.h"
 #include "Page.h"
 #include "PageCache.h"
@@ -34,6 +34,7 @@
 #include "KURL.h"
 #include "PlatformString.h"
 #include "IconDatabase.h"
+#include "PluginDatabase.h"
 #include "Image.h"
 #include "IntSize.h"
 #include "ApplicationCacheStorage.h"
@@ -80,16 +81,26 @@ public:
 typedef QHash<int, QPixmap> WebGraphicHash;
 Q_GLOBAL_STATIC(WebGraphicHash, _graphics)
 
+static void earlyClearGraphics()
+{
+    _graphics()->clear();
+}
+
 static WebGraphicHash* graphics()
 {
     WebGraphicHash* hash = _graphics();
 
     if (hash->isEmpty()) {
+
+        // prevent ~QPixmap running after ~QApplication (leaks native pixmaps)
+        qAddPostRoutine(earlyClearGraphics);
+
         hash->insert(QWebSettings::MissingImageGraphic, QPixmap(QLatin1String(":webkit/resources/missingImage.png")));
         hash->insert(QWebSettings::MissingPluginGraphic, QPixmap(QLatin1String(":webkit/resources/nullPlugin.png")));
         hash->insert(QWebSettings::DefaultFrameIconGraphic, QPixmap(QLatin1String(":webkit/resources/urlIcon.png")));
         hash->insert(QWebSettings::TextAreaSizeGripCornerGraphic, QPixmap(QLatin1String(":webkit/resources/textAreaResizeCorner.png")));
         hash->insert(QWebSettings::DeleteButtonGraphic, QPixmap(QLatin1String(":webkit/resources/deleteButton.png")));
+        hash->insert(QWebSettings::InputSpeechButtonGraphic, QPixmap(QLatin1String(":webkit/resources/inputSpeech.png")));
     }
 
     return hash;
@@ -184,9 +195,10 @@ void QWebSettingsPrivate::apply()
                                       global->attributes.value(QWebSettings::SpatialNavigationEnabled));
         settings->setSpatialNavigationEnabled(value);
 
-        value = attributes.value(QWebSettings::DOMPasteAllowed,
-                                      global->attributes.value(QWebSettings::DOMPasteAllowed));
+        value = attributes.value(QWebSettings::JavascriptCanAccessClipboard,
+                                      global->attributes.value(QWebSettings::JavascriptCanAccessClipboard));
         settings->setDOMPasteAllowed(value);
+        settings->setJavaScriptCanAccessClipboard(value);
 
         value = attributes.value(QWebSettings::DeveloperExtrasEnabled,
                                       global->attributes.value(QWebSettings::DeveloperExtrasEnabled));
@@ -205,10 +217,6 @@ void QWebSettingsPrivate::apply()
         QString storagePath = !localStoragePath.isEmpty() ? localStoragePath : global->localStoragePath;
         settings->setLocalStorageDatabasePath(storagePath);
 
-        value = attributes.value(QWebSettings::ZoomTextOnly,
-                                 global->attributes.value(QWebSettings::ZoomTextOnly));
-        settings->setZoomMode(value ? WebCore::ZoomTextOnly : WebCore::ZoomPage);
-
         value = attributes.value(QWebSettings::PrintElementBackgrounds,
                                       global->attributes.value(QWebSettings::PrintElementBackgrounds));
         settings->setShouldPrintBackgrounds(value);
@@ -216,7 +224,7 @@ void QWebSettingsPrivate::apply()
 #if ENABLE(DATABASE)
         value = attributes.value(QWebSettings::OfflineStorageDatabaseEnabled,
                                       global->attributes.value(QWebSettings::OfflineStorageDatabaseEnabled));
-        WebCore::Database::setIsAvailable(value);
+        WebCore::AbstractDatabase::setIsAvailable(value);
 #endif
 
         value = attributes.value(QWebSettings::OfflineWebApplicationCacheEnabled,
@@ -235,10 +243,6 @@ void QWebSettingsPrivate::apply()
                                       global->attributes.value(QWebSettings::LocalContentCanAccessFileUrls));
         settings->setAllowFileAccessFromFileURLs(value);
 
-        value = attributes.value(QWebSettings::JavaScriptCanAccessClipboard,
-                                      global->attributes.value(QWebSettings::JavaScriptCanAccessClipboard));
-        settings->setJavaScriptCanAccessClipboard(value);
-
         value = attributes.value(QWebSettings::XSSAuditingEnabled,
                                       global->attributes.value(QWebSettings::XSSAuditingEnabled));
         settings->setXSSAuditorEnabled(value);
@@ -248,6 +252,10 @@ void QWebSettingsPrivate::apply()
                                       global->attributes.value(QWebSettings::TiledBackingStoreEnabled));
         settings->setTiledBackingStoreEnabled(value);
 #endif
+
+        value = attributes.value(QWebSettings::SiteSpecificQuirksEnabled,
+                                      global->attributes.value(QWebSettings::SiteSpecificQuirksEnabled));
+        settings->setNeedsSiteSpecificQuirks(value);
 
         settings->setUsesPageCache(WebCore::pageCache()->capacity());
     } else {
@@ -376,8 +384,6 @@ QWebSettings* QWebSettings::globalSettings()
         recording visited pages in the history and storing web page icons. This is disabled by default.
     \value JavascriptCanOpenWindows Specifies whether JavaScript programs
         can open new windows. This is disabled by default.
-    \value DOMPasteAllowed Specifies whether JavaScript programs can
-        read clipboard contents.
     \value JavascriptCanAccessClipboard Specifies whether JavaScript programs
         can read or write to the clipboard. This is disabled by default.
     \value DeveloperExtrasEnabled Enables extra tools for Web developers.
@@ -433,6 +439,8 @@ QWebSettings* QWebSettings::globalSettings()
         and at other times scrolling the page itself. For this reason iframes and framesets are
         barely usable on touch devices. This will flatten all the frames to become one scrollable page.
         This is disabled by default.
+    \value SiteSpecificQuirksEnabled This setting enables WebKit's workaround for broken sites. It is
+        enabled by default.
 */
 
 /*!
@@ -446,12 +454,32 @@ QWebSettings::QWebSettings()
     d->fontSizes.insert(QWebSettings::MinimumLogicalFontSize, 0);
     d->fontSizes.insert(QWebSettings::DefaultFontSize, 16);
     d->fontSizes.insert(QWebSettings::DefaultFixedFontSize, 13);
-    d->fontFamilies.insert(QWebSettings::StandardFont, QLatin1String("Arial"));
-    d->fontFamilies.insert(QWebSettings::FixedFont, QLatin1String("Courier New"));
-    d->fontFamilies.insert(QWebSettings::SerifFont, QLatin1String("Times New Roman"));
-    d->fontFamilies.insert(QWebSettings::SansSerifFont, QLatin1String("Arial"));
-    d->fontFamilies.insert(QWebSettings::CursiveFont, QLatin1String("Arial"));
-    d->fontFamilies.insert(QWebSettings::FantasyFont, QLatin1String("Arial"));
+
+    QFont defaultFont;
+    defaultFont.setStyleHint(QFont::Serif);
+    d->fontFamilies.insert(QWebSettings::StandardFont, defaultFont.defaultFamily());
+    d->fontFamilies.insert(QWebSettings::SerifFont, defaultFont.defaultFamily());
+
+#if QT_VERSION >= QT_VERSION_CHECK(4, 7, 0)
+    defaultFont.setStyleHint(QFont::Fantasy);
+    d->fontFamilies.insert(QWebSettings::FantasyFont, defaultFont.defaultFamily());
+
+    defaultFont.setStyleHint(QFont::Cursive);
+    d->fontFamilies.insert(QWebSettings::CursiveFont, defaultFont.defaultFamily());
+#else
+    d->fontFamilies.insert(QWebSettings::FantasyFont, defaultFont.defaultFamily());
+    d->fontFamilies.insert(QWebSettings::CursiveFont, defaultFont.defaultFamily());
+#endif
+
+    defaultFont.setStyleHint(QFont::SansSerif);
+    d->fontFamilies.insert(QWebSettings::SansSerifFont, defaultFont.defaultFamily());
+
+#if QT_VERSION >= QT_VERSION_CHECK(4, 7, 0)
+    defaultFont.setStyleHint(QFont::Monospace);
+#else
+    defaultFont.setStyleHint(QFont::TypeWriter);
+#endif
+    d->fontFamilies.insert(QWebSettings::FixedFont, defaultFont.defaultFamily());
 
     d->attributes.insert(QWebSettings::AutoLoadImages, true);
     d->attributes.insert(QWebSettings::DnsPrefetchEnabled, false);
@@ -469,6 +497,7 @@ QWebSettings::QWebSettings()
     d->attributes.insert(QWebSettings::WebGLEnabled, false);
     d->attributes.insert(QWebSettings::TiledBackingStoreEnabled, false);
     d->attributes.insert(QWebSettings::FrameFlatteningEnabled, false);
+    d->attributes.insert(QWebSettings::SiteSpecificQuirksEnabled, true);
     d->offlineStorageDefaultQuota = 5 * 1024 * 1024;
     d->defaultTextEncoding = QLatin1String("iso-8859-1");
 }
@@ -1061,6 +1090,14 @@ void QWebSettings::enablePersistentStorage(const QString& path)
     QWebSettings::globalSettings()->setAttribute(QWebSettings::LocalStorageEnabled, true);
     QWebSettings::globalSettings()->setAttribute(QWebSettings::OfflineStorageDatabaseEnabled, true);
     QWebSettings::globalSettings()->setAttribute(QWebSettings::OfflineWebApplicationCacheEnabled, true);
+
+#if ENABLE(NETSCAPE_PLUGIN_METADATA_CACHE)
+    QFileInfo info(storagePath);
+    if (info.isDir() && info.isWritable()) {
+        WebCore::PluginDatabase::setPersistentMetadataCacheEnabled(true);
+        WebCore::PluginDatabase::setPersistentMetadataCachePath(storagePath);
+    }
+#endif
 }
 
 /*!

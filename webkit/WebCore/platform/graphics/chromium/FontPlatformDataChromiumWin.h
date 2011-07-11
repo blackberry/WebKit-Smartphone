@@ -29,14 +29,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef FontPlatformDataWin_h
-#define FontPlatformDataWin_h
+#ifndef FontPlatformDataChromiumWin_h
+#define FontPlatformDataChromiumWin_h
 
 #include "config.h"
 
-#include "StringImpl.h"
+#include <wtf/Forward.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
+#include <wtf/text/StringImpl.h> 
 
 #include <usp10.h>
 
@@ -45,7 +46,6 @@ typedef struct HFONT__ *HFONT;
 namespace WebCore {
 
 class FontDescription;
-class String;
 
 class FontPlatformData {
 public:
@@ -131,4 +131,4 @@ private:
 
 } // WebCore
 
-#endif // FontPlatformDataWin_h
+#endif // FontPlatformDataChromiumWin_h

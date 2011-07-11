@@ -49,6 +49,7 @@
 #include "DragController.h"
 #include "DragData.h"
 #include "EditorClientQt.h"
+#include "SchemeRegistry.h"
 #include "SecurityOrigin.h"
 #include "Settings.h"
 #include "Page.h"
@@ -80,6 +81,7 @@
 #include "Cache.h"
 #include "runtime/InitializeThreading.h"
 #include "PageGroup.h"
+#include "GeolocationPermissionClientQt.h"
 #include "NotificationPresenterClientQt.h"
 #include "PageClientQt.h"
 #include "WorkerThread.h"
@@ -218,9 +220,6 @@ const char* QWebPagePrivate::editorCommandForWebActions(QWebPage::WebAction acti
     return 0;
 }
 
-// If you change this make sure to also adjust the docs for QWebPage::userAgentForUrl
-#define WEBKIT_VERSION "527+"
-
 static inline DragOperation dropActionToDragOp(Qt::DropActions actions)
 {
     unsigned result = 0;
@@ -254,7 +253,7 @@ static inline Qt::DropAction dragOpToDropAction(unsigned actions)
 QWebPagePrivate::QWebPagePrivate(QWebPage *qq)
     : q(qq)
     , client(0)
-#if QT_VERSION < 0x040600
+#if QT_VERSION < QT_VERSION_CHECK(4, 6, 0)
     , view(0)
 #endif
     , clickCausedFocus(false)
@@ -264,15 +263,20 @@ QWebPagePrivate::QWebPagePrivate(QWebPage *qq)
     , inspectorIsInternalOnly(false)
 {
     WebCore::InitializeLoggingChannelsIfNecessary();
-    JSC::initializeThreading();
+    ScriptController::initializeThreading();
     WTF::initializeMainThread();
     WebCore::SecurityOrigin::setLocalLoadPolicy(WebCore::SecurityOrigin::AllowLocalLoadsForLocalAndSubstituteData);
+#if QT_VERSION < QT_VERSION_CHECK(4, 7, 0)
+    WebCore::Font::setCodePath(WebCore::Font::Complex);
+#endif
 
-    chromeClient = new ChromeClientQt(q);
-    contextMenuClient = new ContextMenuClientQt();
-    editorClient = new EditorClientQt(q);
-    page = new Page(chromeClient, contextMenuClient, editorClient,
-                    new DragClientQt(q), new InspectorClientQt(q), 0, 0, 0);
+    Page::PageClients pageClients;
+    pageClients.chromeClient = new ChromeClientQt(q);
+    pageClients.contextMenuClient = new ContextMenuClientQt();
+    pageClients.editorClient = new EditorClientQt(q);
+    pageClients.dragClient = new DragClientQt(q);
+    pageClients.inspectorClient = new InspectorClientQt(q);
+    page = new Page(pageClients);
 
     settings = new QWebSettings(page->settings());
 
@@ -299,7 +303,7 @@ QWebPagePrivate::QWebPagePrivate(QWebPage *qq)
     PageGroup::setShouldTrackVisitedLinks(true);
     
 #if ENABLE(NOTIFICATIONS)    
-    notificationPresenterClient = new NotificationPresenterClientQt();
+    NotificationPresenterClientQt::notificationPresenter()->addClient();
 #endif
 }
 
@@ -315,11 +319,11 @@ QWebPagePrivate::~QWebPagePrivate()
     delete page;
     
 #if ENABLE(NOTIFICATIONS)
-    delete notificationPresenterClient;
+    NotificationPresenterClientQt::notificationPresenter()->removeClient();
 #endif
 }
 
-WebCore::Page* QWebPagePrivate::core(QWebPage* page)
+WebCore::Page* QWebPagePrivate::core(const QWebPage* page)
 {
     return page->d->page;
 }
@@ -590,7 +594,7 @@ void QWebPagePrivate::timerEvent(QTimerEvent *ev)
     if (timerId == tripleClickTimer.timerId())
         tripleClickTimer.stop();
     else
-        q->QObject::timerEvent(ev);
+        q->timerEvent(ev);
 }
 
 void QWebPagePrivate::mouseMoveEvent(QGraphicsSceneMouseEvent* ev)
@@ -1008,7 +1012,7 @@ void QWebPagePrivate::dragEnterEvent(QGraphicsSceneDragDropEvent* ev)
     Qt::DropAction action = dragOpToDropAction(page->dragController()->dragEntered(&dragData));
     ev->setDropAction(action);
     if (action != Qt::IgnoreAction)
-        ev->accept();
+        ev->acceptProposedAction();
 #endif
 }
 
@@ -1021,7 +1025,7 @@ void QWebPagePrivate::dragEnterEvent(QDragEnterEvent* ev)
     ev->setDropAction(action);
     // We must accept this event in order to receive the drag move events that are sent
     // while the drag and drop action is in progress.
-    ev->accept();
+    ev->acceptProposedAction();
 #endif
 }
 
@@ -1051,7 +1055,7 @@ void QWebPagePrivate::dragMoveEvent(QGraphicsSceneDragDropEvent* ev)
     Qt::DropAction action = dragOpToDropAction(page->dragController()->dragUpdated(&dragData));
     ev->setDropAction(action);
     if (action != Qt::IgnoreAction)
-        ev->accept();
+        ev->acceptProposedAction();
 #endif
 }
 
@@ -1065,7 +1069,7 @@ void QWebPagePrivate::dragMoveEvent(QDragMoveEvent* ev)
     ev->setDropAction(action);
     // We must accept this event in order to receive the drag move events that are sent
     // while the drag and drop action is in progress.
-    ev->accept();
+    ev->acceptProposedAction();
 #endif
 }
 
@@ -1075,7 +1079,7 @@ void QWebPagePrivate::dropEvent(QGraphicsSceneDragDropEvent* ev)
     DragData dragData(ev->mimeData(), ev->pos().toPoint(),
             QCursor::pos(), dropActionToDragOp(ev->possibleActions()));
     if (page->dragController()->performDrag(&dragData))
-        ev->accept();
+        ev->acceptProposedAction();
 #endif
 }
 
@@ -1087,7 +1091,7 @@ void QWebPagePrivate::dropEvent(QDropEvent* ev)
     DragData dragData(ev->mimeData(), ev->pos(), QCursor::pos(),
                       dropActionToDragOp(Qt::DropAction(ev->dropAction())));
     if (page->dragController()->performDrag(&dragData))
-        ev->accept();
+        ev->acceptProposedAction();
 #endif
 }
 
@@ -1128,7 +1132,7 @@ void QWebPagePrivate::inputMethodEvent(QInputMethodEvent *ev)
 {
     WebCore::Frame *frame = page->focusController()->focusedOrMainFrame();
     WebCore::Editor *editor = frame->editor();
-#if QT_VERSION >= 0x040600
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
     QInputMethodEvent::Attribute selection(QInputMethodEvent::Selection, 0, 0, QVariant());
 #endif
 
@@ -1169,7 +1173,7 @@ void QWebPagePrivate::inputMethodEvent(QInputMethodEvent *ev)
             }
             break;
         }
-#if QT_VERSION >= 0x040600
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
         case QInputMethodEvent::Selection: {
             selection = a;
             hasSelection = true;
@@ -1187,7 +1191,7 @@ void QWebPagePrivate::inputMethodEvent(QInputMethodEvent *ev)
         // 3. populated preedit with a selection attribute, and start/end of 0 or non-0 updates selection of supplied preedit text
         // 4. otherwise event is updating supplied pre-edit text
         QString preedit = ev->preeditString();
-#if QT_VERSION >= 0x040600
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
         if (hasSelection) {
             QString text = (renderTextControl) ? QString(renderTextControl->text()) : QString();
             if (preedit.isEmpty() && selection.start + selection.length > 0)
@@ -1197,31 +1201,105 @@ void QWebPagePrivate::inputMethodEvent(QInputMethodEvent *ev)
                                    (selection.length < 0) ? selection.start : selection.start + selection.length);
         } else
 #endif
-            editor->setComposition(preedit, underlines, preedit.length(), 0);
+            if (!preedit.isEmpty())
+                editor->setComposition(preedit, underlines, preedit.length(), 0);
     }
 
     ev->accept();
 }
 
+#ifndef QT_NO_PROPERTIES
+typedef struct {
+    const char* name;
+    double deferredRepaintDelay;
+    double initialDeferredRepaintDelayDuringLoading;
+    double maxDeferredRepaintDelayDuringLoading;
+    double deferredRepaintDelayIncrementDuringLoading;
+} QRepaintThrottlingPreset;
+
 void QWebPagePrivate::dynamicPropertyChangeEvent(QDynamicPropertyChangeEvent* event)
 {
     if (event->propertyName() == "_q_viewMode") {
-        QString mode = q->property("_q_viewMode").toString();
-        if (mode != viewMode) {
-            viewMode = mode;
-            WebCore::Frame* frame = QWebFramePrivate::core(q->mainFrame());
-            WebCore::FrameView* view = frame->view();
-            frame->document()->updateStyleSelector();
-            view->layout();
-        }
+        page->setViewMode(Page::stringToViewMode(q->property("_q_viewMode").toString()));
     } else if (event->propertyName() == "_q_HTMLTokenizerChunkSize") {
         int chunkSize = q->property("_q_HTMLTokenizerChunkSize").toInt();
         q->handle()->page->setCustomHTMLTokenizerChunkSize(chunkSize);
     } else if (event->propertyName() == "_q_HTMLTokenizerTimeDelay") {
         double timeDelay = q->property("_q_HTMLTokenizerTimeDelay").toDouble();
         q->handle()->page->setCustomHTMLTokenizerTimeDelay(timeDelay);
+    } else if (event->propertyName() == "_q_RepaintThrottlingDeferredRepaintDelay") {
+        double p = q->property("_q_RepaintThrottlingDeferredRepaintDelay").toDouble();
+        FrameView::setRepaintThrottlingDeferredRepaintDelay(p);
+    } else if (event->propertyName() == "_q_RepaintThrottlingnInitialDeferredRepaintDelayDuringLoading") {
+        double p = q->property("_q_RepaintThrottlingnInitialDeferredRepaintDelayDuringLoading").toDouble();
+        FrameView::setRepaintThrottlingnInitialDeferredRepaintDelayDuringLoading(p);
+    } else if (event->propertyName() == "_q_RepaintThrottlingMaxDeferredRepaintDelayDuringLoading") {
+        double p = q->property("_q_RepaintThrottlingMaxDeferredRepaintDelayDuringLoading").toDouble();
+        FrameView::setRepaintThrottlingMaxDeferredRepaintDelayDuringLoading(p);
+    } else if (event->propertyName() == "_q_RepaintThrottlingDeferredRepaintDelayIncrementDuringLoading") {
+        double p = q->property("_q_RepaintThrottlingDeferredRepaintDelayIncrementDuringLoading").toDouble();
+        FrameView::setRepaintThrottlingDeferredRepaintDelayIncrementDuringLoading(p);
+    } else if (event->propertyName() == "_q_RepaintThrottlingPreset") {
+        static const QRepaintThrottlingPreset presets[] = {
+            {   "NoThrottling",     0,      0,      0,      0 },
+            {   "Legacy",       0.025,      0,    2.5,    0.5 },
+            {   "Minimal",       0.01,      0,      1,    0.2 },
+            {   "Medium",       0.025,      1,      5,    0.5 },
+            {   "Heavy",          0.1,      2,     10,      1 }
+        };
+
+        QString p = q->property("_q_RepaintThrottlingPreset").toString();
+        for(int i = 0; i < sizeof(presets) / sizeof(presets[0]); i++) {
+            if(p == presets[i].name) {
+                FrameView::setRepaintThrottlingDeferredRepaintDelay(
+                        presets[i].deferredRepaintDelay);
+                FrameView::setRepaintThrottlingnInitialDeferredRepaintDelayDuringLoading(
+                        presets[i].initialDeferredRepaintDelayDuringLoading);
+                FrameView::setRepaintThrottlingMaxDeferredRepaintDelayDuringLoading(
+                        presets[i].maxDeferredRepaintDelayDuringLoading);
+                FrameView::setRepaintThrottlingDeferredRepaintDelayIncrementDuringLoading(
+                        presets[i].deferredRepaintDelayIncrementDuringLoading);
+                break;
+            }
+        }
     }
+#if ENABLE(TILED_BACKING_STORE)
+    else if (event->propertyName() == "_q_TiledBackingStoreTileSize") {
+        WebCore::Frame* frame = QWebFramePrivate::core(q->mainFrame());
+        if (!frame->tiledBackingStore())
+            return;
+        QSize tileSize = q->property("_q_TiledBackingStoreTileSize").toSize();
+        frame->tiledBackingStore()->setTileSize(tileSize);
+    } else if (event->propertyName() == "_q_TiledBackingStoreTileCreationDelay") {
+        WebCore::Frame* frame = QWebFramePrivate::core(q->mainFrame());
+        if (!frame->tiledBackingStore())
+            return;
+        int tileCreationDelay = q->property("_q_TiledBackingStoreTileCreationDelay").toInt();
+        frame->tiledBackingStore()->setTileCreationDelay(static_cast<double>(tileCreationDelay) / 1000.);
+    } else if (event->propertyName() == "_q_TiledBackingStoreKeepAreaMultiplier") {
+        WebCore::Frame* frame = QWebFramePrivate::core(q->mainFrame());
+        if (!frame->tiledBackingStore())
+            return;
+        FloatSize keepMultiplier;
+        FloatSize coverMultiplier;
+        frame->tiledBackingStore()->getKeepAndCoverAreaMultipliers(keepMultiplier, coverMultiplier);
+        QSizeF qSize = q->property("_q_TiledBackingStoreKeepAreaMultiplier").toSizeF();
+        keepMultiplier = FloatSize(qSize.width(), qSize.height());
+        frame->tiledBackingStore()->setKeepAndCoverAreaMultipliers(keepMultiplier, coverMultiplier);
+    } else if (event->propertyName() == "_q_TiledBackingStoreCoverAreaMultiplier") {
+        WebCore::Frame* frame = QWebFramePrivate::core(q->mainFrame());
+        if (!frame->tiledBackingStore())
+            return;
+        FloatSize keepMultiplier;
+        FloatSize coverMultiplier;
+        frame->tiledBackingStore()->getKeepAndCoverAreaMultipliers(keepMultiplier, coverMultiplier);
+        QSizeF qSize = q->property("_q_TiledBackingStoreCoverAreaMultiplier").toSizeF();
+        coverMultiplier = FloatSize(qSize.width(), qSize.height());
+        frame->tiledBackingStore()->setKeepAndCoverAreaMultipliers(keepMultiplier, coverMultiplier);
+    }
+#endif
 }
+#endif
 
 void QWebPagePrivate::shortcutOverrideEvent(QKeyEvent* event)
 {
@@ -1310,14 +1388,17 @@ bool QWebPagePrivate::handleScrolling(QKeyEvent *ev, Frame *frame)
 }
 
 #if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
-void QWebPagePrivate::touchEvent(QTouchEvent* event)
+bool QWebPagePrivate::touchEvent(QTouchEvent* event)
 {
     WebCore::Frame* frame = QWebFramePrivate::core(mainFrame);
     if (!frame->view())
-        return;
+        return false;
 
-    bool accepted = frame->eventHandler()->handleTouchEvent(PlatformTouchEvent(event));
-    event->setAccepted(accepted);
+    // Always accept the QTouchEvent so that we'll receive also TouchUpdate and TouchEnd events
+    event->setAccepted(true);
+
+    // Return whether the default action was cancelled in the JS event handler
+    return frame->eventHandler()->handleTouchEvent(PlatformTouchEvent(event));
 }
 #endif
 
@@ -1394,7 +1475,7 @@ QVariant QWebPage::inputMethodQuery(Qt::InputMethodQuery property) const
             return QVariant();
 
         }
-#if QT_VERSION >= 0x040600
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
         case Qt::ImAnchorPosition: {
             if (renderTextControl) {
                 if (editor->hasComposition()) {
@@ -1543,6 +1624,7 @@ InspectorController* QWebPagePrivate::inspectorController()
     \value Back Navigate back in the history of navigated links.
     \value Forward Navigate forward in the history of navigated links.
     \value Stop Stop loading the current page.
+    \value StopScheduledPageRefresh Stop all pending page refresh/redirect requests.
     \value Reload Reload the current page.
     \value ReloadAndBypassCache Reload the current page, but do not use any local cache. (Added in Qt 4.6)
     \value Cut Cut the content currently selected into the clipboard.
@@ -1613,6 +1695,111 @@ InspectorController* QWebPagePrivate::inspectorController()
     \value WebBrowserWindow The window is a regular web browser window.
     \value WebModalDialog The window acts as modal dialog.
 */
+
+
+/*!
+    \class QWebPage::ViewportConfiguration
+    \since 4.7
+    \brief The QWebPage::ViewportConfiguration class describes hints that can be applied to a viewport.
+
+    QWebPage::ViewportConfiguration provides a description of a viewport, such as viewport geometry,
+    initial scale factor with limits, plus information about whether a user should be able
+    to scale the contents in the viewport or not, ie. by zooming.
+
+    ViewportConfiguration can be set by a web author using the viewport meta tag extension, documented
+    at \l{http://developer.apple.com/safari/library/documentation/appleapplications/reference/safariwebcontent/usingtheviewport/usingtheviewport.html}{Safari Reference Library: Using the Viewport Meta Tag}.
+
+    All values might not be set, as such when dealing with the hints, the developer needs to
+    check whether the values are valid. Negative values denote an invalid qreal value.
+
+    \inmodule QtWebKit
+*/
+
+/*!
+    Constructs an empty QWebPage::ViewportConfiguration.
+*/
+QWebPage::ViewportConfiguration::ViewportConfiguration()
+    : d(0)
+    , m_initialScaleFactor(-1.0)
+    , m_minimumScaleFactor(-1.0)
+    , m_maximumScaleFactor(-1.0)
+    , m_devicePixelRatio(-1.0)
+    , m_isUserScalable(true)
+    , m_isValid(false)
+{
+
+}
+
+/*!
+    Constructs a QWebPage::ViewportConfiguration which is a copy from \a other .
+*/
+QWebPage::ViewportConfiguration::ViewportConfiguration(const QWebPage::ViewportConfiguration& other)
+    : d(other.d)
+    , m_initialScaleFactor(other.m_initialScaleFactor)
+    , m_minimumScaleFactor(other.m_minimumScaleFactor)
+    , m_maximumScaleFactor(other.m_maximumScaleFactor)
+    , m_devicePixelRatio(other.m_devicePixelRatio)
+    , m_isUserScalable(other.m_isUserScalable)
+    , m_isValid(other.m_isValid)
+    , m_size(other.m_size)
+{
+
+}
+
+/*!
+    Destroys the QWebPage::ViewportConfiguration.
+*/
+QWebPage::ViewportConfiguration::~ViewportConfiguration()
+{
+
+}
+
+/*!
+    Assigns the given QWebPage::ViewportConfiguration to this viewport hints and returns a
+    reference to this.
+*/
+QWebPage::ViewportConfiguration& QWebPage::ViewportConfiguration::operator=(const QWebPage::ViewportConfiguration& other)
+{
+    if (this != &other) {
+        d = other.d;
+        m_initialScaleFactor = other.m_initialScaleFactor;
+        m_minimumScaleFactor = other.m_minimumScaleFactor;
+        m_maximumScaleFactor = other.m_maximumScaleFactor;
+        m_isUserScalable = other.m_isUserScalable;
+        m_isValid = other.m_isValid;
+        m_size = other.m_size;
+    }
+
+    return *this;
+}
+
+/*! \fn inline bool QWebPage::ViewportConfiguration::isValid() const
+    Returns whether this is a valid ViewportConfiguration or not.
+
+    An invalid ViewportConfiguration will have an empty QSize, negative values for scale factors and
+    true for the boolean isUserScalable.
+*/
+
+/*! \fn inline QSize QWebPage::ViewportConfiguration::size() const
+    Returns the size of the viewport.
+*/
+
+/*! \fn inline qreal QWebPage::ViewportConfiguration::initialScaleFactor() const
+    Returns the initial scale of the viewport as a multiplier.
+*/
+
+/*! \fn inline qreal QWebPage::ViewportConfiguration::minimumScaleFactor() const
+    Returns the minimum scale value of the viewport as a multiplier.
+*/
+
+/*! \fn inline qreal QWebPage::ViewportConfiguration::maximumScaleFactor() const
+    Returns the maximum scale value of the viewport as a multiplier.
+*/
+
+/*! \fn inline bool QWebPage::ViewportConfiguration::isUserScalable() const
+    Determines whether or not the scale can be modified by the user.
+*/
+
 
 /*!
     \class QWebPage
@@ -1795,7 +1982,7 @@ void QWebPage::setView(QWidget* view)
 */
 QWidget *QWebPage::view() const
 {
-#if QT_VERSION < 0x040600
+#if QT_VERSION < QT_VERSION_CHECK(4, 6, 0)
     return d->view;
 #else
     return d->view.data();
@@ -1811,9 +1998,14 @@ QWidget *QWebPage::view() const
 */
 void QWebPage::javaScriptConsoleMessage(const QString& message, int lineNumber, const QString& sourceID)
 {
-    Q_UNUSED(message)
-    Q_UNUSED(lineNumber)
     Q_UNUSED(sourceID)
+
+    // Catch plugin logDestroy message for LayoutTests/plugins/open-and-close-window-with-plugin.html
+    // At this point DRT's WebPage has already been destroyed
+    if (QWebPagePrivate::drtRun) {
+        if (message == "PLUGIN: NPP_Destroy")
+            fprintf (stdout, "CONSOLE MESSAGE: line %d: %s\n", lineNumber, message.toUtf8().constData());
+    }
 }
 
 /*!
@@ -1894,6 +2086,26 @@ bool QWebPage::shouldInterruptJavaScript()
 #endif
 }
 
+void QWebPage::setUserPermission(QWebFrame* frame, PermissionDomain domain, PermissionPolicy policy)
+{
+    switch (domain) {
+    case NotificationsPermissionDomain:
+#if ENABLE(NOTIFICATIONS)
+        if (policy == PermissionGranted)
+            NotificationPresenterClientQt::notificationPresenter()->allowNotificationForFrame(frame);
+#endif
+        break;
+    case GeolocationPermissionDomain:
+#if ENABLE(GEOLOCATION)
+        GeolocationPermissionClientQt::geolocationPermissionClient()->setPermission(frame, policy);
+#endif
+        break;
+
+    default:
+        break;
+    }
+}
+
 /*!
     This function is called whenever WebKit wants to create a new window of the given \a type, for
     example when a JavaScript program requests to open a document in a new window.
@@ -1905,7 +2117,11 @@ bool QWebPage::shouldInterruptJavaScript()
 
     If \a type is WebModalDialog, the application must call setWindowModality(Qt::ApplicationModal) on the new window.
 
-    \sa acceptNavigationRequest()
+    \note In the cases when the window creation is being triggered by JavaScript, apart from
+    reimplementing this method application must also set the JavaScriptCanOpenWindows attribute
+    of QWebSettings to true in order for it to get called.
+
+    \sa acceptNavigationRequest(), QWebView::createWindow()
 */
 QWebPage *QWebPage::createWindow(WebWindowType type)
 {
@@ -1945,6 +2161,15 @@ static void openNewWindow(const QUrl& url, WebCore::Frame* frame)
         if (Page* newPage = oldPage->chrome()->createWindow(frame,
                 frameLoadRequest(url, frame), features))
             newPage->chrome()->show();
+    }
+}
+
+static void collectChildFrames(QWebFrame* frame, QList<QWebFrame*>& list)
+{
+    list << frame->childFrames();
+    QListIterator<QWebFrame*> it(frame->childFrames());
+    while (it.hasNext()) {
+        collectChildFrames(it.next(), list);
     }
 }
 
@@ -2044,6 +2269,16 @@ void QWebPage::triggerAction(WebAction action, bool)
 #endif
             break;
         }
+        case StopScheduledPageRefresh: {
+            QWebFrame* topFrame = mainFrame();
+            topFrame->d->frame->redirectScheduler()->cancel();
+            QList<QWebFrame*> childFrames;
+            collectChildFrames(topFrame, childFrames);
+            QListIterator<QWebFrame*> it(childFrames);
+            while (it.hasNext())
+                it.next()->d->frame->redirectScheduler()->cancel();
+            break;
+        }
         default:
             command = QWebPagePrivate::editorCommandForWebActions(action);
             break;
@@ -2085,6 +2320,30 @@ void QWebPage::setViewportSize(const QSize &size) const
     }
 }
 
+QWebPage::ViewportConfiguration QWebPage::viewportConfigurationForSize(QSize availableSize) const
+{
+    static int desktopWidth = 980;
+    static int deviceDPI = 160;
+
+    FloatRect rect = d->page->chrome()->windowRect();
+
+    int deviceWidth = rect.width();
+    int deviceHeight = rect.height();
+
+    WebCore::ViewportConfiguration conf = WebCore::findConfigurationForViewportData(mainFrame()->d->viewportArguments, desktopWidth, deviceWidth, deviceHeight, deviceDPI, availableSize);
+
+    ViewportConfiguration result;
+
+    result.m_isValid = true;
+    result.m_size = conf.layoutViewport;
+    result.m_initialScaleFactor = conf.initialScale;
+    result.m_minimumScaleFactor = conf.minimumScale;
+    result.m_maximumScaleFactor = conf.maximumScale;
+    result.m_devicePixelRatio = conf.devicePixelRatio;
+
+    return result;
+}
+
 QSize QWebPage::preferredContentsSize() const
 {
     QWebFrame* frame = d->mainFrame;
@@ -2100,30 +2359,41 @@ QSize QWebPage::preferredContentsSize() const
 /*!
     \property QWebPage::preferredContentsSize
     \since 4.6
-    \brief the preferred size of the contents
+    \brief a custom size used for laying out the page contents.
 
-    If this property is set to a valid size, it is used to lay out the page.
-    If it is not set (the default), the viewport size is used instead.
+    By default all pages are laid out using the viewport of the page as the base.
+
+    As pages mostly are designed for desktop usage, they often do not layout properly
+    on small devices as the contents require a certain view width. For this reason
+    it is common to use a different layout size and then scale the contents to fit
+    within the actual view.
+
+    If this property is set to a valid size, this size is used for all layout needs
+    instead of the size of the viewport.
+
+    Setting an invalid size, makes the page fall back to using the viewport size for layout.
 
     \sa viewportSize
 */
-void QWebPage::setPreferredContentsSize(const QSize &size) const
+void QWebPage::setPreferredContentsSize(const QSize& size) const
 {
+    // FIXME: Rename this method to setCustomLayoutSize
+
     d->fixedLayoutSize = size;
 
-    QWebFrame *frame = mainFrame();
-    if (frame->d->frame && frame->d->frame->view()) {
-        WebCore::FrameView* view = frame->d->frame->view();
+    QWebFrame* frame = mainFrame();
+    if (!frame->d->frame || !frame->d->frame->view())
+        return;
 
-        if (size.isValid()) {
-            view->setUseFixedLayout(true);
-            view->setFixedLayoutSize(size);
-            view->layout();
-        } else if (view->useFixedLayout()) {
-            view->setUseFixedLayout(false);
-            view->layout();
-        }
-    }
+    WebCore::FrameView* view = frame->d->frame->view();
+
+    if (size.isValid()) {
+        view->setUseFixedLayout(true);
+        view->setFixedLayoutSize(size);
+    } else if (view->useFixedLayout())
+        view->setUseFixedLayout(false);
+
+    view->layout();
 }
 
 /*!
@@ -2149,7 +2419,7 @@ bool QWebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &
                 return true;
 
             case DelegateExternalLinks:
-                if (WebCore::SecurityOrigin::shouldTreatURLSchemeAsLocal(request.url().scheme()))
+                if (WebCore::SchemeRegistry::shouldTreatURLSchemeAsLocal(request.url().scheme()))
                     return true;
                 emit linkClicked(request.url());
                 return false;
@@ -2173,7 +2443,7 @@ bool QWebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &
 QString QWebPage::selectedText() const
 {
     d->createMainFrame();
-    return d->page->focusController()->focusedOrMainFrame()->selectedText();
+    return d->page->focusController()->focusedOrMainFrame()->editor()->selectedText();
 }
 
 #ifndef QT_NO_ACTION
@@ -2583,12 +2853,14 @@ bool QWebPage::event(QEvent *ev)
     case QEvent::TouchBegin:
     case QEvent::TouchUpdate:
     case QEvent::TouchEnd:
-        d->touchEvent(static_cast<QTouchEvent*>(ev));
-        break;
+        // Return whether the default action was cancelled in the JS event handler
+        return d->touchEvent(static_cast<QTouchEvent*>(ev));
 #endif
+#ifndef QT_NO_PROPERTIES
     case QEvent::DynamicPropertyChange:
         d->dynamicPropertyChangeEvent(static_cast<QDynamicPropertyChangeEvent*>(ev));
         break;
+#endif
     default:
         return QObject::event(ev);
     }
@@ -2635,7 +2907,7 @@ void QWebPage::setContentEditable(bool editable)
         if (d->mainFrame) {
             WebCore::Frame* frame = d->mainFrame->d->frame;
             if (editable) {
-                frame->applyEditingStyleToBodyElement();
+                frame->editor()->applyEditingStyleToBodyElement();
                 // FIXME: mac port calls this if there is no selectedDOMRange
                 //frame->setSelectionFromNone();
             }
@@ -3040,6 +3312,14 @@ bool QWebPage::findText(const QString &subString, FindFlags options)
         } else
             return d->page->markAllMatchesForText(subString, caseSensitivity, true, 0);
     } else {
+        if (subString.isEmpty()) {
+            d->page->mainFrame()->selection()->clear();
+            Frame* frame = d->page->mainFrame()->tree()->firstChild();
+            while (frame) {
+                frame->selection()->clear();
+                frame = frame->tree()->traverseNextWithWrap(false);
+            }
+        }
         ::FindDirection direction = ::FindDirectionForward;
         if (options & FindBackward)
             direction = ::FindDirectionBackward;
@@ -3333,7 +3613,7 @@ QString QWebPage::userAgentForUrl(const QUrl&) const
         firstPartTemp += QString::fromLatin1("Sun Solaris");
 #elif defined Q_OS_ULTRIX
         firstPartTemp += QString::fromLatin1("DEC Ultrix");
-#elif defined Q_WS_S60
+#elif defined Q_OS_SYMBIAN
         firstPartTemp += QLatin1Char(' ');
         QSysInfo::S60Version s60Version = QSysInfo::s60Version();
         switch (s60Version) {
@@ -3442,6 +3722,16 @@ quint64 QWebPage::bytesReceived() const
 {
     return d->m_bytesReceived;
 }
+
+/*!
+    \since 4.7
+    \fn void QWebPage::viewportChangeRequested()
+
+    Page authors can provide the supplied values by using the viewport meta tag. More information
+    about this can be found at \l{http://developer.apple.com/safari/library/documentation/appleapplications/reference/safariwebcontent/usingtheviewport/usingtheviewport.html}{Safari Reference Library: Using the Viewport Meta Tag}.
+
+    \sa QWebPage::ViewportConfiguration, setPreferredContentsSize(), QGraphicsWebView::setScale()
+*/
 
 /*!
     \fn void QWebPage::loadStarted()

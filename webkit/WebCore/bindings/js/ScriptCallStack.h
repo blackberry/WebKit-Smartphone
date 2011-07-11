@@ -31,11 +31,11 @@
 #ifndef ScriptCallStack_h
 #define ScriptCallStack_h
 
-#include "ScriptArray.h"
 #include "ScriptCallFrame.h"
 #include "ScriptState.h"
 #include "ScriptString.h"
 #include <wtf/Noncopyable.h>
+#include <wtf/RefPtr.h>
 
 namespace JSC {
     class ExecState;
@@ -44,9 +44,11 @@ namespace JSC {
 
 namespace WebCore {
 
+    class InspectorArray;
+
     class ScriptCallStack : public Noncopyable {
     public:
-        ScriptCallStack(JSC::ExecState*, const JSC::ArgList&, unsigned skipArgumentCount = 0);
+        ScriptCallStack(JSC::ExecState*, unsigned skipArgumentCount = 0);
         ~ScriptCallStack();
 
         ScriptState* state() const { return m_exec; }
@@ -54,7 +56,7 @@ namespace WebCore {
         // frame retrieval methods
         const ScriptCallFrame &at(unsigned);
         unsigned size();
-        static bool stackTrace(int, ScriptState*, ScriptArray&);
+        static bool stackTrace(int, const RefPtr<InspectorArray>&);
 
     private:
         void initialize();

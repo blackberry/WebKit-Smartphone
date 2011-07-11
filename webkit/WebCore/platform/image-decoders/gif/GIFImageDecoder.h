@@ -36,7 +36,7 @@ namespace WebCore {
     // This class decodes the GIF image format.
     class GIFImageDecoder : public ImageDecoder {
     public:
-        GIFImageDecoder();
+        GIFImageDecoder(bool premultiplyAlpha);
         virtual ~GIFImageDecoder();
 
         enum GIFQuery { GIFFullQuery, GIFSizeQuery, GIFFrameCountQuery };
@@ -49,6 +49,10 @@ namespace WebCore {
         virtual size_t frameCount();
         virtual int repetitionCount() const;
         virtual RGBA32Buffer* frameBufferAtIndex(size_t index);
+        // CAUTION: setFailed() deletes |m_reader|.  Be careful to avoid
+        // accessing deleted memory, especially when calling this from inside
+        // GIFImageReader!
+        virtual bool setFailed();
         virtual void clearFrameBufferCache(size_t clearBeforeFrame);
 
         // Callbacks from the GIF reader.

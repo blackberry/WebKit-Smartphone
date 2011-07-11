@@ -26,8 +26,10 @@
 #ifndef SelectionController_h
 #define SelectionController_h
 
+#include "CSSMutableStyleDeclaration.h"
 #include "IntRect.h"
 #include "Range.h"
+#include "ScrollBehavior.h"
 #include "Timer.h"
 #include "VisibleSelection.h"
 #include <wtf/Noncopyable.h>
@@ -36,15 +38,20 @@ namespace WebCore {
 
 class Frame;
 class GraphicsContext;
+class HTMLFormElement;
 class RenderObject;
 class RenderView;
 class Settings;
 class VisiblePosition;
 
+enum DirectionalityPolicy { MakeNonDirectionalSelection, MakeDirectionalSelection };
+
 class SelectionController : public Noncopyable {
 public:
-    enum EAlteration { MOVE, EXTEND };
-    enum EDirection { FORWARD, BACKWARD, RIGHT, LEFT };
+    enum EAlteration { AlterationMove, AlterationExtend };
+    enum EDirection { DirectionForward, DirectionBackward, DirectionRight, DirectionLeft };
+    enum CursorAlignOnScroll { AlignCursorOnScrollIfNeeded,
+                               AlignCursorOnScrollAlways };
 
     SelectionController(Frame* = 0, bool isDragCaretController = false);
 
@@ -54,14 +61,14 @@ public:
     Node* shadowTreeRootNode() const { return m_selection.shadowTreeRootNode(); }
      
     void moveTo(const Range*, EAffinity, bool userTriggered = false);
-    void moveTo(const VisiblePosition&, bool userTriggered = false);
+    void moveTo(const VisiblePosition&, bool userTriggered = false, CursorAlignOnScroll = AlignCursorOnScrollIfNeeded);
     void moveTo(const VisiblePosition&, const VisiblePosition&, bool userTriggered = false);
     void moveTo(const Position&, EAffinity, bool userTriggered = false);
     void moveTo(const Position&, const Position&, EAffinity, bool userTriggered = false);
 
     const VisibleSelection& selection() const { return m_selection; }
-    void setSelection(const VisibleSelection&, bool closeTyping = true, bool clearTypingStyle = true, bool userTriggered = false, TextGranularity = CharacterGranularity);
-    void setSelection(const VisibleSelection& selection, TextGranularity granularity) { setSelection(selection, true, true, false, granularity); }
+    void setSelection(const VisibleSelection&, bool closeTyping = true, bool clearTypingStyle = true, bool userTriggered = false, CursorAlignOnScroll = AlignCursorOnScrollIfNeeded, TextGranularity = CharacterGranularity, DirectionalityPolicy = MakeDirectionalSelection);
+    void setSelection(const VisibleSelection& selection, TextGranularity granularity, DirectionalityPolicy directionality = MakeDirectionalSelection) { setSelection(selection, true, true, false, AlignCursorOnScrollIfNeeded, granularity, directionality); }
     bool setSelectedRange(Range*, EAffinity, bool closeTyping);
     void selectAll();
     void clear();
@@ -76,7 +83,7 @@ public:
     EAffinity affinity() const { return m_selection.affinity(); }
 
     bool modify(EAlteration, EDirection, TextGranularity, bool userTriggered = false);
-    bool modify(EAlteration, int verticalDistance, bool userTriggered = false);
+    bool modify(EAlteration, int verticalDistance, bool userTriggered = false, CursorAlignOnScroll = AlignCursorOnScrollIfNeeded);
     TextGranularity granularity() const { return m_granularity; }
 
     void setStart(const VisiblePosition &, bool userTriggered = false);
@@ -96,9 +103,12 @@ public:
     RenderObject* caretRenderer() const;
 
     // Caret rect local to the caret's renderer
-    IntRect localCaretRect() const;
+    IntRect localCaretRect();
+    IntRect localCaretRectForPainting() const { return m_caretRect; }
+
     // Bounds of (possibly transformed) caret in absolute coords
     IntRect absoluteCaretBounds();
+    void setCaretRectNeedsUpdate(bool flag = true);
     static IntRect repaintRectForCaret(IntRect caret);
     void setNeedsLayout(bool flag = true);
 
@@ -145,6 +155,26 @@ public:
     void showTreeForThis() const;
 #endif
 
+    bool shouldChangeSelection(const VisibleSelection&) const;
+    bool shouldDeleteSelection(const VisibleSelection&) const;
+    void setFocusedNodeIfNeeded();
+    void notifyRendererOfSelectionChange(bool userTriggered);
+
+    void paintDragCaret(GraphicsContext*, int tx, int ty, const IntRect& clipRect) const;
+
+    CSSMutableStyleDeclaration* typingStyle() const;
+    void setTypingStyle(PassRefPtr<CSSMutableStyleDeclaration>);
+    void clearTypingStyle();
+
+    FloatRect bounds(bool clipToVisibleContent = true) const;
+
+    void getClippedVisibleTextRectangles(Vector<FloatRect>&) const;
+
+    HTMLFormElement* currentForm() const;
+
+    void revealSelection(const ScrollAlignment& = ScrollAlignment::alignCenterIfNeeded, bool revealExtent = false);
+    void setSelectionFromNone();
+
 private:
     enum EPositionType { START, END, BASE, EXTENT };
 
@@ -165,7 +195,7 @@ private:
     VisiblePosition modifyMovingLeft(TextGranularity);
     VisiblePosition modifyMovingBackward(TextGranularity);
 
-    void layout();
+    void updateCaretRect();
     IntRect caretRepaintRect() const;
     bool shouldRepaintCaret(const RenderView* view) const;
 
@@ -189,13 +219,15 @@ private:
     VisibleSelection m_selection;
     TextGranularity m_granularity;
 
+    RefPtr<CSSMutableStyleDeclaration> m_typingStyle;
+
     Timer<SelectionController> m_caretBlinkTimer;
 
     IntRect m_caretRect; // caret rect in coords local to the renderer responsible for painting the caret
     IntRect m_absCaretBounds; // absolute bounding rect for the caret
     IntRect m_absoluteCaretRepaintBounds;
     
-    bool m_needsLayout; // true if m_caretRect and m_absCaretBounds need to be calculated
+    bool m_caretRectNeedsUpdate; // true if m_caretRect and m_absCaretBounds need to be calculated
     bool m_absCaretBoundsDirty;
     bool m_isDirectional;
     bool m_isDragCaretController;
@@ -204,6 +236,21 @@ private:
     bool m_caretVisible;
     bool m_caretPaint;
 };
+
+inline CSSMutableStyleDeclaration* SelectionController::typingStyle() const
+{
+    return m_typingStyle.get();
+}
+
+inline void SelectionController::clearTypingStyle()
+{
+    m_typingStyle.clear();
+}
+
+inline void SelectionController::setTypingStyle(PassRefPtr<CSSMutableStyleDeclaration> style)
+{
+    m_typingStyle = style;
+}
 
 #if !(PLATFORM(MAC) || PLATFORM(GTK))
 inline void SelectionController::notifyAccessibilityForSelectionChange()

@@ -40,6 +40,8 @@ namespace WebKit {
 // Typedef for server-side objects like OpenGL textures and program objects.
 typedef unsigned int WebGLId;
 
+class WebView;
+
 // This interface abstracts the operations performed by the
 // GraphicsContext3D in order to implement WebGL. Nearly all of the
 // methods exposed on this interface map directly to entry points in
@@ -77,11 +79,11 @@ public:
 
     // Creates a "default" implementation of WebGraphicsContext3D which calls
     // OpenGL directly.
-    static WebGraphicsContext3D* createDefault();
+    WEBKIT_API static WebGraphicsContext3D* createDefault();
 
     // Initializes the graphics context; should be the first operation performed
     // on newly-constructed instances. Returns true on success.
-    virtual bool initialize(Attributes) = 0;
+    virtual bool initialize(Attributes, WebView*) = 0;
 
     // Makes the OpenGL context current on the current thread. Returns true on
     // success.
@@ -101,12 +103,26 @@ public:
 
     // Query whether it is built on top of compliant GLES2 implementation.
     virtual bool isGLES2Compliant() = 0;
+    // Query whether it is built on top of GLES2 NPOT strict implementation.
+    virtual bool isGLES2NPOTStrict() = 0;
+    // Query whether it is built on top of implementation that generates errors
+    // on out-of-bounds buffer accesses.
+    virtual bool isErrorGeneratedOnOutOfBoundsAccesses() = 0;
 
     // Helper for software compositing path. Reads back the frame buffer into
     // the memory region pointed to by "pixels" with size "bufferSize". It is
     // expected that the storage for "pixels" covers (4 * width * height) bytes.
     // Returns true on success.
     virtual bool readBackFramebuffer(unsigned char* pixels, size_t bufferSize) = 0;
+
+    // Returns the id of the texture which is used for storing the contents of
+    // the framebuffer associated with this context. This texture is accessible
+    // by the gpu-based page compositor.
+    virtual unsigned getPlatformTextureId() = 0;
+
+    // Copies the contents of the off-screen render target used by the WebGL
+    // context to the corresponding texture used by the compositor.
+    virtual void prepareTexture() = 0;
 
     // Synthesizes an OpenGL error which will be returned from a
     // later call to getError. This is used to emulate OpenGL ES
@@ -117,6 +133,8 @@ public:
     // instance of any given error, and returns them from calls to
     // getError in the order they were added.
     virtual void synthesizeGLError(unsigned long error) = 0;
+
+    virtual bool supportsBGRA() = 0;
 
     // The entry points below map directly to the OpenGL ES 2.0 API.
     // See: http://www.khronos.org/registry/gles/
@@ -168,6 +186,8 @@ public:
 
     virtual bool getActiveAttrib(WebGLId program, unsigned long index, ActiveInfo&) = 0;
     virtual bool getActiveUniform(WebGLId program, unsigned long index, ActiveInfo&) = 0;
+
+    virtual void getAttachedShaders(WebGLId program, int maxCount, int* count, unsigned int* shaders) = 0;
 
     virtual int  getAttribLocation(WebGLId program, const char* name) = 0;
 

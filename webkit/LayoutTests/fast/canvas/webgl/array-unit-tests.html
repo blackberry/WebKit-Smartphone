@@ -173,16 +173,17 @@ function testOffsetsAndSizes(type, name, elementSizeInBytes) {
   running('test ' + name + ' OffsetsAndSizes');
   try {
     var len = 10;
+    assertEq('type.BYTES_PER_ELEMENT', elementSizeInBytes, type.BYTES_PER_ELEMENT);
     var array = new type(len);
     assert('array.buffer', array.buffer);
-    assertEq('array.byteOffset', array.byteOffset, 0);
-    assertEq('array.length', array.length, len);
-    assertEq('array.byteLength', array.byteLength, len * elementSizeInBytes);
+    assertEq('array.byteOffset', 0, array.byteOffset);
+    assertEq('array.length', len, array.length);
+    assertEq('array.byteLength', len * elementSizeInBytes, array.byteLength);
     array = new type(array.buffer, elementSizeInBytes, len - 1);
     assert('array.buffer', array.buffer);
-    assertEq('array.byteOffset', array.byteOffset, elementSizeInBytes);
-    assertEq('array.length', array.length, len - 1);
-    assertEq('array.byteLength', array.byteLength, (len - 1) * elementSizeInBytes);
+    assertEq('array.byteOffset', elementSizeInBytes, array.byteOffset);
+    assertEq('array.length', len - 1, array.length);
+    assertEq('array.byteLength', (len - 1) * elementSizeInBytes, array.byteLength);
     pass();
   } catch (e) {
     fail(e);
@@ -343,33 +344,71 @@ function testBoundaryConditions(type, name, lowValue, expectedLowValue, highValu
 function testConstructionWithNullBuffer(type, name) {
     var array;
     try {
-        array = new type(null, 0, 0);
+        array = new type(null);
         testFailed("Construction of " + name + " with null buffer should throw exception");
     } catch (e) {
         testPassed("Construction of " + name + " with null buffer threw exception");
     }
-}
-
-
-function testConstructionWithOutOfRangeValues(type, name) {
-    var buffer = new ArrayBuffer(4);
-    var array;
     try {
-        array = new type(buffer, 4, 0x3FFFFFFF);
-        testFailed("Construction of " + name + " with out-of-range values should throw exception");
+        array = new type(null, 0, 0);
+        testFailed("Construction of " + name + " with (null buffer, 0) should throw exception");
     } catch (e) {
-        testPassed("Construction of " + name + " with out-of-range values threw exception");
+        testPassed("Construction of " + name + " with (null buffer, 0) threw exception");
+    }
+    try {
+        array = new type(null, 0, 0);
+        testFailed("Construction of " + name + " with (null buffer, 0, 0) should throw exception");
+    } catch (e) {
+        testPassed("Construction of " + name + " with (null buffer, 0, 0) threw exception");
     }
 }
 
-function testConstructionWithNegativeOutOfRangeValues(type, name) {
-    var buffer = new ArrayBuffer(4);
-    var array;
+function shouldThrowIndexSizeErr(func, text) {
+    var errorText = text + " should throw INDEX_SIZE_ERR exception";
     try {
-        array = new type(buffer, 4, -2147483648);
-        testFailed("Construction of " + name + " with negative out-of-range values should throw exception");
+        func();
+        testFailed(errorText);
     } catch (e) {
-        testPassed("Construction of " + name + " with negative out-of-range values threw exception");
+        if (e.code != DOMException.INDEX_SIZE_ERR) {
+            testFailed(errorText);
+        } else {
+            testPassed(text + " threw INDEX_SIZE_ERR exception");
+        }
+    }
+}
+
+function testConstructionWithOutOfRangeValues(type, name) {
+    shouldThrowIndexSizeErr(function() {
+        var buffer = new ArrayBuffer(4);
+        var array = new type(buffer, 4, 0x3FFFFFFF);
+    }, "Construction of " + name + " with out-of-range values");
+}
+
+function testConstructionWithNegativeOutOfRangeValues(type, name) {
+    try {
+        var buffer = new ArrayBuffer(-1);
+        testFailed("Construction of ArrayBuffer with negative size should throw exception");
+    } catch (e) {
+        testPassed("Construction of ArrayBuffer with negative size threw exception");
+    }
+    try {
+        var array = new type(-1);
+        testFailed("Construction of " + name + " with negative size should throw exception");
+    } catch (e) {
+        testPassed("Construction of " + name + " with negative size threw exception");
+    }
+    shouldThrowIndexSizeErr(function() {
+        var buffer = new ArrayBuffer(4);
+        var array = new type(buffer, 4, -2147483648);
+    }, "Construction of " + name + " with negative out-of-range values");
+}
+
+function testConstructionWithUnalignedOffset(type, name, elementSizeInBytes) {
+    if (elementSizeInBytes > 1) {
+        shouldThrowIndexSizeErr(function() {
+            var buffer = new ArrayBuffer(32);
+            var array = new type(buffer, 1, elementSizeInBytes);
+        }, "Construction of " + name + " with unaligned offset");
     }
 }
 
@@ -508,7 +547,7 @@ function runTests() {
   // The "name" attribute is a concession to browsers which don't
   // implement the "name" property on function objects
   var testCases =
-    [ {name: "FloatArray",
+    [ {name: "Float32Array",
        unsigned: false,
        elementSizeInBytes: 4,
        low: -500.5,
@@ -556,59 +595,7 @@ function runTests() {
        low: 0,
        expectedLow: 0,
        high: 4294967295,
-       expectedHigh: 4294967295},
-
-      // Legacy names of these types. Left here only to catch breakage
-      // until the WebGLArray aliases are removed completely. (FIXME)
-      {name: "WebGLByteArray",
-       unsigned: false,
-       elementSizeInBytes: 1,
-       low: -128,
-       expectedLow: -128,
-       high: 127,
-       expectedHigh: 127},
-      {name: "WebGLFloatArray",
-       unsigned: false,
-       elementSizeInBytes: 4,
-       low: -500.5,
-       expectedLow: -500.5,
-       high: 500.5,
-       expectedHigh: 500.5},
-      {name: "WebGLIntArray",
-       unsigned: false,
-       elementSizeInBytes: 4,
-       low: -2147483648,
-       expectedLow: -2147483648,
-       high: 2147483647,
-       expectedHigh: 2147483647},
-      {name: "WebGLShortArray",
-       unsigned: false,
-       elementSizeInBytes: 2,
-       low: -32768,
-       expectedLow: -32768,
-       high: 32767,
-       expectedHigh: 32767},
-      {name: "WebGLUnsignedByteArray",
-       unsigned: true,
-       elementSizeInBytes: 1,
-       low: 0,
-       expectedLow: 0,
-       high: 255,
-       expectedHigh: 255},
-      {name: "WebGLUnsignedIntArray",
-       unsigned: true,
-       elementSizeInBytes: 4,
-       low: 0,
-       expectedLow: 0,
-       high: 4294967295,
-       expectedHigh: 4294967295},
-      {name: "WebGLUnsignedShortArray",
-       unsigned: true,
-       elementSizeInBytes: 2,
-       low: 0,
-       expectedLow: 0,
-       high: 65535,
-       expectedHigh: 65535} ];
+       expectedHigh: 4294967295} ];
 
   for (var i = 0; i < testCases.length; i++) {
     var testCase = testCases[i];
@@ -645,6 +632,7 @@ function runTests() {
     testConstructionWithNullBuffer(type, name);
     testConstructionWithOutOfRangeValues(type, name);
     testConstructionWithNegativeOutOfRangeValues(type, name);
+    testConstructionWithUnalignedOffset(type, name, testCase.elementSizeInBytes);
     testConstructionOfHugeArray(type, name, testCase.elementSizeInBytes);
     testSlicingWithOutOfRangeValues(type, name, testCase.elementSizeInBytes);
     testSlicingWithDefaultValues(type, name, testCase.elementSizeInBytes);
@@ -662,9 +650,6 @@ successfullyParsed = true;
 
 </script>
 <script src="../../js/resources/js-test-post.js"></script>
-
-<script>
-</script>
 
 </body>
 </html>

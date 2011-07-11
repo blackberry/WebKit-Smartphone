@@ -28,28 +28,19 @@
 #include "Frame.h"
 
 #include "Document.h"
-#include "EditorClient.h"
 #include "FloatRect.h"
-#include "FrameLoader.h"
-#include "FrameLoadRequest.h"
 #include "FrameView.h"
 #include "GraphicsContext.h"
 #include "HTMLIFrameElement.h"
 #include "HTMLNames.h"
 #include "HTMLTableCellElement.h"
 #include "KeyboardEvent.h"
-#include "NP_jsobject.h"
-#include "npruntime_impl.h"
+#include "NotImplemented.h"
 #include "Page.h"
-#include "Plugin.h"
-#include "RegularExpression.h"
 #include "RenderFrame.h"
-#include "RenderTableCell.h"
+#include "RenderLayer.h"
 #include "RenderView.h"
 #include "ResourceHandle.h"
-#include "runtime_root.h"
-#include "Settings.h"
-#include "TextResourceDecoder.h"
 
 #include <windows.h>
 
@@ -85,7 +76,7 @@ void computePageRectsForFrame(Frame* frame, const IntRect& printRect, float head
 
     float ratio = (float)printRect.height() / (float)printRect.width();
 
-    float pageWidth  = (float) root->overflowWidth();
+    float pageWidth  = (float) root->rightLayoutOverflow();
     float pageHeight = pageWidth * ratio;
     outPageHeight = (int) pageHeight;   // this is the height of the page adjusted by margins
     pageHeight -= (headerHeight + footerHeight);
@@ -119,7 +110,7 @@ HBITMAP imageFromSelection(Frame* frame, bool forceBlackText)
         return 0;
 
     frame->view()->setPaintRestriction(forceBlackText ? PaintRestrictionSelectionOnlyBlackText : PaintRestrictionSelectionOnly);
-    FloatRect fr = frame->selectionBounds();
+    FloatRect fr = frame->selection()->bounds();
     IntRect ir((int)fr.x(), (int)fr.y(), (int)fr.width(), (int)fr.height());
     if (ir.isEmpty())
         return 0;
@@ -129,8 +120,8 @@ HBITMAP imageFromSelection(Frame* frame, bool forceBlackText)
     FrameView* view = frame->view();
     if (view->parent()) {
         ir.setLocation(view->parent()->convertChildToSelf(view, ir.location()));
-        w = ir.width() * view->scale() + 0.5;
-        h = ir.height() * view->scale() + 0.5;
+        w = ir.width() * view->zoomFactor() + 0.5;
+        h = ir.height() * view->zoomFactor() + 0.5;
     } else {
         ir = view->contentsToWindow(ir);
         w = ir.width();
@@ -155,6 +146,12 @@ HBITMAP imageFromSelection(Frame* frame, bool forceBlackText)
     frame->view()->setPaintRestriction(PaintRestrictionNone);
 
     return hBmp;
+}
+
+DragImageRef Frame::nodeImage(Node*)
+{
+    notImplemented();
+    return 0;
 }
 
 DragImageRef Frame::dragImageForSelection()

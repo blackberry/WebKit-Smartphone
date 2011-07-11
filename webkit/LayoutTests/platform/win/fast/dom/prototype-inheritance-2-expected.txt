@@ -48,6 +48,7 @@ PASS CSSValueListConstructor from inner.getComputedStyle(inner.document.body).ge
 PASS CSSValueListPrototype from inner.getComputedStyle(inner.document.body).getPropertyCSSValue(-webkit-transition-timing-function).__proto__
 PASS CSSValuePrototype from inner.getComputedStyle(inner.document.body).getPropertyCSSValue(background-clip).__proto__.__proto__
 FAIL CanvasPattern from inner.document.getElementsByTagName("canvas")[0].getContext("2d").createPattern(inner.document.getElementsByTagName("img")[0], "")
+FAIL CanvasPatternConstructor from inner.document.getElementsByTagName("canvas")[0].getContext("2d").createPattern(inner.document.getElementsByTagName("img")[0], "").constructor
 FAIL CanvasPatternPrototype from inner.document.getElementsByTagName("canvas")[0].getContext("2d").createPattern(inner.document.getElementsByTagName("img")[0], "").__proto__
 PASS CanvasRenderingContext2D from inner.document.getElementsByTagName("canvas")[0].getContext("2d")
 PASS CanvasRenderingContext2DConstructor from inner.document.getElementsByTagName("canvas")[0].getContext("2d").constructor
@@ -73,11 +74,13 @@ PASS DOMApplicationCachePrototype from inner.document.forms.testForm.0.ownerDocu
 PASS DOMImplementation from inner.document.forms.testForm.0.ownerDocument.implementation
 PASS DOMImplementationConstructor from inner.document.forms.testForm.0.ownerDocument.implementation.constructor
 PASS DOMImplementationPrototype from inner.document.forms.testForm.0.ownerDocument.implementation.__proto__
+PASS DOMStringMap from inner.document.forms.testForm.0.dataset
+PASS DOMStringMapConstructor from inner.document.forms.testForm.0.dataset.constructor
+PASS DOMStringMapPrototype from inner.document.forms.testForm.0.dataset.__proto__
 PASS DOMWindow from inner
 PASS DOMWindowPrototype from inner.document.forms.testForm.0.ownerDocument.defaultView.__proto__
 PASS DocumentPrototype from inner.document.forms.testForm.0.ownerDocument.__proto__.__proto__
 PASS ElementPrototype from inner.document.forms.testForm.0.__proto__.__proto__.__proto__
-PASS EventSourceContructor from inner.document.forms.testForm.0.ownerDocument.defaultView.EventSource
 FAIL Function from inner.document.location.pathname.constructor
 PASS HTMLAnchorElement from inner.document.forms.testForm.0.parentNode.firstElementChild
 PASS HTMLAnchorElementConstructor from inner.document.forms.testForm.0.parentNode.firstElementChild.constructor
@@ -148,6 +151,8 @@ PASS LocationPrototype from inner.document.location.__proto__
 PASS MediaList from inner.document.forms.testForm.0.ownerDocument.styleSheets.0.media
 PASS MediaListConstructor from inner.document.forms.testForm.0.ownerDocument.styleSheets.0.media.constructor
 PASS MediaListPrototype from inner.document.forms.testForm.0.ownerDocument.styleSheets.0.media.__proto__
+PASS MemoryInfo from inner.document.forms.testForm.0.ownerDocument.defaultView.console.memory
+PASS MemoryInfoPrototype from inner.document.forms.testForm.0.ownerDocument.defaultView.console.memory.__proto__
 PASS MimeType from inner.document.forms.testForm.0.ownerDocument.defaultView.clientInformation.mimeTypes.0
 PASS MimeTypeArray from inner.document.forms.testForm.0.ownerDocument.defaultView.clientInformation.mimeTypes
 PASS MimeTypeArrayConstructor from inner.document.forms.testForm.0.ownerDocument.defaultView.clientInformation.mimeTypes.constructor
@@ -196,6 +201,7 @@ PASS Text from inner.document.forms.testForm.0.parentNode.lastElementChild.previ
 PASS TextConstructor from inner.document.forms.testForm.0.attributes.0.lastChild.constructor
 PASS TextPrototype from inner.document.forms.testForm.0.attributes.0.lastChild.__proto__
 PASS TimeRanges from inner.document.forms.testForm.0.previousElementSibling.played
+PASS TimeRangesConstructor from inner.document.forms.testForm.0.previousElementSibling.played.constructor
 PASS TimeRangesPrototype from inner.document.forms.testForm.0.previousElementSibling.played.__proto__
 PASS ValidityState from inner.document.forms.testForm.0.0.validity
 PASS ValidityStatePrototype from inner.document.forms.testForm.0.0.validity.__proto__
@@ -205,13 +211,13 @@ PASS WebKitCSSKeyframeRulePrototype from inner.document.getElementById("dummySty
 PASS WebKitCSSKeyframesRule from inner.document.getElementById("dummyStyle").sheet.cssRules.6
 PASS WebKitCSSKeyframesRuleConstructor from inner.document.getElementById("dummyStyle").sheet.cssRules.6.constructor
 PASS WebKitCSSKeyframesRulePrototype from inner.document.getElementById("dummyStyle").sheet.cssRules.6.__proto__
-PASS XSLTProcessorConsructor from inner.document.forms.testForm.0.ownerDocument.defaultView.XSLTProcessor
 Never found Audio
 Never found Blob
 Never found CDATASection
 Never found CSSRule
 Never found CSSVariablesDeclaration
 Never found CSSVariablesRule
+Never found CanvasGradient
 Never found CharacterData
 Never found Clipboard
 Never found DOMParser
@@ -222,6 +228,7 @@ Never found DocumentType
 Never found Element
 Never found Entity
 Never found EntityReference
+Never found EventSource
 Never found File
 Never found FileList
 Never found FormData
@@ -311,6 +318,7 @@ Never found SVGFEBlendElement
 Never found SVGFEColorMatrixElement
 Never found SVGFEComponentTransferElement
 Never found SVGFECompositeElement
+Never found SVGFEConvolveMatrixElement
 Never found SVGFEDiffuseLightingElement
 Never found SVGFEDisplacementMapElement
 Never found SVGFEDistantLightElement
@@ -420,6 +428,7 @@ Never found XMLHttpRequestUpload
 Never found XMLSerializer
 Never found XPathEvaluator
 Never found XPathResult
+Never found XSLTProcessor
 PASS successfullyParsed is true
 
 TEST COMPLETE

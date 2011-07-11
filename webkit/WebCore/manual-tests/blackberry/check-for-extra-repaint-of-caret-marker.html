@@ -1,0 +1,40 @@
+<html>
+<head>
+<style>
+#input { border: 1px solid black; }
+</style>
+<script>
+function runTest()
+{
+    var input = document.getElementById("input");
+    var selection = window.getSelection();
+    selection.setPosition(input, 0);
+    selection.modify("move", "forward", "character");
+}
+window.onload = runTest;
+</script>
+</head>
+<body>
+<p>This test can be used to verify whether the caret marker is being extraneously repainted when caret blinking is disabled.</p>
+<p>(Note, we must continuously repaint the caret to show- and hide- it when caret blinking is enabled.)</p>
+<ol>
+    <li>Open the bugdisp application and navigate the device/simulator to this page.</li>
+    <li>This test FAILED if there is a continuous flow of messages in bugdisp of the form:
+<pre>
+USERMODE_TASK           SEMAPHORE USERMODE_TASK: Acquiring semaphore 660d838
+USERMODE_TASK           SEMAPHORE USERMODE_TASK: Releasing semaphore 660d838
+USERMODE_TASK           SEMAPHORE USERMODE_TASK: Acquiring semaphore 660d838
+USERMODE_TASK           SEMAPHORE USERMODE_TASK: Releasing semaphore 660d838
+USERMODE_TASK           SEMAPHORE USERMODE_TASK: Acquiring semaphore 660d218
+USERMODE_TASK           SEMAPHORE USERMODE_TASK: Releasing semaphore 660d218
+USERMODE_TASK             MESSAGE Posting <0x0056>::<0x9c88020d>( 0, 0, 0 )
+APP                    SEMAPHORE APP_THREAD: Acquiring semaphore 660d218
+APP                    SEMAPHORE APP_THREAD: Releasing semaphore 660d218
+APP                    SEMAPHORE APP_THREAD: Acquiring semaphore 660d838
+APP                    SEMAPHORE APP_THREAD: Releasing semaphore 660d838
+</pre>
+    Otherwise, it PASSED.</li>
+</ol>
+<div id="input" contenteditable="true">sample</div>
+</body>
+</html>

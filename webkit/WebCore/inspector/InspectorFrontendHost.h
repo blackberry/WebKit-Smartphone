@@ -62,11 +62,13 @@ public:
     void requestAttachWindow();
     void requestDetachWindow();
     void closeWindow();
+    void disconnectFromBackend();
     void bringToFront();
     void inspectedURLChanged(const String&);
 
     void setAttachedWindowHeight(unsigned height);
     void moveWindowBy(float x, float y) const;
+    void setExtensionAPI(const String& script);
 
     String localizedStringsURL();
     String hiddenPanels();
@@ -75,6 +77,7 @@ public:
 
     // Called from [Custom] implementations.
     void showContextMenu(Event*, const Vector<ContextMenuItem*>& items);
+    void sendMessageToBackend(const String& message);
 
 private:
 #if ENABLE(CONTEXT_MENUS)

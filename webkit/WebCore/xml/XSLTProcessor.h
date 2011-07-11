@@ -26,9 +26,9 @@
 #if ENABLE(XSLT)
 
 #include "Node.h"
-#include "StringHash.h"
 #include "XSLStyleSheet.h"
 #include <wtf/HashMap.h>
+#include <wtf/text/StringHash.h>
 
 #if !USE(QXMLQUERY)
 #include <libxml/parserInternals.h>
@@ -44,6 +44,7 @@ class DocumentFragment;
 class XSLTProcessor : public RefCounted<XSLTProcessor> {
 public:
     static PassRefPtr<XSLTProcessor> create() { return adoptRef(new XSLTProcessor); }
+    ~XSLTProcessor();
 
     void setXSLStyleSheet(PassRefPtr<XSLStyleSheet> styleSheet) { m_stylesheet = styleSheet; }
     bool transformToString(Node* source, String& resultMIMEType, String& resultString, String& resultEncoding);

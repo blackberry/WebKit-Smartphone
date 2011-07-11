@@ -28,24 +28,19 @@
 #include "CachePolicy.h"
 #include "CachedResource.h"
 #include "PlatformString.h"
-#include "StringHash.h"
 #include "loader.h"
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/Vector.h>
+#include <wtf/text/StringHash.h>
 
 namespace WebCore  {
 
 class CachedCSSStyleSheet;
 class CachedResource;
-class DocLoader;
+class CachedResourceLoader;
 class KURL;
-
-struct CacheClient {
-    virtual void didAddToLiveResourcesSize(CachedResource* resource) = 0;
-    virtual void didRemoveFromLiveResourcesSize(CachedResource* resource) = 0;
-};
 
 // This cache holds subresources used by Web pages: images, scripts, stylesheets, etc.
 
@@ -90,9 +85,6 @@ public:
 #if ENABLE(XSLT)
         TypeStatistic xslStyleSheets;
 #endif
-#if ENABLE(XBL)
-        TypeStatistic xblDocs;
-#endif
         TypeStatistic fonts;
     };
 
@@ -101,11 +93,11 @@ public:
 
     // Request resources from the cache.  A load will be initiated and a cache object created if the object is not
     // found in the cache.
-    CachedResource* requestResource(DocLoader*, CachedResource::Type, const KURL& url, const String& charset, bool isPreload = false);
+    CachedResource* requestResource(CachedResourceLoader*, CachedResource::Type, const KURL& url, const String& charset, bool isPreload = false);
 
-    CachedCSSStyleSheet* requestUserCSSStyleSheet(DocLoader*, const String& url, const String& charset);
+    CachedCSSStyleSheet* requestUserCSSStyleSheet(CachedResourceLoader*, const String& url, const String& charset);
     
-    void revalidateResource(CachedResource*, DocLoader*);
+    void revalidateResource(CachedResource*, CachedResourceLoader*);
     void revalidationSucceeded(CachedResource* revalidatingResource, const ResourceResponse&);
     void revalidationFailed(CachedResource* revalidatingResource);
     
@@ -120,8 +112,6 @@ public:
     // still live on if they are referenced by some Web page though.
     void setDisabled(bool);
     bool disabled() const { return m_disabled; }
-
-    void setClient(CacheClient* client) { m_client = client; }
     
     void setPruneEnabled(bool enabled) { m_pruneEnabled = enabled; }
     void prune()
@@ -139,8 +129,8 @@ public:
     // Remove an existing cache entry from both the resource map and from the LRU list.
     void remove(CachedResource* resource) { evict(resource); }
 
-    void addDocLoader(DocLoader*);
-    void removeDocLoader(DocLoader*);
+    void addCachedResourceLoader(CachedResourceLoader*);
+    void removeCachedResourceLoader(CachedResourceLoader*);
 
     CachedResource* resourceForURL(const String&);
 
@@ -183,7 +173,7 @@ private:
     void evict(CachedResource*);
 
     // Member variables.
-    HashSet<DocLoader*> m_docLoaders;
+    HashSet<CachedResourceLoader*> m_cachedResourceLoaders;
     Loader m_loader;
 
     bool m_disabled;  // Whether or not the cache is enabled.
@@ -209,8 +199,6 @@ private:
     // A URL-based map of all resources that are in the cache (including the freshest version of objects that are currently being 
     // referenced by a Web page).
     HashMap<String, CachedResource*> m_resources;
-
-    CacheClient* m_client;
 };
 
 // Function to obtain the global cache.

@@ -42,6 +42,7 @@
 #include "V8Utilities.h"
 #include "WrapperTypeInfo.h"
 #include <v8.h>
+#include <wtf/Forward.h>
 #include <wtf/PassRefPtr.h> // so generated bindings don't have to
 #include <wtf/Vector.h>
 
@@ -53,12 +54,12 @@
 
 namespace WebCore {
 
+    class CachedScript;
     class DOMWindow;
     class Frame;
     class Node;
     class SVGElement;
     class ScriptExecutionContext;
-    class String;
     class V8EventListener;
     class V8IsolatedContext;
     class WorldContextHandle;
@@ -201,7 +202,6 @@ namespace WebCore {
         }
 #endif
 
-        void setEventHandlerLineNumber(int lineNumber) { m_handlerLineNumber = lineNumber; }
         void finishedWithEvent(Event*) { }
 
         // Evaluate JavaScript in a new isolated world. The script gets its own
@@ -209,6 +209,9 @@ namespace WebCore {
         // Array, and so-on), and its own wrappers for all DOM nodes and DOM
         // constructors.
         void evaluateInIsolatedWorld(int worldId, const Vector<ScriptSourceCode>& sources, int extensionGroup);
+
+        // Returns true if the proxy is currently executing a script in V8.
+        bool executingScript() const;
 
         // Evaluate a script file in the current execution environment.
         // The caller must hold an execution context.
@@ -285,7 +288,7 @@ namespace WebCore {
 
         static v8::Handle<v8::Value> checkNewLegal(const v8::Arguments&);
 
-        static v8::Handle<v8::Script> compileScript(v8::Handle<v8::String> code, const String& fileName, int baseLine);
+        static v8::Handle<v8::Script> compileScript(v8::Handle<v8::String> code, const String& fileName, int baseLine, v8::ScriptData* = 0);
 
         // If the exception code is different from zero, a DOM exception is
         // schedule to be thrown.
@@ -293,6 +296,10 @@ namespace WebCore {
 
         // Schedule an error object to be thrown.
         static v8::Handle<v8::Value> throwError(ErrorType, const char* message);
+
+        // Helpers for throwing syntax and type errors with predefined messages.
+        static v8::Handle<v8::Value> throwTypeError();
+        static v8::Handle<v8::Value> throwSyntaxError();
 
         template <typename T>
         static v8::Handle<v8::Value> constructDOMObject(const v8::Arguments&, WrapperTypeInfo*);
@@ -331,11 +338,11 @@ namespace WebCore {
         static void reportUnsafeAccessTo(Frame* target, DelayReporting delay);
 
     private:
-        // If m_recursionCount is 0, let LocalStorage know so we can release
-        // the storage mutex.
-        void releaseStorageMutex();
+        void didLeaveScriptContext();
 
         void resetIsolatedWorlds();
+
+        PassOwnPtr<v8::ScriptData> precompileScript(v8::Handle<v8::String>, CachedScript*);
 
         // Returns false when we're out of memory in V8.
         bool setInjectedScriptContextDebugId(v8::Handle<v8::Context> targetContext);
@@ -353,12 +360,14 @@ namespace WebCore {
         static const char* svgExceptionName(int exceptionCode);
 #endif
 
+#if ENABLE(DATABASE)
+        static const char* sqlExceptionName(int exceptionCode);
+#endif
+
         Frame* m_frame;
 
         // For the moment, we have one of these.  Soon we will have one per DOMWrapperWorld.
         RefPtr<V8DOMWindowShell> m_windowShell;
-
-        int m_handlerLineNumber;
 
         // True for <a href="javascript:foo()"> and false for <script>foo()</script>.
         // Only valid during execution.

@@ -34,54 +34,97 @@
 #include "JSDOMBinding.h"
 #include "PlatformString.h"
 #include <runtime/UString.h>
-#include <runtime/StringBuilder.h>
+#include <wtf/Forward.h>
+#include <wtf/Deque.h>
 
 namespace WebCore {
 
-class String;
-
 class ScriptString {
 public:
-    ScriptString() {}
-    ScriptString(const char* s) : m_str(s) {}
-    ScriptString(const String& s) : m_str(stringToUString(s)) {}
-    ScriptString(const JSC::UString& s) : m_str(s) {}
+    ScriptString() : m_ropeLength(0) {}
+    ScriptString(const char* s) : m_str(s), m_ropeLength(0) {}
+    ScriptString(const WTF::String& s) : m_str(stringToUString(s)), m_ropeLength(0) {}
+    ScriptString(const JSC::UString& s) : m_str(s), m_ropeLength(0) {}
 
-    operator JSC::UString() const { return m_str; }
-    operator String() const { return ustringToString(m_str); }
-    const JSC::UString& ustring() const { return m_str; }
+    operator JSC::UString() const { buildIfNeeded(); return m_str; }
+    operator WTF::String() const { buildIfNeeded(); return ustringToString(m_str); }
+    const JSC::UString& ustring() const { buildIfNeeded(); return m_str; }
 
-    bool isNull() const { return m_str.isNull(); }
-    size_t size() const { return m_str.size(); }
+    bool isNull() const { return m_str.isNull() && !m_ropeLength; }
+    size_t size() const { return m_str.length() + m_ropeLength; }
+
+    ScriptString(const ScriptString& s)
+        : m_ropeLength(0)
+    {
+        s.buildIfNeeded();
+        m_str = s.m_str;
+    }
+
+    ScriptString& operator=(const ScriptString& s)
+    {
+        s.buildIfNeeded();
+        m_str = s.m_str;
+        m_rope.clear();
+        m_ropeLength = 0;
+        return *this;
+    }
 
     ScriptString& operator=(const char* s)
     {
         m_str = s;
+        m_rope.clear();
+        m_ropeLength = 0;
         return *this;
     }
 
-    ScriptString& operator+=(const String& s)
+    ScriptString& operator+=(const WTF::String& s)
     {
-        JSC::StringBuilder buffer;
-        buffer.append(m_str);
-        buffer.append(stringToUString(s));
-        m_str = buffer.build();
+        m_rope.append(stringToUString(s));
+        m_ropeLength += s.length();
         return *this;
     }
 
     bool operator==(const ScriptString& s) const
     {
+        buildIfNeeded();
         return m_str == s.m_str;
     }
 
     bool operator!=(const ScriptString& s) const
     {
+        buildIfNeeded();
         // Avoid exporting an extra symbol by re-using "==" operator.
         return !(m_str == s.m_str);
     }
 
 private:
+
+    void buildIfNeeded() const
+    {
+        if (!m_ropeLength)
+            return;
+
+        Vector<UChar> buffer;
+        buffer.reserveCapacity(m_str.length() + m_ropeLength);
+        buffer.append(m_str.characters(), m_str.length());
+
+        Deque<JSC::UString>::const_iterator it = m_rope.begin();
+        Deque<JSC::UString>::const_iterator end = m_rope.end();
+
+        for (; it != end; ++it) {
+            const JSC::UString& s = *it;
+            buffer.append(s.characters(), s.length());
+        }
+
+        ScriptString* that = const_cast<ScriptString*>(this);
+        that->m_rope.clear();
+        that->m_str = JSC::UString(buffer.data(), buffer.size());
+        that->m_ropeLength = 0;
+    }
+
     JSC::UString m_str;
+    Deque<JSC::UString> m_rope;
+    size_t m_ropeLength;
 };
 
 } // namespace WebCore

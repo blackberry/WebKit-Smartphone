@@ -39,7 +39,6 @@ all : \
     ArrayPrototype.lut.h \
     chartables.c \
     DatePrototype.lut.h \
-    Grammar.cpp \
     JSONObject.lut.h \
     Lexer.lut.h \
     MathObject.lut.h \
@@ -49,6 +48,9 @@ all : \
     StringPrototype.lut.h \
     docs/bytecode.html \
     RegExpJitTables.h \
+    JavaScriptCore.JSVALUE32.exp \
+    JavaScriptCore.JSVALUE32_64.exp \
+    JavaScriptCore.JSVALUE64.exp \
 #
 
 # lookup tables for classes
@@ -57,16 +59,6 @@ all : \
 	$^ -i > $@
 Lexer.lut.h: create_hash_table Keywords.table
 	$^ > $@
-
-# JavaScript language grammar
-
-Grammar.cpp: Grammar.y
-	bison -d -p jscyy $< -o $@ > bison_out.txt 2>&1
-	perl -p -e 'END { if ($$conflict) { unlink "Grammar.cpp"; die; } } $$conflict ||= /conflict/' < bison_out.txt
-	touch Grammar.cpp.h
-	touch Grammar.hpp
-	cat Grammar.cpp.h Grammar.hpp > Grammar.h
-	rm -f Grammar.cpp.h Grammar.hpp bison_out.txt
 
 # character tables for PCRE
 
@@ -79,3 +71,12 @@ docs/bytecode.html: make-bytecode-docs.pl Interpreter.cpp
 #character tables for Yarr
 RegExpJitTables.h: create_regex_tables
 	python $^ > $@
+
+JavaScriptCore.JSVALUE32.exp: JavaScriptCore.exp JavaScriptCore.JSVALUE32only.exp
+	cat $^ > $@
+
+JavaScriptCore.JSVALUE32_64.exp: JavaScriptCore.exp JavaScriptCore.JSVALUE32_64only.exp
+	cat $^ > $@
+
+JavaScriptCore.JSVALUE64.exp: JavaScriptCore.exp JavaScriptCore.JSVALUE64only.exp
+	cat $^ > $@

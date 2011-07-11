@@ -61,14 +61,10 @@ public:
     int selectionBottom() const { return lineBottom(); }
     int selectionHeight() const { return max(0, selectionBottom() - selectionTop()); }
 
-    virtual int verticallyAlignBoxes(int heightOfBlock, GlyphOverflowAndFallbackFontsMap&);
+    int verticallyAlignBoxes(int heightOfBlock, GlyphOverflowAndFallbackFontsMap&);
     void setLineTopBottomPositions(int top, int bottom);
 
     virtual RenderLineBoxList* rendererLineBoxes() const;
-
-#if ENABLE(SVG)
-    virtual void computePerCharacterLayoutInformation() { }
-#endif
 
     RenderObject* lineBreakObj() const { return m_lineBreakObj; }
     BidiStatus lineBreakBidiStatus() const;
@@ -91,17 +87,17 @@ public:
 
     EllipsisBox* ellipsisBox() const;
 
-    void paintEllipsisBox(RenderObject::PaintInfo&, int tx, int ty) const;
+    void paintEllipsisBox(PaintInfo&, int tx, int ty) const;
     bool hitTestEllipsisBox(HitTestResult&, int x, int y, int tx, int ty, HitTestAction, bool);
 
     virtual void clearTruncation();
 
 #if PLATFORM(MAC)
     void addHighlightOverflow();
-    void paintCustomHighlight(RenderObject::PaintInfo&, int tx, int ty, const AtomicString& highlightType);
+    void paintCustomHighlight(PaintInfo&, int tx, int ty, const AtomicString& highlightType);
 #endif
 
-    virtual void paint(RenderObject::PaintInfo&, int tx, int ty);
+    virtual void paint(PaintInfo&, int tx, int ty);
     virtual bool nodeAtPoint(const HitTestRequest&, HitTestResult&, int, int, int, int);
 
     bool hasSelectedChildren() const { return m_hasSelectedChildren; }
@@ -112,7 +108,7 @@ public:
     InlineBox* lastSelectedBox();
 
     GapRects fillLineSelectionGap(int selTop, int selHeight, RenderBlock* rootBlock, int blockX, int blockY,
-                                  int tx, int ty, const RenderObject::PaintInfo*);
+                                  int tx, int ty, const PaintInfo*);
 
     RenderBlock* block() const;
 
@@ -122,7 +118,7 @@ public:
     {
         ASSERT(!isDirty());
         if (!m_floats)
-            m_floats.set(new Vector<RenderBox*>());
+            m_floats= adoptPtr(new Vector<RenderBox*>);
         return *m_floats;
     }
 
@@ -132,7 +128,10 @@ public:
     virtual void attachLineBoxToRenderObject();
     virtual void removeLineBoxFromRenderObject();
 
-protected:
+private:
+    bool hasEllipsisBox() const { return m_hasEllipsisBoxOrHyphen; }
+    void setHasEllipsisBox(bool hasEllipsisBox) { m_hasEllipsisBoxOrHyphen = hasEllipsisBox; }
+
     // Where this line ended.  The exact object and the position within that object are stored so that
     // we can create an InlineIterator beginning just after the end of this line.
     RenderObject* m_lineBreakObj;

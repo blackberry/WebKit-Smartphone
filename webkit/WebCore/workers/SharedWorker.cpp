@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2009 Google Inc. All rights reserved.
+ * Copyright (C) 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -40,28 +41,55 @@
 #include "MessagePort.h"
 #include "SharedWorkerRepository.h"
 
+#if OS(OLYMPIA)
+#include "OlympiaPlatformMisc.h"
+#endif
+
 namespace WebCore {
 
-SharedWorker::SharedWorker(const String& url, const String& name, ScriptExecutionContext* context, ExceptionCode& ec)
+inline SharedWorker::SharedWorker(ScriptExecutionContext* context)
     : AbstractWorker(context)
 {
-    RefPtr<MessageChannel> channel = MessageChannel::create(scriptExecutionContext());
-    m_port = channel->port1();
-    OwnPtr<MessagePortChannel> remotePort = channel->port2()->disentangle(ec);
-    ASSERT(!ec);
-
-    KURL scriptUrl = resolveURL(url, ec);
-    if (ec)
-        return;
-    SharedWorkerRepository::connect(this, remotePort.release(), scriptUrl, name, ec);
-#if ENABLE(INSPECTOR)
-    if (InspectorController* inspector = scriptExecutionContext()->inspectorController())
-        inspector->didCreateWorker(asID(), scriptUrl.string(), true);
+#if OS(OLYMPIA)
+    Olympia::Platform::increaseWorkerCount();
 #endif
+}
+
+PassRefPtr<SharedWorker> SharedWorker::create(const String& url, const String& name, ScriptExecutionContext* context, ExceptionCode& ec)
+{
+#if OS(OLYMPIA)
+    if (!Olympia::Platform::willStartWorker()) {
+        ec = INVALID_STATE_ERR;
+        return 0;
+    }
+#endif
+
+    RefPtr<SharedWorker> worker = adoptRef(new SharedWorker(context));
+
+    RefPtr<MessageChannel> channel = MessageChannel::create(context);
+    worker->m_port = channel->port1();
+    OwnPtr<MessagePortChannel> remotePort = channel->port2()->disentangle(ec);
+    ASSERT(remotePort);
+
+    KURL scriptURL = worker->resolveURL(url, ec);
+    if (scriptURL.isEmpty())
+        return 0;
+
+    SharedWorkerRepository::connect(worker.get(), remotePort.release(), scriptURL, name, ec);
+
+#if ENABLE(INSPECTOR)
+    if (InspectorController* inspector = context->inspectorController())
+        inspector->didCreateWorker(worker->asID(), scriptURL.string(), true);
+#endif
+
+    return worker.release();
 }
 
 SharedWorker::~SharedWorker()
 {
+#if OS(OLYMPIA)
+    Olympia::Platform::decreaseWorkerCount();
+#endif
 }
 
 } // namespace WebCore

@@ -1,0 +1,23 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x148
+  RenderBlock {HTML} at (0,0) size 800x148
+    RenderBody {BODY} at (8,16) size 784x116
+      RenderBlock {P} at (0,0) size 784x21 [color=#000080]
+        RenderText {#text} at (0,1) size 545x19
+          text run at (0,1) width 545: "In the following test, the blue blocks should be on the given sides of the teal rectangle."
+      RenderBlock {DIV} at (0,37) size 784x79
+        RenderBlock {DIV} at (16,0) size 752x79 [color=#00FFFF] [bgcolor=#008080]
+          RenderBlock (floating) {P} at (8,8) size 176x58 [color=#FFFFFF] [bgcolor=#000080] [border: (4px solid #0000FF)]
+            RenderText {#text} at (8,9) size 156x40
+              text run at (8,9) width 156: "\x{21E6} This blue block should"
+              text run at (8,30) width 87: "be on the left."
+          RenderBlock (floating) {P} at (568,8) size 176x58 [color=#FFFFFF] [bgcolor=#000080] [border: (4px solid #0000FF)]
+            RenderText {#text} at (8,9) size 156x40
+              text run at (8,9) width 156: "\x{21E8} This blue block should"
+              text run at (8,30) width 96: "be on the right."
+          RenderText {#text} at (184,9) size 380x61
+            text run at (184,9) width 380: "Teal rectangle. Teal rectangle. Teal rectangle. Teal rectangle."
+            text run at (184,30) width 192: "Teal rectangle. Teal rectangle. "
+            text run at (376,30) width 188: "Teal rectangle. Teal rectangle."
+            text run at (184,51) width 380: "Teal rectangle. Teal rectangle. Teal rectangle. Teal rectangle."

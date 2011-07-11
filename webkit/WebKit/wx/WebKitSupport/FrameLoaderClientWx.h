@@ -34,6 +34,7 @@
 #include "PluginView.h"
 #include "ResourceResponse.h"
 #include "HTMLPlugInElement.h"
+#include <wtf/Forward.h>
 
 class wxWebFrame;
 class wxWebView;
@@ -45,7 +46,6 @@ namespace WebCore {
     class Element;
     class FormState;
     class NavigationAction;
-    class String;
     class ResourceLoader;
 
     struct LoadErrorResetToken;
@@ -131,6 +131,7 @@ namespace WebCore {
         virtual void finishedLoading(DocumentLoader*);
 
         virtual bool canShowMIMEType(const String& MIMEType) const;
+        virtual bool canShowMIMETypeAsHTML(const String& MIMEType) const;
         virtual bool representationExistsForURLScheme(const String& URLScheme) const;
         virtual String generatedMIMETypeForURLScheme(const String& URLScheme) const;
 

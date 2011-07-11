@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2008 Collabora Ltd. All rights reserved.
+ * Copyright (C) 2010 Girish Ramakrishnan <girish@forwardbias.in>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,7 +28,9 @@
 #include "config.h"
 #include "PluginView.h"
 
+#if USE(JSC)
 #include "Bridge.h"
+#endif
 #include "Chrome.h"
 #include "Document.h"
 #include "DocumentLoader.h"
@@ -84,6 +87,8 @@ using JSC::JSObject;
 using JSC::JSValue;
 using JSC::UString;
 #endif
+
+#if ENABLE(NETSCAPE_PLUGIN_API)
 
 using std::min;
 
@@ -170,9 +175,9 @@ void PluginView::handleEvent(Event* event)
     else if (event->isKeyboardEvent())
         handleKeyboardEvent(static_cast<KeyboardEvent*>(event));
 #if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API)
-    else if (event->type() == eventNames().DOMFocusOutEvent)
+    else if (event->type() == eventNames().DOMFocusOutEvent || event->type() == eventNames().focusoutEvent)
         handleFocusOutEvent();
-    else if (event->type() == eventNames().DOMFocusInEvent)
+    else if (event->type() == eventNames().DOMFocusInEvent || event->type() == eventNames().focusinEvent)
         handleFocusInEvent();
 #endif
 }
@@ -289,7 +294,10 @@ PluginView::~PluginView()
 
     ASSERT(!m_lifeSupportTimer.isActive());
 
-    instanceMap().remove(m_instance);
+    // If we failed to find the plug-in, we'll return early in our constructor, and
+    // m_instance will be 0.
+    if (m_instance)
+        instanceMap().remove(m_instance);
 
     if (m_isWaitingToStart)
         m_parentFrame->document()->removeMediaCanStartListener(this);
@@ -536,8 +544,8 @@ NPError PluginView::load(const FrameLoadRequest& frameLoadRequest, bool sendNoti
         // For security reasons, only allow JS requests to be made on the frame that contains the plug-in.
         if (!targetFrameName.isNull() && m_parentFrame->tree()->find(targetFrameName) != m_parentFrame)
             return NPERR_INVALID_PARAM;
-    } else if (!SecurityOrigin::canLoad(url, String(), m_parentFrame->document()))
-            return NPERR_GENERIC_ERROR;
+    } else if (!m_parentFrame->document()->securityOrigin()->canDisplay(url))
+        return NPERR_GENERIC_ERROR;
 
     PluginRequest* request = new PluginRequest(frameLoadRequest, sendNotification, notifyData, arePopupsAllowed());
     scheduleRequest(request);
@@ -675,6 +683,12 @@ NPError PluginView::setValue(NPPVariable variable, void* value)
     }
 #endif // defined(XP_MACOSX)
 
+#if PLATFORM(QT) && defined(MOZ_PLATFORM_MAEMO) && (MOZ_PLATFORM_MAEMO == 5)
+    case NPPVpluginWindowlessLocalBool:
+        m_renderToImage = true;
+        return NPERR_NO_ERROR;
+#endif
+
     default:
         notImplemented();
         return NPERR_GENERIC_ERROR;
@@ -721,10 +735,9 @@ void PluginView::setJavaScriptPaused(bool paused)
         m_requestTimer.startOneShot(0);
 }
 
-#if USE(JSC)
-PassRefPtr<JSC::Bindings::Instance> PluginView::bindingInstance()
-{
 #if ENABLE(NETSCAPE_PLUGIN_API)
+NPObject* PluginView::npObject()
+{
     NPObject* object = 0;
 
     if (!m_isStarted || !m_plugin || !m_plugin->pluginFuncs()->getvalue)
@@ -738,12 +751,29 @@ PassRefPtr<JSC::Bindings::Instance> PluginView::bindingInstance()
     NPError npErr;
     {
         PluginView::setCurrentPluginView(this);
+#if USE(JSC)
         JSC::JSLock::DropAllLocks dropAllLocks(JSC::SilenceAssertionsOnly);
+#endif
         setCallingPlugin(true);
         npErr = m_plugin->pluginFuncs()->getvalue(m_instance, NPPVpluginScriptableNPObject, &object);
         setCallingPlugin(false);
         PluginView::setCurrentPluginView(0);
     }
+
+    if (npErr != NPERR_NO_ERROR)
+        return 0;
+
+    return object;
+}
+#endif
+
+#if USE(JSC)
+PassRefPtr<JSC::Bindings::Instance> PluginView::bindingInstance()
+{
+#if ENABLE(NETSCAPE_PLUGIN_API)
+    NPObject* object = npObject();
+    if (!object)
+        return 0;
 
     if (hasOneRef()) {
         // The renderer for the PluginView was destroyed during the above call, and
@@ -751,9 +781,6 @@ PassRefPtr<JSC::Bindings::Instance> PluginView::bindingInstance()
         // return null.
         return 0;
     }
-
-    if (npErr != NPERR_NO_ERROR || !object)
-        return 0;
 
     RefPtr<JSC::Bindings::RootObject> root = m_parentFrame->script()->createRootObject(this);
     RefPtr<JSC::Bindings::Instance> instance = JSC::Bindings::CInstance::create(object, root.release());
@@ -816,6 +843,7 @@ PluginView::PluginView(Frame* parentFrame, const IntSize& size, PluginPackage* p
     , m_paramNames(0)
     , m_paramValues(0)
     , m_mimeType(mimeType)
+    , m_instance(0)
 #if defined(XP_MACOSX)
     , m_isWindowed(false)
 #else
@@ -849,6 +877,9 @@ PluginView::PluginView(Frame* parentFrame, const IntSize& size, PluginPackage* p
     , m_visual(0)
     , m_colormap(0)
     , m_pluginDisplay(0)
+#endif
+#if PLATFORM(QT) && defined(MOZ_PLATFORM_MAEMO) && (MOZ_PLATFORM_MAEMO == 5)
+    , m_renderToImage(false)
 #endif
     , m_loadManually(loadManually)
     , m_manualStream(0)
@@ -1375,7 +1406,9 @@ void PluginView::privateBrowsingStateChanged(bool privateBrowsingEnabled)
         return;
 
     PluginView::setCurrentPluginView(this);
+#if USE(JSC)
     JSC::JSLock::DropAllLocks dropAllLocks(JSC::SilenceAssertionsOnly);
+#endif
     setCallingPlugin(true);
     NPBool value = privateBrowsingEnabled;
     setValue(m_instance, NPNVprivateModeBool, &value);
@@ -1384,3 +1417,5 @@ void PluginView::privateBrowsingStateChanged(bool privateBrowsingEnabled)
 }
 
 } // namespace WebCore
+
+#endif // ENABLE(NETSCAPE_PLUGIN_API)

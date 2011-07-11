@@ -1,0 +1,71 @@
+<html>
+<head>
+<link rel="stylesheet" href="../../../../fast/js/resources/js-test-style.css">
+<script src="../../../../fast/js/resources/js-test-pre.js"></script>
+<script>
+var event;
+function runTest()
+{
+    if (!window.layoutTestController)
+        return;
+
+    if (!window.eventSender)
+        return;
+
+    layoutTestController.dumpAsText();
+    var input = document.getElementById("input");
+    input.focus();
+
+    const upperCaseA = "A";
+    debug("Test that eventSender.keyDown('A') is equivalent to pressing: Shift + a:");
+    input.onkeydown = function(e) { checkKeyboardEventModifierKeys(e, ["shiftKey"]) };
+    eventSender.keyDown(upperCaseA);
+
+    const lowerCaseA = "a"
+    debug("Simulate Shift + " + lowerCaseA + ":");
+    input.onkeydown = function(e) { checkKeyboardEventModifierKeys(e, ["shiftKey"]) };
+    eventSender.keyDown(lowerCaseA, ["shiftKey"]);
+
+    debug("Simulate Alt + " + lowerCaseA + ":");
+    input.onkeydown = function(e) { checkKeyboardEventModifierKeys(e, ["altKey"]) };
+    eventSender.keyDown(lowerCaseA, ["altKey"]);
+
+    debug("Simulate Shift + Alt + " + lowerCaseA + ":");
+    input.onkeydown = function(e) { checkKeyboardEventModifierKeys(e, ["shiftKey", "altKey"]) };
+    eventSender.keyDown(lowerCaseA, ["shiftKey", "altKey"]);
+    
+    var testContainer = document.getElementById("test-container");
+    if (testContainer)
+        document.body.removeChild(testContainer);
+    debug('<br /><span class="pass">TEST COMPLETE</span>');
+}
+
+function checkKeyboardEventModifierKeys(e, expectedModifierKeys)
+{
+    if (!e || !expectedModifierKeys)
+        return;
+
+    event = e;
+    for (var i = 0; i < expectedModifierKeys.length; ++i) {
+        if (expectedModifierKeys[i] === "shiftKey")
+            shouldBeTrue('event.shiftKey');
+        else if (expectedModifierKeys[i] === "altKey")
+            shouldBeTrue('event.altKey');
+    }
+}
+
+window.onload = runTest;
+</script>
+</head>
+<body>
+<p id="description"></p>
+<div id="test-container">
+    <input id="input" type="text"/>
+</div>
+<div id="console"></div>
+<script>
+    description("This tests that modifier keys of user-generated key down events are passed in DOM Keyboard Events.");
+    var successfullyParsed = true;
+</script>
+</body>
+</html>

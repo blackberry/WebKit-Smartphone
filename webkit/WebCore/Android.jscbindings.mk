@@ -58,6 +58,7 @@ BINDING_C_INCLUDES := \
 
 LOCAL_SRC_FILES += \
 	bindings/js/GCController.cpp \
+	bindings/js/IDBBindingUtilities.cpp \
 	bindings/js/JSAttrCustom.cpp \
 	bindings/js/JSAudioConstructor.cpp \
 	bindings/js/JSCDATASectionCustom.cpp \
@@ -66,7 +67,6 @@ LOCAL_SRC_FILES += \
 	bindings/js/JSCSSStyleDeclarationCustom.cpp \
 	bindings/js/JSCSSValueCustom.cpp \
 	bindings/js/JSCallbackData.cpp \
-	bindings/js/JSCanvasNumberArrayCustom.cpp \
 	bindings/js/JSCanvasRenderingContext2DCustom.cpp \
 	bindings/js/JSCanvasRenderingContextCustom.cpp \
 	bindings/js/JSClipboardCustom.cpp \
@@ -79,19 +79,20 @@ LOCAL_SRC_FILES += \
 	bindings/js/JSCustomSQLTransactionCallback.cpp \
 	bindings/js/JSCustomSQLTransactionErrorCallback.cpp \
 	bindings/js/JSCustomVoidCallback.cpp \
-	bindings/js/JSDatabaseCallback.cpp \
-	bindings/js/JSDesktopNotificationsCustom.cpp \
 	bindings/js/JSDOMApplicationCacheCustom.cpp \
 	bindings/js/JSDOMBinding.cpp \
-  bindings/js/JSDOMFormDataCustom.cpp \
+	bindings/js/JSDOMFormDataCustom.cpp \
 	bindings/js/JSDOMGlobalObject.cpp \
 	bindings/js/JSDOMWindowBase.cpp \
 	bindings/js/JSDOMWindowCustom.cpp \
 	bindings/js/JSDOMWindowShell.cpp \
+	bindings/js/JSDatabaseCallback.cpp \
 	bindings/js/JSDataGridColumnListCustom.cpp \
 	bindings/js/JSDataGridDataSource.cpp \
-	bindings/js/JSDatabaseCustom.cpp \
 	bindings/js/JSDedicatedWorkerContextCustom.cpp \
+	bindings/js/JSDesktopNotificationsCustom.cpp \
+	bindings/js/JSDeviceMotionEventCustom.cpp \
+	bindings/js/JSDeviceOrientationEventCustom.cpp \
 	bindings/js/JSDocumentCustom.cpp \
 	bindings/js/JSElementCustom.cpp \
 	bindings/js/JSEventCustom.cpp \
@@ -110,18 +111,18 @@ LOCAL_SRC_FILES += \
 	bindings/js/JSHTMLFormElementCustom.cpp \
 	bindings/js/JSHTMLFrameElementCustom.cpp \
 	bindings/js/JSHTMLFrameSetElementCustom.cpp \
-	bindings/js/JSHTMLIFrameElementCustom.cpp \
 	bindings/js/JSHTMLInputElementCustom.cpp \
 	bindings/js/JSHTMLObjectElementCustom.cpp \
 	bindings/js/JSHTMLOptionsCollectionCustom.cpp \
 	bindings/js/JSHTMLSelectElementCustom.cpp \
 	bindings/js/JSHistoryCustom.cpp \
+	bindings/js/JSIDBAnyCustom.cpp \
+	bindings/js/JSIDBKeyCustom.cpp \
 	bindings/js/JSImageConstructor.cpp \
 	bindings/js/JSImageDataCustom.cpp \
 	bindings/js/JSLazyEventListener.cpp \
 	bindings/js/JSLocationCustom.cpp \
 	bindings/js/JSMainThreadExecState.cpp \
-	bindings/js/JSMessageChannelConstructor.cpp \
 	bindings/js/JSMessageChannelCustom.cpp \
 	bindings/js/JSMessageEventCustom.cpp \
 	bindings/js/JSMessagePortCustom.cpp \
@@ -144,24 +145,20 @@ LOCAL_SRC_FILES += \
 	bindings/js/JSSVGMatrixCustom.cpp \
 	bindings/js/JSSVGPathSegCustom.cpp \
 	bindings/js/JSSVGPathSegListCustom.cpp \
-	bindings/js/JSSharedWorkerConstructor.cpp \
 	bindings/js/JSSharedWorkerCustom.cpp \
 	bindings/js/JSStorageCustom.cpp \
 	bindings/js/JSStyleSheetCustom.cpp \
 	bindings/js/JSStyleSheetListCustom.cpp \
 	bindings/js/JSTextCustom.cpp \
 	bindings/js/JSTreeWalkerCustom.cpp \
-	bindings/js/JSWebKitCSSMatrixConstructor.cpp \
-	bindings/js/JSWebKitPointConstructor.cpp \
-	bindings/js/JSWorkerConstructor.cpp \
+	bindings/js/JSWebKitCSSMatrixCustom.cpp \
+	bindings/js/JSWebKitPointCustom.cpp \
 	bindings/js/JSWorkerContextBase.cpp \
 	bindings/js/JSWorkerContextCustom.cpp \
 	bindings/js/JSWorkerContextErrorHandler.cpp \
 	bindings/js/JSWorkerCustom.cpp \
-	bindings/js/JSXMLHttpRequestConstructor.cpp \
 	bindings/js/JSXMLHttpRequestCustom.cpp \
 	bindings/js/JSXMLHttpRequestUploadCustom.cpp \
-	bindings/js/JSXSLTProcessorConstructor.cpp \
 	bindings/js/JSXSLTProcessorCustom.cpp \
 	bindings/js/ScheduledAction.cpp \
 	bindings/js/ScriptArray.cpp \
@@ -172,6 +169,7 @@ LOCAL_SRC_FILES += \
 	bindings/js/ScriptEventListener.cpp \
 	bindings/js/ScriptFunctionCall.cpp \
 	bindings/js/ScriptObject.cpp \
+	bindings/js/ScriptProfile.cpp \
 	bindings/js/ScriptState.cpp \
 	bindings/js/ScriptValue.cpp \
 	bindings/js/SerializedScriptValue.cpp \

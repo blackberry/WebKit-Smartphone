@@ -26,22 +26,16 @@
 #include "ExecutableAllocator.h"
 #include <wtf/Forward.h>
 #include <wtf/RefCounted.h>
-#include "yarr/RegexJIT.h"
-#include "yarr/RegexInterpreter.h"
 
 namespace JSC {
 
-    struct JSRegExp;
-
+    struct RegExpRepresentation;
     class JSGlobalData;
 
     class RegExp : public RefCounted<RegExp> {
     public:
-        static PassRefPtr<RegExp> create(JSGlobalData* globalData, const UString& pattern);
         static PassRefPtr<RegExp> create(JSGlobalData* globalData, const UString& pattern, const UString& flags);
-#if !ENABLE(YARR)
         ~RegExp();
-#endif
 
         bool global() const { return m_flagBits & Global; }
         bool ignoreCase() const { return m_flagBits & IgnoreCase; }
@@ -54,9 +48,12 @@ namespace JSC {
 
         int match(const UString&, int startOffset, Vector<int, 32>* ovector = 0);
         unsigned numSubpatterns() const { return m_numSubpatterns; }
+        
+#if ENABLE(REGEXP_TRACING)
+        void printTraceData();
+#endif
 
     private:
-        RegExp(JSGlobalData* globalData, const UString& pattern);
         RegExp(JSGlobalData* globalData, const UString& pattern, const UString& flags);
 
         void compile(JSGlobalData*);
@@ -67,17 +64,12 @@ namespace JSC {
         int m_flagBits;
         const char* m_constructionError;
         unsigned m_numSubpatterns;
-        UString m_lastMatchString;
-        int m_lastMatchStart;
-        Vector<int, 32> m_lastOVector;
-
-#if ENABLE(YARR_JIT)
-        Yarr::RegexCodeBlock m_regExpJITCode;
-#elif ENABLE(YARR)
-        OwnPtr<Yarr::BytecodePattern> m_regExpBytecode;
-#else
-        JSRegExp* m_regExp;
+#if ENABLE(REGEXP_TRACING)
+        unsigned m_rtMatchCallCount;
+        unsigned m_rtMatchFoundCount;
 #endif
+
+        OwnPtr<RegExpRepresentation> m_representation;
     };
 
 } // namespace JSC

@@ -1,0 +1,60 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderTable {TABLE} at (0,0) size 424x131 [border: none (1px solid #808080) none (1px solid #808080)]
+        RenderBlock {CAPTION} at (0,0) size 422x21
+          RenderText {#text} at (17,1) size 388x19
+            text run at (17,1) width 388: "Communicator 4.5 Installers for Mac and Windows Platforms"
+        RenderTableSection {TBODY} at (1,21) size 422x110
+          RenderTableRow {TR} at (0,2) size 422x25
+            RenderTableCell {TH} at (2,12) size 118x4 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+            RenderTableCell {TH} at (122,2) size 111x25 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 107x19
+                text run at (2,3) width 107: "Macintosh PPC"
+            RenderTableCell {TH} at (235,2) size 88x25 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 84x19
+                text run at (2,3) width 84: "Windows 95"
+            RenderTableCell {TH} at (325,2) size 95x25 [border: (1px inset #808080)] [r=0 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 91x19
+                text run at (2,3) width 91: "Windows NT"
+          RenderTableRow {TR} at (0,29) size 422x25
+            RenderTableCell {TD} at (2,29) size 118x25 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 73x19
+                text run at (2,3) width 73: "Base Install"
+            RenderTableCell {TD} at (122,29) size 111x25 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (235,29) size 88x25 [border: (1px inset #808080)] [r=1 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (325,29) size 95x25 [border: (1px inset #808080)] [r=1 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+          RenderTableRow {TR} at (0,56) size 422x25
+            RenderTableCell {TD} at (2,56) size 118x25 [border: (1px inset #808080)] [r=2 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 103x19
+                text run at (2,3) width 103: "Complete Install"
+            RenderTableCell {TD} at (122,56) size 111x25 [border: (1px inset #808080)] [r=2 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (235,56) size 88x25 [border: (1px inset #808080)] [r=2 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (325,56) size 95x25 [border: (1px inset #808080)] [r=2 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+          RenderTableRow {TR} at (0,83) size 422x25
+            RenderTableCell {TD} at (2,83) size 118x25 [border: (1px inset #808080)] [r=3 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 114x19
+                text run at (2,3) width 114: "Pro Edition Install"
+            RenderTableCell {TD} at (122,83) size 111x25 [border: (1px inset #808080)] [r=3 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (235,83) size 88x25 [border: (1px inset #808080)] [r=3 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (325,83) size 95x25 [border: (1px inset #808080)] [r=3 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"

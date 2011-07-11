@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -24,6 +25,8 @@
 #include "FileChooser.h"
 #include "FocusDirection.h"
 #include "HostWindow.h"
+#include "PopupMenu.h"
+#include "SearchPopupMenu.h"
 #include <wtf/Forward.h>
 #include <wtf/RefPtr.h>
 
@@ -44,7 +47,7 @@ namespace WebCore {
     class IntRect;
     class Node;
     class Page;
-    class String;
+    class PopupMenuClient;
 #if ENABLE(NOTIFICATIONS)
     class NotificationPresenter;
 #endif
@@ -69,6 +72,7 @@ namespace WebCore {
         virtual IntRect windowToScreen(const IntRect&) const;
         virtual PlatformPageClient platformPageClient() const;
         virtual void scrollbarsModeDidChange() const;
+        virtual void setCursor(const Cursor&);
 
         void scrollRectIntoView(const IntRect&) const;
 
@@ -121,9 +125,6 @@ namespace WebCore {
         void setStatusbarText(Frame*, const String&);
         bool shouldInterruptJavaScript();
 
-        void registerProtocolHandler(const String& scheme, const String& baseURL, const String& url, const String& title);
-        void registerContentHandler(const String& mimeType, const String& baseURL, const String& url, const String& title);
-
         IntRect windowResizerRect() const;
 
         void mouseDidMoveOverElement(const HitTestResult&, unsigned modifierFlags);
@@ -138,8 +139,6 @@ namespace WebCore {
         void runOpenPanel(Frame*, PassRefPtr<FileChooser>);
         void chooseIconForFiles(const Vector<String>&, FileChooser*);
 
-        bool setCursor(PlatformCursorHandle);
-
 #if PLATFORM(MAC)
         void focusNSView(NSView*);
 #endif
@@ -148,6 +147,9 @@ namespace WebCore {
         NotificationPresenter* notificationPresenter() const; 
 #endif
 
+        bool selectItemWritingDirectionIsNatural();
+        PassRefPtr<PopupMenu> createPopupMenu(PopupMenuClient*) const;
+        PassRefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient*) const;
 #if PLATFORM(OLYMPIA)
         void layoutFinished(Frame*) const;
         void overflowExceedsContentsSize(Frame*) const;

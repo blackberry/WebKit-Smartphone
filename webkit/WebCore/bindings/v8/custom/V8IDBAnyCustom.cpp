@@ -11,9 +11,6 @@
  * copyright notice, this list of conditions and the following disclaimer
  * in the documentation and/or other materials provided with the
  * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
@@ -35,9 +32,12 @@
 #include "V8IDBAny.h"
 
 #include "SerializedScriptValue.h"
-#include "V8IDBDatabaseRequest.h"
-#include "V8IDBObjectStoreRequest.h"
-#include "V8IndexedDatabaseRequest.h"
+#include "V8IDBCursor.h"
+#include "V8IDBDatabase.h"
+#include "V8IDBFactory.h"
+#include "V8IDBIndex.h"
+#include "V8IDBKey.h"
+#include "V8IDBObjectStore.h"
 
 namespace WebCore {
 
@@ -49,12 +49,20 @@ v8::Handle<v8::Value> toV8(IDBAny* impl)
     switch (impl->type()) {
     case IDBAny::UndefinedType:
         return v8::Undefined();
-    case IDBAny::IDBDatabaseRequestType:
-        return toV8(impl->idbDatabaseRequest());
-    case IDBAny::IDBObjectStoreRequestType:
-        return toV8(impl->idbObjectStoreRequest());
-    case IDBAny::IndexedDatabaseRequestType:
-        return toV8(impl->indexedDatabaseRequest());
+    case IDBAny::NullType:
+        return v8::Null();
+    case IDBAny::IDBCursorType:
+        return toV8(impl->idbCursor());
+    case IDBAny::IDBDatabaseType:
+        return toV8(impl->idbDatabase());
+    case IDBAny::IDBIndexType:
+        return toV8(impl->idbIndex());
+    case IDBAny::IDBKeyType:
+        return toV8(impl->idbKey());
+    case IDBAny::IDBObjectStoreType:
+        return toV8(impl->idbObjectStore());
+    case IDBAny::IDBFactoryType:
+        return toV8(impl->idbFactory());
     case IDBAny::SerializedScriptValueType:
         return impl->serializedScriptValue()->deserialize();
     }

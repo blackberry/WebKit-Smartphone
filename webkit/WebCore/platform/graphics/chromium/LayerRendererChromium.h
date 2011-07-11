@@ -34,6 +34,8 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
+#include "CanvasLayerChromium.h"
+#include "ContentLayerChromium.h"
 #include "IntRect.h"
 #include "LayerChromium.h"
 #include "SkBitmap.h"
@@ -42,30 +44,39 @@
 #include <wtf/PassOwnPtr.h>
 #include <wtf/Vector.h>
 
+#if PLATFORM(CG)
+#include <CoreGraphics/CGContext.h>
+#include <wtf/RetainPtr.h>
+#endif
+
 namespace WebCore {
 
 class GLES2Context;
-class Page;
 
 // Class that handles drawing of composited render layers using GL.
 class LayerRendererChromium : public Noncopyable {
 public:
-    static PassOwnPtr<LayerRendererChromium> create(Page* page);
+    static PassOwnPtr<LayerRendererChromium> create(PassOwnPtr<GLES2Context> gles2Context);
 
-    LayerRendererChromium(Page* page);
+    LayerRendererChromium(PassOwnPtr<GLES2Context> gles2Context);
     ~LayerRendererChromium();
 
-    // Updates the contents of the root layer that fall inside the updateRect and recomposites
-    // all the layers.
-    void drawLayers(const IntRect& updateRect, const IntRect& visibleRect, const IntRect& contentRect, const IntPoint& scrollPosition);
+    // updates size of root texture, if needed, and scrolls the backbuffer.
+    void prepareToDrawLayers(const IntRect& visibleRect, const IntRect& contentRect, const IntPoint& scrollPosition);
+
+    // updates a rectangle within the root layer texture
+    void updateRootLayerTextureRect(const IntRect& updateRect);
+
+    // draws the current layers onto the backbuffer
+    void drawLayers(const IntRect& visibleRect, const IntRect& contentRect);
+
+    // puts backbuffer onscreen
+    void present();
 
     void setRootLayer(PassRefPtr<LayerChromium> layer) { m_rootLayer = layer; }
     LayerChromium* rootLayer() { return m_rootLayer.get(); }
 
     void setNeedsDisplay() { m_needsDisplay = true; }
-
-    // Frees the texture associated with the given layer.
-    bool freeLayerTexture(LayerChromium*);
 
     bool hardwareCompositing() const { return m_hardwareCompositing; }
 
@@ -73,49 +84,50 @@ public:
 
     GraphicsContext* rootLayerGraphicsContext() const { return m_rootLayerGraphicsContext.get(); }
 
+    unsigned createLayerTexture();
+
+    static void debugGLCall(const char* command, const char* file, int line);
+
+    const TransformationMatrix& projectionMatrix() const { return m_projectionMatrix; }
+
+    void useShader(unsigned);
+
+    bool checkTextureSize(const IntSize&);
+
+    const LayerChromium::SharedValues* layerSharedValues() const { return m_layerSharedValues.get(); }
+    const ContentLayerChromium::SharedValues* contentLayerSharedValues() const { return m_contentLayerSharedValues.get(); }
+    const CanvasLayerChromium::SharedValues* canvasLayerSharedValues() const { return m_canvasLayerSharedValues.get(); }
+
+    IntSize rootLayerTextureSize() const { return IntSize(m_rootLayerTextureWidth, m_rootLayerTextureHeight); }
+    void getFramebufferPixels(void *pixels, const IntRect& rect);
+
 private:
-    void compositeLayersRecursive(LayerChromium*, const TransformationMatrix&, float opacity, const IntRect& visibleRect);
+    void updateLayersRecursive(LayerChromium* layer, const TransformationMatrix& parentMatrix, float opacity);
 
-    void drawDebugBorder(LayerChromium*, const TransformationMatrix&);
+    void drawLayersRecursive(LayerChromium*, const FloatRect& scissorRect);
 
-    void drawTexturedQuad(const TransformationMatrix& matrix, float width, float height, float opacity, bool scrolling);
+    void drawLayer(LayerChromium*);
 
     bool isLayerVisible(LayerChromium*, const TransformationMatrix&, const IntRect& visibleRect);
 
-    void bindCommonAttribLocation(int location, char* attribName);
+    void drawLayerIntoStencilBuffer(LayerChromium*, bool decrement);
 
-    enum VboIds { Vertices, LayerElements };
+    void scissorToRect(const FloatRect&);
 
-    // These are here only temporarily and should be removed once we switch over to GGL
-    bool initGL();
     bool makeContextCurrent();
 
-    bool initializeSharedGLObjects();
-    int getTextureId(LayerChromium*);
-    int assignTextureForLayer(LayerChromium*);
+    bool initializeSharedObjects();
+    void cleanupSharedObjects();
 
-    // GL shader program object IDs.
-    unsigned int m_layerProgramObject;
-    unsigned int m_borderProgramObject;
-    unsigned int m_scrollProgramObject;
-
-    unsigned int m_rootLayerTextureId;
+    unsigned m_rootLayerTextureId;
     int m_rootLayerTextureWidth;
     int m_rootLayerTextureHeight;
 
-    // Shader uniform and attribute locations.
-    const int m_positionLocation;
-    const int m_texCoordLocation;
-    int m_samplerLocation;
-    int m_matrixLocation;
-    int m_alphaLocation;
-    int m_scrollMatrixLocation;
-    int m_scrollSamplerLocation;
+    // Scroll shader uniform locations.
+    unsigned m_scrollShaderProgram;
+    int m_scrollShaderSamplerLocation;
+    int m_scrollShaderMatrixLocation;
 
-    int m_borderMatrixLocation;
-    int m_borderColorLocation;
-
-    unsigned int m_quadVboIds[3];
     TransformationMatrix m_projectionMatrix;
 
     RefPtr<LayerChromium> m_rootLayer;
@@ -124,22 +136,48 @@ private:
     IntPoint m_scrollPosition;
     bool m_hardwareCompositing;
 
-    // Map associating layers with textures ids used by the GL compositor.
-    typedef HashMap<LayerChromium*, unsigned int> TextureIdMap;
-    TextureIdMap m_textureIdMap;
+    unsigned int m_currentShader;
 
 #if PLATFORM(SKIA)
     OwnPtr<skia::PlatformCanvas> m_rootLayerCanvas;
     OwnPtr<PlatformContextSkia> m_rootLayerSkiaContext;
     OwnPtr<GraphicsContext> m_rootLayerGraphicsContext;
+#elif PLATFORM(CG)
+    Vector<uint8_t> m_rootLayerBackingStore;
+    RetainPtr<CGContextRef> m_rootLayerCGContext;
+    OwnPtr<GraphicsContext> m_rootLayerGraphicsContext;
 #endif
+
     IntSize m_rootLayerCanvasSize;
 
-    OwnPtr<GLES2Context> m_gles2Context;
+    IntRect m_rootVisibleRect;
 
-    // The WebCore Page that the compositor renders into.
-    Page* m_page;
+    int m_maxTextureSize;
+
+    int m_numStencilBits;
+
+    // Store values that are shared between instances of each layer type
+    // associated with this instance of the compositor. Since there can be
+    // multiple instances of the compositor running in the same renderer process
+    // we cannot store these values in static variables.
+    OwnPtr<LayerChromium::SharedValues> m_layerSharedValues;
+    OwnPtr<ContentLayerChromium::SharedValues> m_contentLayerSharedValues;
+    OwnPtr<CanvasLayerChromium::SharedValues> m_canvasLayerSharedValues;
+
+    OwnPtr<GLES2Context> m_gles2Context;
 };
+
+// Setting DEBUG_GL_CALLS to 1 will call glGetError() after almost every GL
+// call made by the compositor. Useful for debugging rendering issues but
+// will significantly degrade performance.
+#define DEBUG_GL_CALLS 0
+
+#if DEBUG_GL_CALLS && !defined ( NDEBUG )
+#define GLC(x) { (x), LayerRendererChromium::debugGLCall(#x, __FILE__, __LINE__); }
+#else
+#define GLC(x) (x)
+#endif
+
 
 }
 

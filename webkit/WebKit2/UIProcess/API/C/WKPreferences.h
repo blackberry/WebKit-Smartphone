@@ -36,16 +36,30 @@
 extern "C" {
 #endif
 
+WK_EXPORT WKTypeID WKPreferencesGetTypeID();
+
 WK_EXPORT WKPreferencesRef WKPreferencesCreate();
 WK_EXPORT WKPreferencesRef WKPreferencesCreateCopy(WKPreferencesRef);
 
+// Defaults to true.
 WK_EXPORT void WKPreferencesSetJavaScriptEnabled(WKPreferencesRef preferences, bool javaScriptEnabled);
 WK_EXPORT bool WKPreferencesGetJavaScriptEnabled(WKPreferencesRef preferences);
+
+// Defaults to true.
 WK_EXPORT void WKPreferencesSetLoadsImagesAutomatically(WKPreferencesRef preferences, bool loadsImagesAutomatically);
 WK_EXPORT bool WKPreferencesGetLoadsImagesAutomatically(WKPreferencesRef preferences);
 
-WK_EXPORT WKPreferencesRef WKPreferencesRetain(WKPreferencesRef preferences);
-WK_EXPORT void WKPreferencesRelease(WKPreferencesRef preferences);
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetOfflineWebApplicationCacheEnabled(WKPreferencesRef preferences, bool offlineWebApplicationCacheEnabled);
+WK_EXPORT bool WKPreferencesGetOfflineWebApplicationCacheEnabled(WKPreferencesRef preferences);
+
+// Defaults to true.
+WK_EXPORT void WKPreferencesSetLocalStorageEnabled(WKPreferencesRef preferences, bool localStorageEnabled);
+WK_EXPORT bool WKPreferencesGetLocalStorageEnabled(WKPreferencesRef preferences);
+
+// Defaults to true.
+WK_EXPORT void WKPreferencesSetXSSAuditorEnabled(WKPreferencesRef preferences, bool xssAuditorEnabled);
+WK_EXPORT bool WKPreferencesGetXSSAuditorEnabled(WKPreferencesRef preferences);
 
 #ifdef __cplusplus
 }

@@ -55,6 +55,10 @@
 #include <wtf/HashSet.h>
 #include <wtf/Threading.h>
 
+#if OS(OLYMPIA)
+#include "OlympiaPlatformMisc.h"
+#endif
+
 namespace WebCore {
 
 class SharedWorkerProxy : public ThreadSafeShared<SharedWorkerProxy>, public WorkerLoaderProxy, public WorkerReportingProxy {
@@ -288,9 +292,12 @@ void SharedWorkerScriptLoader::notifyFinished()
     // We need to address this before supporting nested workers.
 
     // Hand off the just-loaded code to the repository to start up the worker thread.
-    if (m_scriptLoader->failed())
+    if (m_scriptLoader->failed()) {
+#if OS(OLYMPIA)
+        Olympia::Platform::didCancelStartingWorker();
+#endif
         m_worker->dispatchEvent(Event::create(eventNames().errorEvent, false, true));
-    else {
+    } else {
 #if ENABLE(INSPECTOR)
         if (InspectorController* inspector = m_worker->scriptExecutionContext()->inspectorController())
             inspector->scriptImported(m_scriptLoader->identifier(), m_scriptLoader->script());
@@ -318,8 +325,12 @@ void DefaultSharedWorkerRepository::workerScriptLoaded(SharedWorkerProxy& proxy,
 #endif
 {
     MutexLocker lock(m_lock);
-    if (proxy.isClosing())
+    if (proxy.isClosing()) {
+#if OS(OLYMPIA)
+        Olympia::Platform::didCancelStartingWorker();
+#endif
         return;
+    }
 
     // Another loader may have already started up a thread for this proxy - if so, just send a connect to the pre-existing thread.
     if (!proxy.thread()) {
@@ -399,7 +410,7 @@ void DefaultSharedWorkerRepository::connectToWorker(PassRefPtr<SharedWorker> wor
     if (proxy->thread())
         proxy->thread()->runLoop().postTask(SharedWorkerConnectTask::create(port));
     else {
-        RefPtr<SharedWorkerScriptLoader> loader = adoptRef(new SharedWorkerScriptLoader(worker, port.release(), proxy.release()));
+        RefPtr<SharedWorkerScriptLoader> loader = adoptRef(new SharedWorkerScriptLoader(worker, port, proxy.release()));
         loader->load(url);
     }
 }

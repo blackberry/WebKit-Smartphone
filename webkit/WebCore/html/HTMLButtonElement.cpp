@@ -40,16 +40,17 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-HTMLButtonElement::HTMLButtonElement(const QualifiedName& tagName, Document* doc, HTMLFormElement* form)
-    : HTMLFormControlElement(tagName, doc, form)
+inline HTMLButtonElement::HTMLButtonElement(const QualifiedName& tagName, Document* document, HTMLFormElement* form)
+    : HTMLFormControlElement(tagName, document, form)
     , m_type(SUBMIT)
     , m_activeSubmit(false)
 {
     ASSERT(hasTagName(buttonTag));
 }
 
-HTMLButtonElement::~HTMLButtonElement()
+PassRefPtr<HTMLButtonElement> HTMLButtonElement::create(const QualifiedName& tagName, Document* document, HTMLFormElement* form)
 {
+    return adoptRef(new HTMLButtonElement(tagName, document, form));
 }
 
 RenderObject* HTMLButtonElement::createRenderer(RenderArena* arena, RenderStyle*)
@@ -163,20 +164,10 @@ bool HTMLButtonElement::appendFormData(FormDataList& formData, bool)
 }
 
 void HTMLButtonElement::accessKeyAction(bool sendToAnyElement)
-{   
+{
     focus();
     // send the mouse button events iff the caller specified sendToAnyElement
     dispatchSimulatedClick(0, sendToAnyElement);
-}
-
-String HTMLButtonElement::accessKey() const
-{
-    return getAttribute(accesskeyAttr);
-}
-
-void HTMLButtonElement::setAccessKey(const String &value)
-{
-    setAttribute(accesskeyAttr, value);
 }
 
 String HTMLButtonElement::value() const
@@ -184,9 +175,4 @@ String HTMLButtonElement::value() const
     return getAttribute(valueAttr);
 }
 
-void HTMLButtonElement::setValue(const String &value)
-{
-    setAttribute(valueAttr, value);
-}
-    
 } // namespace

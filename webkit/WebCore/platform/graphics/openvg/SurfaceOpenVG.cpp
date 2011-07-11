@@ -112,6 +112,7 @@ SurfaceOpenVG* SurfaceOpenVG::adoptExistingSurface(const EGLDisplay& display, co
 SurfaceOpenVG::SurfaceOpenVG(const IntSize& size, const EGLDisplay& display, EGLConfig* confPtr, EGLint* errorCode)
     : m_activePainter(0)
     , m_doesOwnSurface(true)
+    , m_doesApplyFlipTransformationOnPainterCreation(false)
     , m_eglDisplay(display)
     , m_eglSurface(EGL_NO_SURFACE)
     , m_eglContext(EGL_NO_CONTEXT)
@@ -134,6 +135,7 @@ SurfaceOpenVG::SurfaceOpenVG(const IntSize& size, const EGLDisplay& display, EGL
 SurfaceOpenVG::SurfaceOpenVG(EGLClientBuffer buffer, EGLenum bufferType, const EGLDisplay& display, EGLConfig* confPtr, EGLint* errorCode)
     : m_activePainter(0)
     , m_doesOwnSurface(true)
+    , m_doesApplyFlipTransformationOnPainterCreation(false)
     , m_eglDisplay(display)
     , m_eglSurface(EGL_NO_SURFACE)
     , m_eglContext(EGL_NO_CONTEXT)
@@ -161,6 +163,7 @@ SurfaceOpenVG::SurfaceOpenVG(EGLClientBuffer buffer, EGLenum bufferType, const E
 SurfaceOpenVG::SurfaceOpenVG(EGLNativeWindowType window, const EGLDisplay& display, EGLConfig* confPtr)
     : m_activePainter(0)
     , m_doesOwnSurface(true)
+    , m_doesApplyFlipTransformationOnPainterCreation(false)
     , m_eglDisplay(display)
     , m_eglSurface(EGL_NO_SURFACE)
     , m_eglContext(EGL_NO_CONTEXT)
@@ -188,6 +191,7 @@ SurfaceOpenVG::SurfaceOpenVG(EGLNativeWindowType window, const EGLDisplay& displ
 SurfaceOpenVG::SurfaceOpenVG()
     : m_activePainter(0)
     , m_doesOwnSurface(true)
+    , m_doesApplyFlipTransformationOnPainterCreation(false)
     , m_eglDisplay(EGL_NO_DISPLAY)
     , m_eglSurface(EGL_NO_SURFACE)
     , m_eglContext(EGL_NO_CONTEXT)
@@ -288,6 +292,16 @@ SurfaceOpenVG* SurfaceOpenVG::sharedSurface() const
 #else
     ASSERT_NOT_REACHED();
     return 0;
+#endif
+}
+
+bool SurfaceOpenVG::isCurrent() const
+{
+#if PLATFORM(EGL)
+    return m_eglSurface == eglGetCurrentSurface(EGL_DRAW);
+#else
+    ASSERT_NOT_REACHED();
+    return false;
 #endif
 }
 

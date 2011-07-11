@@ -47,9 +47,13 @@ class Rietveld(object):
             return None
         return "%s%s" % (config.codereview_server_url, codereview_issue)
 
-    def post(self, diff, message=None, codereview_issue=None, cc=None):
+    def post(self, diff, patch_id, codereview_issue, message=None, cc=None):
         if not message:
             raise ScriptError("Rietveld requires a message.")
+
+        # Rietveld has a 100 character limit on message length.
+        if len(message) > 100:
+            message = message[:100]
 
         args = [
             # First argument is empty string to mimic sys.argv.
@@ -57,6 +61,7 @@ class Rietveld(object):
             "--assume_yes",
             "--server=%s" % config.codereview_server_host,
             "--message=%s" % message,
+            "--webkit_patch_id=%s" % patch_id,
         ]
         if codereview_issue:
             args.append("--issue=%s" % codereview_issue)
@@ -69,6 +74,6 @@ class Rietveld(object):
 
         # Use RealMain instead of calling upload from the commandline so that
         # we can pass in the diff ourselves. Otherwise, upload will just use
-        # git diff for git checkouts, which doesn't respect --squash and --git-commit.
-        issue, patchset = upload.RealMain(args[1:], data=diff)
+        # git diff for git checkouts, which doesn't respect --git-commit.
+        issue, patchset = upload.RealMain(args, data=diff)
         return issue

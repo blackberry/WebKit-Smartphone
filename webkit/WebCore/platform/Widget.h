@@ -68,19 +68,24 @@ class BView;
 typedef BView* PlatformWidget;
 #endif
 
+#if PLATFORM(BREWMP)
+typedef void* PlatformWidget;
+#endif
+
 #if PLATFORM(CHROMIUM)
 #include "PlatformWidget.h"
 #endif
 
 #if PLATFORM(OLYMPIA)
-#include "PageClientOlympia.h"
-typedef PageClientOlympia* PlatformPageClient;
+#include "PageClientBlackBerry.h"
+typedef PageClientBlackBerry* PlatformPageClient;
 typedef void* PlatformWidget;
 #endif
 
 #if PLATFORM(EFL)
-#include <Ecore_Evas.h>
-#include <Evas.h>
+typedef struct _Evas_Object Evas_Object;
+typedef struct _Evas Evas;
+typedef struct _Ecore_Evas Ecore_Evas;
 typedef Evas_Object* PlatformWidget;
 #endif
 
@@ -95,6 +100,7 @@ typedef void* PlatformWidget;
 #include "IntRect.h"
 #include "IntSize.h"
 
+#include <wtf/Forward.h>
 #include <wtf/RefCounted.h>
 
 namespace WebCore {
@@ -106,9 +112,6 @@ class GraphicsContext;
 class PlatformMouseEvent;
 class ScrollView;
 class WidgetPrivate;
-#if PLATFORM(EFL)
-class String;
-#endif
 
 // The Widget class serves as a base class for three kinds of objects:
 // (1) Scrollable areas (ScrollView)
@@ -183,8 +186,8 @@ public:
 
     virtual bool isFrameView() const { return false; }
     virtual bool isPluginView() const { return false; }
-    // FIXME: The Mac plug-in code should inherit from PluginView. When this happens PluginWidget and PluginView can become one class.
-    virtual bool isPluginWidget() const { return false; }
+    // FIXME: The Mac plug-in code should inherit from PluginView. When this happens PluginViewBase and PluginView can become one class.
+    virtual bool isPluginViewBase() const { return false; }
     virtual bool isScrollbar() const { return false; }
 
     void removeFromParent();

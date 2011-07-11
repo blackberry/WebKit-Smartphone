@@ -49,6 +49,7 @@ class QWebHistoryItem;
 class QWebSecurityOrigin;
 class QWebElement;
 class QWebElementCollection;
+class QWebScriptWorld;
 
 class DumpRenderTreeSupportQt;
 namespace WebCore {

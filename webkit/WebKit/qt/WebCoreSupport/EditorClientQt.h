@@ -27,8 +27,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef EditorClientQt_H
-#define EditorClientQt_H
+#ifndef EditorClientQt_h
+#define EditorClientQt_h
 
 #include "EditorClient.h"
 #include "RefCounted.h"
@@ -94,8 +94,6 @@ public:
     virtual bool doTextFieldCommandFromEvent(Element*, KeyboardEvent*);
     virtual void textWillBeDeletedInTextField(Element*);
     virtual void textDidChangeInTextArea(Element*);
-    // Note: This code is under review for upstreaming.
-    virtual bool focusedElementsAreRichlyEditable();
 
     virtual void ignoreWordInSpellDocument(const String&);
     virtual void learnWord(const String&);
@@ -107,6 +105,7 @@ public:
     virtual void showSpellingUI(bool show);
     virtual bool spellingUIIsShowing();
     virtual void getGuessesForWord(const String&, Vector<String>& guesses);
+    virtual void willSetInputMethodState();
     virtual void setInputMethodState(bool enabled);
 
     bool isEditing() const;

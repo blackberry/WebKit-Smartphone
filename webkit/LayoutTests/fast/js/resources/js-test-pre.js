@@ -1,5 +1,6 @@
+// svg/dynamic-updates tests set enablePixelTesting=true, as we want to dump text + pixel results
 if (window.layoutTestController)
-    layoutTestController.dumpAsText();
+    layoutTestController.dumpAsText(window.enablePixelTesting);
 
 function description(msg)
 {
@@ -22,7 +23,7 @@ function debug(msg)
 
 function escapeHTML(text)
 {
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\0/g, "\\0");
 }
 
 function testPassed(msg)
@@ -218,6 +219,26 @@ function shouldBeUndefined(_a)
     testFailed(_a + " should be undefined. Was " + _av);
 }
 
+function shouldBeGreaterThanOrEqual(_a, _b) {
+    if (typeof _a != "string" || typeof _b != "string")
+        debug("WARN: shouldBeGreaterThanOrEqual expects string arguments");
+
+    var exception;
+    var _av;
+    try {
+        _av = eval(_a);
+    } catch (e) {
+        exception = e;
+    }
+    var _bv = eval(_b);
+
+    if (exception)
+        testFailed(_a + " should be >= " + _b + ". Threw exception " + exception);
+    else if (typeof _av == "undefined" || _av < _bv)
+        testFailed(_a + " should be >= " + _b + ". Was " + _av + " (of type " + typeof _av + ").");
+    else
+        testPassed(_a + " is >= " + _b);
+}
 
 function shouldThrow(_a, _e)
 {
@@ -258,4 +279,17 @@ function gc() {
         for (var i = 0; i < 1000; i++)
             gcRec(10)
     }
+}
+
+// It's possible for an async test to call finishJSTest() before js-test-post.js
+// has been parsed.
+function finishJSTest()
+{
+    wasFinishJSTestCalled = true;
+    if (!window.wasPostTestScriptParsed)
+        return;
+    shouldBeTrue("successfullyParsed");
+    debug('<br /><span class="pass">TEST COMPLETE</span>');
+    if (window.jsTestIsAsync && window.layoutTestController)
+        layoutTestController.notifyDone();
 }

@@ -37,6 +37,7 @@
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
+#include "FrameLoaderStateMachine.h"
 #include "FrameTree.h"
 #include "FrameView.h"
 #include "HistoryItem.h"
@@ -47,7 +48,21 @@
 #include "Settings.h"
 #include <wtf/text/CString.h>
 
+#if USE(PLATFORM_STRATEGIES)
+#include "PlatformStrategies.h"
+#include "VisitedLinkStrategy.h"
+#endif
+
 namespace WebCore {
+
+static inline void addVisitedLink(Page* page, const KURL& url)
+{
+#if USE(PLATFORM_STRATEGIES)
+    platformStrategies()->visitedLinkStrategy()->addVisitedLink(page, visitedLinkHash(url.string().characters(), url.string().length()));
+#else
+    page->group().addVisitedLink(url);
+#endif
+}
 
 HistoryController::HistoryController(Frame* frame)
     : m_frame(frame)
@@ -76,7 +91,7 @@ void HistoryController::saveScrollPositionAndViewStateToItem(HistoryItem* item)
 // after load completes so that the viewport is truly contained in the true content size.
 void HistoryController::restoreScrollPositionAndViewState()
 {
-    if (!m_frame->loader()->committedFirstRealDocumentLoad())
+    if (!m_frame->loader()->stateMachine()->committedFirstRealDocumentLoad())
         return;
 
     ASSERT(m_currentItem);
@@ -110,21 +125,13 @@ void HistoryController::restoreScrollPositionAndViewState()
 void HistoryController::updateBackForwardListForFragmentScroll()
 {
     updateBackForwardListClippedAtTarget(false);
-    
-    // Since the document isn't changed as a result of a fragment scroll, we should
-    // preserve the DocumentSequenceNumber of the previous item.
-    if (!m_previousItem)
-        return;
-
-    ASSERT(m_currentItem);
-    m_currentItem->setDocumentSequenceNumber(m_previousItem->documentSequenceNumber());
 }
 
 void HistoryController::saveDocumentState()
 {
     // FIXME: Reading this bit of FrameLoader state here is unfortunate.  I need to study
     // this more to see if we can remove this dependency.
-    if (m_frame->loader()->creatingInitialEmptyDocument())
+    if (m_frame->loader()->stateMachine()->creatingInitialEmptyDocument())
         return;
 
     // For a standard page load, we will have a previous item set, which will be used to
@@ -235,25 +242,6 @@ void HistoryController::goToItem(HistoryItem* targetItem, FrameLoadType type)
     recursiveGoToItem(targetItem, currentItem, type);
 }
 
-// Walk the frame tree and ensure that the URLs match the URLs in the item.
-bool HistoryController::urlsMatchItem(HistoryItem* item) const
-{
-    const KURL& currentURL = m_frame->loader()->documentLoader()->url();
-    if (!equalIgnoringFragmentIdentifier(currentURL, item->url()))
-        return false;
-
-    const HistoryItemVector& childItems = item->children();
-
-    unsigned size = childItems.size();
-    for (unsigned i = 0; i < size; ++i) {
-        Frame* childFrame = m_frame->tree()->child(childItems[i]->target());
-        if (childFrame && !childFrame->loader()->history()->urlsMatchItem(childItems[i].get()))
-            return false;
-    }
-
-    return true;
-}
-
 void HistoryController::updateForBackForwardNavigation()
 {
 #if !LOG_DISABLED
@@ -290,7 +278,7 @@ void HistoryController::updateForReload()
 //     2) Global history: Handled by the client.
 //     3) Visited links: Handled by the PageGroup.
 
-void HistoryController::updateForStandardLoad()
+void HistoryController::updateForStandardLoad(HistoryUpdateType updateType)
 {
     LOG(History, "WebCoreHistory: Updating History for Standard Load in frame %s", m_frame->loader()->documentLoader()->url().string().ascii().data());
 
@@ -302,7 +290,8 @@ void HistoryController::updateForStandardLoad()
 
     if (!frameLoader->documentLoader()->isClientRedirect()) {
         if (!historyURL.isEmpty()) {
-            updateBackForwardListClippedAtTarget(true);
+            if (updateType != UpdateAllExceptBackForwardList)
+                updateBackForwardListClippedAtTarget(true);
             if (!needPrivacy) {
                 frameLoader->client()->updateGlobalHistory();
                 frameLoader->documentLoader()->setDidCreateGlobalHistoryEntry(true);
@@ -319,7 +308,7 @@ void HistoryController::updateForStandardLoad()
 
     if (!historyURL.isEmpty() && !needPrivacy) {
         if (Page* page = m_frame->page())
-            page->group().addVisitedLink(historyURL);
+            addVisitedLink(page, historyURL);
 
         if (!frameLoader->documentLoader()->didCreateGlobalHistoryEntry() && frameLoader->documentLoader()->unreachableURL().isEmpty() && !frameLoader->url().isEmpty())
             frameLoader->client()->updateGlobalHistoryRedirectLinks();
@@ -363,7 +352,7 @@ void HistoryController::updateForRedirectWithLockedBackForwardList()
 
     if (!historyURL.isEmpty() && !needPrivacy) {
         if (Page* page = m_frame->page())
-            page->group().addVisitedLink(historyURL);
+            addVisitedLink(page, historyURL);
 
         if (!m_frame->loader()->documentLoader()->didCreateGlobalHistoryEntry() && m_frame->loader()->documentLoader()->unreachableURL().isEmpty() && !m_frame->loader()->url().isEmpty())
             m_frame->loader()->client()->updateGlobalHistoryRedirectLinks();
@@ -390,7 +379,7 @@ void HistoryController::updateForClientRedirect()
 
     if (!historyURL.isEmpty() && !needPrivacy) {
         if (Page* page = m_frame->page())
-            page->group().addVisitedLink(historyURL);
+            addVisitedLink(page, historyURL);
     }
 }
 
@@ -428,7 +417,7 @@ void HistoryController::updateForSameDocumentNavigation()
     if (!page)
         return;
 
-    page->group().addVisitedLink(m_frame->loader()->url());
+    addVisitedLink(page, m_frame->loader()->url());
 }
 
 void HistoryController::updateForFrameLoadCompleted()
@@ -465,9 +454,9 @@ void HistoryController::setProvisionalItem(HistoryItem* item)
 
 PassRefPtr<HistoryItem> HistoryController::createItem(bool useOriginal)
 {
-    DocumentLoader* docLoader = m_frame->loader()->documentLoader();
+    DocumentLoader* documentLoader = m_frame->loader()->documentLoader();
     
-    KURL unreachableURL = docLoader ? docLoader->unreachableURL() : KURL();
+    KURL unreachableURL = documentLoader ? documentLoader->unreachableURL() : KURL();
     
     KURL url;
     KURL originalURL;
@@ -476,11 +465,11 @@ PassRefPtr<HistoryItem> HistoryController::createItem(bool useOriginal)
         url = unreachableURL;
         originalURL = unreachableURL;
     } else {
-        originalURL = docLoader ? docLoader->originalURL() : KURL();
+        originalURL = documentLoader ? documentLoader->originalURL() : KURL();
         if (useOriginal)
             url = originalURL;
-        else if (docLoader)
-            url = docLoader->requestURL();
+        else if (documentLoader)
+            url = documentLoader->requestURL();
     }
 
     LOG(History, "WebCoreHistory: Creating item for %s", url.string().ascii().data());
@@ -497,20 +486,20 @@ PassRefPtr<HistoryItem> HistoryController::createItem(bool useOriginal)
     
     Frame* parentFrame = m_frame->tree()->parent();
     String parent = parentFrame ? parentFrame->tree()->name() : "";
-    String title = docLoader ? docLoader->title() : "";
+    String title = documentLoader ? documentLoader->title() : "";
 
     RefPtr<HistoryItem> item = HistoryItem::create(url, m_frame->tree()->name(), parent, title);
     item->setOriginalURLString(originalURL.string());
 
-    if (!unreachableURL.isEmpty() || !docLoader || docLoader->response().httpStatusCode() >= 400)
+    if (!unreachableURL.isEmpty() || !documentLoader || documentLoader->response().httpStatusCode() >= 400)
         item->setLastVisitWasFailure(true);
 
     // Save form state if this is a POST
-    if (docLoader) {
+    if (documentLoader) {
         if (useOriginal)
-            item->setFormInfoFromRequest(docLoader->originalRequest());
+            item->setFormInfoFromRequest(documentLoader->originalRequest());
         else
-            item->setFormInfoFromRequest(docLoader->request());
+            item->setFormInfoFromRequest(documentLoader->request());
     }
     
     // Set the item for which we will save document state
@@ -525,9 +514,21 @@ PassRefPtr<HistoryItem> HistoryController::createItemTree(Frame* targetFrame, bo
     RefPtr<HistoryItem> bfItem = createItem(m_frame->tree()->parent() ? true : false);
     if (m_previousItem)
         saveScrollPositionAndViewStateToItem(m_previousItem.get());
-    if (!(clipAtTarget && m_frame == targetFrame)) {
+
+    if (!clipAtTarget || m_frame != targetFrame) {
         // save frame state for items that aren't loading (khtml doesn't save those)
         saveDocumentState();
+
+        // clipAtTarget is false for navigations within the same document, so
+        // we should copy the documentSequenceNumber over to the newly create
+        // item.  Non-target items are just clones, and they should therefore
+        // preserve the same itemSequenceNumber.
+        if (m_previousItem) {
+            if (m_frame != targetFrame)
+                bfItem->setItemSequenceNumber(m_previousItem->itemSequenceNumber());
+            bfItem->setDocumentSequenceNumber(m_previousItem->documentSequenceNumber());
+        }
+
         for (Frame* child = m_frame->tree()->firstChild(); child; child = child->tree()->nextSibling()) {
             FrameLoader* childLoader = child->loader();
             bool hasChildLoaded = childLoader->frameHasLoaded();
@@ -540,6 +541,7 @@ PassRefPtr<HistoryItem> HistoryController::createItemTree(Frame* targetFrame, bo
                 bfItem->addChildItem(childLoader->history()->createItemTree(targetFrame, clipAtTarget));
         }
     }
+    // FIXME: Eliminate the isTargetItem flag in favor of itemSequenceNumber.
     if (m_frame == targetFrame)
         bfItem->setIsTargetItem(true);
     return bfItem;
@@ -554,21 +556,16 @@ void HistoryController::recursiveGoToItem(HistoryItem* item, HistoryItem* fromIt
     ASSERT(item);
     ASSERT(fromItem);
 
-    KURL itemURL = item->url();
-    KURL currentURL;
-    if (m_frame->loader()->documentLoader())
-        currentURL = m_frame->loader()->documentLoader()->url();
-
-    // Always reload the target frame of the item we're going to.  This ensures that we will
-    // do -some- load for the transition, which means a proper notification will be posted
-    // to the app.
-    // The exact URL has to match, including fragment.  We want to go through the _load
-    // method, even if to do a within-page navigation.
-    // The current frame tree and the frame tree snapshot in the item have to match.
-    if (!item->isTargetItem() &&
-        itemURL == currentURL &&
-        ((m_frame->tree()->name().isEmpty() && item->target().isEmpty()) || m_frame->tree()->name() == item->target()) &&
-        childFramesMatchItem(item))
+    // If the item we're going to is a clone of the item we're at, then do
+    // not load it again, and continue history traversal to its children.
+    // The current frame tree and the frame tree snapshot in the item have
+    // to match.
+    // Note: If item and fromItem are the same, then we need to create a new
+    // document.
+    if (item != fromItem 
+        && item->itemSequenceNumber() == fromItem->itemSequenceNumber()
+        && currentFramesMatchItem(item)
+        && fromItem->hasSameFrames(item))
     {
         // This content is good, so leave it alone and look for children that need reloading
         // Save form state (works from currentItem, since prevItem is nil)
@@ -593,7 +590,7 @@ void HistoryController::recursiveGoToItem(HistoryItem* item, HistoryItem* fromIt
         for (int i = 0; i < size; ++i) {
             String childFrameName = childItems[i]->target();
             HistoryItem* fromChildItem = fromItem->childItemWithTarget(childFrameName);
-            ASSERT(fromChildItem || fromItem->isTargetItem());
+            ASSERT(fromChildItem);
             Frame* childFrame = m_frame->tree()->child(childFrameName);
             ASSERT(childFrame);
             childFrame->loader()->history()->recursiveGoToItem(childItems[i].get(), fromChildItem, type);
@@ -603,10 +600,12 @@ void HistoryController::recursiveGoToItem(HistoryItem* item, HistoryItem* fromIt
     }
 }
 
-// helper method that determines whether the subframes described by the item's subitems
-// match our own current frameset
-bool HistoryController::childFramesMatchItem(HistoryItem* item) const
+// Helper method that determines whether the current frame tree matches given history item's.
+bool HistoryController::currentFramesMatchItem(HistoryItem* item) const
 {
+    if ((!m_frame->tree()->name().isEmpty() || !item->target().isEmpty()) && m_frame->tree()->name() != item->target())
+        return false;
+        
     const HistoryItemVector& childItems = item->children();
     if (childItems.size() != m_frame->tree()->childCount())
         return false;
@@ -617,7 +616,6 @@ bool HistoryController::childFramesMatchItem(HistoryItem* item) const
             return false;
     }
     
-    // Found matches for all item targets
     return true;
 }
 
@@ -641,9 +639,9 @@ void HistoryController::updateBackForwardListClippedAtTarget(bool doClip)
 
     frameLoader->checkDidPerformFirstNavigation();
 
-    RefPtr<HistoryItem> item = frameLoader->history()->createItemTree(m_frame, doClip);
-    LOG(BackForward, "WebCoreBackForward - Adding backforward item %p for frame %s", item.get(), m_frame->loader()->documentLoader()->url().string().ascii().data());
-    page->backForwardList()->addItem(item);
+    RefPtr<HistoryItem> topItem = frameLoader->history()->createItemTree(m_frame, doClip);
+    LOG(BackForward, "WebCoreBackForward - Adding backforward item %p for frame %s", topItem.get(), m_frame->loader()->documentLoader()->url().string().ascii().data());
+    page->backForwardList()->addItem(topItem.release());
 }
 
 void HistoryController::pushState(PassRefPtr<SerializedScriptValue> stateObject, const String& title, const String& urlString)
@@ -655,19 +653,15 @@ void HistoryController::pushState(PassRefPtr<SerializedScriptValue> stateObject,
     ASSERT(page);
 
     // Get a HistoryItem tree for the current frame tree.
-    RefPtr<HistoryItem> item = createItemTree(m_frame, false);
-    ASSERT(item->isTargetItem());
+    RefPtr<HistoryItem> topItem = page->mainFrame()->loader()->history()->createItemTree(m_frame, false);
     
-    // Override data in the target item to reflect the pushState() arguments.
-    item->setTitle(title);
-    item->setStateObject(stateObject);
-    item->setURLString(urlString);
+    // Override data in the current item (created by createItemTree) to reflect
+    // the pushState() arguments.
+    m_currentItem->setTitle(title);
+    m_currentItem->setStateObject(stateObject);
+    m_currentItem->setURLString(urlString);
 
-    // Since the document isn't changed as a result of a pushState call, we
-    // should preserve the DocumentSequenceNumber of the previous item.
-    item->setDocumentSequenceNumber(m_previousItem->documentSequenceNumber());
-    
-    page->backForwardList()->pushStateItem(item.release());
+    page->backForwardList()->addItem(topItem.release());
 }
 
 void HistoryController::replaceState(PassRefPtr<SerializedScriptValue> stateObject, const String& title, const String& urlString)

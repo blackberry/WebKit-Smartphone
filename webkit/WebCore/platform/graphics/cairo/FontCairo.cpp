@@ -70,11 +70,11 @@ void Font::drawGlyphs(GraphicsContext* context, const SimpleFontData* font, cons
     }
 
     // Text shadow, inspired by FontMac
-    IntSize shadowSize;
-    int shadowBlur = 0;
+    FloatSize shadowOffset;
+    float shadowBlur = 0;
     Color shadowColor;
-    bool hasShadow = context->textDrawingMode() == cTextFill &&
-        context->getShadow(shadowSize, shadowBlur, shadowColor);
+    bool hasShadow = context->textDrawingMode() & cTextFill
+                     && context->getShadow(shadowOffset, shadowBlur, shadowColor);
 
     // TODO: Blur support
     if (hasShadow) {
@@ -94,15 +94,15 @@ void Font::drawGlyphs(GraphicsContext* context, const SimpleFontData* font, cons
         FloatRect rect(FloatPoint(), FloatSize(extents.width, extents.height));
         IntSize shadowBufferSize;
         FloatRect shadowRect;
-        float kernelSize = 0.f;
-        GraphicsContext::calculateShadowBufferDimensions(shadowBufferSize, shadowRect, kernelSize, rect, shadowSize, shadowBlur);
+        float radius = 0;
+        context->calculateShadowBufferDimensions(shadowBufferSize, shadowRect, radius, rect, shadowOffset, shadowBlur);
 
         // Draw shadow into a new ImageBuffer
         OwnPtr<ImageBuffer> shadowBuffer = ImageBuffer::create(shadowBufferSize);
         GraphicsContext* shadowContext = shadowBuffer->context();
         cairo_t* shadowCr = shadowContext->platformContext();
 
-        cairo_translate(shadowCr, kernelSize, extents.height + kernelSize);
+        cairo_translate(shadowCr, radius, extents.height + radius);
 
         cairo_set_scaled_font(shadowCr, font->platformData().scaledFont());
         cairo_show_glyphs(shadowCr, glyphs, numGlyphs);
@@ -113,9 +113,9 @@ void Font::drawGlyphs(GraphicsContext* context, const SimpleFontData* font, cons
             cairo_restore(shadowCr);
         }
         cairo_translate(cr, 0.0, -extents.height);
-        context->createPlatformShadow(shadowBuffer.release(), shadowColor, shadowRect, kernelSize);
+        context->applyPlatformShadow(shadowBuffer.release(), shadowColor, shadowRect, radius);
 #else
-        cairo_translate(cr, shadowSize.width(), shadowSize.height());
+        cairo_translate(cr, shadowOffset.width(), shadowOffset.height());
         cairo_show_glyphs(cr, glyphs, numGlyphs);
         if (font->syntheticBoldOffset()) {
             cairo_save(cr);
@@ -195,7 +195,7 @@ void Font::drawGlyphs(GraphicsContext* context, const SimpleFontData* font, cons
 
     // Re-enable the platform shadow we disabled earlier
     if (hasShadow)
-        context->setShadow(shadowSize, shadowBlur, shadowColor, DeviceColorSpace);
+        context->setShadow(shadowOffset, shadowBlur, shadowColor, DeviceColorSpace);
 
     cairo_restore(cr);
 }

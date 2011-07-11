@@ -9,13 +9,13 @@
  * are met:
  *
  * 1.  Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer. 
+ *     notice, this list of conditions and the following disclaimer.
  * 2.  Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution. 
+ *     documentation and/or other materials provided with the distribution.
  * 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of
  *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission. 
+ *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -33,14 +33,12 @@
 #include "FileSystem.h"
 
 #include "PlatformString.h"
-#include <wtf/text/CString.h>
-
-#include <QDateTime>
-#include <QFile>
-#include <QTemporaryFile>
-#include <QFileInfo>
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QTemporaryFile>
+#include <wtf/text/CString.h>
 
 namespace WebCore {
 
@@ -118,7 +116,7 @@ Vector<String> listDirectory(const String& path, const String& filter)
 CString openTemporaryFile(const char* prefix, PlatformFileHandle& handle)
 {
 #ifndef QT_NO_TEMPORARYFILE
-    QTemporaryFile* tempFile = new QTemporaryFile(QLatin1String(prefix));
+    QTemporaryFile* tempFile = new QTemporaryFile(QDir::tempPath() + QLatin1Char('/') + QLatin1String(prefix));
     tempFile->setAutoRemove(false);
     QFile* temp = tempFile;
     if (temp->open(QIODevice::ReadWrite)) {
@@ -129,6 +127,33 @@ CString openTemporaryFile(const char* prefix, PlatformFileHandle& handle)
     handle = invalidPlatformFileHandle;
     return CString();
 }
+
+#if ENABLE(NETSCAPE_PLUGIN_METADATA_CACHE)
+PlatformFileHandle openFile(const String& path, FileOpenMode mode)
+{
+    QIODevice::OpenMode platformMode;
+
+    if (mode == OpenForRead)
+        platformMode = QIODevice::ReadOnly;
+    else if (mode == OpenForWrite)
+        platformMode = (QIODevice::WriteOnly | QIODevice::Truncate);
+    else
+        return invalidPlatformFileHandle;
+
+    QFile* file = new QFile(path);
+    if (file->open(platformMode))
+        return file;
+
+    return invalidPlatformFileHandle;
+}
+
+int readFromFile(PlatformFileHandle handle, char* data, int length)
+{
+    if (handle && handle->exists() && handle->isReadable())
+        return handle->read(data, length);
+    return 0;
+}
+#endif
 
 void closeFile(PlatformFileHandle& handle)
 {

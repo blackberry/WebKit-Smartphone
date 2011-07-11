@@ -30,6 +30,7 @@
 #import "WebEditorClient.h"
 
 #import "DOMCSSStyleDeclarationInternal.h"
+#import "DOMDocumentFragmentInternal.h"
 #import "DOMHTMLElementInternal.h"
 #import "DOMHTMLInputElementInternal.h"
 #import "DOMHTMLTextAreaElementInternal.h"
@@ -48,8 +49,11 @@
 #import "WebKitVersionChecks.h"
 #import "WebLocalizableStrings.h"
 #import "WebNSURLExtras.h"
+#import "WebResourceInternal.h"
 #import "WebViewInternal.h"
+#import <WebCore/ArchiveResource.h>
 #import <WebCore/Document.h>
+#import <WebCore/DocumentFragment.h>
 #import <WebCore/EditAction.h>
 #import <WebCore/EditCommand.h>
 #import <WebCore/HTMLInputElement.h>
@@ -59,15 +63,24 @@
 #import <WebCore/LegacyWebArchive.h>
 #import <WebCore/PlatformKeyboardEvent.h>
 #import <WebCore/PlatformString.h>
+#import <WebCore/UserTypingGestureIndicator.h>
 #import <WebCore/WebCoreObjCExtras.h>
 #import <runtime/InitializeThreading.h>
 #import <wtf/PassRefPtr.h>
 #import <wtf/Threading.h>
+#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+#import <AppKit/NSTextChecker.h>
+#endif
 
 using namespace WebCore;
 using namespace WTF;
 
 using namespace HTMLNames;
+
+@interface NSAttributedString (WebNSAttributedStringDetails)
+- (id)_initWithDOMRange:(DOMRange *)range;
+- (DOMDocumentFragment *)_documentFromRange:(NSRange)range document:(DOMDocument *)document documentAttributes:(NSDictionary *)dict subresources:(NSArray **)subresources;
+@end
 
 static WebViewInsertAction kit(EditorInsertAction coreAction)
 {
@@ -170,7 +183,17 @@ WebEditorClient::WebEditorClient(WebView *webView)
     : m_webView(webView)
     , m_undoTarget([[[WebEditorUndoTarget alloc] init] autorelease])
     , m_haveUndoRedoOperations(false)
+#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+    , m_correctionPanelTag(-1)
+#endif
 {
+}
+
+WebEditorClient::~WebEditorClient()
+{
+#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+    dismissCorrectionPanel(true);
+#endif
 }
 
 bool WebEditorClient::isContinuousSpellCheckingEnabled()
@@ -285,6 +308,10 @@ void WebEditorClient::respondToChangedSelection()
 {
     [m_webView _selectionChanged];
 
+#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+    dismissCorrectionPanel(true);
+#endif
+
     // FIXME: This quirk is needed due to <rdar://problem/5009625> - We can phase it out once Aperture can adopt the new behavior on their end
     if (!WebKitLinkedOnOrAfter(WEBKIT_FIRST_VERSION_WITHOUT_APERTURE_QUIRK) && [[[NSBundle mainBundle] bundleIdentifier] isEqualToString:@"com.apple.Aperture"])
         return;
@@ -310,6 +337,52 @@ void WebEditorClient::didSetSelectionTypesForPasteboard()
 NSString* WebEditorClient::userVisibleString(NSURL *URL)
 {
     return [URL _web_userVisibleString];
+}
+
+static NSArray* excludedElementsForAttributedStringConversion()
+{
+    static NSArray *elements = nil;
+    if (elements == nil) {
+        elements = [[NSArray alloc] initWithObjects:
+                    // Omit style since we want style to be inline so the fragment can be easily inserted.
+                    @"style",
+                    // Omit xml so the result is not XHTML.
+                    @"xml", 
+                    // Omit tags that will get stripped when converted to a fragment anyway.
+                    @"doctype", @"html", @"head", @"body",
+                    // Omit deprecated tags.
+                    @"applet", @"basefont", @"center", @"dir", @"font", @"isindex", @"menu", @"s", @"strike", @"u",
+                    // Omit object so no file attachments are part of the fragment.
+                    @"object", nil];
+        CFRetain(elements);
+    }
+    return elements;
+}
+
+DocumentFragment* WebEditorClient::documentFragmentFromAttributedString(NSAttributedString* string, Vector<ArchiveResource*>& resources)
+{
+    NSDictionary *dictionary = [[NSDictionary alloc] initWithObjectsAndKeys:
+                                        excludedElementsForAttributedStringConversion(), NSExcludedElementsDocumentAttribute,
+                                        m_webView, @"WebResourceHandler", nil];
+    
+    NSArray* s;
+    DOMDocumentFragment* fragment = [string _documentFromRange:NSMakeRange(0, [string length]) 
+                                                      document:[[m_webView mainFrame] DOMDocument] 
+                                            documentAttributes:dictionary
+                                                  subresources:&s];
+    NSEnumerator *e = [s objectEnumerator];
+    WebResource *r;
+    while ((r = [e nextObject])) {
+        RefPtr<ArchiveResource>  ar = [r _coreResource];
+        resources.append(ar.get());
+    }
+    [dictionary release];
+    return core(fragment);
+}
+
+void WebEditorClient::setInsertionPasteboard(NSPasteboard* pasteboard)
+{
+    [m_webView _setInsertionPasteboard:pasteboard];
 }
 
 #ifdef BUILDING_ON_TIGER
@@ -557,10 +630,13 @@ void WebEditorClient::textFieldDidEndEditing(Element* element)
     FormDelegateLog(inputElement);
     CallFormDelegate(m_webView, @selector(textFieldDidEndEditing:inFrame:), inputElement, kit(element->document()->frame()));
 }
-    
+
 void WebEditorClient::textDidChangeInTextField(Element* element)
 {
     if (!element->hasTagName(inputTag))
+        return;
+
+    if (!UserTypingGestureIndicator::processingUserTypingGesture() || UserTypingGestureIndicator::focusedElementAtGestureStart() != element)
         return;
 
     DOMHTMLInputElement* inputElement = kit(static_cast<HTMLInputElement*>(element));
@@ -622,12 +698,6 @@ void WebEditorClient::textDidChangeInTextArea(Element* element)
     DOMHTMLTextAreaElement* textAreaElement = kit(static_cast<HTMLTextAreaElement*>(element));
     FormDelegateLog(textAreaElement);
     CallFormDelegate(m_webView, @selector(textDidChangeInTextArea:inFrame:), textAreaElement, kit(element->document()->frame()));
-}
-
-// Note: This code is under review for upstreaming.
-bool WebEditorClient::focusedElementsAreRichlyEditable()
-{
-    return false;
 }
 
 void WebEditorClient::ignoreWordInSpellDocument(const String& text)
@@ -792,6 +862,35 @@ void WebEditorClient::updateSpellingUIWithGrammarString(const String& badGrammar
 #endif
 }
 
+#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+void WebEditorClient::showCorrectionPanel(const FloatRect& boundingBoxOfReplacedString, const String& replacedString, const String& replacementString, Editor* editor) {
+    dismissCorrectionPanel(true);
+
+    NSRect boundingBoxAsNSRect = boundingBoxOfReplacedString;
+    NSRect webViewFrame = m_webView.frame;
+    boundingBoxAsNSRect.origin.y = webViewFrame.size.height-NSMaxY(boundingBoxAsNSRect);
+
+    // Need to explicitly use these local NSString objects, because the C++ references may be invalidated by the time the block below is executed.
+    NSString *replacedStringAsNSString = replacedString;
+    NSString *replacementStringAsNSString = replacementString;
+
+    m_correctionPanelTag = [[NSSpellChecker sharedSpellChecker] showCorrection:replacementStringAsNSString forStringInRect:boundingBoxAsNSRect view:m_webView completionHandler:^(BOOL accepted) {
+        if (!accepted) {
+            [[NSSpellChecker sharedSpellChecker] recordResponse:NSCorrectionResponseRejected toCorrection:replacementStringAsNSString forWord:replacedStringAsNSString language:nil inSpellDocumentWithTag:[m_webView spellCheckerDocumentTag]];
+            editor->handleRejectedCorrection();
+        }
+    }];
+}
+
+void WebEditorClient::dismissCorrectionPanel(bool correctionAccepted)
+{
+    if (m_correctionPanelTag >= 0) {
+        [[NSSpellChecker sharedSpellChecker] dismissCorrection:m_correctionPanelTag acceptCorrection:correctionAccepted];
+        m_correctionPanelTag = -1;
+    }
+}
+#endif
+
 void WebEditorClient::updateSpellingUIWithMisspelledWord(const String& misspelledWord)
 {
     [[NSSpellChecker sharedSpellChecker] updateSpellingPanelWithMisspelledWord:misspelledWord];
@@ -822,6 +921,10 @@ void WebEditorClient::getGuessesForWord(const String& word, WTF::Vector<String>&
         while ((string = [enumerator nextObject]) != nil)
             guesses.append(string);
     }
+}
+
+void WebEditorClient::willSetInputMethodState()
+{
 }
 
 void WebEditorClient::setInputMethodState(bool)

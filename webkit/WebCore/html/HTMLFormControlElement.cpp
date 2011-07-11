@@ -30,6 +30,7 @@
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "Document.h"
+#include "DocumentParser.h"
 #include "ElementRareData.h"
 #include "Event.h"
 #include "EventHandler.h"
@@ -38,8 +39,6 @@
 #include "HTMLFormElement.h"
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
-#include "HTMLParser.h"
-#include "HTMLTokenizer.h"
 #include "LabelsNodeList.h"
 #include "Page.h"
 #include "RenderBox.h"
@@ -53,9 +52,9 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-HTMLFormControlElement::HTMLFormControlElement(const QualifiedName& tagName, Document* doc, HTMLFormElement* f, ConstructionType constructionType)
-    : HTMLElement(tagName, doc, constructionType)
-    , m_form(f)
+HTMLFormControlElement::HTMLFormControlElement(const QualifiedName& tagName, Document* document, HTMLFormElement* form)
+    : HTMLElement(tagName, document)
+    , m_form(form)
     , m_disabled(false)
     , m_readOnly(false)
     , m_required(false)
@@ -79,11 +78,6 @@ HTMLFormControlElement::~HTMLFormControlElement()
 bool HTMLFormControlElement::formNoValidate() const
 {
     return !getAttribute(formnovalidateAttr).isNull();
-}
-
-void HTMLFormControlElement::setFormNoValidate(bool formnovalidate)
-{
-    setAttribute(formnovalidateAttr, formnovalidate ? "" : 0);
 }
 
 ValidityState* HTMLFormControlElement::validity()
@@ -178,12 +172,7 @@ void HTMLFormControlElement::removedFromTree(bool deep)
 {
     // If the form and element are both in the same tree, preserve the connection to the form.
     // Otherwise, null out our form and remove ourselves from the form's list of elements.
-    HTMLParser* parser = 0;
-    if (Tokenizer* tokenizer = document()->tokenizer())
-        if (tokenizer->isHTMLTokenizer())
-            parser = static_cast<HTMLTokenizer*>(tokenizer)->htmlParser();
-    
-    if (m_form && !(parser && parser->isHandlingResidualStyleAcrossBlocks()) && findRoot(this) != findRoot(m_form)) {
+    if (m_form && findRoot(this) != findRoot(m_form)) {
         m_form->removeFormElement(this);
         m_form = 0;
     }
@@ -197,7 +186,7 @@ const AtomicString& HTMLFormControlElement::formControlName() const
     return name.isNull() ? emptyAtom : name;
 }
 
-void HTMLFormControlElement::setName(const AtomicString &value)
+void HTMLFormControlElement::setName(const AtomicString& value)
 {
     setAttribute(nameAttr, value);
 }
@@ -212,29 +201,14 @@ void HTMLFormControlElement::setDisabled(bool b)
     setAttribute(disabledAttr, b ? "" : 0);
 }
 
-void HTMLFormControlElement::setReadOnly(bool b)
-{
-    setAttribute(readonlyAttr, b ? "" : 0);
-}
-
 bool HTMLFormControlElement::autofocus() const
 {
     return hasAttribute(autofocusAttr);
 }
 
-void HTMLFormControlElement::setAutofocus(bool b)
-{
-    setAttribute(autofocusAttr, b ? "autofocus" : 0);
-}
-
 bool HTMLFormControlElement::required() const
 {
     return m_required;
-}
-
-void HTMLFormControlElement::setRequired(bool b)
-{
-    setAttribute(requiredAttr, b ? "required" : 0);
 }
 
 static void updateFromElementCallback(Node* node)
@@ -547,7 +521,7 @@ static bool isNotLineBreak(UChar ch) { return ch != newlineCharacter && ch != ca
 bool HTMLTextFormControlElement::isPlaceholderEmpty() const
 {
     const AtomicString& attributeValue = getAttribute(placeholderAttr);
-    return attributeValue.string().find(isNotLineBreak) == -1;
+    return attributeValue.string().find(isNotLineBreak) == notFound;
 }
 
 bool HTMLTextFormControlElement::placeholderShouldBeVisible() const

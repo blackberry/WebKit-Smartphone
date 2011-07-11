@@ -31,21 +31,21 @@
 #include "config.h"
 #include "TestShell.h"
 
+#include "DRTDevToolsAgent.h"
+#include "DRTDevToolsClient.h"
 #include "LayoutTestController.h"
 #include "WebViewHost.h"
-#include "base/md5.h" // FIXME: Wrap by webkit_support.
-#include "base/string16.h"
-#include "gfx/codec/png_codec.h" // FIXME: Remove dependecy. WebCore/platform/image-encoder is better?
-#include "net/base/escape.h" // FIXME: Remove dependency.
 #include "public/WebDataSource.h"
 #include "public/WebDocument.h"
 #include "public/WebElement.h"
 #include "public/WebFrame.h"
 #include "public/WebHistoryItem.h"
+#include "public/WebKit.h"
 #include "public/WebRuntimeFeatures.h"
 #include "public/WebScriptController.h"
 #include "public/WebSettings.h"
 #include "public/WebSize.h"
+#include "public/WebSpeechInputControllerMock.h"
 #include "public/WebString.h"
 #include "public/WebURLRequest.h"
 #include "public/WebURLResponse.h"
@@ -53,9 +53,11 @@
 #include "skia/ext/bitmap_platform_device.h"
 #include "skia/ext/platform_canvas.h"
 #include "webkit/support/webkit_support.h"
+#include "webkit/support/webkit_support_gfx.h"
 #include <algorithm>
 #include <cctype>
 #include <vector>
+#include <wtf/MD5.h>
 
 using namespace WebKit;
 using namespace std;
@@ -75,32 +77,79 @@ static const char fileTestPrefix[] = "(file test):";
 static const char dataUrlPattern[] = "data:";
 static const string::size_type dataUrlPatternSize = sizeof(dataUrlPattern) - 1;
 
-TestShell::TestShell()
+TestShell::TestShell(bool testShellMode)
     : m_testIsPending(false)
     , m_testIsPreparing(false)
     , m_focusedWidget(0)
+    , m_testShellMode(testShellMode)
+    , m_allowExternalPages(false)
+    , m_devTools(0)
 {
     WebRuntimeFeatures::enableGeolocation(true);
+    WebRuntimeFeatures::enableIndexedDatabase(true);
     m_accessibilityController.set(new AccessibilityController(this));
     m_layoutTestController.set(new LayoutTestController(this));
     m_eventSender.set(new EventSender(this));
     m_plainTextController.set(new PlainTextController());
     m_textInputController.set(new TextInputController(this));
     m_notificationPresenter.set(new NotificationPresenter(this));
+    m_printer.set(m_testShellMode ? TestEventPrinter::createTestShellPrinter() : TestEventPrinter::createDRTPrinter());
 
+    // 30 second is the same as the value in Mac DRT.
+    // If we use a value smaller than the timeout value of
+    // (new-)run-webkit-tests, (new-)run-webkit-tests misunderstands that a
+    // timed-out DRT process was crashed.
+    m_timeout = 30 * 1000;
+
+    m_drtDevToolsAgent.set(new DRTDevToolsAgent);
     m_webViewHost = createWebView();
     m_webView = m_webViewHost->webView();
+    m_drtDevToolsAgent->setWebView(m_webView);
 }
 
 TestShell::~TestShell()
 {
+    // Note: DevTools are closed together with all the other windows in the
+    // windows list.
+
     loadURL(GURL("about:blank"));
     // Call GC twice to clean up garbage.
     callJSGC();
     callJSGC();
 
     // Destroy the WebView before its WebViewHost.
+    m_drtDevToolsAgent->setWebView(0);
     m_webView->close();
+}
+
+void TestShell::createDRTDevToolsClient(DRTDevToolsAgent* agent)
+{
+    m_drtDevToolsClient.set(new DRTDevToolsClient(agent, m_devTools->webView()));
+}
+
+void TestShell::showDevTools()
+{
+    if (!m_devTools) {
+        WebURL url = webkit_support::GetDevToolsPathAsURL();
+        if (!url.isValid()) {
+            ASSERT(false);
+            return;
+        }
+        m_devTools = createNewWindow(url);
+        ASSERT(m_devTools);
+        createDRTDevToolsClient(m_drtDevToolsAgent.get());
+    }
+    m_devTools->show(WebKit::WebNavigationPolicyNewWindow);
+}
+
+void TestShell::closeDevTools()
+{
+    if (m_devTools) {
+        m_drtDevToolsAgent->reset();
+        m_drtDevToolsClient.clear();
+        closeWindow(m_devTools);
+        m_devTools = 0;
+    }
 }
 
 void TestShell::resetWebSettings(WebView& webView)
@@ -155,6 +204,7 @@ void TestShell::resetWebSettings(WebView& webView)
     settings->setLocalStorageEnabled(true);
     settings->setOfflineWebApplicationCacheEnabled(true);
     settings->setAllowFileAccessFromFileURLs(true);
+    settings->setUserStyleSheetLocation(WebURL());
 
     // LayoutTests were written with Safari Mac in mind which does not allow
     // tabbing to links by default.
@@ -180,6 +230,8 @@ void TestShell::resetWebSettings(WebView& webView)
 #else
     settings->setEditingBehavior(WebSettings::EditingBehaviorWin);
 #endif
+    // FIXME: crbug.com/51879
+    settings->setAcceleratedCompositingEnabled(false);
 }
 
 void TestShell::runFileTest(const TestParams& params)
@@ -192,6 +244,15 @@ void TestShell::runFileTest(const TestParams& params)
     bool inspectorTestMode = testUrl.find("/inspector/") != string::npos
         || testUrl.find("\\inspector\\") != string::npos;
     m_webView->settings()->setDeveloperExtrasEnabled(inspectorTestMode);
+
+    if (testUrl.find("loading/") != string::npos
+        || testUrl.find("loading\\") != string::npos)
+        m_layoutTestController->setShouldDumpFrameLoadCallbacks(true);
+
+    if (inspectorTestMode)
+        showDevTools();
+
+    m_printer->handleTestHeader(testUrl.c_str());
     loadURL(m_params.testUrl);
 
     m_testIsPreparing = false;
@@ -224,6 +285,9 @@ void TestShell::resetTestController()
     m_eventSender->reset();
     m_webViewHost->reset();
     m_notificationPresenter->reset();
+    m_drtDevToolsAgent->reset();
+    if (m_drtDevToolsClient)
+        m_drtDevToolsClient->reset();
 }
 
 void TestShell::loadURL(const WebURL& url)
@@ -283,8 +347,7 @@ void TestShell::testFinished()
 
 void TestShell::testTimedOut()
 {
-    fprintf(stderr, "FAIL: Timed out waiting for notifyDone to be called\n");
-    fprintf(stdout, "FAIL: Timed out waiting for notifyDone to be called\n");
+    m_printer->handleTimedOut();
     testFinished();
 }
 
@@ -369,7 +432,7 @@ static string dumpHistoryItem(const WebHistoryItem& item, int indent, bool isCur
         url.replace(0, pos + layoutTestsPatternSize, fileTestPrefix);
     } else if (!url.find(dataUrlPattern)) {
         // URL-escape data URLs to match results upstream.
-        string path = EscapePath(url.substr(dataUrlPatternSize));
+        string path = webkit_support::EscapePath(url.substr(dataUrlPatternSize));
         url.replace(dataUrlPatternSize, url.length(), path);
     }
 
@@ -431,16 +494,20 @@ void TestShell::dump()
     if (!frame)
         return;
     bool shouldDumpAsText = m_layoutTestController->shouldDumpAsText();
+    bool shouldGeneratePixelResults = m_layoutTestController->shouldGeneratePixelResults();
     bool dumpedAnything = false;
     if (m_params.dumpTree) {
         dumpedAnything = true;
-        printf("Content-Type: text/plain\n");
+        m_printer->handleTextHeader();
         // Text output: the test page can request different types of output
         // which we handle here.
         if (!shouldDumpAsText) {
             // Plain text pages should be dumped as text
             string mimeType = frame->dataSource()->response().mimeType().utf8();
-            shouldDumpAsText = mimeType == "text/plain";
+            if (mimeType == "text/plain") {
+                shouldDumpAsText = true;
+                shouldGeneratePixelResults = false;
+            }
         }
         if (shouldDumpAsText) {
             bool recursive = m_layoutTestController->shouldDumpChildFramesAsText();
@@ -456,9 +523,9 @@ void TestShell::dump()
             printf("%s", dumpAllBackForwardLists().c_str());
     }
     if (dumpedAnything && m_params.printSeparators)
-        printf("#EOF\n");
+        m_printer->handleTextFooter();
 
-    if (m_params.dumpPixels && !shouldDumpAsText) {
+    if (m_params.dumpPixels && shouldGeneratePixelResults) {
         // Image output: we write the image data to the file given on the
         // command line (for the dump pixels argument), and the MD5 sum to
         // stdout.
@@ -497,14 +564,15 @@ void TestShell::dump()
             }
         }
 
-        string md5sum = dumpImage(m_webViewHost->canvas(), m_params.pixelHash);
+        dumpImage(m_webViewHost->canvas());
     }
-    printf("#EOF\n"); // For the image.
+    m_printer->handleImageFooter();
+    m_printer->handleTestFooter(dumpedAnything);
     fflush(stdout);
     fflush(stderr);
 }
 
-string TestShell::dumpImage(skia::PlatformCanvas* canvas, const string& expectedHash)
+void TestShell::dumpImage(skia::PlatformCanvas* canvas) const
 {
     skia::BitmapPlatformDevice& device =
         static_cast<skia::BitmapPlatformDevice&>(canvas->getTopPlatformDevice());
@@ -524,6 +592,8 @@ string TestShell::dumpImage(skia::PlatformCanvas* canvas, const string& expected
     bool discardTransparency = false;
 #elif OS(UNIX)
     bool discardTransparency = true;
+    if (areLayoutTestImagesOpaque())
+        device.makeOpaque(0, 0, sourceBitmap.width(), sourceBitmap.height());
 #endif
 
     // Compute MD5 sum.  We should have done this before calling
@@ -531,35 +601,31 @@ string TestShell::dumpImage(skia::PlatformCanvas* canvas, const string& expected
     // some images that are the pixel identical on windows and other platforms
     // but have different MD5 sums.  At this point, rebaselining all the windows
     // tests is too much of a pain, so we just check in different baselines.
-    MD5Context ctx;
-    MD5Init(&ctx);
-    MD5Update(&ctx, sourceBitmap.getPixels(), sourceBitmap.getSize());
-
-    MD5Digest digest;
-    MD5Final(&digest, &ctx);
-    string md5hash = MD5DigestToBase16(digest);
-    printf("\nActualHash: %s\n", md5hash.c_str());
-    if (!expectedHash.empty())
-        printf("\nExpectedHash: %s\n", expectedHash.c_str());
+    MD5 digester;
+    Vector<uint8_t, 16> digestValue;
+    digester.addBytes(reinterpret_cast<const uint8_t*>(sourceBitmap.getPixels()), sourceBitmap.getSize());
+    digester.checksum(digestValue);
+    string md5hash;
+    md5hash.reserve(16 * 2);
+    for (unsigned i = 0; i < 16; ++i) {
+        char hex[3];
+        // Use "x", not "X". The string must be lowercased.
+        sprintf(hex, "%02x", digestValue[i]);
+        md5hash.append(hex);
+    }
 
     // Only encode and dump the png if the hashes don't match. Encoding the image
     // is really expensive.
-    if (md5hash.compare(expectedHash)) {
+    if (md5hash.compare(m_params.pixelHash)) {
         std::vector<unsigned char> png;
-        gfx::PNGCodec::ColorFormat colorFormat = gfx::PNGCodec::FORMAT_BGRA;
-        gfx::PNGCodec::Encode(
+        webkit_support::EncodeBGRAPNG(
             reinterpret_cast<const unsigned char*>(sourceBitmap.getPixels()),
-            colorFormat, sourceBitmap.width(), sourceBitmap.height(),
+            sourceBitmap.width(), sourceBitmap.height(),
             static_cast<int>(sourceBitmap.rowBytes()), discardTransparency, &png);
 
-        printf("Content-Type: image/png\n");
-        printf("Content-Length: %lu\n", png.size());
-        // Write to disk.
-        if (fwrite(&png[0], 1, png.size(), stdout) != png.size())
-            FATAL("Short write to stdout.\n");
-    }
-
-    return md5hash;
+        m_printer->handleImage(md5hash.c_str(), m_params.pixelHash.c_str(), &png[0], png.size(), m_params.pixelFileName.c_str());
+    } else
+        m_printer->handleImage(md5hash.c_str(), m_params.pixelHash.c_str(), 0, 0, m_params.pixelFileName.c_str());
 }
 
 void TestShell::bindJSObjectsToWindow(WebFrame* frame)
@@ -571,15 +637,6 @@ void TestShell::bindJSObjectsToWindow(WebFrame* frame)
     m_textInputController->bindToJavascript(frame, WebString::fromUTF8("textInputController"));
 }
 
-int TestShell::layoutTestTimeout()
-{
-    // 30 second is the same as the value in Mac DRT.
-    // If we use a value smaller than the timeout value of
-    // (new-)run-webkit-tests, (new-)run-webkit-tests misunderstands that a
-    // timed-out DRT process was crashed.
-    return 30 * 1000;
-}
-
 WebViewHost* TestShell::createWebView()
 {
     return createNewWindow(WebURL());
@@ -588,7 +645,7 @@ WebViewHost* TestShell::createWebView()
 WebViewHost* TestShell::createNewWindow(const WebURL& url)
 {
     WebViewHost* host = new WebViewHost(this);
-    WebView* view = WebView::create(host);
+    WebView* view = WebView::create(host, m_drtDevToolsAgent.get());
     host->setWebWidget(view);
     resetWebSettings(*view);
     view->initializeMainFrame(host);
@@ -605,6 +662,8 @@ void TestShell::closeWindow(WebViewHost* window)
         return;
     }
     m_windowList.remove(i);
+    if (window->webWidget() == m_focusedWidget)
+        m_focusedWidget = 0;
     window->webWidget()->close();
     delete window;
 }

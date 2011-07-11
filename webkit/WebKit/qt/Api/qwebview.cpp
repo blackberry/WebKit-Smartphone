@@ -349,7 +349,7 @@ void QWebViewPrivate::detachCurrentPage()
         return;
 
     if (page) {
-#if QT_VERSION >= 0x040600
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
         page->d->view.clear();
 #else
         page->d->view = 0;
@@ -415,6 +415,8 @@ void QWebView::setPage(QWebPage* page)
                 this, SIGNAL(statusBarMessage(QString)));
         connect(d->page, SIGNAL(linkClicked(QUrl)),
                 this, SIGNAL(linkClicked(QUrl)));
+        connect(d->page, SIGNAL(selectionChanged()),
+                this, SIGNAL(selectionChanged()));
 
         connect(d->page, SIGNAL(microFocusChanged()),
                 this, SLOT(updateMicroFocus()));
@@ -470,7 +472,12 @@ void QWebView::load(const QNetworkRequest &request,
     through the charset attribute of the HTML script tag. Alternatively, the
     encoding can also be specified by the web server.
 
-    \sa load(), setContent(), QWebFrame::toHtml()
+    This is a convenience function equivalent to setContent(html, "text/html", baseUrl).
+
+    \warning This function works only for HTML, for other mime types (i.e. XHTML, SVG)
+    setContent() should be used instead.
+
+    \sa load(), setContent(), QWebFrame::toHtml(), QWebFrame::setContent()
 */
 void QWebView::setHtml(const QString &html, const QUrl &baseUrl)
 {
@@ -826,8 +833,9 @@ bool QWebView::event(QEvent *e)
                    || e->type() == QEvent::TouchEnd 
                    || e->type() == QEvent::TouchUpdate) {
             d->page->event(e);
-            if (e->isAccepted())
-                return true;
+
+            // Always return true so that we'll receive also TouchUpdate and TouchEnd events
+            return true;
 #endif
         } else if (e->type() == QEvent::Leave)
             d->page->event(e);
@@ -945,7 +953,11 @@ void QWebView::paintEvent(QPaintEvent *ev)
     \note If the createWindow() method of the associated page is reimplemented, this
     method is not called, unless explicitly done so in the reimplementation.
 
-    \sa QWebPage::createWindow()
+    \note In the cases when the window creation is being triggered by JavaScript, apart from
+    reimplementing this method application must also set the JavaScriptCanOpenWindows attribute
+    of QWebSettings to true in order for it to get called.
+
+    \sa QWebPage::createWindow(), QWebPage::acceptNavigationRequest()
 */
 QWebView *QWebView::createWindow(QWebPage::WebWindowType type)
 {

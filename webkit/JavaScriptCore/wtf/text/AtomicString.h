@@ -34,9 +34,7 @@
 #define ATOMICSTRING_CONVERSION
 #endif
 
-// FIXME: This is a temporary layering violation while we move string code to WTF.
-// Landing the file moves in one patch, will follow on with patches to change the namespaces.
-namespace WebCore {
+namespace WTF {
 
 struct AtomicStringHash;
 
@@ -75,10 +73,10 @@ public:
     bool contains(const String& s, bool caseSensitive = true) const
         { return m_string.contains(s, caseSensitive); }
 
-    int find(UChar c, int start = 0) const { return m_string.find(c, start); }
-    int find(const char* s, int start = 0, bool caseSentitive = true) const
+    size_t find(UChar c, size_t start = 0) const { return m_string.find(c, start); }
+    size_t find(const char* s, size_t start = 0, bool caseSentitive = true) const
         { return m_string.find(s, start, caseSentitive); }
-    int find(const String& s, int start = 0, bool caseSentitive = true) const
+    size_t find(const String& s, size_t start = 0, bool caseSentitive = true) const
         { return m_string.find(s, start, caseSentitive); }
     
     bool startsWith(const String& s, bool caseSensitive = true) const
@@ -158,17 +156,23 @@ inline bool equalIgnoringCase(const String& a, const AtomicString& b) { return e
     extern const JS_EXPORTDATA AtomicString xmlnsAtom;
 #endif
 
-} // namespace WebCore
-
-
-namespace WTF {
-
     // AtomicStringHash is the default hash for AtomicString
     template<typename T> struct DefaultHash;
-    template<> struct DefaultHash<WebCore::AtomicString> {
-        typedef WebCore::AtomicStringHash Hash;
+    template<> struct DefaultHash<AtomicString> {
+        typedef AtomicStringHash Hash;
     };
 
 } // namespace WTF
+
+#ifndef ATOMICSTRING_HIDE_GLOBALS
+using WTF::AtomicString;
+using WTF::nullAtom;
+using WTF::emptyAtom;
+using WTF::textAtom;
+using WTF::commentAtom;
+using WTF::starAtom;
+using WTF::xmlAtom;
+using WTF::xmlnsAtom;
+#endif
 
 #endif // AtomicString_h

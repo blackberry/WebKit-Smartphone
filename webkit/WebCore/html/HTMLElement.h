@@ -30,8 +30,6 @@ namespace WebCore {
 class DocumentFragment;
 class HTMLCollection;
 class HTMLFormElement;
-
-enum HTMLTagStatus { TagStatusOptional, TagStatusRequired, TagStatusForbidden };
                        
 class HTMLElement : public StyledElement {
 public:
@@ -46,7 +44,8 @@ public:
 
     String innerHTML() const;
     String outerHTML() const;
-    PassRefPtr<DocumentFragment> createContextualFragment(const String&, FragmentScriptingPermission = FragmentScriptingAllowed);
+    // deprecatedCreateContextualFragment logic should be moved into Range::createContextualFragment
+    PassRefPtr<DocumentFragment> deprecatedCreateContextualFragment(const String&, FragmentScriptingPermission = FragmentScriptingAllowed);
     void setInnerHTML(const String&, ExceptionCode&);
     void setOuterHTML(const String&, ExceptionCode&);
     void setInnerText(const String&, ExceptionCode&);
@@ -71,8 +70,7 @@ public:
 
     virtual void accessKeyAction(bool sendToAnyElement);
 
-    virtual HTMLTagStatus endTagRequirement() const;
-    virtual int tagPriority() const;
+    bool ieForbidsInsertHTML() const;
 
     virtual bool rendererIsNeeded(RenderStyle*);
     virtual RenderObject* createRenderer(RenderArena*, RenderStyle*);
@@ -82,22 +80,12 @@ public:
     static void addHTMLAlignmentToStyledElement(StyledElement*, Attribute*);
 
 protected:
-    HTMLElement(const QualifiedName& tagName, Document*, ConstructionType = CreateHTMLElementZeroRefCount);
+    HTMLElement(const QualifiedName& tagName, Document*);
 
     void addHTMLAlignment(Attribute*);
 
     virtual bool mapToEntry(const QualifiedName& attrName, MappedAttributeEntry& result) const;
     virtual void parseMappedAttribute(Attribute*);
-
-    virtual bool childAllowed(Node* newChild); // Error-checking during parsing that checks the DTD
-
-    // Helper function to check the DTD for a given child node.
-    virtual bool checkDTD(const Node*);
-
-    static bool inEitherTagList(const Node*);
-    static bool inInlineTagList(const Node*);
-    static bool inBlockTagList(const Node*);
-    static bool isRecognizedTagName(const QualifiedName&);
 
     HTMLFormElement* findFormAncestor() const;
 
@@ -111,8 +99,8 @@ private:
     Node* insertAdjacent(const String& where, Node* newChild, ExceptionCode&);
 };
 
-inline HTMLElement::HTMLElement(const QualifiedName& tagName, Document* document, ConstructionType type)
-    : StyledElement(tagName, document, type)
+inline HTMLElement::HTMLElement(const QualifiedName& tagName, Document* document)
+    : StyledElement(tagName, document, CreateHTMLElement)
 {
     ASSERT(tagName.localName().impl());
 }

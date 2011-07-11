@@ -3,8 +3,9 @@
  *               1999 Waldo Bastian (bastian@kde.org)
  *               2001 Andreas Schlapbach (schlpbch@iam.unibe.ch)
  *               2001-2003 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2002, 2006, 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2002, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2008 David Smith (catfish.man@gmail.com)
+ * Copyright (C) 2010 Google Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -25,45 +26,105 @@
 #include "config.h"
 #include "CSSSelector.h"
 
-#include "wtf/Assertions.h"
+#include "CSSOMUtils.h"
 #include "HTMLNames.h"
-
+#include <wtf/Assertions.h>
 #include <wtf/HashMap.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/Vector.h>
 
 namespace WebCore {
-    
+
 using namespace HTMLNames;
 
-unsigned int CSSSelector::specificity()
+class CSSSelectorBag : public Noncopyable {
+public:
+    ~CSSSelectorBag()
+    {
+        ASSERT(isEmpty());
+    }
+
+    bool isEmpty() const
+    {
+        return m_stack.isEmpty();
+    }
+
+    void add(PassOwnPtr<CSSSelector> selector)
+    {
+        if (selector)
+            m_stack.append(selector.leakPtr());
+    }
+
+    PassOwnPtr<CSSSelector> takeAny()
+    {
+        ASSERT(!isEmpty());
+        OwnPtr<CSSSelector> selector = adoptPtr(m_stack.last());
+        m_stack.removeLast();
+        return selector.release();
+    }
+
+private:
+    Vector<CSSSelector*, 16> m_stack;
+};
+
+unsigned CSSSelector::specificity() const
+{
+    // make sure the result doesn't overflow
+    static const unsigned maxValueMask = 0xffffff;
+    unsigned total = 0;
+    for (const CSSSelector* selector = this; selector; selector = selector->tagHistory()) {
+        if (selector->m_isForPage)
+            return (total + selector->specificityForPage()) & maxValueMask;
+        total = (total + selector->specificityForOneSelector()) & maxValueMask;
+    }
+    return total;
+}
+
+inline unsigned CSSSelector::specificityForOneSelector() const
 {
     // FIXME: Pseudo-elements and pseudo-classes do not have the same specificity. This function
     // isn't quite correct.
-    int s = (m_tag.localName() == starAtom ? 0 : 1);
+    unsigned s = (m_tag.localName() == starAtom ? 0 : 1);
     switch (m_match) {
-        case Id:
-            s += 0x10000;
-            break;
-        case Exact:
-        case Class:
-        case Set:
-        case List:
-        case Hyphen:
-        case PseudoClass:
-        case PseudoElement:
-        case Contain:
-        case Begin:
-        case End:
-            s += 0x100;
-        case None:
-            break;
+    case Id:
+        s += 0x10000;
+        break;
+    case Exact:
+    case Class:
+    case Set:
+    case List:
+    case Hyphen:
+    case PseudoClass:
+    case PseudoElement:
+    case Contain:
+    case Begin:
+    case End:
+        s += 0x100;
+    case None:
+        break;
     }
+    return s;
+}
 
-    if (CSSSelector* tagHistory = this->tagHistory())
-        s += tagHistory->specificity();
+unsigned CSSSelector::specificityForPage() const
+{
+    // See http://dev.w3.org/csswg/css3-page/#cascading-and-page-context
+    unsigned s = (m_tag.localName() == starAtom ? 0 : 4);
 
-    // make sure it doesn't overflow
-    return s & 0xffffff;
+    switch (pseudoType()) {
+    case PseudoFirstPage:
+        s += 2;
+        break;
+    case PseudoLeftPage:
+    case PseudoRightPage:
+        s += 1;
+        break;
+    case PseudoNotParsed:
+        break;
+    default:
+        ASSERT_NOT_REACHED();
+    }
+    return s;
 }
 
 PseudoId CSSSelector::pseudoId(PseudoType type)
@@ -83,6 +144,10 @@ PseudoId CSSSelector::pseudoId(PseudoType type)
         return FILE_UPLOAD_BUTTON;
     case PseudoInputPlaceholder:
         return INPUT_PLACEHOLDER;
+#if ENABLE(INPUT_SPEECH)
+    case PseudoInputSpeechButton:
+        return INPUT_SPEECH_BUTTON;
+#endif
     case PseudoSliderThumb:
         return SLIDER_THUMB;
     case PseudoSearchCancelButton:
@@ -111,6 +176,8 @@ PseudoId CSSSelector::pseudoId(PseudoType type)
         return MEDIA_CONTROLS_TIMELINE;
     case PseudoMediaControlsVolumeSlider:
         return MEDIA_CONTROLS_VOLUME_SLIDER;
+    case PseudoMediaControlsVolumeSliderMuteButton:
+        return MEDIA_CONTROLS_VOLUME_SLIDER_MUTE_BUTTON;
     case PseudoMediaControlsSeekBackButton:
         return MEDIA_CONTROLS_SEEK_BACK_BUTTON;
     case PseudoMediaControlsSeekForwardButton:
@@ -150,6 +217,44 @@ PseudoId CSSSelector::pseudoId(PseudoType type)
         ASSERT_NOT_REACHED();
         return NOPSEUDO;
 #endif
+
+#if ENABLE(METER_TAG)
+    case PseudoMeterHorizontalBar:
+        return METER_HORIZONTAL_BAR;
+    case PseudoMeterHorizontalOptimum:
+        return METER_HORIZONTAL_OPTIMUM;
+    case PseudoMeterHorizontalSuboptimal:
+        return METER_HORIZONTAL_SUBOPTIMAL;
+    case PseudoMeterHorizontalEvenLessGood:
+        return METER_HORIZONTAL_EVEN_LESS_GOOD;
+    case PseudoMeterVerticalBar:
+        return METER_VERTICAL_BAR;
+    case PseudoMeterVerticalOptimum:
+        return METER_VERTICAL_OPTIMUM;
+    case PseudoMeterVerticalSuboptimal:
+        return METER_VERTICAL_SUBOPTIMAL;
+    case PseudoMeterVerticalEvenLessGood:
+        return METER_VERTICAL_EVEN_LESS_GOOD;
+#else
+    case PseudoMeterHorizontalBar:
+    case PseudoMeterHorizontalOptimum:
+    case PseudoMeterHorizontalSuboptimal:
+    case PseudoMeterHorizontalEvenLessGood:
+    case PseudoMeterVerticalBar:
+    case PseudoMeterVerticalOptimum:
+    case PseudoMeterVerticalSuboptimal:
+    case PseudoMeterVerticalEvenLessGood:
+        ASSERT_NOT_REACHED();
+        return NOPSEUDO;
+#endif
+
+#if ENABLE(FULLSCREEN_API)
+    case PseudoFullScreen:
+        return FULL_SCREEN;
+    case PseudoFullScreenDocument:
+        return FULL_SCREEN_DOCUMENT;
+#endif
+            
     case PseudoInputListButton:
 #if ENABLE(DATALIST)
         return INPUT_LIST_BUTTON;
@@ -225,6 +330,9 @@ static HashMap<AtomicStringImpl*, CSSSelector::PseudoType>* nameToPseudoTypeMap(
     DEFINE_STATIC_LOCAL(AtomicString, before, ("before"));
     DEFINE_STATIC_LOCAL(AtomicString, checked, ("checked"));
     DEFINE_STATIC_LOCAL(AtomicString, fileUploadButton, ("-webkit-file-upload-button"));
+#if ENABLE(INPUT_SPEECH)
+    DEFINE_STATIC_LOCAL(AtomicString, inputSpeechButton, ("-webkit-input-speech-button"));
+#endif
     DEFINE_STATIC_LOCAL(AtomicString, defaultString, ("default"));
     DEFINE_STATIC_LOCAL(AtomicString, disabled, ("disabled"));
     DEFINE_STATIC_LOCAL(AtomicString, readOnly, ("read-only"));
@@ -261,6 +369,7 @@ static HashMap<AtomicStringImpl*, CSSSelector::PseudoType>* nameToPseudoTypeMap(
     DEFINE_STATIC_LOCAL(AtomicString, mediaControlsPlayButton, ("-webkit-media-controls-play-button"));
     DEFINE_STATIC_LOCAL(AtomicString, mediaControlsTimeline, ("-webkit-media-controls-timeline"));
     DEFINE_STATIC_LOCAL(AtomicString, mediaControlsVolumeSlider, ("-webkit-media-controls-volume-slider"));
+    DEFINE_STATIC_LOCAL(AtomicString, mediaControlsVolumeSliderMuteButton, ("-webkit-media-controls-volume-slider-mute-button"));
     DEFINE_STATIC_LOCAL(AtomicString, mediaControlsSeekBackButton, ("-webkit-media-controls-seek-back-button"));
     DEFINE_STATIC_LOCAL(AtomicString, mediaControlsSeekForwardButton, ("-webkit-media-controls-seek-forward-button"));
     DEFINE_STATIC_LOCAL(AtomicString, mediaControlsRewindButton, ("-webkit-media-controls-rewind-button"));
@@ -280,6 +389,18 @@ static HashMap<AtomicStringImpl*, CSSSelector::PseudoType>* nameToPseudoTypeMap(
 #if ENABLE(PROGRESS_TAG)
     DEFINE_STATIC_LOCAL(AtomicString, progressBarValue, ("-webkit-progress-bar-value"));
 #endif
+
+#if ENABLE(METER_TAG)
+    DEFINE_STATIC_LOCAL(AtomicString, meterHorizontalBar, ("-webkit-meter-horizontal-bar"));
+    DEFINE_STATIC_LOCAL(AtomicString, meterHorizontalOptimumValue, ("-webkit-meter-horizontal-optimum-value"));
+    DEFINE_STATIC_LOCAL(AtomicString, meterHorizontalSuboptimalValue, ("-webkit-meter-horizontal-suboptimal-value"));
+    DEFINE_STATIC_LOCAL(AtomicString, meterHorizontalEvenLessGoodValue, ("-webkit-meter-horizontal-even-less-good-value"));
+    DEFINE_STATIC_LOCAL(AtomicString, meterVerticalBar, ("-webkit-meter-vertical-bar"));
+    DEFINE_STATIC_LOCAL(AtomicString, meterVerticalOptimumValue, ("-webkit-meter-vertical-optimum-value"));
+    DEFINE_STATIC_LOCAL(AtomicString, meterVerticalSuboptimalValue, ("-webkit-meter-vertical-suboptimal-value"));
+    DEFINE_STATIC_LOCAL(AtomicString, meterVerticalEvenLessGoodValue, ("-webkit-meter-vertical-even-less-good-value"));
+#endif
+
     DEFINE_STATIC_LOCAL(AtomicString, required, ("required"));
     DEFINE_STATIC_LOCAL(AtomicString, resizer, ("-webkit-resizer"));
     DEFINE_STATIC_LOCAL(AtomicString, root, ("root"));
@@ -312,6 +433,10 @@ static HashMap<AtomicStringImpl*, CSSSelector::PseudoType>* nameToPseudoTypeMap(
     DEFINE_STATIC_LOCAL(AtomicString, firstPage, ("first"));
     DEFINE_STATIC_LOCAL(AtomicString, leftPage, ("left"));
     DEFINE_STATIC_LOCAL(AtomicString, rightPage, ("right"));
+#if ENABLE(FULLSCREEN_API)
+    DEFINE_STATIC_LOCAL(AtomicString, fullScreen, ("-webkit-full-screen"));
+    DEFINE_STATIC_LOCAL(AtomicString, fullScreenDocument, ("-webkit-full-screen-document"));
+#endif
 
     static HashMap<AtomicStringImpl*, CSSSelector::PseudoType>* nameToPseudoType = 0;
     if (!nameToPseudoType) {
@@ -323,6 +448,9 @@ static HashMap<AtomicStringImpl*, CSSSelector::PseudoType>* nameToPseudoTypeMap(
         nameToPseudoType->set(before.impl(), CSSSelector::PseudoBefore);
         nameToPseudoType->set(checked.impl(), CSSSelector::PseudoChecked);
         nameToPseudoType->set(fileUploadButton.impl(), CSSSelector::PseudoFileUploadButton);
+#if ENABLE(INPUT_SPEECH)
+        nameToPseudoType->set(inputSpeechButton.impl(), CSSSelector::PseudoInputSpeechButton);
+#endif
         nameToPseudoType->set(defaultString.impl(), CSSSelector::PseudoDefault);
         nameToPseudoType->set(disabled.impl(), CSSSelector::PseudoDisabled);
         nameToPseudoType->set(readOnly.impl(), CSSSelector::PseudoReadOnly);
@@ -359,6 +487,7 @@ static HashMap<AtomicStringImpl*, CSSSelector::PseudoType>* nameToPseudoTypeMap(
         nameToPseudoType->set(mediaControlsTimeRemainingDisplay.impl(), CSSSelector::PseudoMediaControlsTimeRemainingDisplay);
         nameToPseudoType->set(mediaControlsTimeline.impl(), CSSSelector::PseudoMediaControlsTimeline);
         nameToPseudoType->set(mediaControlsVolumeSlider.impl(), CSSSelector::PseudoMediaControlsVolumeSlider);
+        nameToPseudoType->set(mediaControlsVolumeSliderMuteButton.impl(), CSSSelector::PseudoMediaControlsVolumeSliderMuteButton);
         nameToPseudoType->set(mediaControlsSeekBackButton.impl(), CSSSelector::PseudoMediaControlsSeekBackButton);
         nameToPseudoType->set(mediaControlsSeekForwardButton.impl(), CSSSelector::PseudoMediaControlsSeekForwardButton);
         nameToPseudoType->set(mediaControlsRewindButton.impl(), CSSSelector::PseudoMediaControlsRewindButton);
@@ -376,6 +505,16 @@ static HashMap<AtomicStringImpl*, CSSSelector::PseudoType>* nameToPseudoTypeMap(
         nameToPseudoType->set(outerSpinButton.impl(), CSSSelector::PseudoOuterSpinButton);
 #if ENABLE(PROGRESS_TAG)
         nameToPseudoType->set(progressBarValue.impl(), CSSSelector::PseudoProgressBarValue);
+#endif
+#if ENABLE(METER_TAG)
+        nameToPseudoType->set(meterHorizontalBar.impl(), CSSSelector::PseudoMeterHorizontalBar);
+        nameToPseudoType->set(meterHorizontalOptimumValue.impl(), CSSSelector::PseudoMeterHorizontalOptimum);
+        nameToPseudoType->set(meterHorizontalSuboptimalValue.impl(), CSSSelector::PseudoMeterHorizontalSuboptimal);
+        nameToPseudoType->set(meterHorizontalEvenLessGoodValue.impl(), CSSSelector::PseudoMeterHorizontalEvenLessGood);
+        nameToPseudoType->set(meterVerticalBar.impl(), CSSSelector::PseudoMeterVerticalBar);
+        nameToPseudoType->set(meterVerticalOptimumValue.impl(), CSSSelector::PseudoMeterVerticalOptimum);
+        nameToPseudoType->set(meterVerticalSuboptimalValue.impl(), CSSSelector::PseudoMeterVerticalSuboptimal);
+        nameToPseudoType->set(meterVerticalEvenLessGoodValue.impl(), CSSSelector::PseudoMeterVerticalEvenLessGood);
 #endif
         nameToPseudoType->set(root.impl(), CSSSelector::PseudoRoot);
         nameToPseudoType->set(windowInactive.impl(), CSSSelector::PseudoWindowInactive);
@@ -409,6 +548,10 @@ static HashMap<AtomicStringImpl*, CSSSelector::PseudoType>* nameToPseudoTypeMap(
         nameToPseudoType->set(firstPage.impl(), CSSSelector::PseudoFirstPage);
         nameToPseudoType->set(leftPage.impl(), CSSSelector::PseudoLeftPage);
         nameToPseudoType->set(rightPage.impl(), CSSSelector::PseudoRightPage);
+#if ENABLE(FULLSCREEN_API)
+        nameToPseudoType->set(fullScreen.impl(), CSSSelector::PseudoFullScreen);
+        nameToPseudoType->set(fullScreenDocument.impl(), CSSSelector::PseudoFullScreenDocument);
+#endif
     }
     return nameToPseudoType;
 }
@@ -442,6 +585,9 @@ void CSSSelector::extractPseudoType() const
     case PseudoFileUploadButton:
     case PseudoInputListButton:
     case PseudoInputPlaceholder:
+#if ENABLE(INPUT_SPEECH)
+    case PseudoInputSpeechButton:
+#endif
     case PseudoInnerSpinButton:
     case PseudoMediaControlsPanel:
     case PseudoMediaControlsMuteButton:
@@ -450,6 +596,7 @@ void CSSSelector::extractPseudoType() const
     case PseudoMediaControlsTimeRemainingDisplay:
     case PseudoMediaControlsTimeline:
     case PseudoMediaControlsVolumeSlider:
+    case PseudoMediaControlsVolumeSliderMuteButton:
     case PseudoMediaControlsSeekBackButton:
     case PseudoMediaControlsSeekForwardButton:
     case PseudoMediaControlsRewindButton:
@@ -459,6 +606,14 @@ void CSSSelector::extractPseudoType() const
     case PseudoMediaControlsFullscreenButton:
     case PseudoMediaControlsTimelineContainer:
     case PseudoMediaControlsVolumeSliderContainer:
+    case PseudoMeterHorizontalBar:
+    case PseudoMeterHorizontalOptimum:
+    case PseudoMeterHorizontalSuboptimal:
+    case PseudoMeterHorizontalEvenLessGood:
+    case PseudoMeterVerticalBar:
+    case PseudoMeterVerticalOptimum:
+    case PseudoMeterVerticalSuboptimal:
+    case PseudoMeterVerticalEvenLessGood:
     case PseudoOuterSpinButton:
     case PseudoProgressBarValue:
     case PseudoResizer:
@@ -526,6 +681,10 @@ void CSSSelector::extractPseudoType() const
     case PseudoSingleButton:
     case PseudoNoButton:
     case PseudoNotParsed:
+#if ENABLE(FULLSCREEN_API)
+    case PseudoFullScreen:
+    case PseudoFullScreenDocument:
+#endif
         break;
     case PseudoFirstPage:
     case PseudoLeftPage:
@@ -577,18 +736,21 @@ String CSSSelector::selectorText() const
     if (m_match == CSSSelector::None || !prefix.isNull() || localName != starAtom) {
         if (prefix.isNull())
             str = localName;
-        else
-            str = prefix + "|" + localName;
+        else {
+            str = prefix.string();
+            str.append("|");
+            str.append(localName);
+        }
     }
 
     const CSSSelector* cs = this;
     while (true) {
         if (cs->m_match == CSSSelector::Id) {
             str += "#";
-            str += cs->m_value;
+            serializeIdentifier(cs->m_value, str);
         } else if (cs->m_match == CSSSelector::Class) {
             str += ".";
-            str += cs->m_value;
+            serializeIdentifier(cs->m_value, str);
         } else if (cs->m_match == CSSSelector::PseudoClass || cs->m_match == CSSSelector::PagePseudoClass) {
             str += ":";
             str += cs->m_value;
@@ -610,8 +772,10 @@ String CSSSelector::selectorText() const
         } else if (cs->hasAttribute()) {
             str += "[";
             const AtomicString& prefix = cs->attribute().prefix();
-            if (!prefix.isNull())
-                str += prefix + "|";
+            if (!prefix.isNull()) {
+                str.append(prefix);
+                str.append("|");
+            }
             str += cs->attribute().localName();
             switch (cs->m_match) {
                 case CSSSelector::Exact:
@@ -640,9 +804,8 @@ String CSSSelector::selectorText() const
                     break;
             }
             if (cs->m_match != CSSSelector::Set) {
-                str += "\"";
-                str += cs->m_value;
-                str += "\"]";
+                serializeString(cs->m_value, str);
+                str += "]";
             }
         }
         if (cs->relation() != CSSSelector::SubSelector || !cs->tagHistory())
@@ -762,8 +925,8 @@ bool CSSSelector::RareData::parseNth()
         m_a = 2;
         m_b = 0;
     } else {
-        int n = argument.find('n');
-        if (n != -1) {
+        size_t n = argument.find('n');
+        if (n != notFound) {
             if (argument[0] == '-') {
                 if (n == 1)
                     m_a = -1; // -n == -1n
@@ -774,12 +937,12 @@ bool CSSSelector::RareData::parseNth()
             else
                 m_a = argument.substring(0, n).toInt();
             
-            int p = argument.find('+', n);
-            if (p != -1)
+            size_t p = argument.find('+', n);
+            if (p != notFound)
                 m_b = argument.substring(p + 1, argument.length() - p - 1).toInt();
             else {
                 p = argument.find('-', n);
-                if (p != -1)
+                if (p != notFound)
                     m_b = -argument.substring(p + 1, argument.length() - p - 1).toInt();
             }
         } else
@@ -803,5 +966,34 @@ bool CSSSelector::RareData::matchNth(int count)
         return (m_b - count) % (-m_a) == 0;
     }
 }
-    
+
+inline void CSSSelector::releaseOwnedSelectorsToBag(CSSSelectorBag& bag)
+{
+    if (m_hasRareData) {
+        ASSERT(m_data.m_rareData);
+        bag.add(m_data.m_rareData->m_tagHistory.release());
+        bag.add(m_data.m_rareData->m_simpleSelector.release());
+        delete m_data.m_rareData;
+        // Clear the pointer so that a destructor of this selector will not
+        // traverse this chain.
+        m_data.m_rareData = 0;
+    } else {
+        bag.add(adoptPtr(m_data.m_tagHistory));
+        // Clear the pointer for the same reason.
+        m_data.m_tagHistory = 0;
+    }
+}
+
+void CSSSelector::deleteReachableSelectors()
+{
+    // Traverse the chain of selectors and delete each iteratively.
+    CSSSelectorBag selectorsToBeDeleted;
+    releaseOwnedSelectorsToBag(selectorsToBeDeleted);
+    while (!selectorsToBeDeleted.isEmpty()) {
+        OwnPtr<CSSSelector> selector(selectorsToBeDeleted.takeAny());
+        ASSERT(selector);
+        selector->releaseOwnedSelectorsToBag(selectorsToBeDeleted);
+    }
+}
+
 } // namespace WebCore

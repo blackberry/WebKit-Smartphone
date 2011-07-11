@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2006 Nikolas Zimmermann <zimmermann@kde.org>
  * Copyright (C) 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Torch Mobile (Beijing) Co. Ltd. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,6 +46,11 @@ using namespace std;
 
 namespace WebCore {
 
+static void releaseImageData(void*, const void* data, size_t)
+{
+    fastFree(const_cast<void*>(data));
+}
+
 ImageBufferData::ImageBufferData(const IntSize&)
     : m_data(0)
 {
@@ -55,42 +61,46 @@ ImageBuffer::ImageBuffer(const IntSize& size, ImageColorSpace imageColorSpace, b
     , m_size(size)
 {
     success = false;  // Make early return mean failure.
-    unsigned bytesPerRow;
     if (size.width() < 0 || size.height() < 0)
         return;
-    bytesPerRow = size.width();
+
+    unsigned bytesPerRow = size.width();
     if (imageColorSpace != GrayScale) {
         // Protect against overflow
         if (bytesPerRow > 0x3FFFFFFF)
             return;
         bytesPerRow *= 4;
     }
+    m_data.m_bytesPerRow = bytesPerRow;
 
+    size_t dataSize = size.height() * bytesPerRow;
     if (!tryFastCalloc(size.height(), bytesPerRow).getValue(m_data.m_data))
         return;
 
     ASSERT((reinterpret_cast<size_t>(m_data.m_data) & 2) == 0);
 
-    RetainPtr<CGColorSpaceRef> colorSpace;
     switch(imageColorSpace) {
         case DeviceRGB:
-            colorSpace.adoptCF(CGColorSpaceCreateDeviceRGB());
+            m_data.m_colorSpace.adoptCF(CGColorSpaceCreateDeviceRGB());
             break;
         case GrayScale:
-            colorSpace.adoptCF(CGColorSpaceCreateDeviceGray());
+            m_data.m_colorSpace.adoptCF(CGColorSpaceCreateDeviceGray());
             break;
-#if PLATFORM(MAC) && !defined(BUILDING_ON_TIGER)
+#if ((PLATFORM(MAC) || PLATFORM(CHROMIUM)) && !defined(BUILDING_ON_TIGER))
         case LinearRGB:
-            colorSpace.adoptCF(CGColorSpaceCreateWithName(kCGColorSpaceGenericRGBLinear));
+            m_data.m_colorSpace.adoptCF(CGColorSpaceCreateWithName(kCGColorSpaceGenericRGBLinear));
             break;
+            
 #endif
         default:
-            colorSpace.adoptCF(CGColorSpaceCreateDeviceRGB());
+            m_data.m_colorSpace.adoptCF(CGColorSpaceCreateDeviceRGB());
             break;
     }
 
+    m_data.m_grayScale = imageColorSpace == GrayScale;
+    m_data.m_bitmapInfo = m_data.m_grayScale ? kCGImageAlphaNone : kCGImageAlphaPremultipliedLast;
     RetainPtr<CGContextRef> cgContext(AdoptCF, CGBitmapContextCreate(m_data.m_data, size.width(), size.height(), 8, bytesPerRow,
-        colorSpace.get(), (imageColorSpace == GrayScale) ? kCGImageAlphaNone : kCGImageAlphaPremultipliedLast));
+                                                                     m_data.m_colorSpace.get(), m_data.m_bitmapInfo));
     if (!cgContext)
         return;
 
@@ -98,11 +108,13 @@ ImageBuffer::ImageBuffer(const IntSize& size, ImageColorSpace imageColorSpace, b
     m_context->scale(FloatSize(1, -1));
     m_context->translate(0, -size.height());
     success = true;
+    
+    // Create a live image that wraps the data.
+    m_data.m_dataProvider.adoptCF(CGDataProviderCreateWithData(0, m_data.m_data, dataSize, releaseImageData));
 }
 
 ImageBuffer::~ImageBuffer()
 {
-    fastFree(m_data.m_data);
 }
 
 GraphicsContext* ImageBuffer::context() const
@@ -110,17 +122,59 @@ GraphicsContext* ImageBuffer::context() const
     return m_context.get();
 }
 
-Image* ImageBuffer::image() const
+bool ImageBuffer::drawsUsingCopy() const
 {
-    if (!m_image) {
-        // It's assumed that if image() is called, the actual rendering to the
-        // GraphicsContext must be done.
-        ASSERT(context());
-        CGImageRef cgImage = CGBitmapContextCreateImage(context()->platformContext());
-        // BitmapImage will release the passed in CGImage on destruction
-        m_image = BitmapImage::create(cgImage);
+    return false;
+}
+
+PassRefPtr<Image> ImageBuffer::copyImage() const
+{
+    // BitmapImage will release the passed in CGImage on destruction
+    return BitmapImage::create(CGBitmapContextCreateImage(context()->platformContext()));
+}
+
+static CGImageRef cgImage(const IntSize& size, const ImageBufferData& data)
+{
+    return CGImageCreate(size.width(), size.height(), 8, data.m_grayScale ? 8 : 32, data.m_bytesPerRow,
+                         data.m_colorSpace.get(), data.m_bitmapInfo, data.m_dataProvider.get(), 0, true, kCGRenderingIntentDefault);
+}
+
+void ImageBuffer::draw(GraphicsContext* destContext, ColorSpace styleColorSpace, const FloatRect& destRect, const FloatRect& srcRect,
+                       CompositeOperator op, bool useLowQualityScale)
+{
+    if (destContext == context()) {
+        // We're drawing into our own buffer.  In order for this to work, we need to copy the source buffer first.
+        RefPtr<Image> copy = copyImage();
+        destContext->drawImage(copy.get(), DeviceColorSpace, destRect, srcRect, op, useLowQualityScale);
+    } else {
+        RefPtr<Image> imageForRendering = BitmapImage::create(cgImage(m_size, m_data));
+        destContext->drawImage(imageForRendering.get(), styleColorSpace, destRect, srcRect, op, useLowQualityScale);
     }
-    return m_image.get();
+}
+
+void ImageBuffer::drawPattern(GraphicsContext* destContext, const FloatRect& srcRect, const AffineTransform& patternTransform,
+                              const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator op, const FloatRect& destRect)
+{
+    if (destContext == context()) {
+        // We're drawing into our own buffer.  In order for this to work, we need to copy the source buffer first.
+        RefPtr<Image> copy = copyImage();
+        copy->drawPattern(destContext, srcRect, patternTransform, phase, styleColorSpace, op, destRect);
+    } else {
+        RefPtr<Image> imageForRendering = BitmapImage::create(cgImage(m_size, m_data));
+        imageForRendering->drawPattern(destContext, srcRect, patternTransform, phase, styleColorSpace, op, destRect);
+    }
+}
+
+void ImageBuffer::clip(GraphicsContext* context, const FloatRect& rect) const
+{
+    RetainPtr<CGImageRef> image(AdoptCF, cgImage(m_size, m_data));
+                                                                                          
+    CGContextRef platformContext = context->platformContext();
+    CGContextTranslateCTM(platformContext, rect.x(), rect.y() + rect.height());
+    CGContextScaleCTM(platformContext, 1, -1);
+    CGContextClipToMask(platformContext, FloatRect(FloatPoint(), rect.size()), image.get());
+    CGContextScaleCTM(platformContext, 1, -1);
+    CGContextTranslateCTM(platformContext, -rect.x(), -rect.y() - rect.height());
 }
 
 template <Multiply multiplied>
@@ -249,6 +303,14 @@ void ImageBuffer::putPremultipliedImageData(ImageData* source, const IntRect& so
     putImageData<Premultiplied>(source, sourceRect, destPoint, m_data, m_size);
 }
 
+static inline CFStringRef jpegUTI()
+{
+#if PLATFORM(WIN)
+    static const CFStringRef kUTTypeJPEG = CFSTR("public.jpeg");
+#endif
+    return kUTTypeJPEG;
+}
+    
 static RetainPtr<CFStringRef> utiFromMIMEType(const String& mimeType)
 {
 #if PLATFORM(MAC)
@@ -260,13 +322,12 @@ static RetainPtr<CFStringRef> utiFromMIMEType(const String& mimeType)
     // FIXME: Add Windows support for all the supported UTIs when a way to convert from MIMEType to UTI reliably is found.
     // For now, only support PNG, JPEG, and GIF. See <rdar://problem/6095286>.
     static const CFStringRef kUTTypePNG = CFSTR("public.png");
-    static const CFStringRef kUTTypeJPEG = CFSTR("public.jpeg");
     static const CFStringRef kUTTypeGIF = CFSTR("com.compuserve.gif");
 
     if (equalIgnoringCase(mimeType, "image/png"))
         return kUTTypePNG;
     if (equalIgnoringCase(mimeType, "image/jpeg"))
-        return kUTTypeJPEG;
+        return jpegUTI();
     if (equalIgnoringCase(mimeType, "image/gif"))
         return kUTTypeGIF;
 
@@ -275,7 +336,7 @@ static RetainPtr<CFStringRef> utiFromMIMEType(const String& mimeType)
 #endif
 }
 
-String ImageBuffer::toDataURL(const String& mimeType) const
+String ImageBuffer::toDataURL(const String& mimeType, const double* quality) const
 {
     ASSERT(MIMETypeRegistry::isSupportedImageMIMETypeForEncoding(mimeType));
 
@@ -287,11 +348,23 @@ String ImageBuffer::toDataURL(const String& mimeType) const
     if (!data)
         return "data:,";
 
-    RetainPtr<CGImageDestinationRef> destination(AdoptCF, CGImageDestinationCreateWithData(data.get(), utiFromMIMEType(mimeType).get(), 1, 0));
+    RetainPtr<CFStringRef> uti = utiFromMIMEType(mimeType);
+    ASSERT(uti);
+
+    RetainPtr<CGImageDestinationRef> destination(AdoptCF, CGImageDestinationCreateWithData(data.get(), uti.get(), 1, 0));
     if (!destination)
         return "data:,";
 
-    CGImageDestinationAddImage(destination.get(), image.get(), 0);
+    RetainPtr<CFDictionaryRef> imageProperties = 0;
+    if (CFEqual(uti.get(), jpegUTI()) && quality && *quality >= 0.0 && *quality <= 1.0) {
+        // Apply the compression quality to the image destination.
+        RetainPtr<CFNumberRef> compressionQuality(AdoptCF, CFNumberCreate(kCFAllocatorDefault, kCFNumberDoubleType, quality));
+        const void* key = kCGImageDestinationLossyCompressionQuality;
+        const void* value = compressionQuality.get();
+        imageProperties.adoptCF(CFDictionaryCreate(0, &key, &value, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks));
+    }
+
+    CGImageDestinationAddImage(destination.get(), image.get(), imageProperties.get());
     CGImageDestinationFinalize(destination.get());
 
     Vector<char> out;

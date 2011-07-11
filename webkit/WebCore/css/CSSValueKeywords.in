@@ -288,6 +288,8 @@ tigrinya-et-abegede
 ethiopic-abegede-ti-et
 upper-greek
 upper-norwegian
+asterisks
+footnotes
 hebrew
 armenian
 georgian
@@ -566,6 +568,7 @@ button
 button-bevel
 default-button
 inner-spin-button
+input-speech-button
 list-button
 listbox
 listitem
@@ -582,7 +585,9 @@ media-sliderthumb
 media-volume-slider-container
 media-volume-slider
 media-volume-sliderthumb
+media-volume-slider-mute-button
 media-controls-background
+media-controls-fullscreen-background
 media-current-time-display
 media-time-remaining-display
 menulist
@@ -604,8 +609,12 @@ searchfield-results-decoration
 searchfield-results-button
 searchfield-cancel-button
 textfield
-textarea
 caps-lock-indicator
+relevancy-level-indicator
+continuous-capacity-level-indicator
+discrete-capacity-level-indicator
+rating-level-indicator
+textarea
 
 #
 # CSS_PROP_BORDER_IMAGE
@@ -682,6 +691,8 @@ linear
 ease-in
 ease-out
 ease-in-out
+step-start
+step-end
 
 #
 # CSS_PROP_ZOOM
@@ -726,3 +737,8 @@ fullscreen
 maximized
 minimized
 windowed
+
+# -webkit-hyphens
+# none
+manual
+# auto

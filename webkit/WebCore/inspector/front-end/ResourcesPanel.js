@@ -29,9 +29,7 @@
 
 WebInspector.ResourcesPanel = function()
 {
-    WebInspector.AbstractTimelinePanel.call(this);
-
-    this.element.addStyleClass("resources");
+    WebInspector.AbstractTimelinePanel.call(this, "resources");
 
     this._createPanelEnabler();
 
@@ -43,6 +41,7 @@ WebInspector.ResourcesPanel = function()
     this.createInterface();
 
     this._createStatusbarButtons();
+    this._popoverHelper = new WebInspector.PopoverHelper(this.element, this._getPopoverAnchor.bind(this), this._showPopover.bind(this), true);
 
     this.reset();
     this.filter(this.filterAllElement, false);
@@ -51,8 +50,6 @@ WebInspector.ResourcesPanel = function()
 }
 
 WebInspector.ResourcesPanel.prototype = {
-    toolbarItemClass: "resources",
-
     get toolbarItemLabel()
     {
         return WebInspector.UIString("Resources");
@@ -85,30 +82,30 @@ WebInspector.ResourcesPanel.prototype = {
 
     populateSidebar: function()
     {
-        var timeGraphItem = new WebInspector.SidebarTreeElement("resources-time-graph-sidebar-item", WebInspector.UIString("Time"));
-        timeGraphItem.onselect = this._graphSelected.bind(this);
+        this.timeGraphItem = new WebInspector.SidebarTreeElement("resources-time-graph-sidebar-item", WebInspector.UIString("Time"));
+        this.timeGraphItem.onselect = this._graphSelected.bind(this);
 
         var transferTimeCalculator = new WebInspector.ResourceTransferTimeCalculator();
         var transferDurationCalculator = new WebInspector.ResourceTransferDurationCalculator();
 
-        timeGraphItem.sortingOptions = [
-            { name: WebInspector.UIString("Sort by Start Time"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByAscendingStartTime, calculator: transferTimeCalculator },
-            { name: WebInspector.UIString("Sort by Response Time"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByAscendingResponseReceivedTime, calculator: transferTimeCalculator },
-            { name: WebInspector.UIString("Sort by End Time"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByAscendingEndTime, calculator: transferTimeCalculator },
-            { name: WebInspector.UIString("Sort by Duration"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByDescendingDuration, calculator: transferDurationCalculator },
-            { name: WebInspector.UIString("Sort by Latency"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByDescendingLatency, calculator: transferDurationCalculator },
+        this.timeGraphItem.sortingOptions = [
+            { name: WebInspector.UIString("Sort by Start Time"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByAscendingStartTime, calculator: transferTimeCalculator, optionName: "startTime" },
+            { name: WebInspector.UIString("Sort by Response Time"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByAscendingResponseReceivedTime, calculator: transferTimeCalculator, optionName: "responseTime" },
+            { name: WebInspector.UIString("Sort by End Time"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByAscendingEndTime, calculator: transferTimeCalculator, optionName: "endTime" },
+            { name: WebInspector.UIString("Sort by Duration"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByDescendingDuration, calculator: transferDurationCalculator, optionName: "duration" },
+            { name: WebInspector.UIString("Sort by Latency"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByDescendingLatency, calculator: transferDurationCalculator, optionName: "latency" },
         ];
 
-        timeGraphItem.isBarOpaqueAtLeft = false;
-        timeGraphItem.selectedSortingOptionIndex = 1;
+        this.timeGraphItem.isBarOpaqueAtLeft = false;
+        this.timeGraphItem.selectedSortingOptionIndex = 1;
 
         this.sizeGraphItem = new WebInspector.SidebarTreeElement("resources-size-graph-sidebar-item", WebInspector.UIString("Size"));
         this.sizeGraphItem.onselect = this._graphSelected.bind(this);
 
         var transferSizeCalculator = new WebInspector.ResourceTransferSizeCalculator();
         this.sizeGraphItem.sortingOptions = [
-            { name: WebInspector.UIString("Sort by Transfer Size"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByDescendingTransferSize, calculator: transferSizeCalculator },
-            { name: WebInspector.UIString("Sort by Size"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByDescendingSize, calculator: transferSizeCalculator },
+            { name: WebInspector.UIString("Sort by Transfer Size"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByDescendingTransferSize, calculator: transferSizeCalculator, optionName: "transferSize" },
+            { name: WebInspector.UIString("Sort by Size"), sortingFunction: WebInspector.ResourceSidebarTreeElement.CompareByDescendingSize, calculator: transferSizeCalculator, optionName: "size" },
         ];
 
         this.sizeGraphItem.isBarOpaqueAtLeft = true;
@@ -117,7 +114,7 @@ WebInspector.ResourcesPanel.prototype = {
         this.graphsTreeElement = new WebInspector.SidebarSectionTreeElement(WebInspector.UIString("GRAPHS"), {}, true);
         this.sidebarTree.appendChild(this.graphsTreeElement);
 
-        this.graphsTreeElement.appendChild(timeGraphItem);
+        this.graphsTreeElement.appendChild(this.timeGraphItem);
         this.graphsTreeElement.appendChild(this.sizeGraphItem);
         this.graphsTreeElement.expand();
 
@@ -151,7 +148,7 @@ WebInspector.ResourcesPanel.prototype = {
     {
         this.largerResourcesButton = new WebInspector.StatusBarButton(WebInspector.UIString("Use small resource rows."), "resources-larger-resources-status-bar-item");
 
-        WebInspector.settings.addEventListener("loaded", this._settingsLoaded, this);
+        WebInspector.applicationSettings.addEventListener("loaded", this._settingsLoaded, this);
         this.largerResourcesButton.addEventListener("click", this._toggleLargerResources.bind(this), false);
         this.sortingSelectElement = document.createElement("select");
         this.sortingSelectElement.className = "status-bar-item";
@@ -160,9 +157,35 @@ WebInspector.ResourcesPanel.prototype = {
 
     _settingsLoaded: function()
     {
-        this.largerResourcesButton.toggled = WebInspector.settings.resourcesLargeRows;
-        if (!WebInspector.settings.resourcesLargeRows)
-            this._setLargerResources(WebInspector.settings.resourcesLargeRows);
+        this.largerResourcesButton.toggled = WebInspector.applicationSettings.resourcesLargeRows;
+        if (!WebInspector.applicationSettings.resourcesLargeRows)
+            this._setLargerResources(WebInspector.applicationSettings.resourcesLargeRows);
+        this._loadSortOptions();
+    },
+
+    _loadSortOptions: function()
+    {
+        var newOptions = WebInspector.applicationSettings.resourcesSortOptions;
+        if (!newOptions)
+            return;
+
+        this._loadSortOptionForGraph(this.timeGraphItem, newOptions.timeOption || "responseTime");
+        this._loadSortOptionForGraph(this.sizeGraphItem, newOptions.sizeOption || "transferSize");
+    },
+
+    _loadSortOptionForGraph: function(graphItem, newOptionName)
+    {
+        var sortingOptions = graphItem.sortingOptions;
+        for (var i = 0; i < sortingOptions.length; ++i) {
+            if (sortingOptions[i].optionName === newOptionName) {
+                graphItem.selectedSortingOptionIndex = i;
+                // Propagate the option change down to the currently selected option.
+                if (this._lastSelectedGraphTreeElement === graphItem) {
+                    this._lastSelectedGraphTreeElement = null;
+                    this._graphSelected(graphItem);
+                }
+            }
+        }
     },
 
     get mainResourceLoadTime()
@@ -231,7 +254,7 @@ WebInspector.ResourcesPanel.prototype = {
         var resourcesLength = this._resources.length;
         for (var i = 0; i < resourcesLength; ++i) {
             var resource = this._resources[i];
-            if (!resource._itemsTreeElement)
+            if (!resource._itemsTreeElement || !resource._itemsTreeElement.selectable)
                 continue;
             var resourceView = this.resourceViewForResource(resource);
             if (!resourceView.performSearch || resourceView === visibleView)
@@ -319,6 +342,7 @@ WebInspector.ResourcesPanel.prototype = {
     {
         this._resourceTrackingEnabled = true;
         this.reset();
+        this.restoreSidebarWidth();
     },
 
     resourceTrackingWasDisabled: function()
@@ -329,6 +353,7 @@ WebInspector.ResourcesPanel.prototype = {
 
     reset: function()
     {
+        this._popoverHelper.hidePopup();
         this.closeVisibleResource();
 
         delete this.currentQuery;
@@ -477,6 +502,8 @@ WebInspector.ResourcesPanel.prototype = {
         if (!resource)
             return;
 
+        this._popoverHelper.hidePopup();
+
         this.containerElement.addStyleClass("viewing-resource");
 
         if (this.visibleResource && this.visibleResource._resourcesView)
@@ -617,11 +644,12 @@ WebInspector.ResourcesPanel.prototype = {
             option.label = sortingOption.name;
             option.sortingFunction = sortingOption.sortingFunction;
             option.calculator = sortingOption.calculator;
+            option.optionName = sortingOption.optionName;
             this.sortingSelectElement.appendChild(option);
         }
 
         this.sortingSelectElement.selectedIndex = treeElement.selectedSortingOptionIndex;
-        this._changeSortingFunction();
+        this._doChangeSortingFunction();
 
         this.closeVisibleResource();
         this.containerElement.scrollTop = 0;
@@ -637,7 +665,7 @@ WebInspector.ResourcesPanel.prototype = {
         if (!this.itemsTreeElement._childrenListNode)
             return;
 
-        WebInspector.settings.resourcesLargeRows = !WebInspector.settings.resourcesLargeRows;
+        WebInspector.applicationSettings.resourcesLargeRows = !WebInspector.applicationSettings.resourcesLargeRows;
         this._setLargerResources(this.itemsTreeElement.smallChildren);
     },
 
@@ -657,7 +685,21 @@ WebInspector.ResourcesPanel.prototype = {
 
     _changeSortingFunction: function()
     {
-        var selectedOption = this.sortingSelectElement[this.sortingSelectElement.selectedIndex];
+        this._doChangeSortingFunction();
+        WebInspector.applicationSettings.resourcesSortOptions = {timeOption: this._selectedOptionNameForGraph(this.timeGraphItem), sizeOption: this._selectedOptionNameForGraph(this.sizeGraphItem)};
+    },
+
+    _selectedOptionNameForGraph: function(graphItem)
+    {
+        return graphItem.sortingOptions[graphItem.selectedSortingOptionIndex].optionName;
+    },
+
+    _doChangeSortingFunction: function()
+    {
+        var selectedIndex = this.sortingSelectElement.selectedIndex;
+        if (this._lastSelectedGraphTreeElement)
+            this._lastSelectedGraphTreeElement.selectedSortingOptionIndex = selectedIndex;
+        var selectedOption = this.sortingSelectElement[selectedIndex];
         this.sortingFunction = selectedOption.sortingFunction;
         this.calculator = this.summaryBar.calculator = selectedOption.calculator;
     },
@@ -727,14 +769,113 @@ WebInspector.ResourcesPanel.prototype = {
         return this.items;
     },
 
-    searchIteratesOverViews: function()
-    {
-        return true;
-    },
-
     elementsToRestoreScrollPositionsFor: function()
     {
         return [ this.containerElement ];
+    },
+
+    _getPopoverAnchor: function(element)
+    {
+        var anchor = element.enclosingNodeOrSelfWithClass("resources-graph-bar") || element.enclosingNodeOrSelfWithClass("resources-graph-label");
+        if (!anchor)
+            return null;
+        var resource = anchor.parentElement.resource;
+        return resource && resource.timing ? anchor : null;
+    },
+
+    _showPopover: function(anchor)
+    {
+        var tableElement = document.createElement("table");
+        var resource = anchor.parentElement.resource;
+        var rows = [];
+
+        function addRow(title, start, end, color)
+        {
+            var row = {};
+            row.title = title;
+            row.start = start;
+            row.end = end;
+            rows.push(row);
+        }
+
+        if (resource.timing.proxyStart !== -1)
+            addRow(WebInspector.UIString("Proxy"), resource.timing.proxyStart, resource.timing.proxyEnd);
+
+        if (resource.timing.dnsStart !== -1) {
+            addRow(WebInspector.UIString("DNS Lookup"), resource.timing.dnsStart, resource.timing.dnsEnd);
+        }
+
+        if (resource.timing.connectStart !== -1) {
+            if (resource.connectionReused)
+                addRow(WebInspector.UIString("Blocking"), resource.timing.connectStart, resource.timing.connectEnd);
+            else {
+                var connectStart = resource.timing.connectStart;
+                // Connection includes DNS, subtract it here.
+                if (resource.timing.dnsStart !== -1)
+                    connectStart += resource.timing.dnsEnd - resource.timing.dnsStart;
+                addRow(WebInspector.UIString("Connecting"), connectStart, resource.timing.connectEnd);
+            }
+        }
+
+        if (resource.timing.sslStart !== -1)
+            addRow(WebInspector.UIString("SSL"), resource.timing.sslStart, resource.timing.sslEnd);
+
+        var sendStart = resource.timing.sendStart;
+        if (resource.timing.sslStart !== -1)
+            sendStart += resource.timing.sslEnd - resource.timing.sslStart;
+        
+        addRow(WebInspector.UIString("Sending"), resource.timing.sendStart, resource.timing.sendEnd);
+        addRow(WebInspector.UIString("Waiting"), resource.timing.sendEnd, resource.timing.receiveHeadersEnd);
+        addRow(WebInspector.UIString("Receiving"), (resource.responseReceivedTime - resource.timing.requestTime) * 1000, (resource.endTime - resource.timing.requestTime) * 1000);
+
+        const chartWidth = 200;
+        var total = (resource.endTime - resource.timing.requestTime) * 1000;
+        var scale = chartWidth / total;
+
+        for (var i = 0; i < rows.length; ++i) {
+            var tr = document.createElement("tr");
+            tableElement.appendChild(tr);
+
+            var td = document.createElement("td");
+            td.textContent = rows[i].title;
+            tr.appendChild(td);
+
+            td = document.createElement("td");
+            td.width = chartWidth + "px";
+
+            var row = document.createElement("div");
+            row.className = "resource-timing-row";
+            td.appendChild(row);
+
+            var bar = document.createElement("span");
+            bar.className = "resource-timing-bar";
+            bar.style.left = scale * rows[i].start + "px";
+            bar.style.right = scale * (total - rows[i].end) + "px";
+            bar.style.backgroundColor = rows[i].color;
+            bar.textContent = "\u200B"; // Important for 0-time items to have 0 width.
+            row.appendChild(bar);
+
+            var title = document.createElement("span");
+            title.className = "resource-timing-bar-title";
+            if (i >= rows.length - 2)
+                title.style.right = (scale * (total - rows[i].end) + 3) + "px";
+            else
+                title.style.left = (scale * rows[i].start + 3) + "px";
+            title.textContent = Number.millisToString(rows[i].end - rows[i].start);
+            row.appendChild(title);
+
+            tr.appendChild(td);
+        }
+
+        var popover = new WebInspector.Popover(tableElement);
+        popover.show(anchor);
+        return popover;
+    },
+
+    hide: function()
+    {
+        WebInspector.Panel.prototype.hide.call(this);
+        this._popoverHelper.hidePopup();
     }
 }
 
@@ -742,10 +883,8 @@ WebInspector.ResourcesPanel.prototype.__proto__ = WebInspector.AbstractTimelineP
 
 WebInspector.getResourceContent = function(identifier, callback)
 {
-    InspectorBackend.getResourceContent(WebInspector.Callback.wrap(callback), identifier);
+    InspectorBackend.getResourceContent(identifier, callback);
 }
-
-WebInspector.didGetResourceContent = WebInspector.Callback.processCallback;
 
 WebInspector.ResourceTimeCalculator = function(startAtZero)
 {
@@ -858,6 +997,9 @@ WebInspector.ResourceTimeCalculator.prototype = {
         else
             var leftLabel = rightLabel;
 
+        if (resource.timing)
+            return {left: leftLabel, right: rightLabel};
+
         if (hasLatency && rightLabel) {
             var total = this.formatValue(resource.duration);
             var tooltip = WebInspector.UIString("%s latency, %s download (%s total)", leftLabel, rightLabel, total);
@@ -868,7 +1010,6 @@ WebInspector.ResourceTimeCalculator.prototype = {
 
         if (resource.cached)
             tooltip = WebInspector.UIString("%s (from cache)", tooltip);
-
         return {left: leftLabel, right: rightLabel, tooltip: tooltip};
     },
 
@@ -1040,7 +1181,7 @@ WebInspector.ResourceSidebarTreeElement.prototype = {
     
     ondblclick: function(event)
     {
-        InjectedScriptAccess.getDefault().openInInspectedWindow(this.resource.url, function() {});
+        InspectorBackend.openInInspectedWindow(this.resource.url);
     },
 
     ondragstart: function(event) {
@@ -1203,11 +1344,11 @@ WebInspector.ResourceGraph = function(resource)
     this._graphElement.className = "resources-graph-side";
     this._graphElement.addEventListener("mouseover", this.refreshLabelPositions.bind(this), false);
 
-    if (resource.cached)
-        this._graphElement.addStyleClass("resource-cached");
+    this._cachedChanged();
 
     this._barAreaElement = document.createElement("div");
     this._barAreaElement.className = "resources-graph-bar-area hidden";
+    this._barAreaElement.resource = resource;
     this._graphElement.appendChild(this._barAreaElement);
 
     this._barLeftElement = document.createElement("div");
@@ -1227,6 +1368,8 @@ WebInspector.ResourceGraph = function(resource)
     this._barAreaElement.appendChild(this._labelRightElement);
 
     this._graphElement.addStyleClass("resources-category-" + resource.category.name);
+
+    resource.addEventListener("cached changed", this._cachedChanged, this);
 }
 
 WebInspector.ResourceGraph.prototype = {
@@ -1350,5 +1493,11 @@ WebInspector.ResourceGraph.prototype = {
         this._labelLeftElement.title = tooltip;
         this._labelRightElement.title = tooltip;
         this._barRightElement.title = tooltip;
+    },
+
+    _cachedChanged: function()
+    {
+        if (this.resource.cached)
+            this._graphElement.addStyleClass("resource-cached");
     }
 }

@@ -29,7 +29,8 @@
 #import "WKAPICast.h"
 
 // Implementation
-#import "DrawingAreaProxyUpdateChunk.h"
+#import "ChunkedUpdateDrawingAreaProxy.h"
+#import "LayerBackedDrawingAreaProxy.h"
 #import "PageClientImpl.h"
 #import "RunLoop.h"
 #import "WebContext.h"
@@ -48,12 +49,17 @@ using namespace WebCore;
 
 @interface WKViewData : NSObject {
 @public
+    OwnPtr<PageClientImpl> _pageClient;
     RefPtr<WebPageProxy> _page;
 
     // For ToolTips.
     NSToolTipTag _lastToolTipTag;
     id _trackingRectOwner;
     void* _trackingRectUserData;
+
+#if USE(ACCELERATED_COMPOSITING)
+    NSView *_layerHostingView;
+#endif
 }
 @end
 
@@ -79,16 +85,18 @@ using namespace WebCore;
 
     _data = [[WKViewData alloc] init];
 
+    _data->_pageClient = PageClientImpl::create(self);
     _data->_page = toWK(pageNamespaceRef)->createWebPage();
-    _data->_page->setPageClient(new PageClientImpl(self));
-    _data->_page->initializeWebPage(IntSize(frame.size), new DrawingAreaProxyUpdateChunk(self));
+    _data->_page->setPageClient(_data->_pageClient.get());
+    _data->_page->initializeWebPage(IntSize(frame.size), ChunkedUpdateDrawingAreaProxy::create(self));
+    _data->_page->setIsInWindow([self window]);
 
     return self;
 }
 
 - (id)initWithFrame:(NSRect)frame
 {
-    RefPtr<WebContext> context = WebContext::create(ProcessModelSecondaryProcess);
+    WebContext* context = WebContext::sharedProcessContext();
     self = [self initWithFrame:frame pageNamespaceRef:toRef(context->createPageNamespace())];
     if (!self)
         return nil;
@@ -131,14 +139,21 @@ using namespace WebCore;
     return YES;
 }
 
-- (void)setFrame:(NSRect)frame
+- (void)setFrameSize:(NSSize)size
 {
-    [super setFrame:frame];
+    [super setFrameSize:size];
 
-    _data->_page->drawingArea()->setSize(IntSize(frame.size));
+    _data->_page->drawingArea()->setSize(IntSize(size));
 }
 
 // Events
+
+// Override this so that AppKit will send us arrow keys as key down events so we can
+// support them via the key bindings mechanism.
+- (BOOL)_wantsKeyDownForEvent:(NSEvent *)event
+{
+    return YES;
+}
 
 - (void)mouseDown:(NSEvent *)theEvent
 {
@@ -176,13 +191,13 @@ using namespace WebCore;
     _data->_page->wheelEvent(wheelEvent);
 }
 
-- (void)keyUp:(NSEvent *)theEvent;
+- (void)keyUp:(NSEvent *)theEvent
 {
     WebKeyboardEvent keyboardEvent = WebEventFactory::createWebKeyboardEvent(theEvent);
     _data->_page->keyEvent(keyboardEvent);
 }
 
-- (void)keyDown:(NSEvent *)theEvent;
+- (void)keyDown:(NSEvent *)theEvent
 {
     WebKeyboardEvent keyboardEvent = WebEventFactory::createWebKeyboardEvent(theEvent);
     _data->_page->keyEvent(keyboardEvent);
@@ -227,7 +242,9 @@ static bool isViewVisible(NSView *view)
 
 - (void)_updateVisibility
 {
-    _data->_page->drawingArea()->setPageIsVisible(isViewVisible(self));
+    _data->_page->setIsInWindow([self window]);
+    if (DrawingAreaProxy* area = _data->_page->drawingArea())
+        area->setPageIsVisible(isViewVisible(self));
 }
 
 - (void)viewWillMoveToWindow:(NSWindow *)window
@@ -240,8 +257,16 @@ static bool isViewVisible(NSView *view)
 
 - (void)viewDidMoveToWindow
 {
-    [self _updateVisibility];
-    [self _updateActiveState];
+    // We want to make sure to update the active state while hidden, so if the view is about to become visible, we
+    // update the active state first and then make it visible. If the view is about to be hidden, we hide it first and then
+    // update the active state.
+    if ([self window]) {
+        [self _updateActiveState];
+        [self _updateVisibility];
+    } else {
+        [self _updateVisibility];
+        [self _updateActiveState];
+    }
 }
 
 - (void)_windowDidBecomeKey:(NSNotification *)notification
@@ -312,6 +337,12 @@ static bool isViewVisible(NSView *view)
         [[self window] selectKeyViewPrecedingView:self];
 }
 
+- (void)_setCursor:(NSCursor *)cursor
+{
+    if ([NSCursor currentCursor] == cursor)
+        return;
+    [cursor set];
+}
 
 // Any non-zero value will do, but using something recognizable might help us debug some day.
 #define TRACKING_RECT_TAG 0xBADFACE
@@ -410,7 +441,7 @@ static bool isViewVisible(NSView *view)
 
 - (NSString *)view:(NSView *)view stringForToolTip:(NSToolTipTag)tag point:(NSPoint)point userData:(void *)data
 {
-    return [[(NSString *)_data->_page->toolTip() copy] autorelease];
+    return nsStringFromWebCoreString(_data->_page->toolTip());
 }
 
 - (void)_toolTipChangedFrom:(NSString *)oldToolTip to:(NSString *)newToolTip
@@ -426,5 +457,105 @@ static bool isViewVisible(NSView *view)
         [self _sendToolTipMouseEntered];
     }
 }
+
+#if USE(ACCELERATED_COMPOSITING)
+- (void)_startAcceleratedCompositing:(CALayer *)rootLayer
+{
+    if (!_data->_layerHostingView) {
+        NSView *hostingView = [[NSView alloc] initWithFrame:[self bounds]];
+#if !defined(BUILDING_ON_LEOPARD)
+        [hostingView setAutoresizingMask:(NSViewWidthSizable | NSViewHeightSizable)];
+#endif
+        
+        [self addSubview:hostingView];
+        [hostingView release];
+        _data->_layerHostingView = hostingView;
+    }
+
+    // Make a container layer, which will get sized/positioned by AppKit and CA.
+    CALayer *viewLayer = [CALayer layer];
+
+#ifndef NDEBUG
+    [viewLayer setName:@"hosting layer"];
+#endif
+
+#if defined(BUILDING_ON_LEOPARD)
+    // Turn off default animations.
+    NSNull *nullValue = [NSNull null];
+    NSDictionary *actions = [NSDictionary dictionaryWithObjectsAndKeys:
+                             nullValue, @"anchorPoint",
+                             nullValue, @"bounds",
+                             nullValue, @"contents",
+                             nullValue, @"contentsRect",
+                             nullValue, @"opacity",
+                             nullValue, @"position",
+                             nullValue, @"sublayerTransform",
+                             nullValue, @"sublayers",
+                             nullValue, @"transform",
+                             nil];
+    [viewLayer setStyle:[NSDictionary dictionaryWithObject:actions forKey:@"actions"]];
+#endif
+
+#if !defined(BUILDING_ON_LEOPARD)
+    // If we aren't in the window yet, we'll use the screen's scale factor now, and reset the scale 
+    // via -viewDidMoveToWindow.
+    CGFloat scaleFactor = [self window] ? [[self window] userSpaceScaleFactor] : [[NSScreen mainScreen] userSpaceScaleFactor];
+    [viewLayer setTransform:CATransform3DMakeScale(scaleFactor, scaleFactor, 1)];
+#endif
+
+    [_data->_layerHostingView setLayer:viewLayer];
+    [_data->_layerHostingView setWantsLayer:YES];
+    
+    // Parent our root layer in the container layer
+    [viewLayer addSublayer:rootLayer];
+}
+
+- (void)_stopAcceleratedCompositing
+{
+    if (_data->_layerHostingView) {
+        [_data->_layerHostingView setLayer:nil];
+        [_data->_layerHostingView setWantsLayer:NO];
+        [_data->_layerHostingView removeFromSuperview];
+        _data->_layerHostingView = nil;
+    }
+}
+
+- (void)_switchToDrawingAreaTypeIfNecessary:(DrawingAreaProxy::Type)type
+{
+    DrawingAreaProxy::Type existingDrawingAreaType = _data->_page->drawingArea() ? _data->_page->drawingArea()->type() : DrawingAreaProxy::None;
+    if (existingDrawingAreaType == type)
+        return;
+
+    OwnPtr<DrawingAreaProxy> newDrawingArea;
+    switch (type) {
+        case DrawingAreaProxy::None:
+            break;
+        case DrawingAreaProxy::ChunkedUpdateDrawingAreaType: {
+            newDrawingArea = ChunkedUpdateDrawingAreaProxy::create(self);
+            break;
+        }
+        case DrawingAreaProxy::LayerBackedDrawingAreaType: {
+            newDrawingArea = LayerBackedDrawingAreaProxy::create(self);
+            break;
+        }
+    }
+
+    newDrawingArea->setSize(IntSize([self frame].size));
+
+    _data->_page->drawingArea()->detachCompositingContext();
+    _data->_page->setDrawingArea(newDrawingArea.release());
+}
+
+- (void)_pageDidEnterAcceleratedCompositing
+{
+    [self _switchToDrawingAreaTypeIfNecessary:DrawingAreaProxy::LayerBackedDrawingAreaType];
+}
+
+- (void)_pageDidLeaveAcceleratedCompositing
+{
+    // FIXME: we may want to avoid flipping back to the non-layer-backed drawing area until the next page load, to avoid thrashing.
+    [self _switchToDrawingAreaTypeIfNecessary:DrawingAreaProxy::ChunkedUpdateDrawingAreaType];
+}
+#endif // USE(ACCELERATED_COMPOSITING)
 
 @end

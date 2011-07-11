@@ -1,7 +1,7 @@
-/**
+/*
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
- * Copyright (C) 2006, 2007 Apple Inc. All rights reserved.
+ * Copyright (C) 2006, 2007, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -33,11 +33,21 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-HTMLLIElement::HTMLLIElement(const QualifiedName& tagName, Document* doc)
-    : HTMLElement(tagName, doc)
+HTMLLIElement::HTMLLIElement(const QualifiedName& tagName, Document* document)
+    : HTMLElement(tagName, document)
     , m_requestedValue(0)
 {
     ASSERT(hasTagName(liTag));
+}
+
+PassRefPtr<HTMLLIElement> HTMLLIElement::create(Document* document)
+{
+    return adoptRef(new HTMLLIElement(liTag, document));
+}
+
+PassRefPtr<HTMLLIElement> HTMLLIElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new HTMLLIElement(tagName, document));
 }
 
 bool HTMLLIElement::mapToEntry(const QualifiedName& attrName, MappedAttributeEntry& result) const
@@ -104,26 +114,6 @@ void HTMLLIElement::attach()
         else
             render->clearExplicitValue();
     }
-}
-
-String HTMLLIElement::type() const
-{
-    return getAttribute(typeAttr);
-}
-
-void HTMLLIElement::setType(const String& value)
-{
-    setAttribute(typeAttr, value);
-}
-
-int HTMLLIElement::value() const
-{
-    return getAttribute(valueAttr).toInt();
-}
-
-void HTMLLIElement::setValue(int value)
-{
-    setAttribute(valueAttr, String::number(value));
 }
 
 }

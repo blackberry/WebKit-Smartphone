@@ -22,7 +22,7 @@
 #include "config.h"
 #include "CSSCursorImageValue.h"
 
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "Document.h"
 #include "PlatformString.h"
 #include <wtf/MathExtras.h>
@@ -52,9 +52,9 @@ static inline SVGCursorElement* resourceReferencedByCursorElement(const String& 
 }
 #endif
 
-CSSCursorImageValue::CSSCursorImageValue(const String& url, const IntPoint& hotspot)
+CSSCursorImageValue::CSSCursorImageValue(const String& url, const IntPoint& hotSpot)
     : CSSImageValue(url)
-    , m_hotspot(hotspot)
+    , m_hotSpot(hotSpot)
 {
 }
 
@@ -70,7 +70,7 @@ CSSCursorImageValue::~CSSCursorImageValue()
 
     for (; it != end; ++it) {
         SVGElement* referencedElement = *it;
-        referencedElement->setCursorImageValue(0);
+        referencedElement->cursorImageValueRemoved();
         if (SVGCursorElement* cursorElement = resourceReferencedByCursorElement(url, referencedElement->document()))
             cursorElement->removeClient(referencedElement);
     }
@@ -90,11 +90,12 @@ bool CSSCursorImageValue::updateIfSVGCursorIsUsed(Element* element)
         return false;
 
     if (SVGCursorElement* cursorElement = resourceReferencedByCursorElement(url, element->document())) {
+        // FIXME: This will override hot spot specified in CSS, which is probably incorrect.
         float x = roundf(cursorElement->x().value(0));
-        m_hotspot.setX(static_cast<int>(x));
+        m_hotSpot.setX(static_cast<int>(x));
 
         float y = roundf(cursorElement->y().value(0));
-        m_hotspot.setY(static_cast<int>(y));
+        m_hotSpot.setY(static_cast<int>(y));
 
         if (cachedImageURL() != element->document()->completeURL(cursorElement->href()))
             clearCachedImage();
@@ -110,7 +111,7 @@ bool CSSCursorImageValue::updateIfSVGCursorIsUsed(Element* element)
     return false;
 }
 
-StyleCachedImage* CSSCursorImageValue::cachedImage(DocLoader* loader)
+StyleCachedImage* CSSCursorImageValue::cachedImage(CachedResourceLoader* loader)
 {
     String url = getStringValue();
 

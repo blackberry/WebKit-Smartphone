@@ -50,12 +50,20 @@ v8::Handle<v8::Value> constructWebGLArray(const v8::Arguments& args, WrapperType
     int argLen = args.Length();
     if (argLen == 0) {
         // This happens when we return a previously constructed
-        // ArrayBufferView, e.g. from the call to WebGL<T>Array.slice().
+        // ArrayBufferView, e.g. from the call to <Type>Array.slice().
         // The V8DOMWrapper will set the internal pointer in the
         // created object. Unfortunately it doesn't look like it's
         // possible to distinguish between this case and that where
-        // the user calls "new WebGL<T>Array()" from JavaScript.
-        return args.Holder();
+        // the user calls "new <Type>Array()" from JavaScript. We must
+        // construct an empty view to avoid crashes when fetching the
+        // length.
+        RefPtr<ArrayClass> array = ArrayClass::create(0);
+        // Transform the holder into a wrapper object for the array.
+        V8DOMWrapper::setDOMWrapper(args.Holder(), type, array.get());
+        // Do not call SetIndexedPropertiesToExternalArrayData on this
+        // object. Not only is there no point from a performance
+        // perspective, but doing so causes errors in the slice() case.
+        return toV8(array.release(), args.Holder());
     }
 
     // Supported constructors:
@@ -67,6 +75,12 @@ v8::Handle<v8::Value> constructWebGLArray(const v8::Arguments& args, WrapperType
     //   -- create a WebGL<T>Array pointing to the ArrayBuffer
     //      "buf", starting at the specified offset, for the given
     //      length
+
+    if (args[0]->IsNull()) {
+        // Invalid first argument
+        // FIXME: use forthcoming V8Proxy::throwTypeError().
+        return V8Proxy::throwError(V8Proxy::TypeError, "Type error");
+    }
 
     // See whether the first argument is a ArrayBuffer.
     if (V8ArrayBuffer::HasInstance(args[0])) {
@@ -88,8 +102,10 @@ v8::Handle<v8::Value> constructWebGLArray(const v8::Arguments& args, WrapperType
         }
 
         RefPtr<ArrayClass> array = ArrayClass::create(buf, offset, length);
-        if (!array)
-            return throwError("Out-of-range offset and/or length");
+        if (!array) {
+            V8Proxy::setDOMException(INDEX_SIZE_ERR);
+            return notHandledByInterceptor();
+        }
         // Transform the holder into a wrapper object for the array.
         V8DOMWrapper::setDOMWrapper(args.Holder(), type, array.get());
         args.Holder()->SetIndexedPropertiesToExternalArrayData(array.get()->baseAddress(), arrayType, array.get()->length());
@@ -98,22 +114,29 @@ v8::Handle<v8::Value> constructWebGLArray(const v8::Arguments& args, WrapperType
 
     uint32_t len = 0;
     v8::Handle<v8::Object> srcArray;
+    bool doInstantiation = false;
 
-    if (args[0]->IsInt32()) {
-        len = toUInt32(args[0]);
-    } else if (args[0]->IsObject()) {
+    if (args[0]->IsObject()) {
         srcArray = args[0]->ToObject();
         if (srcArray.IsEmpty())
             return throwError("Could not convert argument 0 to an array");
         len = toUInt32(srcArray->Get(v8::String::New("length")));
-    } else
-        return throwError("Could not convert argument 0 to either a number or an array");
-
-    RefPtr<ArrayClass> array = ArrayClass::create(len);
-    if (!array.get()) {
-        V8Proxy::setDOMException(INDEX_SIZE_ERR);
-        return v8::Undefined();
+        doInstantiation = true;
+    } else {
+        bool ok = false;
+        int32_t tempLength = toInt32(args[0], ok); // NaN/+inf/-inf returns 0, this is intended by WebIDL
+        if (ok && tempLength >= 0) {
+            len = static_cast<uint32_t>(tempLength);
+            doInstantiation = true;
+        }
     }
+
+    RefPtr<ArrayClass> array;
+    if (doInstantiation)
+        array = ArrayClass::create(len);
+    if (!array.get())
+        return throwError("ArrayBufferView size is not a small enough positive integer.", V8Proxy::RangeError);
+
     if (!srcArray.IsEmpty()) {
         // Need to copy the incoming array into the newly created ArrayBufferView.
         for (unsigned i = 0; i < len; i++) {

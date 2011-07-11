@@ -146,7 +146,7 @@ rect: style.getPropertyValue(right) : auto
 rect: style.getPropertyCSSValue(right) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(table-layout) : auto
 rect: style.getPropertyCSSValue(table-layout) : [object CSSPrimitiveValue]
-rect: style.getPropertyValue(text-align) : auto
+rect: style.getPropertyValue(text-align) : -webkit-auto
 rect: style.getPropertyCSSValue(text-align) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(text-decoration) : none
 rect: style.getPropertyCSSValue(text-decoration) : [object CSSPrimitiveValue]
@@ -384,10 +384,10 @@ rect: style.getPropertyValue(shape-rendering) : auto
 rect: style.getPropertyCSSValue(shape-rendering) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(stroke) : #FFA500
 rect: style.getPropertyCSSValue(stroke) : [object SVGPaint]
-rect: style.getPropertyValue(stroke-dasharray) : 
-rect: style.getPropertyCSSValue(stroke-dasharray) : null
-rect: style.getPropertyValue(stroke-dashoffset) : 
-rect: style.getPropertyCSSValue(stroke-dashoffset) : null
+rect: style.getPropertyValue(stroke-dasharray) : none
+rect: style.getPropertyCSSValue(stroke-dasharray) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(stroke-dashoffset) : 0
+rect: style.getPropertyCSSValue(stroke-dashoffset) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(stroke-linecap) : butt
 rect: style.getPropertyCSSValue(stroke-linecap) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(stroke-linejoin) : miter
@@ -404,8 +404,8 @@ rect: style.getPropertyValue(baseline-shift) : baseline
 rect: style.getPropertyCSSValue(baseline-shift) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(dominant-baseline) : auto
 rect: style.getPropertyCSSValue(dominant-baseline) : [object CSSPrimitiveValue]
-rect: style.getPropertyValue(kerning) : 
-rect: style.getPropertyCSSValue(kerning) : null
+rect: style.getPropertyValue(kerning) : 0
+rect: style.getPropertyCSSValue(kerning) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(text-anchor) : start
 rect: style.getPropertyCSSValue(text-anchor) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(writing-mode) : lr-tb
@@ -416,6 +416,8 @@ rect: style.getPropertyValue(glyph-orientation-vertical) : auto
 rect: style.getPropertyCSSValue(glyph-orientation-vertical) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-svg-shadow) : none
 rect: style.getPropertyCSSValue(-webkit-svg-shadow) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(vector-effect) : none
+rect: style.getPropertyCSSValue(vector-effect) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(background-attachment) : scroll
 g: style.getPropertyCSSValue(background-attachment) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(background-clip) : border-box
@@ -564,7 +566,7 @@ g: style.getPropertyValue(right) : auto
 g: style.getPropertyCSSValue(right) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(table-layout) : auto
 g: style.getPropertyCSSValue(table-layout) : [object CSSPrimitiveValue]
-g: style.getPropertyValue(text-align) : auto
+g: style.getPropertyValue(text-align) : -webkit-auto
 g: style.getPropertyCSSValue(text-align) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(text-decoration) : none
 g: style.getPropertyCSSValue(text-decoration) : [object CSSPrimitiveValue]
@@ -802,10 +804,10 @@ g: style.getPropertyValue(shape-rendering) : auto
 g: style.getPropertyCSSValue(shape-rendering) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(stroke) : #FFA500
 g: style.getPropertyCSSValue(stroke) : [object SVGPaint]
-g: style.getPropertyValue(stroke-dasharray) : 
-g: style.getPropertyCSSValue(stroke-dasharray) : null
-g: style.getPropertyValue(stroke-dashoffset) : 
-g: style.getPropertyCSSValue(stroke-dashoffset) : null
+g: style.getPropertyValue(stroke-dasharray) : none
+g: style.getPropertyCSSValue(stroke-dasharray) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(stroke-dashoffset) : 0
+g: style.getPropertyCSSValue(stroke-dashoffset) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(stroke-linecap) : butt
 g: style.getPropertyCSSValue(stroke-linecap) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(stroke-linejoin) : miter
@@ -822,8 +824,8 @@ g: style.getPropertyValue(baseline-shift) : baseline
 g: style.getPropertyCSSValue(baseline-shift) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(dominant-baseline) : auto
 g: style.getPropertyCSSValue(dominant-baseline) : [object CSSPrimitiveValue]
-g: style.getPropertyValue(kerning) : 
-g: style.getPropertyCSSValue(kerning) : null
+g: style.getPropertyValue(kerning) : 0
+g: style.getPropertyCSSValue(kerning) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(text-anchor) : start
 g: style.getPropertyCSSValue(text-anchor) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(writing-mode) : lr-tb
@@ -834,4 +836,6 @@ g: style.getPropertyValue(glyph-orientation-vertical) : auto
 g: style.getPropertyCSSValue(glyph-orientation-vertical) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-svg-shadow) : none
 g: style.getPropertyCSSValue(-webkit-svg-shadow) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(vector-effect) : none
+g: style.getPropertyCSSValue(vector-effect) : [object CSSPrimitiveValue]
 

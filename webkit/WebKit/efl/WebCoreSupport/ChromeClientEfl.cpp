@@ -5,6 +5,7 @@
  * Copyright (C) 2008 Diego Gonzalez
  * Copyright (C) 2009-2010 ProFUSION embedded systems
  * Copyright (C) 2009-2010 Samsung Electronics
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  * All rights reserved.
  *
@@ -34,9 +35,11 @@
 #include "ChromeClientEfl.h"
 
 #if ENABLE(DATABASE)
+#include "DatabaseDetails.h"
 #include "DatabaseTracker.h"
 #endif
 #include "EWebKit.h"
+#include "FileChooser.h"
 #include "FloatRect.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClientEfl.h"
@@ -45,8 +48,14 @@
 #include "KURL.h"
 #include "NotImplemented.h"
 #include "PlatformString.h"
+#include "SecurityOrigin.h"
+#include "PopupMenuEfl.h"
+#include "SearchPopupMenuEfl.h"
+#include "ViewportArguments.h"
 #include "WindowFeatures.h"
 #include "ewk_private.h"
+#include <Ecore_Evas.h>
+#include <Evas.h>
 #include <wtf/text/CString.h>
 
 using namespace WebCore;
@@ -83,13 +92,28 @@ void ChromeClientEfl::focusedNodeChanged(Node*)
 
 FloatRect ChromeClientEfl::windowRect()
 {
-    notImplemented();
-    return FloatRect();
+    Ecore_Evas* ee = 0;
+    int x, y, w, h;
+
+    if (!m_view)
+        return FloatRect();
+
+    ee = ecore_evas_ecore_evas_get(evas_object_evas_get(m_view));
+    ecore_evas_geometry_get(ee, &x, &y, &w, &h);
+    return FloatRect(x, y, w, h);
 }
 
 void ChromeClientEfl::setWindowRect(const FloatRect& rect)
 {
-    notImplemented();
+    Ecore_Evas* ee = 0;
+    IntRect intrect = IntRect(rect);
+
+    if (!m_view)
+        return;
+
+    ee = ecore_evas_ecore_evas_get(evas_object_evas_get(m_view));
+    ecore_evas_move(ee, intrect.x(), intrect.y());
+    ecore_evas_resize(ee, intrect.width(), intrect.height());
 }
 
 FloatRect ChromeClientEfl::pageRect()
@@ -114,10 +138,16 @@ void ChromeClientEfl::unfocus()
     evas_object_focus_set(m_view, EINA_FALSE);
 }
 
-Page* ChromeClientEfl::createWindow(Frame*, const FrameLoadRequest& request, const WindowFeatures& features)
+Page* ChromeClientEfl::createWindow(Frame*, const FrameLoadRequest& frameLoadRequest, const WindowFeatures& features)
 {
-    notImplemented();
-    return 0;
+    Evas_Object* newView = ewk_view_window_create(m_view, EINA_TRUE, &features);
+    if (!newView)
+        return 0;
+
+    if (!frameLoadRequest.isEmpty())
+        ewk_view_uri_set(newView, frameLoadRequest.resourceRequest().url().string().utf8().data());
+
+    return ewk_view_core_page_get(newView);
 }
 
 void ChromeClientEfl::show()
@@ -188,6 +218,16 @@ bool ChromeClientEfl::menubarVisible()
     return visible;
 }
 
+void ChromeClientEfl::createSelectPopup(PopupMenuClient* client, int selected, const IntRect& rect)
+{
+    ewk_view_popup_new(m_view, client, selected, rect);
+}
+
+bool ChromeClientEfl::destroySelectPopup()
+{
+    return ewk_view_popup_destroy(m_view);
+}
+
 void ChromeClientEfl::setResizable(bool)
 {
     notImplemented();
@@ -195,7 +235,7 @@ void ChromeClientEfl::setResizable(bool)
 
 void ChromeClientEfl::closeWindowSoon()
 {
-    ewk_view_stop(m_view);
+    ewk_view_window_close(m_view);
 }
 
 bool ChromeClientEfl::canTakeFocus(FocusDirection)
@@ -340,23 +380,65 @@ void ChromeClientEfl::reachedMaxAppCacheSize(int64_t spaceNeeded)
     // FIXME: Free some space.
     notImplemented();
 }
+
+void ChromeClientEfl::reachedApplicationCacheOriginQuota(SecurityOrigin*)
+{
+    notImplemented();
+}
 #endif
 
 #if ENABLE(DATABASE)
 void ChromeClientEfl::exceededDatabaseQuota(Frame* frame, const String& databaseName)
 {
-    uint64_t quota = ewk_settings_web_database_default_quota_get();
+    uint64_t quota;
+    SecurityOrigin* origin = frame->document()->securityOrigin();
 
-    if (!DatabaseTracker::tracker().hasEntryForOrigin(frame->document()->securityOrigin()))
-        DatabaseTracker::tracker().setQuota(frame->document()->securityOrigin(), quota);
+    DatabaseDetails details = DatabaseTracker::tracker().detailsForNameAndOrigin(databaseName, origin);
+    quota = ewk_view_exceeded_database_quota(m_view,
+            kit(frame), databaseName.utf8().data(),
+            details.currentUsage(), details.expectedUsage());
 
-    ewk_view_exceeded_database_quota(m_view, kit(frame), databaseName.utf8().data());
+    /* if client did not set quota, and database is being created now, the
+     * default quota is applied
+     */
+    if (!quota && !DatabaseTracker::tracker().hasEntryForOrigin(origin))
+        quota = ewk_settings_web_database_default_quota_get();
+
+    DatabaseTracker::tracker().setQuota(origin, quota);
 }
 #endif
 
 void ChromeClientEfl::runOpenPanel(Frame* frame, PassRefPtr<FileChooser> prpFileChooser)
 {
-    notImplemented();
+    RefPtr<FileChooser> chooser = prpFileChooser;
+    bool confirm;
+    Eina_List* selectedFilenames = 0;
+    Eina_List* suggestedFilenames = 0;
+    void* filename;
+    Vector<String> filenames;
+
+    for (unsigned i = 0; i < chooser->filenames().size(); i++) {
+        CString str = chooser->filenames()[i].utf8();
+        filename = strdup(str.data());
+        suggestedFilenames = eina_list_append(suggestedFilenames, filename);
+    }
+
+    confirm = ewk_view_run_open_panel(m_view, kit(frame), chooser->allowsMultipleFiles(), suggestedFilenames, &selectedFilenames);
+    EINA_LIST_FREE(suggestedFilenames, filename)
+        free(filename);
+
+    if (!confirm)
+        return;
+
+    EINA_LIST_FREE(selectedFilenames, filename) {
+        filenames.append((char *)filename);
+        free(filename);
+    }
+
+    if (chooser->allowsMultipleFiles())
+        chooser->chooseFiles(filenames);
+    else
+        chooser->chooseFile(filenames[0]);
 }
 
 void ChromeClientEfl::formStateDidChange(const Node*)
@@ -364,10 +446,9 @@ void ChromeClientEfl::formStateDidChange(const Node*)
     notImplemented();
 }
 
-bool ChromeClientEfl::setCursor(PlatformCursorHandle)
+void ChromeClientEfl::setCursor(const Cursor&)
 {
     notImplemented();
-    return false;
 }
 
 void ChromeClientEfl::requestGeolocationPermissionForFrame(Frame*, Geolocation*)
@@ -430,6 +511,30 @@ void ChromeClientEfl::iconForFiles(const Vector<String, 0u>&, PassRefPtr<FileCho
 void ChromeClientEfl::chooseIconForFiles(const Vector<String>&, FileChooser*)
 {
     notImplemented();
+}
+
+void ChromeClientEfl::didReceiveViewportArguments(Frame* frame, const ViewportArguments& arguments) const
+{
+    FrameLoaderClientEfl* client = static_cast<FrameLoaderClientEfl*>(frame->loader()->client());
+    if (client->getInitLayoutCompleted())
+        return;
+
+    ewk_view_viewport_set(m_view, arguments.width, arguments.height, arguments.initialScale, arguments.minimumScale, arguments.maximumScale, arguments.userScalable);
+}
+
+bool ChromeClientEfl::selectItemWritingDirectionIsNatural()
+{
+    return true;
+}
+
+PassRefPtr<PopupMenu> ChromeClientEfl::createPopupMenu(PopupMenuClient* client) const
+{
+    return adoptRef(new PopupMenuEfl(client));
+}
+
+PassRefPtr<SearchPopupMenu> ChromeClientEfl::createSearchPopupMenu(PopupMenuClient* client) const
+{
+    return adoptRef(new SearchPopupMenuEfl(client));
 }
 
 }

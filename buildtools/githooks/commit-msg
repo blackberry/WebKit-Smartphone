@@ -1,9 +1,0 @@
-#!/bin/sh -e
-#
-#
-# Copyright (C) Research In Motion Limited 2010. All rights reserved.
-#
-
-for hook in `ls -1 $GIT_DIR/hooks/commit-msg-* 2>/dev/null` ; do
-    $hook $1
-done

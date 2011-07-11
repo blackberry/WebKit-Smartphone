@@ -42,6 +42,7 @@
 #include "WebDownload.h"
 #include "WebEditorClient.h"
 #include "WebError.h"
+#include "WebFrameNetworkingContext.h"
 #include "WebFramePolicyListener.h"
 #include "WebHistory.h"
 #include "WebHistoryItem.h"
@@ -340,7 +341,7 @@ HRESULT STDMETHODCALLTYPE WebFrame::paintDocumentRectToContext(
         return E_FAIL;
 
     // We can't paint with a layout still pending.
-    view->layoutIfNeededRecursive();
+    view->updateLayoutAndStyleIfNeededRecursive();
 
     HDC dc = reinterpret_cast<HDC>(static_cast<ULONG64>(deviceContext));
     GraphicsContext gc(dc);
@@ -359,7 +360,7 @@ HRESULT STDMETHODCALLTYPE WebFrame::paintDocumentRectToContext(
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE WebFrame::paintDocumentRectToContextAtPoint(
+HRESULT STDMETHODCALLTYPE WebFrame::paintScrollViewRectToContextAtPoint(
     /* [in] */ RECT rect,
     /* [in] */ POINT pt,
     /* [in] */ OLE_HANDLE deviceContext)
@@ -373,16 +374,15 @@ HRESULT STDMETHODCALLTYPE WebFrame::paintDocumentRectToContextAtPoint(
         return E_FAIL;
 
     // We can't paint with a layout still pending.
-    view->layoutIfNeededRecursive();
+    view->updateLayoutAndStyleIfNeededRecursive();
 
     HDC dc = reinterpret_cast<HDC>(static_cast<ULONG64>(deviceContext));
     GraphicsContext gc(dc);
     gc.setShouldIncludeChildWindows(true);
     gc.save();
     IntRect dirtyRect(rect);
-    gc.translate(-pt.x, -pt.y);
-    gc.clip(dirtyRect);
-    view->paintContents(&gc, rect);
+    dirtyRect.move(-pt.x, -pt.y);
+    view->paint(&gc, dirtyRect);
     gc.restore();
 
     return S_OK;
@@ -507,9 +507,10 @@ HRESULT STDMETHODCALLTYPE WebFrame::currentForm(
 
     *currentForm = 0;
 
-    if (Frame* coreFrame = core(this))
-        if (HTMLFormElement* formElement = coreFrame->currentForm())
+    if (Frame* coreFrame = core(this)) {
+        if (HTMLFormElement* formElement = coreFrame->selection()->currentForm())
             *currentForm = DOMElement::createInstance(formElement);
+    }
 
     return *currentForm ? S_OK : E_FAIL;
 }
@@ -846,8 +847,7 @@ HRESULT STDMETHODCALLTYPE WebFrame::childFrames(
 
 // IWebFramePrivate ------------------------------------------------------
 
-HRESULT STDMETHODCALLTYPE WebFrame::renderTreeAsExternalRepresentation(
-    /* [retval][out] */ BSTR *result)
+HRESULT WebFrame::renderTreeAsExternalRepresentation(BOOL forPrinting, BSTR *result)
 {
     if (!result)
         return E_POINTER;
@@ -856,7 +856,7 @@ HRESULT STDMETHODCALLTYPE WebFrame::renderTreeAsExternalRepresentation(
     if (!coreFrame)
         return E_FAIL;
 
-    *result = BString(externalRepresentation(coreFrame)).release();
+    *result = BString(externalRepresentation(coreFrame, forPrinting ? RenderAsTextPrintingMode : RenderAsTextBehaviorNormal)).release();
     return S_OK;
 }
 
@@ -965,7 +965,7 @@ HRESULT STDMETHODCALLTYPE WebFrame::firstLayoutDone(
     if (!coreFrame)
         return E_FAIL;
 
-    *result = coreFrame->loader()->firstLayoutDone();
+    *result = coreFrame->loader()->stateMachine()->firstLayoutDone();
     return S_OK;
 }
 
@@ -1046,7 +1046,7 @@ HRESULT STDMETHODCALLTYPE WebFrame::selectedString(
     if (!coreFrame)
         return E_FAIL;
 
-    String text = coreFrame->displayStringModifiedByEncoding(coreFrame->selectedText());
+    String text = coreFrame->displayStringModifiedByEncoding(coreFrame->editor()->selectedText());
 
     *result = BString(text).release();
     return S_OK;
@@ -1099,15 +1099,6 @@ void WebFrame::invalidate()
         document->recalcStyle(Node::Force);
 }
 
-void WebFrame::setTextSizeMultiplier(float multiplier)
-{
-    Frame* coreFrame = core(this);
-    ASSERT(coreFrame);
-
-    if (FrameView* view = coreFrame->view())
-        view->setZoomFactor(multiplier, ZoomTextOnly);
-}
-
 HRESULT WebFrame::inViewSourceMode(BOOL* flag)
 {
     if (!flag) {
@@ -1142,7 +1133,7 @@ HRESULT WebFrame::elementWithName(BSTR name, IDOMElement* form, IDOMElement** el
 
     HTMLFormElement *formElement = formElementFromDOMElement(form);
     if (formElement) {
-        Vector<HTMLFormControlElement*>& elements = formElement->formElements;
+        const Vector<HTMLFormControlElement*>& elements = formElement->associatedElements();
         AtomicString targetName((UChar*)name, SysStringLen(name));
         for (unsigned int i = 0; i < elements.size(); i++) {
             HTMLFormControlElement *elt = elements[i];
@@ -1299,6 +1290,34 @@ HRESULT WebFrame::numberOfActiveAnimations(UINT* number)
     return S_OK;
 }
 
+HRESULT WebFrame::suspendAnimations()
+{
+    Frame* frame = core(this);
+    if (!frame)
+        return E_FAIL;
+
+    AnimationController* controller = frame->animation();
+    if (!controller)
+        return E_FAIL;
+
+    controller->suspendAnimations(frame->document());
+    return S_OK;
+}
+
+HRESULT WebFrame::resumeAnimations()
+{
+    Frame* frame = core(this);
+    if (!frame)
+        return E_FAIL;
+
+    AnimationController* controller = frame->animation();
+    if (!controller)
+        return E_FAIL;
+
+    controller->resumeAnimations(frame->document());
+    return S_OK;
+}
+
 HRESULT WebFrame::isDisplayingStandaloneImage(BOOL* result)
 {
     if (!result)
@@ -1326,7 +1345,7 @@ HRESULT WebFrame::allowsFollowingLink(BSTR url, BOOL* result)
     if (!frame)
         return E_FAIL;
 
-    *result = SecurityOrigin::canLoad(MarshallingHelpers::BSTRToKURL(url), String(), frame->document());
+    *result = frame->document()->securityOrigin()->canDisplay(MarshallingHelpers::BSTRToKURL(url));
     return S_OK;
 }
 
@@ -1340,7 +1359,7 @@ HRESULT WebFrame::controlsInForm(IDOMElement* form, IDOMElement** controls, int*
         return E_FAIL;
 
     int inCount = *cControls;
-    int count = (int) formElement->formElements.size();
+    int count = (int) formElement->associatedElements().size();
     *cControls = count;
     if (!controls)
         return S_OK;
@@ -1348,7 +1367,7 @@ HRESULT WebFrame::controlsInForm(IDOMElement* form, IDOMElement** controls, int*
         return E_FAIL;
 
     *cControls = 0;
-    Vector<HTMLFormControlElement*>& elements = formElement->formElements;
+    const Vector<HTMLFormControlElement*>& elements = formElement->associatedElements();
     for (int i = 0; i < count; i++) {
         if (elements.at(i)->isEnumeratable()) { // Skip option elements, other duds
             controls[*cControls] = DOMElement::createInstance(elements.at(i));
@@ -1583,6 +1602,12 @@ void WebFrame::didChangeIcons(DocumentLoader*)
 bool WebFrame::canHandleRequest(const ResourceRequest& request) const
 {
     return WebView::canHandleRequest(request);
+}
+
+bool WebFrame::canShowMIMETypeAsHTML(const String& /*MIMEType*/) const
+{
+    notImplemented();
+    return true;
 }
 
 bool WebFrame::canShowMIMEType(const String& /*MIMEType*/) const
@@ -1941,7 +1966,7 @@ void WebFrame::setPrinting(bool printing, float minPageWidth, float maxPageWidth
 {
     Frame* coreFrame = core(this);
     ASSERT(coreFrame);
-    coreFrame->setPrinting(printing, minPageWidth, maxPageWidth, adjustViewSize);
+    coreFrame->setPrinting(printing, FloatSize(minPageWidth, 0), maxPageWidth / minPageWidth, adjustViewSize ? Frame::AdjustViewSize : Frame::DoNotAdjustViewSize);
 }
 
 HRESULT STDMETHODCALLTYPE WebFrame::setInPrintingMode( 
@@ -2538,7 +2563,7 @@ void WebFrame::unmarkAllMisspellings()
         if (!doc)
             return;
 
-        doc->removeMarkers(DocumentMarker::Spelling);
+        doc->markers()->removeMarkers(DocumentMarker::Spelling);
     }
 }
 
@@ -2550,7 +2575,7 @@ void WebFrame::unmarkAllBadGrammar()
         if (!doc)
             return;
 
-        doc->removeMarkers(DocumentMarker::Grammar);
+        doc->markers()->removeMarkers(DocumentMarker::Grammar);
     }
 }
 
@@ -2588,3 +2613,7 @@ void WebFrame::updateBackground()
     coreFrame->view()->updateBackgroundRecursively(backgroundColor, webView()->transparent());
 }
 
+PassRefPtr<FrameNetworkingContext> WebFrame::createNetworkingContext()
+{
+    return WebFrameNetworkingContext::create(core(this), userAgent(url()));
+}

@@ -50,6 +50,7 @@
 #include "V8DOMWindow.h"
 #include "V8Document.h"
 #include "V8GCForContextDispose.h"
+#include "V8HTMLDocument.h"
 #include "V8HiddenPropertyName.h"
 #include "V8History.h"
 #include "V8Location.h"
@@ -82,7 +83,11 @@ static void reportFatalErrorInV8(const char* location, const char* message)
     // V8 is shutdown, we cannot use V8 api.
     // The only thing we can do is to disable JavaScript.
     // FIXME: clean up V8Proxy and disable JavaScript.
-    printf("V8 error: %s (%s)\n", message, location);
+    int memoryUsageMB = -1;
+#if PLATFORM(CHROMIUM)
+    memoryUsageMB = ChromiumBridge::actualMemoryUsageMB();
+#endif
+    printf("V8 error: %s (%s).  Current memory usage: %d MB\n", message, location, memoryUsageMB);
     handleFatalErrorInV8();
 }
 
@@ -237,11 +242,11 @@ void V8DOMWindowShell::clearForNavigation()
 // the frame. However, a new inner window is created for the new page.
 // If there are JS code holds a closure to the old inner window,
 // it won't be able to reach the outer window via its global object.
-void V8DOMWindowShell::initContextIfNeeded()
+bool V8DOMWindowShell::initContextIfNeeded()
 {
     // Bail out if the context has already been initialized.
     if (!m_context.IsEmpty())
-        return;
+        return false;
 
     // Create a handle scope for all local handles.
     v8::HandleScope handleScope;
@@ -268,7 +273,7 @@ void V8DOMWindowShell::initContextIfNeeded()
 
     m_context = createNewContext(m_global, 0);
     if (m_context.IsEmpty())
-        return;
+        return false;
 
     v8::Local<v8::Context> v8Context = v8::Local<v8::Context>::New(m_context);
     v8::Context::Scope contextScope(v8Context);
@@ -279,7 +284,7 @@ void V8DOMWindowShell::initContextIfNeeded()
         // Bail out if allocation of the first global objects fails.
         if (m_global.IsEmpty()) {
             disposeContextHandles();
-            return;
+            return false;
         }
 #ifndef NDEBUG
         V8GCController::registerGlobalHandle(PROXY, this, m_global);
@@ -288,12 +293,12 @@ void V8DOMWindowShell::initContextIfNeeded()
 
     if (!installHiddenObjectPrototype(v8Context)) {
         disposeContextHandles();
-        return;
+        return false;
     }
 
     if (!installDOMWindow(v8Context, m_frame->domWindow())) {
         disposeContextHandles();
-        return;
+        return false;
     }
 
     updateDocument();
@@ -305,6 +310,8 @@ void V8DOMWindowShell::initContextIfNeeded()
     // FIXME: This is wrong. We should actually do this for the proper world once
     // we do isolated worlds the WebCore way.
     m_frame->loader()->dispatchDidClearWindowObjectInWorld(0);
+
+    return true;
 }
 
 v8::Persistent<v8::Context> V8DOMWindowShell::createNewContext(v8::Handle<v8::Object> global, int extensionGroup)
@@ -402,6 +409,12 @@ void V8DOMWindowShell::clearDocumentWrapper()
     }
 }
 
+static void checkDocumentWrapper(v8::Handle<v8::Object> wrapper, Document* document)
+{
+    ASSERT(V8Document::toNative(wrapper) == document);
+    ASSERT(!document->isHTMLDocument() || (V8Document::toNative(v8::Handle<v8::Object>::Cast(wrapper->GetPrototype())) == document));
+}
+
 void V8DOMWindowShell::updateDocumentWrapperCache()
 {
     v8::HandleScope handleScope;
@@ -420,6 +433,10 @@ void V8DOMWindowShell::updateDocumentWrapperCache()
     }
 
     v8::Handle<v8::Value> documentWrapper = toV8(m_frame->document());
+    ASSERT(documentWrapper == m_document || m_document.IsEmpty());
+    if (m_document.IsEmpty())
+        updateDocumentWrapper(v8::Handle<v8::Object>::Cast(documentWrapper));
+    checkDocumentWrapper(m_document, m_frame->document());
 
     // If instantiation of the document wrapper fails, clear the cache
     // and let the DOMWindow accessor handle access to the document.
@@ -495,6 +512,37 @@ void V8DOMWindowShell::updateDocument()
     updateDocumentWrapperCache();
 
     updateSecurityOrigin();
+}
+
+v8::Handle<v8::Value> getter(v8::Local<v8::String> property, const v8::AccessorInfo& info)
+{
+    // FIXME(antonm): consider passing AtomicStringImpl directly.
+    AtomicString name = v8StringToAtomicWebCoreString(property);
+    HTMLDocument* htmlDocument = V8HTMLDocument::toNative(info.Holder());
+    ASSERT(htmlDocument);
+    v8::Handle<v8::Value> result = V8HTMLDocument::GetNamedProperty(htmlDocument, name);
+    if (!result.IsEmpty())
+        return result;
+    v8::Handle<v8::Value> prototype = info.Holder()->GetPrototype();
+    if (prototype->IsObject())
+        return prototype.As<v8::Object>()->Get(property);
+    return v8::Undefined();
+}
+
+void V8DOMWindowShell::namedItemAdded(HTMLDocument* doc, const AtomicString& name)
+{
+    initContextIfNeeded();
+
+    v8::HandleScope handleScope;
+    v8::Context::Scope contextScope(m_context);
+
+    ASSERT(!m_document.IsEmpty());
+    checkDocumentWrapper(m_document, doc);
+    m_document->SetAccessor(v8String(name), getter);
+}
+
+void V8DOMWindowShell::namedItemRemoved(HTMLDocument* doc, const AtomicString& name)
+{
 }
 
 void V8DOMWindowShell::updateSecurityOrigin()

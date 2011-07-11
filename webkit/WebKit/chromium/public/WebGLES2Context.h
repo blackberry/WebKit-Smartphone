@@ -36,6 +36,7 @@
 
 namespace WebKit {
 
+struct WebSize;
 class WebView;
 
 // This interface abstracts the creation and management of an
@@ -45,10 +46,24 @@ class WebGLES2Context : public WebNonCopyable {
 public:
     virtual ~WebGLES2Context() {}
 
-    virtual bool initialize(WebView*) = 0;
+    virtual bool initialize(WebView*, WebGLES2Context* parent) = 0;
     virtual bool makeCurrent() = 0;
     virtual bool destroy() = 0;
     virtual bool swapBuffers() = 0;
+
+    // The follow two functions are for managing a context that renders offscreen.
+
+    // Resizes the backing store used for offscreen rendering.
+    virtual void resizeOffscreenContent(const WebSize&) = 0;
+
+    // Returns the ID of the texture used for offscreen rendering in the context of the parent.
+    virtual unsigned getOffscreenContentParentTextureId() = 0;
+
+    // The following function is used only on Mac OS X and is needed
+    // in order to report window size changes.
+#if defined(__APPLE__)
+    virtual void resizeOnscreenContent(const WebSize&) = 0;
+#endif
 };
 
 } // namespace WebKit

@@ -1,5 +1,0 @@
-This tests whether we can load a file URL with a hostname in the URL. Both Safari and Mozilla ignore the hostname, and so the load should succeed. Note, this is contrary to the definition of a file URL as per RFC 1738, which allows a file URL to have an optional hostname.
-
-SUCCESS: The subframe loaded.
-
-

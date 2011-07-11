@@ -26,6 +26,7 @@
 #include "config.h"
 #include "DOMWindow.h"
 
+#include "AbstractDatabase.h"
 #include "Base64.h"
 #include "BarInfo.h"
 #include "BeforeUnloadEvent.h"
@@ -34,11 +35,15 @@
 #include "CSSStyleSelector.h"
 #include "Chrome.h"
 #include "Console.h"
-#include "Database.h"
-#include "DatabaseCallback.h"
+#include "DocumentLoader.h"
 #include "DOMApplicationCache.h"
 #include "DOMSelection.h"
+#include "DOMStringList.h"
 #include "DOMTimer.h"
+#include "Database.h"
+#include "DatabaseCallback.h"
+#include "DeviceMotionController.h"
+#include "DeviceOrientationController.h"
 #include "PageTransitionEvent.h"
 #include "Document.h"
 #include "Element.h"
@@ -53,10 +58,11 @@
 #include "FrameView.h"
 #include "HTMLFrameOwnerElement.h"
 #include "History.h"
-#include "IndexedDatabase.h"
-#include "IndexedDatabaseRequest.h"
+#include "IDBFactory.h"
+#include "IDBFactoryBackendInterface.h"
 #include "InspectorController.h"
 #include "InspectorTimelineAgent.h"
+#include "KURL.h"
 #include "Location.h"
 #include "StyleMedia.h"
 #include "MessageEvent.h"
@@ -64,6 +70,7 @@
 #include "NotificationCenter.h"
 #include "Page.h"
 #include "PageGroup.h"
+#include "Performance.h"
 #include "PlatformScreen.h"
 #include "PlatformString.h"
 #include "Screen.h"
@@ -76,8 +83,18 @@
 #include "SuddenTermination.h"
 #include "WebKitPoint.h"
 #include <algorithm>
-#include <wtf/text/CString.h>
+#include <wtf/CurrentTime.h>
 #include <wtf/MathExtras.h>
+#include <wtf/text/CString.h>
+
+#if ENABLE(FILE_SYSTEM)
+#include "AsyncFileSystem.h"
+#include "DOMFileSystem.h"
+#include "ErrorCallback.h"
+#include "FileError.h"
+#include "FileSystemCallback.h"
+#include "LocalFileSystem.h"
+#endif
 
 using std::min;
 using std::max;
@@ -229,7 +246,7 @@ bool DOMWindow::dispatchAllPendingBeforeUnloadEvents()
         if (!frame)
             continue;
 
-        if (!frame->shouldClose())
+        if (!frame->loader()->shouldClose())
             return false;
     }
 
@@ -323,20 +340,20 @@ void DOMWindow::parseModalDialogFeatures(const String& featuresArg, HashMap<Stri
     Vector<String>::const_iterator end = features.end();
     for (Vector<String>::const_iterator it = features.begin(); it != end; ++it) {
         String s = *it;
-        int pos = s.find('=');
-        int colonPos = s.find(':');
-        if (pos >= 0 && colonPos >= 0)
+        size_t pos = s.find('=');
+        size_t colonPos = s.find(':');
+        if (pos != notFound && colonPos != notFound)
             continue; // ignore any strings that have both = and :
-        if (pos < 0)
+        if (pos == notFound)
             pos = colonPos;
-        if (pos < 0) {
+        if (pos == notFound) {
             // null string for value means key without value
             map.set(s.stripWhiteSpace().lower(), String());
         } else {
             String key = s.left(pos).stripWhiteSpace().lower();
             String val = s.substring(pos + 1).stripWhiteSpace().lower();
-            int spacePos = val.find(' ');
-            if (spacePos != -1)
+            size_t spacePos = val.find(' ');
+            if (spacePos != notFound)
                 val = val.left(spacePos);
             map.set(key, val);
         }
@@ -371,7 +388,8 @@ bool DOMWindow::canShowModalDialogNow(const Frame* frame)
 }
 
 DOMWindow::DOMWindow(Frame* frame)
-    : m_frame(frame)
+    : m_printDeferred(false),
+      m_frame(frame)
 {
 }
 
@@ -441,6 +459,12 @@ void DOMWindow::clear()
         m_navigator->disconnectFrame();
     m_navigator = 0;
 
+#if ENABLE(WEB_TIMING)
+    if (m_performance)
+        m_performance->disconnectFrame();
+    m_performance = 0;
+#endif
+
     if (m_location)
         m_location->disconnectFrame();
     m_location = 0;
@@ -472,9 +496,7 @@ void DOMWindow::clear()
 #endif
 
 #if ENABLE(INDEXED_DATABASE)
-    if (m_indexedDatabaseRequest)
-        m_indexedDatabaseRequest->disconnectFrame();
-    m_indexedDatabaseRequest = 0;
+    m_idbFactory = 0;
 #endif
 }
 
@@ -566,6 +588,15 @@ Navigator* DOMWindow::navigator() const
         m_navigator = Navigator::create(m_frame);
     return m_navigator.get();
 }
+
+#if ENABLE(WEB_TIMING)
+Performance* DOMWindow::webkitPerformance() const
+{
+    if (!m_performance)
+        m_performance = Performance::create(m_frame);
+    return m_performance.get();
+}
+#endif
 
 Location* DOMWindow::location() const
 {
@@ -672,11 +703,22 @@ NotificationCenter* DOMWindow::webkitNotifications() const
 }
 #endif
 
-#if ENABLE(INDEXED_DATABASE)
-IndexedDatabaseRequest* DOMWindow::indexedDB() const
+void DOMWindow::pageDestroyed()
 {
-    if (m_indexedDatabaseRequest)
-        return m_indexedDatabaseRequest.get();
+#if ENABLE(NOTIFICATIONS)
+    // Clearing Notifications requests involves accessing the client so it must be done
+    // before the frame is detached.
+    if (m_notifications)
+        m_notifications->disconnectFrame();
+    m_notifications = 0;
+#endif
+}
+
+#if ENABLE(INDEXED_DATABASE)
+IDBFactory* DOMWindow::indexedDB() const
+{
+    if (m_idbFactory)
+        return m_idbFactory.get();
 
     Document* document = this->document();
     if (!document)
@@ -690,9 +732,38 @@ IndexedDatabaseRequest* DOMWindow::indexedDB() const
 
     // FIXME: See if indexedDatabase access is allowed.
 
-    m_indexedDatabaseRequest = IndexedDatabaseRequest::create(page->group().indexedDatabase(), m_frame);
-    return m_indexedDatabaseRequest.get();
+    m_idbFactory = IDBFactory::create(page->group().idbFactory());
+    return m_idbFactory.get();
 }
+#endif
+
+#if ENABLE(FILE_SYSTEM)
+void DOMWindow::requestFileSystem(int type, long long size, PassRefPtr<FileSystemCallback> successCallback, PassRefPtr<ErrorCallback> errorCallback)
+{
+    Document* document = this->document();
+    if (!document)
+        return;
+
+    if (!m_localFileSystem) {
+        // FIXME: See if access is allowed.
+
+        Page* page = document->page();
+        if (!page) {
+            DOMFileSystem::scheduleCallback(document, errorCallback, FileError::create(INVALID_STATE_ERR));
+            return;
+        }
+
+        // FIXME: Get the quota settings as well.
+        String path = page->settings()->fileSystemRootPath();
+        m_localFileSystem = LocalFileSystem::create(path);
+    }
+
+    m_localFileSystem->requestFileSystem(document, static_cast<AsyncFileSystem::Type>(type), size, successCallback, errorCallback);
+}
+
+COMPILE_ASSERT(int(DOMWindow::TEMPORARY) == int(AsyncFileSystem::Temporary), enum_mismatch);
+COMPILE_ASSERT(int(DOMWindow::PERSISTENT) == int(AsyncFileSystem::Persistent), enum_mismatch);
+
 #endif
 
 void DOMWindow::postMessage(PassRefPtr<SerializedScriptValue> message, MessagePort* port, const String& targetOrigin, DOMWindow* source, ExceptionCode& ec)
@@ -775,7 +846,18 @@ void DOMWindow::focus()
     if (!m_frame)
         return;
 
-    m_frame->focusWindow();
+    Page* page = m_frame->page();
+    if (!page)
+        return;
+
+    // If we're a top level window, bring the window to the front.
+    if (m_frame == page->mainFrame())
+        page->chrome()->focus();
+
+    if (!m_frame)
+        return;
+
+    m_frame->eventHandler()->focusDocumentView();
 }
 
 void DOMWindow::blur()
@@ -783,7 +865,14 @@ void DOMWindow::blur()
     if (!m_frame)
         return;
 
-    m_frame->unfocusWindow();
+    Page* page = m_frame->page();
+    if (!page)
+        return;
+
+    if (m_frame != page->mainFrame())
+        return;
+
+    page->chrome()->unfocus();
 }
 
 void DOMWindow::close()
@@ -801,8 +890,13 @@ void DOMWindow::close()
     Settings* settings = m_frame->settings();
     bool allowScriptsToCloseWindows = settings && settings->allowScriptsToCloseWindows();
 
-    if (page->openedByDOM() || page->getHistoryLength() <= 1 || allowScriptsToCloseWindows)
-        m_frame->scheduleClose();
+    if (!(page->openedByDOM() || page->getHistoryLength() <= 1 || allowScriptsToCloseWindows))
+        return;
+
+    if (!m_frame->loader()->shouldClose())
+        return;
+
+    page->chrome()->closeWindowSoon();
 }
 
 void DOMWindow::print()
@@ -814,6 +908,11 @@ void DOMWindow::print()
     if (!page)
         return;
 
+    if (m_frame->loader()->isLoading()) {
+        m_printDeferred = true;
+        return;
+    }
+    m_printDeferred = false;
     page->chrome()->print(m_frame);
 }
 
@@ -930,7 +1029,7 @@ bool DOMWindow::find(const String& string, bool caseSensitive, bool backwards, b
         return false;
 
     // FIXME (13016): Support wholeWord, searchInFrames and showDialog
-    return m_frame->findString(string, !backwards, caseSensitive, wrap, false);
+    return m_frame->editor()->findString(string, !backwards, caseSensitive, wrap, false);
 }
 
 bool DOMWindow::offscreenBuffering() const
@@ -971,8 +1070,11 @@ int DOMWindow::innerHeight() const
     if (!view)
         return 0;
     
-    // WARNING: OLYMPIA SPECIFIC CHANGE! Do not remove!
+#if ENABLE(FIXED_REPORTED_SIZE)
     return static_cast<int>(view->reportedHeight() / view->pageZoomFactor());
+#else
+    return static_cast<int>(view->height() / view->pageZoomFactor());
+#endif
 }
 
 int DOMWindow::innerWidth() const
@@ -984,8 +1086,11 @@ int DOMWindow::innerWidth() const
     if (!view)
         return 0;
 
-    // WARNING: OLYMPIA SPECIFIC CHANGE! Do not remove!
+#if ENABLE(FIXED_REPORTED_SIZE)
     return static_cast<int>(view->reportedWidth() / view->pageZoomFactor());
+#else
+    return static_cast<int>(view->width() / view->pageZoomFactor());
+#endif
 }
 
 int DOMWindow::screenX() const
@@ -1069,36 +1174,34 @@ void DOMWindow::setName(const String& string)
     m_frame->tree()->setName(string);
 }
 
-String DOMWindow::status() const
-{
-    if (!m_frame)
-        return String();
-
-    return m_frame->jsStatusBarText();
-}
-
 void DOMWindow::setStatus(const String& string) 
-{ 
-    if (!m_frame) 
-        return; 
+{
+    m_status = string;
 
-    m_frame->setJSStatusBarText(string); 
+    if (!m_frame)
+        return;
+
+    Page* page = m_frame->page();
+    if (!page)
+        return;
+
+    ASSERT(m_frame->document()); // Client calls shouldn't be made when the frame is in inconsistent state.
+    page->chrome()->setStatusbarText(m_frame, m_status);
 } 
     
-String DOMWindow::defaultStatus() const
-{
-    if (!m_frame)
-        return String();
-
-    return m_frame->jsDefaultStatusBarText();
-} 
-
 void DOMWindow::setDefaultStatus(const String& string) 
-{ 
-    if (!m_frame) 
-        return; 
+{
+    m_defaultStatus = string;
 
-    m_frame->setJSDefaultStatusBarText(string);
+    if (!m_frame)
+        return;
+
+    Page* page = m_frame->page();
+    if (!page)
+        return;
+
+    ASSERT(m_frame->document()); // Client calls shouldn't be made when the frame is in inconsistent state.
+    page->chrome()->setStatusbarText(m_frame, m_defaultStatus);
 }
 
 DOMWindow* DOMWindow::self() const
@@ -1224,7 +1327,7 @@ double DOMWindow::devicePixelRatio() const
 PassRefPtr<Database> DOMWindow::openDatabase(const String& name, const String& version, const String& displayName, unsigned long estimatedSize, PassRefPtr<DatabaseCallback> creationCallback, ExceptionCode& ec)
 {
     RefPtr<Database> database = 0;
-    if (m_frame && Database::isAvailable() && m_frame->document()->securityOrigin()->canAccessDatabase())
+    if (m_frame && AbstractDatabase::isAvailable() && m_frame->document()->securityOrigin()->canAccessDatabase())
         database = Database::openDatabase(m_frame->document(), name, version, displayName, estimatedSize, creationCallback, ec);
 
     if (!database && !ec)
@@ -1392,6 +1495,12 @@ bool DOMWindow::addEventListener(const AtomicString& eventType, PassRefPtr<Event
         addUnloadEventListener(this);
     else if (eventType == eventNames().beforeunloadEvent && allowsBeforeUnloadListeners(this))
         addBeforeUnloadEventListener(this);
+#if ENABLE(DEVICE_ORIENTATION)
+    else if (eventType == eventNames().devicemotionEvent && frame() && frame()->page() && frame()->page()->deviceMotionController())
+        frame()->page()->deviceMotionController()->addListener(this);
+    else if (eventType == eventNames().deviceorientationEvent && frame() && frame()->page() && frame()->page()->deviceOrientationController())
+        frame()->page()->deviceOrientationController()->addListener(this);
+#endif
 
     return true;
 }
@@ -1405,13 +1514,23 @@ bool DOMWindow::removeEventListener(const AtomicString& eventType, EventListener
         removeUnloadEventListener(this);
     else if (eventType == eventNames().beforeunloadEvent && allowsBeforeUnloadListeners(this))
         removeBeforeUnloadEventListener(this);
+#if ENABLE(DEVICE_ORIENTATION)
+    else if (eventType == eventNames().devicemotionEvent && frame() && frame()->page() && frame()->page()->deviceMotionController())
+        frame()->page()->deviceMotionController()->removeListener(this);
+    else if (eventType == eventNames().deviceorientationEvent && frame() && frame()->page() && frame()->page()->deviceOrientationController())
+        frame()->page()->deviceOrientationController()->removeListener(this);
+#endif
 
     return true;
 }
 
 void DOMWindow::dispatchLoadEvent()
 {
+    if (DocumentLoader* documentLoader = m_frame ? m_frame->loader()->documentLoader() : 0)
+        documentLoader->timing()->loadEventStart = currentTime();
     dispatchEvent(Event::create(eventNames().loadEvent, false, false), document());
+    if (DocumentLoader* documentLoader = m_frame ? m_frame->loader()->documentLoader() : 0)
+        documentLoader->timing()->loadEventEnd = currentTime();
 
     // For load events, send a separate load event to the enclosing frame only.
     // This is a DOM extension and is independent of bubbling/capturing rules of
@@ -1475,6 +1594,13 @@ void DOMWindow::removeAllEventListeners()
 {
     EventTarget::removeAllEventListeners();
 
+#if ENABLE(DEVICE_ORIENTATION)
+    if (frame() && frame()->page() && frame()->page()->deviceMotionController())
+        frame()->page()->deviceMotionController()->removeAllListeners(this);
+    if (frame() && frame()->page() && frame()->page()->deviceOrientationController())
+        frame()->page()->deviceOrientationController()->removeAllListeners(this);
+#endif
+
     removeAllUnloadEventListeners(this);
     removeAllBeforeUnloadEventListeners(this);
 }
@@ -1498,5 +1624,17 @@ EventTargetData* DOMWindow::ensureEventTargetData()
 {
     return &m_eventTargetData;
 }
+
+#if ENABLE(BLOB)
+String DOMWindow::createBlobURL(Blob* blob)
+{
+    return scriptExecutionContext()->createPublicBlobURL(blob).string();
+}
+
+void DOMWindow::revokeBlobURL(const String& blobURLString)
+{
+    scriptExecutionContext()->revokePublicBlobURL(KURL(ParsedURLString, blobURLString));
+}
+#endif
 
 } // namespace WebCore

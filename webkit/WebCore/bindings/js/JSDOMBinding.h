@@ -30,6 +30,7 @@
 #include <runtime/Completion.h>
 #include <runtime/Lookup.h>
 #include <runtime/WeakGCMap.h>
+#include <wtf/Forward.h>
 #include <wtf/Noncopyable.h>
 
 namespace JSC {
@@ -44,7 +45,6 @@ namespace WebCore {
     class JSNode;
     class KURL;
     class Node;
-    class String;
     class ScriptController;
     class ScriptCachedFrameData;
 
@@ -222,7 +222,7 @@ namespace WebCore {
     {
         if (!node)
             return JSC::jsNull();
-        if (JSNode* wrapper = getCachedDOMNodeWrapper(exec, node->document(), node))
+        if (JSC::JSCell* wrapper = getCachedDOMNodeWrapper(exec, node->document(), node))
             return wrapper;
         return createDOMNodeWrapper<WrapperClass>(exec, globalObject, node);
     }
@@ -313,7 +313,7 @@ namespace WebCore {
 
     Frame* toLexicalFrame(JSC::ExecState*);
     Frame* toDynamicFrame(JSC::ExecState*);
-    bool processingUserGesture(JSC::ExecState*);
+    bool processingUserGesture();
     KURL completeURL(JSC::ExecState*, const String& relativeURL);
     
     inline JSC::JSValue jsString(JSC::ExecState* exec, const String& s)
@@ -339,7 +339,7 @@ namespace WebCore {
 
     inline String ustringToString(const JSC::UString& u)
     {
-        return u.rep();
+        return u.impl();
     }
 
     inline JSC::UString stringToUString(const String& s)
@@ -349,17 +349,17 @@ namespace WebCore {
 
     inline String identifierToString(const JSC::Identifier& i)
     {
-        return i.ustring().rep();
+        return i.impl();
     }
 
     inline AtomicString ustringToAtomicString(const JSC::UString& u)
     {
-        return AtomicString(u.rep());
+        return AtomicString(u.impl());
     }
 
     inline AtomicString identifierToAtomicString(const JSC::Identifier& identifier)
     {
-        return AtomicString(identifier.ustring().rep());
+        return AtomicString(identifier.impl());
     }
 
 } // namespace WebCore

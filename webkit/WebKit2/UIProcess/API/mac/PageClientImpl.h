@@ -27,23 +27,41 @@
 #define PageClientImpl_h
 
 #include "PageClient.h"
+#include <wtf/RetainPtr.h>
 
 @class WKView;
+@class WebEditorUndoTargetObjC;
 
 namespace WebKit {
 
+// NOTE: This does not use String::operator NSString*() since that function
+// expects to be called on the thread running WebCore.
+NSString* nsStringFromWebCoreString(const WTF::String&);
+
 class PageClientImpl : public PageClient {
 public:
-    PageClientImpl(WKView*);
+    static PassOwnPtr<PageClientImpl> create(WKView*);
     virtual ~PageClientImpl();
 
 private:
+    PageClientImpl(WKView*);
+
     virtual void processDidExit();
     virtual void processDidRevive();
     virtual void takeFocus(bool direction);
-    virtual void toolTipChanged(const WebCore::String& oldToolTip, const WebCore::String& newToolTip);
-    
+    virtual void toolTipChanged(const WTF::String& oldToolTip, const WTF::String& newToolTip);
+    virtual void setCursor(const WebCore::Cursor&);
+
+    void registerEditCommand(PassRefPtr<WebEditCommandProxy>, UndoOrRedo);
+    void clearAllEditCommands();
+
+#if USE(ACCELERATED_COMPOSITING)
+    void pageDidEnterAcceleratedCompositing();
+    void pageDidLeaveAcceleratedCompositing();
+#endif
+
     WKView* m_wkView;
+    RetainPtr<WebEditorUndoTargetObjC> m_undoTarget;
 };
 
 } // namespace WebKit

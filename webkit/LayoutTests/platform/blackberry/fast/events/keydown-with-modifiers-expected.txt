@@ -1,0 +1,17 @@
+This tests that modifier keys of user-generated key down events are passed in DOM Keyboard Events.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+Test that eventSender.keyDown('A') is equivalent to pressing: Shift + a:
+PASS event.shiftKey is true
+Simulate Shift + a:
+PASS event.shiftKey is true
+Simulate Alt + a:
+PASS event.altKey is true
+Simulate Shift + Alt + a:
+PASS event.shiftKey is true
+PASS event.altKey is true
+
+TEST COMPLETE
+

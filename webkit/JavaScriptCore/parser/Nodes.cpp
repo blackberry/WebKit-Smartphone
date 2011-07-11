@@ -67,7 +67,7 @@ void SourceElements::append(StatementNode* statement)
     m_statements.append(statement);
 }
 
-inline StatementNode* SourceElements::singleStatement() const
+StatementNode* SourceElements::singleStatement() const
 {
     size_t size = m_statements.size();
     return size == 1 ? m_statements[0] : 0;
@@ -98,7 +98,7 @@ ScopeNode::ScopeNode(JSGlobalData* globalData)
 ScopeNode::ScopeNode(JSGlobalData* globalData, const SourceCode& source, SourceElements* children, VarStack* varStack, FunctionStack* funcStack, CodeFeatures features, int numConstants)
     : StatementNode(globalData)
     , ParserArenaRefCounted(globalData)
-    , m_data(new ScopeNodeData(globalData->parser->arena(), children, varStack, funcStack, numConstants))
+    , m_data(adoptPtr(new ScopeNodeData(globalData->parser->arena(), children, varStack, funcStack, numConstants)))
     , m_features(features)
     , m_source(source)
 {

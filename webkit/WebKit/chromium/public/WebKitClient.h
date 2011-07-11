@@ -35,6 +35,7 @@
 #include "WebData.h"
 #include "WebLocalizedString.h"
 #include "WebString.h"
+#include "WebVector.h"
 #include "WebURL.h"
 
 #include <time.h>
@@ -47,16 +48,20 @@ namespace WebKit {
 
 class WebApplicationCacheHost;
 class WebApplicationCacheHostClient;
+class WebBlobRegistry;
 class WebClipboard;
 class WebCookieJar;
 class WebFileSystem;
+class WebFileUtilities;
 class WebGLES2Context;
 class WebGraphicsContext3D;
-class WebIndexedDatabase;
+class WebIDBFactory;
+class WebIDBKey;
 class WebMessagePortChannel;
 class WebMimeRegistry;
 class WebPluginListBuilder;
 class WebSandboxSupport;
+class WebSerializedScriptValue;
 class WebSharedWorkerRepository;
 class WebSocketStreamHandle;
 class WebStorageNamespace;
@@ -72,7 +77,7 @@ public:
     virtual WebMimeRegistry* mimeRegistry() { return 0; }
 
     // Must return non-null.
-    virtual WebFileSystem* fileSystem() { return 0; }
+    virtual WebFileUtilities* fileUtilities() { return 0; }
 
     // May return null if sandbox support is not necessary
     virtual WebSandboxSupport* sandboxSupport() { return 0; }
@@ -83,6 +88,10 @@ public:
     // May return null.
     virtual WebCookieJar* cookieJar() { return 0; }
 
+    // Blob ----------------------------------------------------------------
+
+    // Must return non-null.
+    virtual WebBlobRegistry* blobRegistry() { return 0; }
 
     // DOM Storage --------------------------------------------------
 
@@ -132,7 +141,8 @@ public:
 
     // Indexed Database ----------------------------------------------------
 
-    virtual WebIndexedDatabase* indexedDatabase() { return 0; }
+    virtual WebIDBFactory* idbFactory() { return 0; }
+    virtual void createIDBKeysFromSerializedValuesAndKeyPath(const WebVector<WebSerializedScriptValue>& values,  const WebString& keyPath, WebVector<WebIDBKey>& keys) { }
 
 
     // Keygen --------------------------------------------------------------
@@ -152,6 +162,9 @@ public:
     // Returns the current space allocated for the pagefile, in MB.
     // That is committed size for Windows and virtual memory size for POSIX
     virtual size_t memoryUsageMB() { return 0; }
+
+    // Same as above, but always returns actual value, without any caches.
+    virtual size_t actualMemoryUsageMB() { return 0; }
 
 
     // Message Ports -------------------------------------------------------
@@ -262,6 +275,11 @@ public:
     // Returns newly allocated WebGLES2Context instance.
     // May return null if it fails to create the context.
     virtual WebGLES2Context* createGLES2Context() { return 0; }
+
+    // FileSystem ----------------------------------------------------------
+
+    // Must return non-null.
+    virtual WebFileSystem* fileSystem() { return 0; }
 
 protected:
     ~WebKitClient() { }

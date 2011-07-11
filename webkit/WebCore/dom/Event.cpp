@@ -23,9 +23,9 @@
 #include "config.h"
 #include "Event.h"
 
-#include "AtomicString.h"
 #include "UserGestureIndicator.h"
 #include <wtf/CurrentTime.h>
+#include <wtf/text/AtomicString.h>
 
 namespace WebCore {
 
@@ -213,6 +213,11 @@ bool Event::isTouchEvent() const
 #endif
 
 #if ENABLE(DEVICE_ORIENTATION)
+bool Event::isDeviceMotionEvent() const
+{
+    return false;
+}
+
 bool Event::isDeviceOrientationEvent() const
 {
     return false;

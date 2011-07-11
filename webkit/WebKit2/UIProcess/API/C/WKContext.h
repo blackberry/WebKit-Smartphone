@@ -32,19 +32,49 @@
 extern "C" {
 #endif
 
-enum {
-    kWKProcessModelSecondaryProcess = 0,
-    kWKProcessModelSecondaryThread = 1
-};
-typedef unsigned long WKProcessModel;
+// Injected Bundle Client
+typedef void (*WKContextDidReceiveMessageFromInjectedBundleCallback)(WKContextRef page, WKStringRef messageName, WKTypeRef messageBody, const void *clientInfo);
 
-WK_EXPORT WKContextRef WKContextCreateWithProcessModel(WKProcessModel processModel);
+struct WKContextInjectedBundleClient {
+    int                                                                 version;
+    const void *                                                        clientInfo;
+    WKContextDidReceiveMessageFromInjectedBundleCallback                didReceiveMessageFromInjectedBundle;
+};
+typedef struct WKContextInjectedBundleClient WKContextInjectedBundleClient;
+
+// History Client
+typedef void (*WKContextDidNavigateWithNavigationDataCallback)(WKContextRef context, WKPageRef page, WKNavigationDataRef navigationData, WKFrameRef frame, const void *clientInfo);
+typedef void (*WKContextDidPerformClientRedirectCallback)(WKContextRef context, WKPageRef page, WKURLRef sourceURL, WKURLRef destinationURL, WKFrameRef frame, const void *clientInfo);
+typedef void (*WKContextDidPerformServerRedirectCallback)(WKContextRef context, WKPageRef page, WKURLRef sourceURL, WKURLRef destinationURL, WKFrameRef frame, const void *clientInfo);
+typedef void (*WKContextDidUpdateHistoryTitleCallback)(WKContextRef context, WKPageRef page, WKStringRef title, WKURLRef URL, WKFrameRef frame, const void *clientInfo);
+typedef void (*WKContextPopulateVisitedLinksCallback)(WKContextRef context, const void *clientInfo);
+
+struct WKContextHistoryClient {
+    int                                                                 version;
+    const void *                                                        clientInfo;
+    WKContextDidNavigateWithNavigationDataCallback                      didNavigateWithNavigationData;
+    WKContextDidPerformClientRedirectCallback                           didPerformClientRedirect;
+    WKContextDidPerformServerRedirectCallback                           didPerformServerRedirect;
+    WKContextDidUpdateHistoryTitleCallback                              didUpdateHistoryTitle;
+    WKContextPopulateVisitedLinksCallback                               populateVisitedLinks;
+};
+typedef struct WKContextHistoryClient WKContextHistoryClient;
+
+WK_EXPORT WKTypeID WKContextGetTypeID();
+
+WK_EXPORT WKContextRef WKContextCreate();
+WK_EXPORT WKContextRef WKContextCreateWithInjectedBundlePath(WKStringRef path);
+WK_EXPORT WKContextRef WKContextGetSharedProcessContext();
 
 WK_EXPORT void WKContextSetPreferences(WKContextRef context, WKPreferencesRef preferences);
 WK_EXPORT WKPreferencesRef WKContextGetPreferences(WKContextRef context);
 
-WK_EXPORT WKContextRef WKContextRetain(WKContextRef context);
-WK_EXPORT void WKContextRelease(WKContextRef context);
+WK_EXPORT void WKContextSetHistoryClient(WKContextRef context, const WKContextHistoryClient* client);
+WK_EXPORT void WKContextSetInjectedBundleClient(WKContextRef context, const WKContextInjectedBundleClient* client);
+
+WK_EXPORT void WKContextPostMessageToInjectedBundle(WKContextRef context, WKStringRef messageName, WKTypeRef messageBody);
+
+WK_EXPORT void WKContextAddVisitedLink(WKContextRef context, WKStringRef visitedURL);
 
 #ifdef __cplusplus
 }

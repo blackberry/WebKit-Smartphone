@@ -1,0 +1,128 @@
+<html>
+<head>
+<script src="../http/tests/inspector/inspector-test2.js"></script>
+<script src="../http/tests/inspector/debugger-test2.js"></script>
+<script>
+
+function appendElement(parentId, childId)
+{
+    var child = document.createElement("div");
+    child.id = childId;
+    document.getElementById(parentId).appendChild(child);
+}
+
+function modifyAttribute(elementId, name, value)
+{
+    var element = document.getElementById(elementId);
+    element.setAttribute(name, value);
+}
+
+function removeElement(elementId)
+{
+    var element = document.getElementById(elementId);
+    element.parentNode.removeChild(element);
+}
+
+var test = function()
+{
+    InspectorTest.startDebuggerTest(step1);
+
+    var d0, d1;
+
+    function step1()
+    {
+        findDOMNodeById("d0", step2);
+    }
+
+    function step2(node)
+    {
+        d0 = node;
+        InspectorTest.addResult("Test that 'Subtree Modified' breakpoint is hit when appending child.");
+        d0.setBreakpoint(WebInspector.DOMBreakpoint.Types.SubtreeModified);
+        InspectorTest.addResult("Set subtree modified DOM breakpoint on d0.");
+        InspectorTest.evaluateInConsole("appendElement('d0', 'd1')");
+        InspectorTest.addResult("Append d1 to d0.");
+        InspectorTest.waitUntilPaused(step3);
+    }
+
+    function step3(callFrames)
+    {
+        InspectorTest.addResult("line: " + callFrames[0].line + ", function: " + callFrames[0].functionName);
+        d0.removeBreakpoint(WebInspector.DOMBreakpoint.Types.SubtreeModified);
+        InspectorTest.resumeExecution(findDOMNodeById.bind(null, "d1", step4));
+    }
+
+    function step4(node)
+    {
+        d1 = node;
+        InspectorTest.addResult("Test that 'Attribute Modified' breakpoint is hit when modifying attribute.");
+        d1.setBreakpoint(WebInspector.DOMBreakpoint.Types.AttributeModified);
+        InspectorTest.addResult("Set attribute modified DOM breakpoint on d1.");
+        InspectorTest.evaluateInConsole("modifyAttribute('d1', 'className', 'foo')");
+        InspectorTest.addResult("Modify d1 className.");
+        InspectorTest.waitUntilPaused(step5);
+    }
+
+    function step5(callFrames)
+    {
+        InspectorTest.addResult("line: " + callFrames[0].line + ", function: " + callFrames[0].functionName);
+        d1.removeBreakpoint(WebInspector.DOMBreakpoint.Types.AttributeModified);
+        InspectorTest.resumeExecution(step6);
+    }
+
+    function step6()
+    {
+        InspectorTest.addResult("Test that 'Node Removed' breakpoint is hit when removing a node.");
+        d1.setBreakpoint(WebInspector.DOMBreakpoint.Types.NodeRemoved);
+        InspectorTest.addResult("Set node removed DOM breakpoint on d1.");
+        InspectorTest.evaluateInConsole("removeElement('d1')");
+        InspectorTest.addResult("Remove d1.");
+        InspectorTest.waitUntilPaused(step7);
+    }
+
+    function step7(callFrames)
+    {
+        InspectorTest.addResult("line: " + callFrames[0].line + ", function: " + callFrames[0].functionName);
+        InspectorTest.resumeExecution(step8);
+    }
+
+    function step8()
+    {
+        InspectorTest.addResult("Test that DOM breakpoints are persisted between page reloads.");
+        d0.setBreakpoint(WebInspector.DOMBreakpoint.Types.SubtreeModified);
+        InspectorTest.addResult("Set subtree modified DOM breakpoint on d0.");
+        InspectorTest.reloadPage(step9);
+    }
+
+    function step9()
+    {
+        InspectorTest.evaluateInConsole("appendElement('d0', 'd1')");
+        InspectorTest.addResult("Append d1 to d0.");
+        InspectorTest.waitUntilPaused(step10);
+    }
+
+    function step10(callFrames)
+    {
+        InspectorTest.addResult("line: " + callFrames[0].line + ", function: " + callFrames[0].functionName);
+        InspectorTest.completeDebuggerTest();
+    }
+
+    function findDOMNodeById(id, callback)
+    {
+        InspectorTest.findDOMNode(null, function(node) {
+            return node.getAttribute("id") === id;
+        }, callback);
+    }
+};
+
+</script>
+</head>
+
+<body onload="runTest()">
+<p>
+Tests DOM breakpoints. <a href="https://bugs.webkit.org/show_bug.cgi?id=42886">Bug 42886</a>
+</p>
+<div id="d0"></div>
+</body>
+</html>
+

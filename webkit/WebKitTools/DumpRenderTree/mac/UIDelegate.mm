@@ -33,8 +33,10 @@
 #import "DumpRenderTreeDraggingInfo.h"
 #import "EventSendingController.h"
 #import "LayoutTestController.h"
+#import <WebKit/WebApplicationCache.h>
 #import <WebKit/WebFramePrivate.h>
 #import <WebKit/WebHTMLViewPrivate.h>
+#import <WebKit/WebQuotaManager.h>
 #import <WebKit/WebSecurityOriginPrivate.h>
 #import <WebKit/WebUIDelegatePrivate.h>
 #import <WebKit/WebView.h>
@@ -65,6 +67,20 @@ DumpRenderTreeDraggingInfo *draggingInfo = nil;
         message = [[message substringToIndex:range.location] stringByAppendingString:[[message substringFromIndex:NSMaxRange(range)] lastPathComponent]];
 
     printf ("CONSOLE MESSAGE: line %d: %s\n", [lineNumber intValue], [message UTF8String]);
+}
+
+- (void)modalWindowWillClose:(NSNotification *)notification
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSWindowWillCloseNotification object:nil];
+    [NSApp abortModal];
+}
+
+- (void)webViewRunModal:(WebView *)sender
+{
+    gLayoutTestController->setWindowIsKey(false);
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(modalWindowWillClose:) name:NSWindowWillCloseNotification object:nil];
+    [NSApp runModalForWindow:[sender window]];
+    gLayoutTestController->setWindowIsKey(true);
 }
 
 - (void)webView:(WebView *)sender runJavaScriptAlertPanelWithMessage:(NSString *)message initiatedByFrame:(WebFrame *)frame
@@ -141,12 +157,24 @@ DumpRenderTreeDraggingInfo *draggingInfo = nil;
 
 - (void)webView:(WebView *)sender frame:(WebFrame *)frame exceededDatabaseQuotaForSecurityOrigin:(WebSecurityOrigin *)origin database:(NSString *)databaseIdentifier
 {
-    if (!done && gLayoutTestController->dumpDatabaseCallbacks())
+    if (!done && gLayoutTestController->dumpDatabaseCallbacks()) {
         printf("UI DELEGATE DATABASE CALLBACK: exceededDatabaseQuotaForSecurityOrigin:{%s, %s, %i} database:%s\n", [[origin protocol] UTF8String], [[origin host] UTF8String], 
             [origin port], [databaseIdentifier UTF8String]);
+    }
 
     static const unsigned long long defaultQuota = 5 * 1024 * 1024;    
-    [origin setQuota:defaultQuota];
+    [[origin databaseQuotaManager] setQuota:defaultQuota];
+}
+
+- (void)webView:(WebView *)sender exceededApplicationCacheOriginQuotaForSecurityOrigin:(WebSecurityOrigin *)origin
+{
+    if (!done && gLayoutTestController->dumpApplicationCacheDelegateCallbacks()) {
+        printf("UI DELEGATE APPLICATION CACHE CALLBACK: exceededApplicationCacheOriginQuotaForSecurityOrigin:{%s, %s, %i}\n",
+            [[origin protocol] UTF8String], [[origin host] UTF8String], [origin port]);
+    }
+
+    static const unsigned long long defaultOriginQuota = [WebApplicationCache defaultOriginQuota];
+    [[origin applicationCacheQuotaManager] setQuota:defaultOriginQuota];
 }
 
 - (void)webView:(WebView *)sender setStatusText:(NSString *)text
@@ -157,11 +185,41 @@ DumpRenderTreeDraggingInfo *draggingInfo = nil;
 
 - (void)webView:(WebView *)webView decidePolicyForGeolocationRequestFromOrigin:(WebSecurityOrigin *)origin frame:(WebFrame *)frame listener:(id<WebGeolocationPolicyListener>)listener
 {
-    // FIXME: If mock permission isn't set yet, we should send the response asynchronously.
-    if (gLayoutTestController->isGeolocationPermissionSet() && gLayoutTestController->geolocationPermission())
+    if (!gLayoutTestController->isGeolocationPermissionSet()) {
+        if (!m_pendingGeolocationPermissionListeners)
+            m_pendingGeolocationPermissionListeners = [[NSMutableSet set] retain];
+        [m_pendingGeolocationPermissionListeners addObject:listener];
+        return;
+    }
+
+    if (gLayoutTestController->geolocationPermission())
         [listener allow];
     else
         [listener deny];
+}
+
+- (void)didSetMockGeolocationPermission
+{
+    ASSERT(gLayoutTestController->isGeolocationPermissionSet());
+    if (m_pendingGeolocationPermissionListeners && !m_timer)
+        m_timer = [NSTimer scheduledTimerWithTimeInterval:0 target:self selector:@selector(timerFired) userInfo:0 repeats:NO];
+}
+
+- (void)timerFired
+{
+    ASSERT(gLayoutTestController->isGeolocationPermissionSet());
+    m_timer = 0;
+    NSEnumerator* enumerator = [m_pendingGeolocationPermissionListeners objectEnumerator];
+    id<WebGeolocationPolicyListener> listener;
+    while ((listener = [enumerator nextObject])) {
+        if (gLayoutTestController->geolocationPermission())
+            [listener allow];
+        else
+            [listener deny];
+    }
+    [m_pendingGeolocationPermissionListeners removeAllObjects];
+    [m_pendingGeolocationPermissionListeners release];
+    m_pendingGeolocationPermissionListeners = nil;
 }
 
 - (BOOL)webView:(WebView *)sender shouldHaltPlugin:(DOMNode *)pluginNode
@@ -169,10 +227,35 @@ DumpRenderTreeDraggingInfo *draggingInfo = nil;
     return NO;
 }
 
+- (BOOL)webView:(WebView *)webView supportsFullScreenForElement:(DOMElement*)element
+{
+    return YES;
+}
+
+- (void)webView:(WebView *)webView enterFullScreenForElement:(DOMElement*)element listener:(NSObject<WebKitFullScreenListener>*)listener
+{
+    [listener webkitWillEnterFullScreen];
+    [listener webkitDidEnterFullScreen];
+}
+
+- (void)webView:(WebView *)webView exitFullScreenForElement:(DOMElement*)element listener:(NSObject<WebKitFullScreenListener>*)listener
+{
+    [listener webkitWillExitFullScreen];
+    [listener webkitDidExitFullScreen];
+}
+
+- (BOOL)webView:(WebView *)webView didPressMissingPluginButton:(DOMElement *)element
+{
+    printf("MISSING PLUGIN BUTTON PRESSED\n");
+    return TRUE;
+}
+
 - (void)dealloc
 {
     [draggingInfo release];
     draggingInfo = nil;
+    [m_pendingGeolocationPermissionListeners release];
+    m_pendingGeolocationPermissionListeners = nil;
 
     [super dealloc];
 }

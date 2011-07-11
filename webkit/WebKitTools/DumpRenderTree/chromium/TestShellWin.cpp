@@ -31,34 +31,43 @@
 #include "config.h"
 #include "TestShell.h"
 
+#include "WebThemeEngineDRT.h"
 #include "webkit/support/webkit_support.h"
 #include <fcntl.h>
 #include <io.h>
+#include <list>
 #include <process.h>
 #include <shlwapi.h>
+#include <string>
 #include <sys/stat.h>
+#include <windows.h>
 
-// Default timeout in ms for file page loads when in layout test mode.
-const int kDefaultFileTestTimeoutMillisecs = 10 * 1000;
-const int kDefaultWatchDogTimeoutMillisecs = kDefaultFileTestTimeoutMillisecs + 1 * 1000;
+#define SIZEOF_STRUCT_WITH_SPECIFIED_LAST_MEMBER(structName, member) \
+    offsetof(structName, member) + \
+    (sizeof static_cast<structName*>(0)->member)
+#define NONCLIENTMETRICS_SIZE_PRE_VISTA \
+    SIZEOF_STRUCT_WITH_SPECIFIED_LAST_MEMBER(NONCLIENTMETRICS, lfMessageFont)
+
+// Theme engine
+static WebThemeEngineDRT themeEngine;
 
 // Thread main to run for the thread which just tests for timeout.
-unsigned int __stdcall watchDogThread(void *arg)
+unsigned int __stdcall watchDogThread(void* arg)
 {
     // If we're debugging a layout test, don't timeout.
     if (::IsDebuggerPresent())
-    return 0;
+        return 0;
 
     TestShell* shell = static_cast<TestShell*>(arg);
     // FIXME: Do we need user-specified time settings as with the original
     // Chromium implementation?
-    DWORD timeout = static_cast<DWORD>(kDefaultWatchDogTimeoutMillisecs);
+    DWORD timeout = static_cast<DWORD>(shell->layoutTestTimeoutForWatchDog());
     DWORD rv = WaitForSingleObject(shell->finishedEvent(), timeout);
     if (rv == WAIT_TIMEOUT) {
         // Print a warning to be caught by the layout-test script.
         // Note: the layout test driver may or may not recognize
         // this as a timeout.
-        puts("#TEST_TIMED_OUT\n");
+        puts("\n#TEST_TIMED_OUT\n");
         puts("#EOF\n");
         fflush(stdout);
         TerminateProcess(GetCurrentProcess(), 0);
@@ -103,11 +112,14 @@ void TestShell::waitTestFinished()
     WaitForSingleObject(threadHandle, 1000);
 }
 
-void platformInit()
+void platformInit(int*, char***)
 {
     // Set stdout/stderr binary mode.
     _setmode(_fileno(stdout), _O_BINARY);
     _setmode(_fileno(stderr), _O_BINARY);
+
+    // Set theme engine.
+    webkit_support::SetThemeEngine(&themeEngine);
 
     // Load Ahem font.
     // AHEM____.TTF is copied to the directory of DumpRenderTree.exe by WebKit.gyp.
@@ -145,4 +157,88 @@ void platformInit()
         exit(1);
     }
     // We don't need to release the font explicitly.
+}
+
+void openStartupDialog()
+{
+    ::MessageBox(0, L"Attach to me?", L"DumpRenderTree", MB_OK);
+}
+
+bool checkLayoutTestSystemDependencies()
+{
+    std::list<std::string> errors;
+
+    OSVERSIONINFOEX versionInfo;
+    ::ZeroMemory(&versionInfo, sizeof(OSVERSIONINFOEX));
+    versionInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+    ::GetVersionEx(reinterpret_cast<OSVERSIONINFO*>(&versionInfo));
+
+    // Default to XP metrics, override if on Vista or win 7.
+    int requiredVScrollSize = 17;
+    int requiredFontSize = -11; // 8 pt
+    const wchar_t* requiredFont = L"Tahoma";
+    bool isVista = false;
+    bool isWin7 = false;
+    const DWORD major = versionInfo.dwMajorVersion;
+    const DWORD minor = versionInfo.dwMinorVersion;
+    const WORD type = versionInfo.wProductType;
+    if (major == 6 && minor == 1 && type == VER_NT_WORKSTATION) {
+        requiredFont = L"Segoe UI";
+        requiredFontSize = -12;
+        isWin7 = true;
+    } else if (major == 6 && !minor && type == VER_NT_WORKSTATION) {
+        requiredFont = L"Segoe UI";
+        requiredFontSize = -12; // 9 pt
+        isVista = true;
+    } else if (!(major == 5 && minor == 1 && type == VER_NT_WORKSTATION)) {
+        // The above check is for XP, so that means ...
+        errors.push_back("Unsupported Operating System version "
+                         "(must use XP, Vista, or Windows 7).");
+    }
+
+    // This metric will be 17 when font size is "Normal".
+    // The size of drop-down menus depends on it.
+    int verticalScrollSize = ::GetSystemMetrics(SM_CXVSCROLL);
+    if (verticalScrollSize != requiredVScrollSize)
+        errors.push_back("Must use normal size fonts (96 dpi).");
+
+    // ClearType must be disabled, because the rendering is unpredictable.
+    BOOL fontSmoothingEnabled;
+    ::SystemParametersInfo(SPI_GETFONTSMOOTHING, 0, &fontSmoothingEnabled, 0);
+    int fontSmoothingType;
+    ::SystemParametersInfo(SPI_GETFONTSMOOTHINGTYPE, 0, &fontSmoothingType, 0);
+    if (fontSmoothingEnabled && (fontSmoothingType == FE_FONTSMOOTHINGCLEARTYPE))
+        errors.push_back("ClearType must be disabled.");
+
+    // Check that we're using the default system fonts
+    NONCLIENTMETRICS metrics;
+    // Checks Vista or later.
+    metrics.cbSize = major >= 6 ? sizeof(NONCLIENTMETRICS) : NONCLIENTMETRICS_SIZE_PRE_VISTA;
+    const bool success = !!::SystemParametersInfo(SPI_GETNONCLIENTMETRICS, metrics.cbSize, &metrics, 0);
+    ASSERT(success);
+    LOGFONTW* systemFonts[] =
+        {&metrics.lfStatusFont, &metrics.lfMenuFont, &metrics.lfSmCaptionFont};
+
+    for (size_t i = 0; i < arraysize(systemFonts); ++i) {
+        if (systemFonts[i]->lfHeight != requiredFontSize || wcscmp(requiredFont, systemFonts[i]->lfFaceName)) {
+            if (isVista || isWin7)
+                errors.push_back("Must use either the Aero or Basic theme.");
+            else
+                errors.push_back("Must use the default XP theme (Luna).");
+            break;
+        }
+    }
+
+    if (!errors.empty()) {
+        fprintf(stderr, "%s",
+                "##################################################################\n"
+                "## Layout test system dependencies check failed.\n"
+                "##\n");
+        for (std::list<std::string>::iterator it = errors.begin(); it != errors.end(); ++it)
+            fprintf(stderr, "## %s\n", it->c_str());
+        fprintf(stderr, "%s",
+                "##\n"
+                "##################################################################\n");
+    }
+    return errors.empty();
 }

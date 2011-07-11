@@ -26,15 +26,21 @@
 @interface BrowserWindowController : NSWindowController {
     IBOutlet NSProgressIndicator *progressIndicator;
     IBOutlet NSButton *reloadButton;
+    IBOutlet NSButton *backButton;
+    IBOutlet NSButton *forwardButton;
+    IBOutlet NSToolbar *toolbar;
     IBOutlet NSTextField *urlText;
     IBOutlet NSView *containerView;
 
     WKPageNamespaceRef _pageNamespace;
     WKView *_webView;
+    BOOL _zoomTextOnly;
 }
 - (IBAction)fetch:(id)sender;
 - (IBAction)reload:(id)sender;
 - (IBAction)forceRepaint:(id)sender;
+- (IBAction)goBack:(id)sender;
+- (IBAction)goForward:(id)sender;
 
 - (IBAction)showHideWebView:(id)sender;
 - (IBAction)removeReinsertWebView:(id)sender;
@@ -42,5 +48,16 @@
 - (id)initWithPageNamespace:(WKPageNamespaceRef)pageNamespace;
 - (void)loadURLString:(NSString *)urlString;
 - (void)applicationTerminating;
+
+- (IBAction)zoomIn:(id)sender;
+- (IBAction)zoomOut:(id)sender;
+- (IBAction)resetZoom:(id)sender;
+- (BOOL)canZoomIn;
+- (BOOL)canZoomOut;
+- (BOOL)canResetZoom;
+
+- (IBAction)toggleZoomMode:(id)sender;
+
+- (IBAction)dumpSourceToConsole:(id)sender;
 
 @end

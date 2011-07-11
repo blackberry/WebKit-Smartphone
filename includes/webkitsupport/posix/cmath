@@ -1,0 +1,7 @@
+/*
+ * Copyright (C) 2010 Research In Motion Limited. http://www.rim.com/
+ */
+
+#define CMATHF <SYSTEMINCLUDE/cmath>
+#include CMATHF
+

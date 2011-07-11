@@ -28,21 +28,10 @@
 
 #include "RenderSVGResourceContainer.h"
 #include "RenderSVGResourceSolidColor.h"
+#include "SVGResources.h"
 #include "SVGURIReference.h"
 
 namespace WebCore {
-
-static inline void registerPendingResource(const AtomicString& id, const SVGPaint::SVGPaintType& paintType, const RenderObject* object)
-{
-    if (paintType != SVGPaint::SVG_PAINTTYPE_URI)
-        return;
-
-    SVGElement* svgElement = static_cast<SVGElement*>(object->node());
-    ASSERT(svgElement);
-    ASSERT(svgElement->isStyled());
-
-    object->document()->accessSVGExtensions()->addPendingResource(id, static_cast<SVGStyledElement*>(svgElement));
-}
 
 inline void RenderSVGResource::adjustColorForPseudoRules(const RenderStyle* style, bool useFillPaint, Color& color)
 {
@@ -65,7 +54,7 @@ inline void RenderSVGResource::adjustColorForPseudoRules(const RenderStyle* styl
 }
 
 // FIXME: This method and strokePaintingResource() should be refactored, to share even more code
-RenderSVGResource* RenderSVGResource::fillPaintingResource(const RenderObject* object, const RenderStyle* style)
+RenderSVGResource* RenderSVGResource::fillPaintingResource(RenderObject* object, const RenderStyle* style)
 {
     ASSERT(object);
     ASSERT(style);
@@ -80,13 +69,9 @@ RenderSVGResource* RenderSVGResource::fillPaintingResource(const RenderObject* o
     RenderSVGResource* fillPaintingResource = 0;
 
     SVGPaint::SVGPaintType paintType = fillPaint->paintType();
-    if (paintType == SVGPaint::SVG_PAINTTYPE_URI
-        || paintType == SVGPaint::SVG_PAINTTYPE_URI_RGBCOLOR) {
-        AtomicString id(SVGURIReference::getTarget(fillPaint->uri()));
-        fillPaintingResource = getRenderSVGResourceContainerById(object->document(), id);
-
-        if (!fillPaintingResource)
-            registerPendingResource(id, paintType, object);
+    if (paintType == SVGPaint::SVG_PAINTTYPE_URI || paintType == SVGPaint::SVG_PAINTTYPE_URI_RGBCOLOR) {
+        if (SVGResources* resources = SVGResourcesCache::cachedResourcesForRenderObject(object))
+            fillPaintingResource = resources->fill();
     }
 
     if (paintType != SVGPaint::SVG_PAINTTYPE_URI && !fillPaintingResource) {
@@ -118,7 +103,7 @@ RenderSVGResource* RenderSVGResource::fillPaintingResource(const RenderObject* o
     return fillPaintingResource;
 }
 
-RenderSVGResource* RenderSVGResource::strokePaintingResource(const RenderObject* object, const RenderStyle* style)
+RenderSVGResource* RenderSVGResource::strokePaintingResource(RenderObject* object, const RenderStyle* style)
 {
     ASSERT(object);
     ASSERT(style);
@@ -134,13 +119,9 @@ RenderSVGResource* RenderSVGResource::strokePaintingResource(const RenderObject*
     FloatRect objectBoundingBox = object->objectBoundingBox();
 
     SVGPaint::SVGPaintType paintType = strokePaint->paintType();
-    if (!objectBoundingBox.isEmpty()
-        && (paintType == SVGPaint::SVG_PAINTTYPE_URI || paintType == SVGPaint::SVG_PAINTTYPE_URI_RGBCOLOR)) {
-        AtomicString id(SVGURIReference::getTarget(strokePaint->uri()));
-        strokePaintingResource = getRenderSVGResourceContainerById(object->document(), id);
-
-        if (!strokePaintingResource)
-            registerPendingResource(id, paintType, object);
+    if (!objectBoundingBox.isEmpty() && (paintType == SVGPaint::SVG_PAINTTYPE_URI || paintType == SVGPaint::SVG_PAINTTYPE_URI_RGBCOLOR)) {
+        if (SVGResources* resources = SVGResourcesCache::cachedResourcesForRenderObject(object))
+            strokePaintingResource = resources->stroke();
     }
 
     if (paintType != SVGPaint::SVG_PAINTTYPE_URI && !strokePaintingResource) {
@@ -180,21 +161,22 @@ RenderSVGResourceSolidColor* RenderSVGResource::sharedSolidPaintingResource()
     return s_sharedSolidPaintingResource;
 }
 
-void RenderSVGResource::markForLayoutAndResourceInvalidation(RenderObject* object)
+void RenderSVGResource::markForLayoutAndParentResourceInvalidation(RenderObject* object, bool needsLayout)
 {
     ASSERT(object);
-    ASSERT(object->node());
-    ASSERT(object->node()->isSVGElement());
+    if (needsLayout)
+        object->setNeedsLayout(true);
 
-    // Mark the renderer for layout
-    object->setNeedsLayout(true);
+    // Invalidate resources in ancestor chain, if needed.
+    RenderObject* current = object->parent();
+    while (current) {
+        if (current->isSVGResourceContainer()) {
+            current->toRenderSVGResourceContainer()->removeAllClientsFromCache();
+            break;
+        }
 
-    // Notify any resources in the ancestor chain, that we've been invalidated
-    SVGElement* element = static_cast<SVGElement*>(object->node());
-    if (!element->isStyled())
-        return;
-
-    static_cast<SVGStyledElement*>(element)->invalidateResourcesInAncestorChain();
+        current = current->parent();
+    }
 }
 
 }

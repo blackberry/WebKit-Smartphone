@@ -1,22 +1,22 @@
 /*
-   Copyright (C) 2007 Eric Seidel <eric@webkit.org>
-   Copyright (C) 2007 Nikolas Zimmermann <zimmermann@kde.org>
-   Copyright (C) Research In Motion Limited 2010. All rights reserved.
-
-   This library is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Library General Public
-   License as published by the Free Software Foundation; either
-   version 2 of the License, or (at your option) any later version.
-
-   This library is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Library General Public License for more details.
-
-   You should have received a copy of the GNU Library General Public License
-   along with this library; see the file COPYING.LIB.  If not, write to
-   the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-   Boston, MA 02110-1301, USA.
+ * Copyright (C) 2007 Eric Seidel <eric@webkit.org>
+ * Copyright (C) 2007 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
  */
 
 #ifndef SVGFontElement_h
@@ -50,14 +50,11 @@ struct SVGKerningPair {
 typedef Vector<SVGKerningPair> KerningPairVector;
 
 class SVGMissingGlyphElement;    
+
 class SVGFontElement : public SVGStyledElement
                      , public SVGExternalResourcesRequired {
 public:
-    SVGFontElement(const QualifiedName&, Document*);
-    virtual ~SVGFontElement();
-
-    virtual void synchronizeProperty(const QualifiedName&);
-    virtual bool rendererIsNeeded(RenderStyle*) { return false; }    
+    static PassRefPtr<SVGFontElement> create(const QualifiedName&, Document*);
 
     void invalidateGlyphCache();
 
@@ -69,10 +66,15 @@ public:
     SVGMissingGlyphElement* firstMissingGlyphElement() const;
 
 private:
-    // SVGExternalResourcesRequired
-    DECLARE_ANIMATED_PROPERTY(SVGFontElement, SVGNames::externalResourcesRequiredAttr, bool, ExternalResourcesRequired, externalResourcesRequired)
+    SVGFontElement(const QualifiedName&, Document*);
+
+    virtual void synchronizeProperty(const QualifiedName&);
+    virtual bool rendererIsNeeded(RenderStyle*) { return false; }    
 
     void ensureGlyphCache() const;
+
+    // SVGExternalResourcesRequired
+    DECLARE_ANIMATED_PROPERTY(SVGFontElement, SVGNames::externalResourcesRequiredAttr, bool, ExternalResourcesRequired, externalResourcesRequired)
 
     mutable KerningPairVector m_horizontalKerningPairs;
     mutable KerningPairVector m_verticalKerningPairs;

@@ -31,8 +31,10 @@
 #ifndef WebViewImpl_h
 #define WebViewImpl_h
 
+#include "WebGLES2Context.h"
 #include "WebNavigationPolicy.h"
 #include "WebPoint.h"
+#include "WebRect.h"
 #include "WebSize.h"
 #include "WebString.h"
 #include "WebView.h"
@@ -44,14 +46,17 @@
 #include "EditorClientImpl.h"
 #include "GraphicsLayer.h"
 #include "InspectorClientImpl.h"
+#include "IntRect.h"
 #include "LayerRendererChromium.h"
 #include "NotificationPresenterImpl.h"
+#include "SpeechInputClientImpl.h"
 #include <wtf/OwnPtr.h>
 #include <wtf/RefCounted.h>
 
 namespace WebCore {
 class ChromiumDataObject;
 class Frame;
+class GLES2Context;
 class HistoryItem;
 class HitTestResult;
 class KeyboardEvent;
@@ -68,8 +73,10 @@ namespace WebKit {
 class AutocompletePopupMenuClient;
 class AutoFillPopupMenuClient;
 class ContextMenuClientImpl;
-class SuggestionsPopupMenuClient;
+class DeviceOrientationClientProxy;
+class DragScrollTimer;
 class WebAccessibilityObject;
+class WebDevToolsAgentClient;
 class WebDevToolsAgentPrivate;
 class WebFrameImpl;
 class WebImage;
@@ -87,16 +94,19 @@ public:
     virtual void resize(const WebSize&);
     virtual void layout();
     virtual void paint(WebCanvas*, const WebRect&);
+    virtual void themeChanged();
+    virtual void composite(bool finish);
     virtual bool handleInputEvent(const WebInputEvent&);
     virtual void mouseCaptureLost();
     virtual void setFocus(bool enable);
-    virtual bool handleCompositionEvent(WebCompositionCommand command,
-                                        int cursorPosition,
-                                        int targetStart,
-                                        int targetEnd,
-                                        const WebString& text);
-    virtual bool queryCompositionStatus(bool* enabled,
-                                        WebRect* caretRect);
+    virtual bool setComposition(
+        const WebString& text,
+        const WebVector<WebCompositionUnderline>& underlines,
+        int selectionStart,
+        int selectionEnd);
+    virtual bool confirmComposition();
+    virtual WebTextInputType textInputType();
+    virtual WebRect caretOrSelectionBounds();
     virtual void setTextDirection(WebTextDirection direction);
     virtual bool isAcceleratedCompositingActive() const;
 
@@ -113,6 +123,7 @@ public:
     virtual void setTabKeyCyclesThroughElements(bool value);
     virtual bool isActive() const;
     virtual void setIsActive(bool value);
+    virtual void setDomainRelaxationForbidden(bool, const WebString& scheme);
     virtual bool dispatchBeforeUnloadEvent();
     virtual void dispatchUnloadEvent();
     virtual WebFrame* mainFrame();
@@ -129,6 +140,10 @@ public:
         const WebPoint& location);
     virtual void copyImageAt(const WebPoint& point);
     virtual void dragSourceEndedAt(
+        const WebPoint& clientPoint,
+        const WebPoint& screenPoint,
+        WebDragOperation operation);
+    virtual void dragSourceMovedTo(
         const WebPoint& clientPoint,
         const WebPoint& screenPoint,
         WebDragOperation operation);
@@ -152,14 +167,26 @@ public:
     virtual void inspectElementAt(const WebPoint& point);
     virtual WebString inspectorSettings() const;
     virtual void setInspectorSettings(const WebString& settings);
+    virtual bool inspectorSetting(const WebString& key, WebString* value) const;
+    virtual void setInspectorSetting(const WebString& key,
+                                     const WebString& value);
     virtual WebDevToolsAgent* devToolsAgent();
-    virtual void setDevToolsAgent(WebDevToolsAgent*);
     virtual WebAccessibilityObject accessibilityObject();
+    // DEPRECATED.
     virtual void applyAutoFillSuggestions(
         const WebNode&,
         const WebVector<WebString>& names,
         const WebVector<WebString>& labels,
-        int defaultSuggestionIndex);
+        const WebVector<int>& uniqueIDs,
+        int separatorIndex);
+    virtual void applyAutoFillSuggestions(
+        const WebNode&,
+        const WebVector<WebString>& names,
+        const WebVector<WebString>& labels,
+        const WebVector<WebString>& icons,
+        const WebVector<int>& uniqueIDs,
+        int separatorIndex);
+    // DEPRECATED: replacing with applyAutoFillSuggestions.
     virtual void applyAutocompleteSuggestions(
         const WebNode&,
         const WebVector<WebString>& suggestions,
@@ -173,10 +200,6 @@ public:
                                     unsigned inactiveBackgroundColor,
                                     unsigned inactiveForegroundColor);
     virtual void performCustomContextMenuAction(unsigned action);
-    virtual void addUserScript(const WebString& sourceCode,
-                               bool runAtStart);
-    virtual void addUserStyleSheet(const WebString& sourceCode);
-    virtual void removeAllUserContent();
 
     // WebViewImpl
 
@@ -225,7 +248,7 @@ public:
     void mouseUp(const WebMouseEvent&);
     void mouseContextMenu(const WebMouseEvent&);
     void mouseDoubleClick(const WebMouseEvent&);
-    void mouseWheel(const WebMouseWheelEvent&);
+    bool mouseWheel(const WebMouseWheelEvent&);
     bool keyEvent(const WebKeyboardEvent&);
     bool charEvent(const WebKeyboardEvent&);
     bool touchEvent(const WebTouchEvent&);
@@ -275,9 +298,9 @@ public:
         const WebImage& dragImage,
         const WebPoint& dragImageOffset);
 
-    void suggestionsPopupDidHide()
+    void autoFillPopupDidHide()
     {
-        m_suggestionsPopupShowing = false;
+        m_autoFillPopupShowing = false;
     }
 
 #if ENABLE(NOTIFICATIONS)
@@ -293,7 +316,7 @@ public:
     void popupOpened(WebCore::PopupContainer* popupContainer);
     void popupClosed(WebCore::PopupContainer* popupContainer);
 
-    void hideSuggestionsPopup();
+    void hideAutoFillPopup();
 
     // HACK: currentInputEvent() is for ChromeClientImpl::show(), until we can
     // fix WebKit to pass enough information up into ChromeClient::show() so we
@@ -304,11 +327,24 @@ public:
     }
 
 #if USE(ACCELERATED_COMPOSITING)
-    void setRootLayerNeedsDisplay();
+    bool allowsAcceleratedCompositing();
     void setRootGraphicsLayer(WebCore::PlatformLayer*);
+    void setRootLayerNeedsDisplay();
+    void scrollRootLayerRect(const WebCore::IntSize& scrollDelta, const WebCore::IntRect& clipRect);
+    void invalidateRootLayerRect(const WebCore::IntRect&);
 #endif
+    // Onscreen contexts display to the screen associated with this view.
+    // Offscreen contexts render offscreen but can share resources with the
+    // onscreen context and thus can be composited.
+    PassOwnPtr<WebCore::GLES2Context> getOnscreenGLES2Context();
+
+    // Returns an onscreen context
+    virtual WebGLES2Context* gles2Context();
+    virtual WebCore::SharedGraphicsContext3D* getSharedGraphicsContext3D();
 
     WebCore::PopupContainer* selectPopup() const { return m_selectPopup.get(); }
+
+    bool zoomTextOnly() const { return m_zoomTextOnly; }
 
     // Returns true if the event leads to scrolling.
     static bool mapKeyCodeForScroll(int keyCode,
@@ -324,7 +360,7 @@ private:
       DragOver
     };
 
-    WebViewImpl(WebViewClient* client);
+    WebViewImpl(WebViewClient* client, WebDevToolsAgentClient* devToolsClient);
     ~WebViewImpl();
 
     // Returns true if the event was actually processed.
@@ -336,10 +372,10 @@ private:
     // Returns true if the autocomple has consumed the event.
     bool autocompleteHandleKeyEvent(const WebKeyboardEvent&);
 
-    // Repaints the suggestions popup. Should be called when the suggestions
-    // have changed. Note that this should only be called when the suggestions
+    // Repaints the AutoFill popup. Should be called when the suggestions
+    // have changed. Note that this should only be called when the AutoFill
     // popup is showing.
-    void refreshSuggestionsPopup();
+    void refreshAutoFillPopup();
 
     // Returns true if the view was scrolled.
     bool scrollViewWithKeyboard(int keyCode, int modifiers);
@@ -359,7 +395,9 @@ private:
 
 #if USE(ACCELERATED_COMPOSITING)
     void setIsAcceleratedCompositingActive(bool);
-    void updateRootLayerContents(const WebRect&);
+    void updateRootLayerContents(const WebCore::IntRect&);
+    void doComposite();
+    void doPixelReadbackToCanvas(WebCanvas*, const WebCore::IntRect&);
 #endif
 
     WebViewClient* m_client;
@@ -406,6 +444,8 @@ private:
     // mean zoom in, negative numbers mean zoom out.
     int m_zoomLevel;
 
+    bool m_zoomTextOnly;
+
     bool m_contextMenuAllowed;
 
     bool m_doingDragAndDrop;
@@ -448,31 +488,17 @@ private:
     // current drop target in this WebView (the drop target can accept the drop).
     WebDragOperation m_dragOperation;
 
-    // Whether a suggestions popup is currently showing.
-    bool m_suggestionsPopupShowing;
-
-    // A pointer to the current suggestions popup menu client. This can be
-    // either an AutoFillPopupMenuClient or an AutocompletePopupMenuClient. We
-    // do not own this pointer.
-    SuggestionsPopupMenuClient* m_suggestionsPopupClient;
+    // Whether an AutoFill popup is currently showing.
+    bool m_autoFillPopupShowing;
 
     // The AutoFill popup client.
     OwnPtr<AutoFillPopupMenuClient> m_autoFillPopupClient;
 
-    // The Autocomplete popup client.
-    OwnPtr<AutocompletePopupMenuClient> m_autocompletePopupClient;
-
-    // A pointer to the current suggestions popup. We do not own this pointer.
-    WebCore::PopupContainer* m_suggestionsPopup;
+    // The AutoFill popup.
+    RefPtr<WebCore::PopupContainer> m_autoFillPopup;
 
     // The popup associated with a select element.
     RefPtr<WebCore::PopupContainer> m_selectPopup;
-
-    // The AutoFill suggestions popup.
-    RefPtr<WebCore::PopupContainer> m_autoFillPopup;
-
-    // The AutoComplete suggestions popup.
-    RefPtr<WebCore::PopupContainer> m_autocompletePopup;
 
     OwnPtr<WebDevToolsAgentPrivate> m_devToolsAgent;
 
@@ -485,6 +511,10 @@ private:
     // Inspector settings.
     WebString m_inspectorSettings;
 
+    typedef HashMap<WTF::String, WTF::String> SettingsMap;
+    OwnPtr<SettingsMap> m_inspectorSettingsMap;
+    OwnPtr<DragScrollTimer> m_dragScrollTimer;
+
 #if ENABLE(NOTIFICATIONS)
     // The provider of desktop notifications;
     NotificationPresenterImpl m_notificationPresenter;
@@ -494,10 +524,22 @@ private:
     RefPtr<WebCore::Node> m_mouseCaptureNode;
 
 #if USE(ACCELERATED_COMPOSITING)
+    WebCore::IntRect m_scrollDamage;
     OwnPtr<WebCore::LayerRendererChromium> m_layerRenderer;
     bool m_isAcceleratedCompositingActive;
+    bool m_compositorCreationFailed;
 #endif
     static const WebInputEvent* m_currentInputEvent;
+
+#if ENABLE(INPUT_SPEECH)
+    SpeechInputClientImpl m_speechInputClient;
+#endif
+
+    OwnPtr<WebGLES2Context> m_gles2Context;
+
+    RefPtr<WebCore::SharedGraphicsContext3D> m_sharedContext3D;
+
+    OwnPtr<DeviceOrientationClientProxy> m_deviceOrientationClientProxy;
 };
 
 } // namespace WebKit

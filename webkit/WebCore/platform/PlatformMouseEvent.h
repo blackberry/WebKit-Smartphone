@@ -34,7 +34,9 @@ typedef struct _GdkEventMotion GdkEventMotion;
 #endif
 
 #if PLATFORM(EFL)
-#include <Evas.h>
+typedef struct _Evas_Event_Mouse_Down Evas_Event_Mouse_Down;
+typedef struct _Evas_Event_Mouse_Up Evas_Event_Mouse_Up;
+typedef struct _Evas_Event_Mouse_Move Evas_Event_Mouse_Move;
 #endif
 
 #if PLATFORM(QT)
@@ -126,10 +128,11 @@ namespace WebCore {
 #if PLATFORM(GTK) 
         PlatformMouseEvent(GdkEventButton*);
         PlatformMouseEvent(GdkEventMotion*);
+        void setClickCount(int count) { m_clickCount = count; }
 #endif
 
 #if PLATFORM(EFL)
-        void setClickCount(Evas_Button_Flags);
+        void setClickCount(unsigned int);
         PlatformMouseEvent(const Evas_Event_Mouse_Down*, IntPoint);
         PlatformMouseEvent(const Evas_Event_Mouse_Up*, IntPoint);
         PlatformMouseEvent(const Evas_Event_Mouse_Move*, IntPoint);

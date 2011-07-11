@@ -2,6 +2,7 @@
  * Copyright (C) 2006 Nikolas Zimmermann <zimmermann@kde.org>
  * Copyright (C) 2007 Holger Hans Peter Freyther <zecke@selfish.org>
  * Copyright (C) 2008, 2009 Dirk Schulze <krit@webkit.org>
+ * Copyright (C) 2010 Torch Mobile (Beijing) Co. Ltd. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,12 +35,11 @@
 #include "GraphicsContext.h"
 #include "ImageData.h"
 #include "MIMETypeRegistry.h"
+#include "NotImplemented.h"
 #include "Pattern.h"
 #include "PlatformString.h"
-
 #include <cairo.h>
 #include <wtf/Vector.h>
-#include <math.h>
 
 using namespace std;
 
@@ -96,26 +96,37 @@ GraphicsContext* ImageBuffer::context() const
     return m_context.get();
 }
 
-Image* ImageBuffer::image() const
+bool ImageBuffer::drawsUsingCopy() const
 {
-    if (!m_image) {
-        // It's assumed that if image() is called, the actual rendering to the
-        // GraphicsContext must be done.
-        ASSERT(context());
+    return false;
+}
 
-        // This creates a COPY of the image and will cache that copy. This means
-        // that if subsequent operations take place on the context, neither the
-        // currently-returned image, nor the results of future image() calls,
-        // will contain that operation.
-        //
-        // This seems silly, but is the way the CG port works: image() is
-        // intended to be used only when rendering is "complete."
-        cairo_surface_t* newsurface = copySurface(m_data.m_surface);
+PassRefPtr<Image> ImageBuffer::copyImage() const
+{
+    // BitmapImage will release the passed in surface on destruction
+    return BitmapImage::create(copySurface(m_data.m_surface));
+}
 
-        // BitmapImage will release the passed in surface on destruction
-        m_image = BitmapImage::create(newsurface);
-    }
-    return m_image.get();
+void ImageBuffer::clip(GraphicsContext*, const FloatRect&) const
+{
+    notImplemented();
+    // See https://bugs.webkit.org/show_bug.cgi?id=23526 for why this is unimplemented.
+}
+
+void ImageBuffer::draw(GraphicsContext* context, ColorSpace styleColorSpace, const FloatRect& destRect, const FloatRect& srcRect,
+                       CompositeOperator op , bool useLowQualityScale)
+{
+    // BitmapImage will release the passed in surface on destruction
+    RefPtr<Image> image = BitmapImage::create(cairo_surface_reference(m_data.m_surface));
+    context->drawImage(image.get(), styleColorSpace, destRect, srcRect, op, useLowQualityScale);
+}
+
+void ImageBuffer::drawPattern(GraphicsContext* context, const FloatRect& srcRect, const AffineTransform& patternTransform,
+                              const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator op, const FloatRect& destRect)
+{
+    // BitmapImage will release the passed in surface on destruction
+    RefPtr<Image> image = BitmapImage::create(cairo_surface_reference(m_data.m_surface));
+    image->drawPattern(context, srcRect, patternTransform, phase, styleColorSpace, op, destRect);
 }
 
 void ImageBuffer::platformTransformColorSpace(const Vector<int>& lookUpTable)
@@ -276,6 +287,7 @@ void ImageBuffer::putPremultipliedImageData(ImageData* source, const IntRect& so
     putImageData<Premultiplied>(source, sourceRect, destPoint, m_data, m_size);
 }
 
+#if !PLATFORM(GTK)
 static cairo_status_t writeFunction(void* closure, const unsigned char* data, unsigned int length)
 {
     Vector<char>* in = reinterpret_cast<Vector<char>*>(closure);
@@ -283,7 +295,7 @@ static cairo_status_t writeFunction(void* closure, const unsigned char* data, un
     return CAIRO_STATUS_SUCCESS;
 }
 
-String ImageBuffer::toDataURL(const String& mimeType) const
+String ImageBuffer::toDataURL(const String& mimeType, const double*) const
 {
     cairo_surface_t* image = cairo_get_target(context()->platformContext());
     if (!image)
@@ -302,5 +314,6 @@ String ImageBuffer::toDataURL(const String& mimeType) const
 
     return "data:" + actualMimeType + ";base64," + String(out.data(), out.size());
 }
+#endif
 
 } // namespace WebCore

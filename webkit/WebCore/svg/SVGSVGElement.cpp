@@ -1,24 +1,24 @@
 /*
-    Copyright (C) 2004, 2005, 2006 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007, 2008 Rob Buis <buis@kde.org>
-                  2007 Apple Inc.  All rights reserved.
-    Copyright (C) Research In Motion Limited 2010. All rights reserved.
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007, 2008, 2010 Rob Buis <buis@kde.org>
+ * Copyright (C) 2007 Apple Inc. All rights reserved.
+ *  Copyright (C) Research In Motion Limited 2010. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -40,6 +40,7 @@
 #include "FloatRect.h"
 #include "FrameView.h"
 #include "HTMLNames.h"
+#include "RenderSVGResource.h"
 #include "RenderSVGRoot.h"
 #include "RenderSVGViewportContainer.h"
 #include "SMILTimeContainer.h"
@@ -80,6 +81,11 @@ SVGSVGElement::SVGSVGElement(const QualifiedName& tagName, Document* doc)
     , m_hasSetContainerSize(false)
 {
     doc->registerForDocumentActivationCallbacks(this);
+}
+
+PassRefPtr<SVGSVGElement> SVGSVGElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new SVGSVGElement(tagName, document));
 }
 
 SVGSVGElement::~SVGSVGElement()
@@ -185,8 +191,7 @@ void SVGSVGElement::setUseCurrentView(bool currentView)
 SVGViewSpec* SVGSVGElement::currentView() const
 {
     if (!m_viewSpec)
-        m_viewSpec.set(new SVGViewSpec(this));
-
+        m_viewSpec = adoptPtr(new SVGViewSpec(this));
     return m_viewSpec.get();
 }
 
@@ -204,13 +209,13 @@ void SVGSVGElement::setCurrentScale(float scale)
         // Calling setCurrentScale() on the outermost <svg> element in a standalone SVG document
         // is allowed to change the page zoom factor, influencing the document size, scrollbars etc.
         if (parentNode() == document())
-            view->setZoomFactor(scale, ZoomPage);
+            view->setPageZoomFactor(scale);
         return;
     }
 
     m_scale = scale;
-    if (renderer())
-        renderer()->setNeedsLayout(true);
+    if (RenderObject* object = renderer())
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(object);
 }
 
 FloatPoint SVGSVGElement::currentTranslate() const
@@ -221,6 +226,9 @@ FloatPoint SVGSVGElement::currentTranslate() const
 void SVGSVGElement::setCurrentTranslate(const FloatPoint &translation)
 {
     m_translation = translation;
+    if (RenderObject* object = renderer())
+        object->setNeedsLayout(true);
+
     if (parentNode() == document() && document()->renderer())
         document()->renderer()->repaint();
 }
@@ -299,22 +307,33 @@ void SVGSVGElement::svgAttributeChanged(const QualifiedName& attrName)
     // Thus the CSS length value for width is not updated, and width() calcWidth()
     // calculations on RenderSVGRoot will be wrong.
     // https://bugs.webkit.org/show_bug.cgi?id=25387
-    if (attrName == SVGNames::widthAttr)
+    bool updateRelativeLengths = false;
+    if (attrName == SVGNames::widthAttr) {
         updateCSSForAttribute(this, attrName, CSSPropertyWidth, widthBaseValue());
-    else if (attrName == SVGNames::heightAttr)
+        updateRelativeLengths = true;
+    } else if (attrName == SVGNames::heightAttr) {
         updateCSSForAttribute(this, attrName, CSSPropertyHeight, heightBaseValue());
+        updateRelativeLengths = true;
+    }
+
+    if (updateRelativeLengths
+        || attrName == SVGNames::xAttr
+        || attrName == SVGNames::yAttr
+        || SVGFitToViewBox::isKnownAttribute(attrName)) {
+        updateRelativeLengths = true;
+        updateRelativeLengthsInformation();
+    }
 
     if (!renderer())
         return;
 
-    if (attrName == SVGNames::xAttr || attrName == SVGNames::yAttr ||
-        SVGTests::isKnownAttribute(attrName) ||
-        SVGLangSpace::isKnownAttribute(attrName) ||
-        SVGExternalResourcesRequired::isKnownAttribute(attrName) ||
-        SVGFitToViewBox::isKnownAttribute(attrName) ||
-        SVGZoomAndPan::isKnownAttribute(attrName) ||
-        SVGStyledLocatableElement::isKnownAttribute(attrName))
-        renderer()->setNeedsLayout(true);
+    if (updateRelativeLengths
+        || SVGTests::isKnownAttribute(attrName)
+        || SVGLangSpace::isKnownAttribute(attrName)
+        || SVGExternalResourcesRequired::isKnownAttribute(attrName)
+        || SVGZoomAndPan::isKnownAttribute(attrName)
+        || SVGStyledLocatableElement::isKnownAttribute(attrName))
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer());
 }
 
 void SVGSVGElement::synchronizeProperty(const QualifiedName& attrName)
@@ -435,7 +454,7 @@ FloatRect SVGSVGElement::createSVGRect()
 
 SVGTransform SVGSVGElement::createSVGTransform()
 {
-    return SVGTransform();
+    return SVGTransform(SVGTransform::SVG_TRANSFORM_MATRIX);
 }
 
 SVGTransform SVGSVGElement::createSVGTransformFromMatrix(const AffineTransform& matrix)
@@ -462,6 +481,12 @@ AffineTransform SVGSVGElement::localCoordinateSpaceTransform(SVGLocatable::CTMSc
             // RenderSVGRoot::localToBorderBoxTransform() (called through mapLocalToContainer(), called from localToAbsolute())
             // also takes the viewBoxToViewTransform() into account, so we have to subtract it here (original cause of bug #27183)
             transform.translate(location.x() - viewBoxTransform.e(), location.y() - viewBoxTransform.f());
+
+            // Respect scroll offset.
+            if (FrameView* view = document()->view()) {
+                IntSize scrollOffset = view->scrollOffset();
+                transform.translate(-scrollOffset.width(), -scrollOffset.height());
+            }
         }
     }
 
@@ -515,10 +540,13 @@ void SVGSVGElement::setCurrentTime(float /* seconds */)
     // FIXME: Implement me, bug 12073
 }
 
-bool SVGSVGElement::hasRelativeValues() const
+bool SVGSVGElement::selfHasRelativeLengths() const
 {
-    return (x().isRelative() || width().isRelative() ||
-            y().isRelative() || height().isRelative());
+    return x().isRelative()
+        || y().isRelative()
+        || width().isRelative()
+        || height().isRelative()
+        || hasAttribute(SVGNames::viewBoxAttr);
 }
 
 bool SVGSVGElement::isOutermostSVG() const
@@ -526,6 +554,12 @@ bool SVGSVGElement::isOutermostSVG() const
     // Element may not be in the document, pretend we're outermost for viewport(), getCTM(), etc.
     if (!parentNode())
         return true;
+
+#if ENABLE(SVG_FOREIGN_OBJECT)
+    // We act like an outermost SVG element, if we're a direct child of a <foreignObject> element.
+    if (parentNode()->hasTagName(SVGNames::foreignObjectTag))
+        return true;
+#endif
 
     // This is true whenever this is the outermost SVG, even if there are HTML elements outside it
     return !parentNode()->isSVGElement();
@@ -564,7 +598,9 @@ void SVGSVGElement::inheritViewAttributes(SVGViewElement* viewElement)
 
     if (viewElement->hasAttribute(SVGNames::zoomAndPanAttr))
         currentView()->setZoomAndPan(viewElement->zoomAndPan());
-    renderer()->setNeedsLayout(true);
+    
+    if (RenderObject* object = renderer())
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(object);
 }
     
 void SVGSVGElement::documentWillBecomeInactive()
@@ -575,6 +611,27 @@ void SVGSVGElement::documentWillBecomeInactive()
 void SVGSVGElement::documentDidBecomeActive()
 {
     unpauseAnimations();
+}
+
+// getElementById on SVGSVGElement is restricted to only the child subtree defined by the <svg> element.
+// See http://www.w3.org/TR/SVG11/struct.html#InterfaceSVGSVGElement
+Element* SVGSVGElement::getElementById(const AtomicString& id) const
+{
+    Element* element = document()->getElementById(id);
+    if (element && element->isDescendantOf(this))
+        return element;
+
+    // Fall back to traversing our subtree. Duplicate ids are allowed, the first found will
+    // be returned.
+    for (Node* node = traverseNextNode(this); node; node = node->traverseNextNode(this)) {
+        if (!node->isElementNode())
+            continue;
+
+        Element* element = static_cast<Element*>(node);
+        if (element->hasID() && element->getIdAttribute() == id)
+            return element;
+    }
+    return 0;
 }
 
 #if PLATFORM(OLYMPIA)
@@ -590,5 +647,3 @@ void SVGSVGElement::setZoomAndPan(unsigned short zoomAndPan)
 }
 
 #endif // ENABLE(SVG)
-
-// vim:ts=4:noet

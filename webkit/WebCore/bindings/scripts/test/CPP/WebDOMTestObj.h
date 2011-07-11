@@ -31,6 +31,7 @@ class TestObj;
 };
 
 class WebDOMEventListener;
+class WebDOMIDBKey;
 class WebDOMString;
 class WebDOMTestObj;
 
@@ -39,7 +40,22 @@ public:
     WebDOMTestObj();
     explicit WebDOMTestObj(WebCore::TestObj*);
     WebDOMTestObj(const WebDOMTestObj&);
-    ~WebDOMTestObj();
+    WebDOMTestObj& operator=(const WebDOMTestObj&);
+    virtual ~WebDOMTestObj();
+
+    enum {
+        WEBDOM_CONST_VALUE_0 = 0,
+        WEBDOM_CONST_VALUE_1 = 1,
+        WEBDOM_CONST_VALUE_2 = 2,
+        WEBDOM_CONST_VALUE_4 = 4,
+        WEBDOM_CONST_VALUE_8 = 8,
+        WEBDOM_CONST_VALUE_9 = -1,
+        WEBDOM_CONST_VALUE_10 = "my constant string",
+        WEBDOM_CONST_VALUE_11 = 0xffffffff,
+        WEBDOM_CONST_VALUE_12 = 0x01,
+        WEBDOM_CONST_VALUE_13 = 0X20,
+        WEBDOM_CONST_VALUE_14 = 0x1abc
+    };
 
     int readOnlyIntAttr() const;
     WebDOMString readOnlyStringAttr() const;
@@ -54,15 +70,57 @@ public:
     void setStringAttr(const WebDOMString&);
     WebDOMTestObj testObjAttr() const;
     void setTestObjAttr(const WebDOMTestObj&);
-    int attrWithException() const;
-    void setAttrWithException(int);
-    int attrWithSetterException() const;
-    void setAttrWithSetterException(int);
+    WebDOMTestObj XMLObjAttr() const;
+    void setXMLObjAttr(const WebDOMTestObj&);
+    bool create() const;
+    void setCreate(bool);
+    WebDOMString reflectedStringAttr() const;
+    void setReflectedStringAttr(const WebDOMString&);
+    int reflectedIntegralAttr() const;
+    void setReflectedIntegralAttr(int);
+    bool reflectedBooleanAttr() const;
+    void setReflectedBooleanAttr(bool);
+    WebDOMString reflectedURLAttr() const;
+    void setReflectedURLAttr(const WebDOMString&);
+    WebDOMString reflectedNonEmptyURLAttr() const;
+    void setReflectedNonEmptyURLAttr(const WebDOMString&);
+    WebDOMString reflectedStringAttr() const;
+    void setReflectedStringAttr(const WebDOMString&);
+    int reflectedCustomIntegralAttr() const;
+    void setReflectedCustomIntegralAttr(int);
+    bool reflectedCustomBooleanAttr() const;
+    void setReflectedCustomBooleanAttr(bool);
+    WebDOMString reflectedCustomURLAttr() const;
+    void setReflectedCustomURLAttr(const WebDOMString&);
+    WebDOMString reflectedCustomNonEmptyURLAttr() const;
+    void setReflectedCustomNonEmptyURLAttr(const WebDOMString&);
     int attrWithGetterException() const;
     void setAttrWithGetterException(int);
+    int attrWithSetterException() const;
+    void setAttrWithSetterException(int);
+    WebDOMString stringAttrWithGetterException() const;
+    void setStringAttrWithGetterException(const WebDOMString&);
+    WebDOMString stringAttrWithSetterException() const;
+    void setStringAttrWithSetterException(const WebDOMString&);
     int customAttr() const;
     void setCustomAttr(int);
     WebDOMString scriptStringAttr() const;
+#if ENABLE(Condition1)
+    int conditionalAttr1() const;
+    void setConditionalAttr1(int);
+#endif
+#if ENABLE(Condition1) && ENABLE(Condition2)
+    int conditionalAttr2() const;
+    void setConditionalAttr2(int);
+#endif
+#if ENABLE(Condition1) || ENABLE(Condition2)
+    int conditionalAttr3() const;
+    void setConditionalAttr3(int);
+#endif
+    int description() const;
+    int id() const;
+    void setId(int);
+    WebDOMString hash() const;
 
     void voidMethod();
     void voidMethodWithArgs(int intArg, const WebDOMString& strArg, const WebDOMTestObj& objArg);
@@ -73,6 +131,7 @@ public:
     WebDOMTestObj methodThatRequiresAllArgs(const WebDOMString& strArg, const WebDOMTestObj& objArg);
     WebDOMTestObj methodThatRequiresAllArgsAndThrows(const WebDOMString& strArg, const WebDOMTestObj& objArg);
     void serializedValue(const WebDOMString& serializedArg);
+    void idbKey(const WebDOMIDBKey& key);
     void methodWithException();
     void customMethod();
     void customMethodWithArgs(int intArg, const WebDOMString& strArg, const WebDOMTestObj& objArg);
@@ -87,9 +146,12 @@ public:
     WebDOMTestObj withScriptStateObj();
     void withScriptStateVoidException();
     WebDOMTestObj withScriptStateObjException();
+    void withScriptExecutionContext();
     void methodWithOptionalArg(int opt);
     void methodWithNonOptionalArgAndOptionalArg(int nonOpt, int opt);
     void methodWithNonOptionalArgAndTwoOptionalArgs(int nonOpt, int opt1, int opt2);
+    void classMethod();
+    int classMethodWithOptional(int arg);
 
     WebCore::TestObj* impl() const;
 

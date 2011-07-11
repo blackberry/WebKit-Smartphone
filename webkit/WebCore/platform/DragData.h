@@ -26,7 +26,6 @@
 #ifndef DragData_h
 #define DragData_h
 
-#include "ClipboardAccessPolicy.h"
 #include "Color.h"
 #include "DragActions.h"
 #include "IntPoint.h"
@@ -52,8 +51,10 @@ typedef struct IDataObject* DragDataRef;
 #elif PLATFORM(WX)
 typedef class wxDataObject* DragDataRef;
 #elif PLATFORM(GTK)
-// FIXME: this should probably be something gdk-specific
-typedef void* DragDataRef;
+namespace WebCore {
+class DataObjectGtk;
+}
+typedef WebCore::DataObjectGtk* DragDataRef;
 #elif PLATFORM(CHROMIUM)
 #include "DragDataRef.h"
 #elif PLATFORM(HAIKU)
@@ -66,7 +67,6 @@ typedef void* DragDataRef;
 
 namespace WebCore {
     
-    class Clipboard;
     class Document;
     class DocumentFragment;
     class KURL;
@@ -78,6 +78,8 @@ namespace WebCore {
     
     class DragData {
     public:
+        enum FilenameConversionPolicy { DoNotConvertFilenames, ConvertFilenames };
+
 #if PLATFORM(MAC)
         //FIXME: In the future the WebKit functions provided by the helper class should be moved into WebCore, 
         //after which this constructor should be removed
@@ -91,11 +93,10 @@ namespace WebCore {
         const IntPoint& globalPosition() const { return m_globalPosition; }
         DragDataRef platformData() const { return m_platformDragData; }
         DragOperation draggingSourceOperationMask() const { return m_draggingSourceOperationMask; }
-        PassRefPtr<Clipboard> createClipboard(ClipboardAccessPolicy) const;
-        bool containsURL() const;
+        bool containsURL(FilenameConversionPolicy filenamePolicy = ConvertFilenames) const;
         bool containsPlainText() const;
         bool containsCompatibleContent() const;
-        String asURL(String* title = 0) const;
+        String asURL(FilenameConversionPolicy filenamePolicy = ConvertFilenames, String* title = 0) const;
         String asPlainText() const;
         void asFilenames(Vector<String>&) const;
         Color asColor() const;

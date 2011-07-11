@@ -25,6 +25,7 @@
 #if ENABLE(SVG)
 #include "RenderSVGBlock.h"
 
+#include "RenderSVGResource.h"
 #include "SVGElement.h"
 
 namespace WebCore {
@@ -66,6 +67,37 @@ void RenderSVGBlock::updateBoxModelInfoFromStyle()
     // Note: This does NOT affect overflow handling on outer/inner <svg> elements - this is handled
     // manually by RenderSVGRoot - which owns the documents enclosing root layer and thus works fine.
     setHasOverflowClip(false);
+}
+
+void RenderSVGBlock::absoluteRects(Vector<IntRect>&, int, int)
+{
+    // This code path should never be taken for SVG, as we're assuming useTransforms=true everywhere, absoluteQuads should be used.
+    ASSERT_NOT_REACHED();
+}
+
+void RenderSVGBlock::destroy()
+{
+    SVGResourcesCache::clientDestroyed(this);
+    RenderBlock::destroy();
+}
+
+void RenderSVGBlock::styleWillChange(StyleDifference diff, const RenderStyle* newStyle)
+{
+    if (diff == StyleDifferenceLayout)
+        setNeedsBoundariesUpdate();
+    RenderBlock::styleWillChange(diff, newStyle);
+}
+
+void RenderSVGBlock::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
+{
+    RenderBlock::styleDidChange(diff, oldStyle);
+    SVGResourcesCache::clientStyleChanged(this, diff, style());
+}
+
+void RenderSVGBlock::updateFromElement()
+{
+    RenderBlock::updateFromElement();
+    SVGResourcesCache::clientUpdatedFromElement(this, style());
 }
 
 }

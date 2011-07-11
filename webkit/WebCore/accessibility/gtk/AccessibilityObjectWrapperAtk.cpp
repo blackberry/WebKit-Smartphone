@@ -34,6 +34,7 @@
 #if HAVE(ACCESSIBILITY)
 
 #include "AXObjectCache.h"
+#include "AccessibilityList.h"
 #include "AccessibilityListBox.h"
 #include "AccessibilityListBoxOption.h"
 #include "AccessibilityRenderObject.h"
@@ -41,12 +42,12 @@
 #include "AccessibilityTableCell.h"
 #include "AccessibilityTableColumn.h"
 #include "AccessibilityTableRow.h"
-#include "AtomicString.h"
 #include "Document.h"
 #include "DocumentType.h"
 #include "Editor.h"
 #include "Frame.h"
 #include "FrameView.h"
+#include "GOwnPtr.h"
 #include "HostWindow.h"
 #include "HTMLNames.h"
 #include "HTMLTableCaptionElement.h"
@@ -54,9 +55,12 @@
 #include "InlineTextBox.h"
 #include "IntRect.h"
 #include "NotImplemented.h"
+#include "RenderListMarker.h"
 #include "RenderText.h"
 #include "TextEncoding.h"
+#include "TextIterator.h"
 #include <wtf/text/CString.h>
+#include <wtf/text/AtomicString.h>
 
 #include <atk/atk.h>
 #include <glib.h>
@@ -143,18 +147,7 @@ static AccessibilityObject* core(AtkDocument* document)
     return core(ATK_OBJECT(document));
 }
 
-static const gchar* nameFromChildren(AccessibilityObject* object)
-{
-    if (!object)
-        return 0;
-
-    AccessibilityRenderObject::AccessibilityChildrenVector children = object->children();
-    // Currently, object->stringValue() should be an empty String. This might not be the case down the road.
-    String name = object->stringValue();
-    for (unsigned i = 0; i < children.size(); ++i)
-        name += children.at(i).get()->stringValue();
-    return returnString(name);
-}
+static gchar* webkit_accessible_text_get_text(AtkText* text, gint startOffset, gint endOffset);
 
 static const gchar* webkit_accessible_get_name(AtkObject* object)
 {
@@ -165,8 +158,16 @@ static const gchar* webkit_accessible_get_name(AtkObject* object)
     AccessibilityRenderObject* renderObject = static_cast<AccessibilityRenderObject*>(coreObject);
     if (coreObject->isControl()) {
         AccessibilityObject* label = renderObject->correspondingLabelForControlElement();
-        if (label)
-            return returnString(nameFromChildren(label));
+        if (label) {
+            AtkObject* atkObject = label->wrapper();
+            if (ATK_IS_TEXT(atkObject))
+                return webkit_accessible_text_get_text(ATK_TEXT(atkObject), 0, -1);
+        }
+
+        // Try text under the node
+        String textUnder = renderObject->textUnderElement();
+        if (textUnder.length())
+            return returnString(textUnder);
     }
 
     if (renderObject->isImage() || renderObject->isInputImage()) {
@@ -422,6 +423,7 @@ static AtkRole atkRole(AccessibilityRole role)
         return ATK_ROLE_HEADING;
     case ListBoxRole:
         return ATK_ROLE_LIST;
+    case ListItemRole:
     case ListBoxOptionRole:
         return ATK_ROLE_LIST_ITEM;
     default:
@@ -435,13 +437,6 @@ static AtkRole webkit_accessible_get_role(AtkObject* object)
 
     if (!axObject)
         return ATK_ROLE_UNKNOWN;
-
-    // WebCore does not seem to have a role for list items
-    if (axObject->isGroup()) {
-        AccessibilityObject* parent = axObject->parentObjectUnignored();
-        if (parent && parent->isList())
-            return ATK_ROLE_LIST_ITEM;
-    }
 
     // WebCore does not know about paragraph role, label role, or section role
     if (axObject->isAccessibilityRenderObject()) {
@@ -941,6 +936,16 @@ static gchar* webkit_accessible_text_get_text(AtkText* text, gint startOffset, g
         ret = ret.substring(start, endOffset - startOffset);
     }
 
+    // Prefix a item number/bullet if needed
+    if (coreObject->roleValue() == ListItemRole) {
+        RenderObject* objRenderer = static_cast<AccessibilityRenderObject*>(coreObject)->renderer();
+        RenderObject* markerRenderer = objRenderer ? objRenderer->firstChild() : 0;
+        if (markerRenderer && markerRenderer->isListMarker()) {
+            String markerTxt = toRenderListMarker(markerRenderer)->text();
+            ret = markerTxt.length() > 0 ? markerTxt + " " + ret : ret;
+        }
+    }
+
     return g_strdup(ret.utf8().data());
 }
 
@@ -1019,39 +1024,299 @@ static gint webkit_accessible_text_get_caret_offset(AtkText* text)
     return offset;
 }
 
-static AtkAttributeSet* webkit_accessible_text_get_run_attributes(AtkText* text, gint offset, gint* start_offset, gint* end_offset)
+static AtkAttributeSet* getAttributeSetForAccessibilityObject(const AccessibilityObject* object)
 {
-    notImplemented();
-    return 0;
+    if (!object->isAccessibilityRenderObject())
+        return 0;
+
+    RenderObject* renderer = static_cast<const AccessibilityRenderObject*>(object)->renderer();
+    RenderStyle* style = renderer->style();
+
+    AtkAttributeSet* result = 0;
+    GOwnPtr<gchar> buffer(g_strdup_printf("%i", style->fontSize()));
+    result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_SIZE), buffer.get());
+
+    Color bgColor = style->visitedDependentColor(CSSPropertyBackgroundColor);
+    if (bgColor.isValid()) {
+        buffer.set(g_strdup_printf("%i,%i,%i",
+                                   bgColor.red(), bgColor.green(), bgColor.blue()));
+        result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_BG_COLOR), buffer.get());
+    }
+
+    Color fgColor = style->visitedDependentColor(CSSPropertyColor);
+    if (fgColor.isValid()) {
+        buffer.set(g_strdup_printf("%i,%i,%i",
+                                   fgColor.red(), fgColor.green(), fgColor.blue()));
+        result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_FG_COLOR), buffer.get());
+    }
+
+    int baselinePosition;
+    bool includeRise = true;
+    switch (style->verticalAlign()) {
+    case SUB:
+        baselinePosition = -1 * renderer->baselinePosition(true);
+        break;
+    case SUPER:
+        baselinePosition = renderer->baselinePosition(true);
+        break;
+    case BASELINE:
+        baselinePosition = 0;
+        break;
+    default:
+        includeRise = false;
+        break;
+    }
+
+    if (includeRise) {
+        buffer.set(g_strdup_printf("%i", baselinePosition));
+        result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_RISE), buffer.get());
+    }
+
+    int indentation = style->textIndent().calcValue(object->size().width());
+    if (indentation != undefinedLength) {
+        buffer.set(g_strdup_printf("%i", indentation));
+        result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_INDENT), buffer.get());
+    }
+
+    String fontFamilyName = style->font().family().family().string();
+    if (fontFamilyName.left(8) == "-webkit-")
+        fontFamilyName = fontFamilyName.substring(8);
+
+    result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_FAMILY_NAME), fontFamilyName.utf8().data());
+
+    int fontWeight = -1;
+    switch (style->font().weight()) {
+    case FontWeight100:
+        fontWeight = 100;
+        break;
+    case FontWeight200:
+        fontWeight = 200;
+        break;
+    case FontWeight300:
+        fontWeight = 300;
+        break;
+    case FontWeight400:
+        fontWeight = 400;
+        break;
+    case FontWeight500:
+        fontWeight = 500;
+        break;
+    case FontWeight600:
+        fontWeight = 600;
+        break;
+    case FontWeight700:
+        fontWeight = 700;
+        break;
+    case FontWeight800:
+        fontWeight = 800;
+        break;
+    case FontWeight900:
+        fontWeight = 900;
+    }
+    if (fontWeight > 0) {
+        buffer.set(g_strdup_printf("%i", fontWeight));
+        result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_WEIGHT), buffer.get());
+    }
+
+    switch (style->textAlign()) {
+    case TAAUTO:
+        break;
+    case LEFT:
+    case WEBKIT_LEFT:
+        result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_JUSTIFICATION), "left");
+        break;
+    case RIGHT:
+    case WEBKIT_RIGHT:
+        result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_JUSTIFICATION), "right");
+        break;
+    case CENTER:
+    case WEBKIT_CENTER:
+        result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_JUSTIFICATION), "center");
+        break;
+    case JUSTIFY:
+        result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_JUSTIFICATION), "fill");
+    }
+
+    result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_UNDERLINE), (style->textDecoration() & UNDERLINE) ? "single" : "none");
+
+    result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_STYLE), style->font().italic() ? "italic" : "normal");
+
+    result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_STRIKETHROUGH), (style->textDecoration() & LINE_THROUGH) ? "true" : "false");
+
+    result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_INVISIBLE), (style->visibility() == HIDDEN) ? "true" : "false");
+
+    result = addAttributeToSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_EDITABLE), object->isReadOnly() ? "false" : "true");
+
+    return result;
+}
+
+static gint compareAttribute(const AtkAttribute* a, const AtkAttribute* b)
+{
+    return g_strcmp0(a->name, b->name) || g_strcmp0(a->value, b->value);
+}
+
+// Returns an AtkAttributeSet with the elements of a1 which are either
+// not present or different in a2.  Neither a1 nor a2 should be used
+// after calling this function.
+static AtkAttributeSet* attributeSetDifference(AtkAttributeSet* a1, AtkAttributeSet* a2)
+{
+    if (!a2)
+        return a1;
+
+    AtkAttributeSet* i = a1;
+    AtkAttributeSet* found;
+    AtkAttributeSet* toDelete = 0;
+
+    while (i) {
+        found = g_slist_find_custom(a2, i->data, (GCompareFunc)compareAttribute);
+        if (found) {
+            AtkAttributeSet* t = i->next;
+            toDelete = g_slist_prepend(toDelete, i->data);
+            a1 = g_slist_delete_link(a1, i);
+            i = t;
+        } else
+            i = i->next;
+    }
+
+    atk_attribute_set_free(a2);
+    atk_attribute_set_free(toDelete);
+    return a1;
+}
+
+static guint accessibilityObjectLength(const AccessibilityObject* object)
+{
+    GOwnPtr<gchar> text(webkit_accessible_text_get_text(ATK_TEXT(object->wrapper()), 0, -1));
+    return g_utf8_strlen(text.get(), -1);
+}
+
+static const AccessibilityObject* getAccessibilityObjectForOffset(const AccessibilityObject* object, guint offset, gint* startOffset, gint* endOffset)
+{
+    const AccessibilityObject* result;
+    guint length = accessibilityObjectLength(object);
+    if (length > offset) {
+        *startOffset = 0;
+        *endOffset = length;
+        result = object;
+    } else {
+        *startOffset = -1;
+        *endOffset = -1;
+        result = 0;
+    }
+
+    if (!object->firstChild())
+        return result;
+
+    AccessibilityObject* child = object->firstChild();
+    guint currentOffset = 0;
+    guint childPosition = 0;
+    while (child && currentOffset <= offset) {
+        guint childLength = accessibilityObjectLength(child);
+        currentOffset = childLength + childPosition;
+        if (currentOffset > offset) {
+            gint childStartOffset;
+            gint childEndOffset;
+            const AccessibilityObject* grandChild = getAccessibilityObjectForOffset(child, offset-childPosition,  &childStartOffset, &childEndOffset);
+            if (childStartOffset >= 0) {
+                *startOffset = childStartOffset + childPosition;
+                *endOffset = childEndOffset + childPosition;
+                result = grandChild;
+            }
+        } else {
+            childPosition += childLength;
+            child = child->nextSibling();
+        }
+    }
+    return result;
+}
+
+static AtkAttributeSet* getRunAttributesFromAccesibilityObject(const AccessibilityObject* element, gint offset, gint* startOffset, gint* endOffset)
+{
+    const AccessibilityObject *child = getAccessibilityObjectForOffset(element, offset, startOffset, endOffset);
+    if (!child) {
+        *startOffset = -1;
+        *endOffset = -1;
+        return 0;
+    }
+
+    AtkAttributeSet* defaultAttributes = getAttributeSetForAccessibilityObject(element);
+    AtkAttributeSet* childAttributes = getAttributeSetForAccessibilityObject(child);
+
+    return attributeSetDifference(childAttributes, defaultAttributes);
+}
+
+static AtkAttributeSet* webkit_accessible_text_get_run_attributes(AtkText* text, gint offset, gint* startOffset, gint* endOffset)
+{
+    AccessibilityObject* coreObject = core(text);
+    AtkAttributeSet* result;
+
+    if (!coreObject) {
+        *startOffset = 0;
+        *endOffset = atk_text_get_character_count(text);
+        return 0;
+    }
+
+    if (offset == -1)
+        offset = atk_text_get_caret_offset(text);
+
+    result = getRunAttributesFromAccesibilityObject(coreObject, offset, startOffset, endOffset);
+
+    if (*startOffset < 0) {
+        *startOffset = offset;
+        *endOffset = offset;
+    }
+
+    return result;
 }
 
 static AtkAttributeSet* webkit_accessible_text_get_default_attributes(AtkText* text)
 {
-    notImplemented();
-    return 0;
+    AccessibilityObject* coreObject = core(text);
+    if (!coreObject || !coreObject->isAccessibilityRenderObject())
+        return 0;
+
+    return getAttributeSetForAccessibilityObject(coreObject);
 }
 
-static void webkit_accessible_text_get_character_extents(AtkText* text, gint offset, gint* x, gint* y, gint* width, gint* height, AtkCoordType coords)
+static IntRect textExtents(AtkText* text, gint startOffset, gint length, AtkCoordType coords)
 {
-    IntRect extents = core(text)->doAXBoundsForRange(PlainTextRange(offset, 1));
-    // FIXME: Use the AtkCoordType
-    // Requires WebCore::ScrollView::contentsToScreen() to be implemented
+    gchar* textContent = webkit_accessible_text_get_text(text, startOffset, -1);
+    gint textLength = g_utf8_strlen(textContent, -1);
 
-#if 0
+    // The first case (endOffset of -1) should work, but seems broken for all Gtk+ apps.
+    gint rangeLength = length;
+    if (rangeLength < 0 || rangeLength > textLength)
+        rangeLength = textLength;
+    AccessibilityObject* coreObject = core(text);
+
+    IntRect extents = coreObject->doAXBoundsForRange(PlainTextRange(startOffset, rangeLength));
     switch(coords) {
     case ATK_XY_SCREEN:
-        extents = core(text)->document()->view()->contentsToScreen(extents);
+        extents = coreObject->document()->view()->contentsToScreen(extents);
         break;
     case ATK_XY_WINDOW:
         // No-op
         break;
     }
-#endif
 
+    return extents;
+}
+
+static void webkit_accessible_text_get_character_extents(AtkText* text, gint offset, gint* x, gint* y, gint* width, gint* height, AtkCoordType coords)
+{
+    IntRect extents = textExtents(text, offset, 1, coords);
     *x = extents.x();
     *y = extents.y();
     *width = extents.width();
     *height = extents.height();
+}
+
+static void webkit_accessible_text_get_range_extents(AtkText* text, gint startOffset, gint endOffset, AtkCoordType coords, AtkTextRectangle* rect)
+{
+    IntRect extents = textExtents(text, startOffset, endOffset - startOffset + 1, coords);
+    rect->x = extents.x();
+    rect->y = extents.y();
+    rect->width = extents.width();
+    rect->height = extents.height();
 }
 
 static gint webkit_accessible_text_get_character_count(AtkText* text)
@@ -1078,14 +1343,74 @@ static bool selectionBelongsToObject(AccessibilityObject* coreObject, VisibleSel
     if (!coreObject->isAccessibilityRenderObject())
         return false;
 
-    Node* node = static_cast<AccessibilityRenderObject*>(coreObject)->renderer()->node();
-    return node == selection.base().containerNode();
+    RefPtr<Range> range = selection.toNormalizedRange();
+    if (!range)
+        return false;
+
+    // We want to check that both the selection intersects the node
+    // AND that the selection is not just "touching" one of the
+    // boundaries for the selected node. We want to check whether the
+    // node is actually inside the region, at least partially
+    Node* node = coreObject->node();
+    Node* lastDescendant = node->lastDescendant();
+    ExceptionCode ec = 0;
+    return (range->intersectsNode(node, ec)
+            && (range->endContainer() != node || range->endOffset())
+            && (range->startContainer() != lastDescendant || range->startOffset() != lastOffsetInNode(lastDescendant)));
+}
+
+static void getSelectionOffsetsForObject(AccessibilityObject* coreObject, VisibleSelection& selection, gint& startOffset, gint& endOffset)
+{
+    if (!coreObject->isAccessibilityRenderObject())
+        return;
+
+    // Early return if the selection doesn't affect the selected node
+    if (!selectionBelongsToObject(coreObject, selection))
+        return;
+
+    // We need to find the exact start and end positions in the
+    // selected node that intersects the selection, to later on get
+    // the right values for the effective start and end offsets
+    ExceptionCode ec = 0;
+    Position nodeRangeStart;
+    Position nodeRangeEnd;
+    Node* node = coreObject->node();
+    RefPtr<Range> selRange = selection.toNormalizedRange();
+
+    // If the selection affects the selected node and its first
+    // possible position is also in the selection, we must set
+    // nodeRangeStart to that position, otherwise to the selection's
+    // start position (it would belong to the node anyway)
+    Node* firstLeafNode = node->firstDescendant();
+    if (selRange->isPointInRange(firstLeafNode, 0, ec))
+        nodeRangeStart = firstPositionInNode(firstLeafNode);
+    else
+        nodeRangeStart = selRange->startPosition();
+
+    // If the selection affects the selected node and its last
+    // possible position is also in the selection, we must set
+    // nodeRangeEnd to that position, otherwise to the selection's
+    // end position (it would belong to the node anyway)
+    Node* lastLeafNode = node->lastDescendant();
+    if (selRange->isPointInRange(lastLeafNode, lastOffsetInNode(lastLeafNode), ec))
+        nodeRangeEnd = lastPositionInNode(lastLeafNode);
+    else
+        nodeRangeEnd = selRange->endPosition();
+
+    // Set values for start and end offsets
+    RefPtr<Range> nodeRange = Range::create(node->document(), nodeRangeStart, nodeRangeEnd);
+    startOffset = nodeRangeStart.offsetInContainerNode();
+    endOffset = startOffset + TextIterator::rangeLength(nodeRange.get());
 }
 
 static gint webkit_accessible_text_get_n_selections(AtkText* text)
 {
     AccessibilityObject* coreObject = core(text);
     VisibleSelection selection = coreObject->selection();
+
+    // Only range selections are needed for the purpose of this method
+    if (!selection.isRange())
+        return 0;
 
     // We don't support multiple selections for now, so there's only
     // two possibilities
@@ -1096,25 +1421,26 @@ static gint webkit_accessible_text_get_n_selections(AtkText* text)
     return !selectionBelongsToObject(coreObject, selection) || selection.isNone() ? 0 : 1;
 }
 
-static gchar* webkit_accessible_text_get_selection(AtkText* text, gint selection_num, gint* start_offset, gint* end_offset)
+static gchar* webkit_accessible_text_get_selection(AtkText* text, gint selectionNum, gint* startOffset, gint* endOffset)
 {
-    AccessibilityObject* coreObject = core(text);
-    VisibleSelection selection = coreObject->selection();
+    // Default values, unless the contrary is proved
+    *startOffset = *endOffset = 0;
 
     // WebCore does not support multiple selection, so anything but 0 does not make sense for now.
-    // Also, we don't want to do anything if the selection does not
-    // belong to the currently selected object. We have to check since
-    // there's no way to get the selection for a given object, only
-    // the global one (the API is a bit confusing)
-    if (selection_num != 0 || !selectionBelongsToObject(coreObject, selection)) {
-        *start_offset = *end_offset = 0;
+    if (selectionNum)
         return 0;
-    }
 
-    *start_offset = selection.start().offsetInContainerNode();
-    *end_offset = selection.end().offsetInContainerNode();
+    // Get the offsets of the selection for the selected object
+    AccessibilityObject* coreObject = core(text);
+    VisibleSelection selection = coreObject->selection();
+    getSelectionOffsetsForObject(coreObject, selection, *startOffset, *endOffset);
 
-    return webkit_accessible_text_get_text(text, *start_offset, *end_offset);
+    // Return 0 instead of "", as that's the expected result for
+    // this AtkText method when there's no selection
+    if (*startOffset == *endOffset)
+        return 0;
+
+    return webkit_accessible_text_get_text(text, *startOffset, *endOffset);
 }
 
 static gboolean webkit_accessible_text_add_selection(AtkText* text, gint start_offset, gint end_offset)
@@ -1123,32 +1449,51 @@ static gboolean webkit_accessible_text_add_selection(AtkText* text, gint start_o
     return FALSE;
 }
 
-static gboolean webkit_accessible_text_remove_selection(AtkText* text, gint selection_num)
+static gboolean webkit_accessible_text_set_selection(AtkText* text, gint selectionNum, gint startOffset, gint endOffset)
 {
-    notImplemented();
-    return FALSE;
+    // WebCore does not support multiple selection, so anything but 0 does not make sense for now.
+    if (selectionNum)
+        return FALSE;
+
+    // Consider -1 and out-of-bound values and correct them to length
+    gint textCount = webkit_accessible_text_get_character_count(text);
+    if (startOffset < 0 || startOffset > textCount)
+        startOffset = textCount;
+    if (endOffset < 0 || endOffset > textCount)
+        endOffset = textCount;
+
+    AccessibilityObject* coreObject = core(text);
+    PlainTextRange textRange(startOffset, endOffset - startOffset);
+    VisiblePositionRange range = coreObject->visiblePositionRangeForRange(textRange);
+    coreObject->setSelectedVisiblePositionRange(range);
+
+    return TRUE;
 }
 
-static gboolean webkit_accessible_text_set_selection(AtkText* text, gint selection_num, gint start_offset, gint end_offset)
+static gboolean webkit_accessible_text_remove_selection(AtkText* text, gint selectionNum)
 {
-    notImplemented();
-    return FALSE;
+    // WebCore does not support multiple selection, so anything but 0 does not make sense for now.
+    if (selectionNum)
+        return FALSE;
+
+    // Do nothing if current selection doesn't belong to the object
+    if (!webkit_accessible_text_get_n_selections(text))
+        return FALSE;
+
+    // Set a new 0-sized selection to the caret position, in order
+    // to simulate selection removal (GAIL style)
+    gint caretOffset = webkit_accessible_text_get_caret_offset(text);
+    return webkit_accessible_text_set_selection(text, selectionNum, caretOffset, caretOffset);
 }
 
 static gboolean webkit_accessible_text_set_caret_offset(AtkText* text, gint offset)
 {
     AccessibilityObject* coreObject = core(text);
 
-    // FIXME: We need to reimplement visiblePositionRangeForRange here
-    // because the actual function checks the offset is within the
-    // boundaries of text().length(), but text() only works for text
-    // controls...
-    VisiblePosition startPosition = coreObject->visiblePositionForIndex(offset);
-    startPosition.setAffinity(DOWNSTREAM);
-    VisiblePosition endPosition = coreObject->visiblePositionForIndex(offset);
-    VisiblePositionRange range = VisiblePositionRange(startPosition, endPosition);
-
+    PlainTextRange textRange(offset, 0);
+    VisiblePositionRange range = coreObject->visiblePositionRangeForRange(textRange);
     coreObject->setSelectedVisiblePositionRange(range);
+
     return TRUE;
 }
 
@@ -1163,6 +1508,7 @@ static void atk_text_interface_init(AtkTextIface* iface)
     iface->get_run_attributes = webkit_accessible_text_get_run_attributes;
     iface->get_default_attributes = webkit_accessible_text_get_default_attributes;
     iface->get_character_extents = webkit_accessible_text_get_character_extents;
+    iface->get_range_extents = webkit_accessible_text_get_range_extents;
     iface->get_character_count = webkit_accessible_text_get_character_count;
     iface->get_offset_at_point = webkit_accessible_text_get_offset_at_point;
     iface->get_n_selections = webkit_accessible_text_get_n_selections;
@@ -1462,8 +1808,19 @@ static gint webkit_accessible_table_get_row_extent_at(AtkTable* table, gint row,
 
 static AtkObject* webkit_accessible_table_get_column_header(AtkTable* table, gint column)
 {
-    // FIXME: This needs to be implemented.
-    notImplemented();
+    AccessibilityObject* accTable = core(table);
+    if (accTable->isAccessibilityRenderObject()) {
+        AccessibilityObject::AccessibilityChildrenVector allColumnHeaders;
+        static_cast<AccessibilityTable*>(accTable)->columnHeaders(allColumnHeaders);
+        unsigned columnCount = allColumnHeaders.size();
+        for (unsigned k = 0; k < columnCount; ++k) {
+            pair<int, int> columnRange;
+            AccessibilityTableCell* cell = static_cast<AccessibilityTableCell*>(allColumnHeaders.at(k).get());
+            cell->columnIndexRange(columnRange);
+            if (columnRange.first <= column && column < columnRange.first + columnRange.second)
+                return allColumnHeaders[k]->wrapper();
+        }
+    }
     return 0;
 }
 
@@ -1473,11 +1830,12 @@ static AtkObject* webkit_accessible_table_get_row_header(AtkTable* table, gint r
     if (accTable->isAccessibilityRenderObject()) {
         AccessibilityObject::AccessibilityChildrenVector allRowHeaders;
         static_cast<AccessibilityTable*>(accTable)->rowHeaders(allRowHeaders);
-
         unsigned rowCount = allRowHeaders.size();
         for (unsigned k = 0; k < rowCount; ++k) {
-            AccessibilityObject* rowObject = allRowHeaders[k]->parentObject();
-            if (static_cast<AccessibilityTableRow*>(rowObject)->rowIndex() == row)
+            pair<int, int> rowRange;
+            AccessibilityTableCell* cell = static_cast<AccessibilityTableCell*>(allRowHeaders.at(k).get());
+            cell->rowIndexRange(rowRange);
+            if (rowRange.first <= row && row < rowRange.first + rowRange.second)
                 return allRowHeaders[k]->wrapper();
         }
     }
@@ -1501,8 +1859,8 @@ static AtkObject* webkit_accessible_table_get_caption(AtkTable* table)
 static const gchar* webkit_accessible_table_get_column_description(AtkTable* table, gint column)
 {
     AtkObject* columnHeader = atk_table_get_column_header(table, column);
-    if (columnHeader)
-        return returnString(nameFromChildren(core(columnHeader)));
+    if (columnHeader && ATK_IS_TEXT(columnHeader))
+        return webkit_accessible_text_get_text(ATK_TEXT(columnHeader), 0, -1);
 
     return 0;
 }
@@ -1510,8 +1868,8 @@ static const gchar* webkit_accessible_table_get_column_description(AtkTable* tab
 static const gchar* webkit_accessible_table_get_row_description(AtkTable* table, gint row)
 {
     AtkObject* rowHeader = atk_table_get_row_header(table, row);
-    if (rowHeader)
-        return returnString(nameFromChildren(core(rowHeader)));
+    if (rowHeader && ATK_IS_TEXT(rowHeader))
+        return webkit_accessible_text_get_text(ATK_TEXT(rowHeader), 0, -1);
 
     return 0;
 }

@@ -30,7 +30,10 @@
 """Abstract base class of Port-specific entrypoints for the layout tests
 test infrastructure (the Port and Driver classes)."""
 
+from __future__ import with_statement
+
 import cgi
+import codecs
 import difflib
 import errno
 import os
@@ -117,7 +120,7 @@ class Port(object):
 
     def check_image_diff(self, override_step=None, logging=True):
         """This routine is used to check whether image_diff binary exists."""
-        raise NotImplemented('Port.check_image_diff')
+        raise NotImplementedError('Port.check_image_diff')
 
     def compare_text(self, expected_text, actual_text):
         """Return whether or not the two strings are *not* equal. This
@@ -128,33 +131,19 @@ class Port(object):
         return expected_text != actual_text
 
     def diff_image(self, expected_filename, actual_filename,
-                   diff_filename=None):
+                   diff_filename=None, tolerance=0):
         """Compare two image files and produce a delta image file.
 
         Return True if the two files are different, False if they are the same.
         Also produce a delta image of the two images and write that into
         |diff_filename| if it is not None.
 
-        While this is a generic routine, we include it in the Port
-        interface so that it can be overriden for testing purposes."""
-        executable = self._path_to_image_diff()
+        |tolerance| should be a percentage value (0.0 - 100.0).
+        If it is omitted, the port default tolerance value is used.
 
-        if diff_filename:
-            cmd = [executable, '--diff', expected_filename, actual_filename,
-                   diff_filename]
-        else:
-            cmd = [executable, expected_filename, actual_filename]
+        """
+        raise NotImplementedError('Port.diff_image')
 
-        result = True
-        try:
-            if self._executive.run_command(cmd, return_exit_code=True) == 0:
-                return False
-        except OSError, e:
-            if e.errno == errno.ENOENT or e.errno == errno.EACCES:
-                _compare_available = False
-            else:
-                raise e
-        return result
 
     def diff_text(self, expected_text, actual_text,
                   expected_filename, actual_filename):
@@ -299,6 +288,18 @@ class Port(object):
         """Return the absolute path to the top of the LayoutTests directory."""
         return self.path_from_webkit_base('LayoutTests')
 
+    def skips_layout_test(self, test_name):
+        """Figures out if the givent test is being skipped or not.
+
+        Test categories are handled as well."""
+        for test_or_category in self.skipped_layout_tests():
+            if test_or_category == test_name:
+                return True
+            category = os.path.join(self.layout_tests_dir(), test_or_category)
+            if os.path.isdir(category) and test_name.startswith(test_or_category):
+                return True
+        return False
+
     def maybe_make_directory(self, *path):
         """Creates the specified directory if it doesn't already exist."""
         try:
@@ -321,7 +322,6 @@ class Port(object):
         if not self._webkit_base_dir:
             abspath = os.path.abspath(__file__)
             self._webkit_base_dir = abspath[0:abspath.find('WebKitTools')]
-            _log.debug("Using WebKit root: %s" % self._webkit_base_dir)
 
         return os.path.join(self._webkit_base_dir, *comps)
 
@@ -336,82 +336,16 @@ class Port(object):
         if the port does not use expectations files."""
         raise NotImplementedError('Port.path_to_test_expectations_file')
 
-    def remove_directory(self, *path):
-        """Recursively removes a directory, even if it's marked read-only.
-
-        Remove the directory located at *path, if it exists.
-
-        shutil.rmtree() doesn't work on Windows if any of the files
-        or directories are read-only, which svn repositories and
-        some .svn files are.  We need to be able to force the files
-        to be writable (i.e., deletable) as we traverse the tree.
-
-        Even with all this, Windows still sometimes fails to delete a file,
-        citing a permission error (maybe something to do with antivirus
-        scans or disk indexing).  The best suggestion any of the user
-        forums had was to wait a bit and try again, so we do that too.
-        It's hand-waving, but sometimes it works. :/
-        """
-        file_path = os.path.join(*path)
-        if not os.path.exists(file_path):
-            return
-
-        win32 = False
-        if sys.platform == 'win32':
-            win32 = True
-            # Some people don't have the APIs installed. In that case we'll do
-            # without.
-            try:
-                win32api = __import__('win32api')
-                win32con = __import__('win32con')
-            except ImportError:
-                win32 = False
-
-            def remove_with_retry(rmfunc, path):
-                os.chmod(path, os.stat.S_IWRITE)
-                if win32:
-                    win32api.SetFileAttributes(path,
-                                              win32con.FILE_ATTRIBUTE_NORMAL)
-                try:
-                    return rmfunc(path)
-                except EnvironmentError, e:
-                    if e.errno != errno.EACCES:
-                        raise
-                    print 'Failed to delete %s: trying again' % repr(path)
-                    time.sleep(0.1)
-                    return rmfunc(path)
-        else:
-
-            def remove_with_retry(rmfunc, path):
-                if os.path.islink(path):
-                    return os.remove(path)
-                else:
-                    return rmfunc(path)
-
-        for root, dirs, files in os.walk(file_path, topdown=False):
-            # For POSIX:  making the directory writable guarantees
-            # removability. Windows will ignore the non-read-only
-            # bits in the chmod value.
-            os.chmod(root, 0770)
-            for name in files:
-                remove_with_retry(os.remove, os.path.join(root, name))
-            for name in dirs:
-                remove_with_retry(os.rmdir, os.path.join(root, name))
-
-        remove_with_retry(os.rmdir, file_path)
-
-    def test_platform_name(self):
-        return self._name
-
     def relative_test_filename(self, filename):
         """Relative unix-style path for a filename under the LayoutTests
         directory. Filenames outside the LayoutTests directory should raise
         an error."""
+        assert(filename.startswith(self.layout_tests_dir()))
         return filename[len(self.layout_tests_dir()) + 1:]
 
     def results_directory(self):
         """Absolute path to the place to store the test results."""
-        raise NotImplemented('Port.results_directory')
+        raise NotImplementedError('Port.results_directory')
 
     def setup_test_run(self):
         """Perform port-specific work at the beginning of a test run."""
@@ -537,6 +471,14 @@ class Port(object):
         expectations, determining search paths, and logging information."""
         raise NotImplementedError('Port.version')
 
+    def test_repository_paths(self):
+        """Returns a list of (repository_name, repository_path) tuples
+        of its depending code base.  By default it returns a list that only
+        contains a ('webkit', <webkitRepossitoryPath>) tuple.
+        """
+        return [('webkit', self.layout_tests_dir())]
+
+
     _WDIFF_DEL = '##WDIFF_DEL##'
     _WDIFF_ADD = '##WDIFF_ADD##'
     _WDIFF_END = '##WDIFF_END##'
@@ -593,7 +535,6 @@ class Port(object):
                 _wdiff_available = False
                 return ""
             raise
-        assert(False)  # Should never be reached.
 
     _pretty_patch_error_html = "Failed to run PrettyPatch, see error console."
 
@@ -620,8 +561,38 @@ class Port(object):
             _log.error("Failed to run PrettyPatch (%s):\n%s" % (command, e.message_with_output()))
             return self._pretty_patch_error_html
 
+    def _webkit_build_directory(self, args):
+        args = ["perl", self.script_path("webkit-build-directory")] + args
+        return self._executive.run_command(args).rstrip()
+
+    def _configuration_file_path(self):
+        build_root = self._webkit_build_directory(["--top-level"])
+        return os.path.join(build_root, "Configuration")
+
+    # Easy override for unit tests
+    def _open_configuration_file(self):
+        configuration_path = self._configuration_file_path()
+        return codecs.open(configuration_path, "r", "utf-8")
+
+    def _read_configuration(self):
+        try:
+            with self._open_configuration_file() as file:
+                return file.readline().rstrip()
+        except IOError, e:
+            return None
+
+    # FIXME: This list may be incomplete as Apple has some sekret configs.
+    _RECOGNIZED_CONFIGURATIONS = ("Debug", "Release")
+
     def default_configuration(self):
-        return "Release"
+        # FIXME: Unify this with webkitdir.pm configuration reading code.
+        configuration = self._read_configuration()
+        if not configuration:
+            configuration = "Release"
+        if configuration not in self._RECOGNIZED_CONFIGURATIONS:
+            _log.warn("Configuration \"%s\" found in %s is not a recognized value.\n" % (configuration, self._configuration_file_path()))
+            _log.warn("Scripts may fail.  See 'set-webkit-configuration --help'.")
+        return configuration
 
     #
     # PROTECTED ROUTINES
@@ -645,6 +616,10 @@ class Port(object):
     def _path_to_driver(self, configuration=None):
         """Returns the full path to the test driver (DumpRenderTree)."""
         raise NotImplementedError('Port.path_to_driver')
+
+    def _path_to_webcore_library(self):
+        """Returns the full path to a built copy of WebCore."""
+        raise NotImplementedError('Port.path_to_webcore_library')
 
     def _path_to_helper(self):
         """Returns the full path to the layout_test_helper binary, which
@@ -762,11 +737,6 @@ class Driver:
         """Returns None if the Driver is still running. Returns the returncode
         if it has exited."""
         raise NotImplementedError('Driver.poll')
-
-    def returncode(self):
-        """Returns the system-specific returncode if the Driver has stopped or
-        exited."""
-        raise NotImplementedError('Driver.returncode')
 
     def stop(self):
         raise NotImplementedError('Driver.stop')

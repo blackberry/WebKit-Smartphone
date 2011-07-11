@@ -169,6 +169,10 @@ class BuildBotTest(unittest.TestCase):
     <td class="box"><a href="builders/Qt%20Linux%20Release">Qt Linux Release</a></td>
       <td align="center" class="LastBuild box failure"><a href="builders/Qt%20Linux%20Release/builds/654">47383</a><br />failed<br />compile-webkit</td>
       <td align="center" class="Activity idle">idle<br />3 pending</td>
+    <tr>
+    <td class="box"><a href="builders/Qt%20Windows%2032-bit%20Debug">Qt Windows 32-bit Debug</a></td>
+      <td align="center" class="LastBuild box failure"><a href="builders/Qt%20Windows%2032-bit%20Debug/builds/2090">60563</a><br />failed<br />failed<br />slave<br />lost</td>
+      <td align="center" class="Activity building">building<br />ETA in<br />~ 5 mins<br />at 08:25</td>
     </table>
 '''
     _expected_example_one_box_parsings = [
@@ -195,6 +199,14 @@ class BuildBotTest(unittest.TestCase):
             'built_revision': 47383,
             'activity': 'idle',
             'pending_builds': 3,
+        },
+        {
+            'is_green': True,
+            'build_number' : 2090,
+            'name': u'Qt Windows 32-bit Debug',
+            'built_revision': 60563,
+            'activity': 'building',
+            'pending_builds': 0,
         },
     ]
 
@@ -245,6 +257,7 @@ class BuildBotTest(unittest.TestCase):
             {'name': u'Leopard Intel Debug (Tests)', },
             {'name': u'SnowLeopard Intel Release (Build)', },
             {'name': u'SnowLeopard Intel Release (Tests)', },
+            {'name': u'SnowLeopard Intel Release (WebKit2 Tests)', },
             {'name': u'SnowLeopard Intel Leaks', },
             {'name': u'Windows Release (Build)', },
             {'name': u'Windows Release (Tests)', },
@@ -263,17 +276,21 @@ class BuildBotTest(unittest.TestCase):
             {'name': u'Chromium Linux Release', },
             {'name': u'Chromium Mac Release', },
             {'name': u'Chromium Win Release', },
+            {'name': u'Chromium Linux Release (Tests)', },
+            {'name': u'Chromium Mac Release (Tests)', },
+            {'name': u'Chromium Win Release (Tests)', },
             {'name': u'New run-webkit-tests', },
         ]
         name_regexps = [
             "SnowLeopard.*Build",
-            "SnowLeopard.*Test",
+            "SnowLeopard.*\(Test",
             "Leopard",
             "Tiger",
             "Windows.*Build",
-            "GTK",
+            "GTK.*32",
+            "GTK.*64.*Debug",  # Disallow the 64-bit Release bot which is broken.
             "Qt",
-            "Chromium",
+            "Chromium.*Release$",
         ]
         expected_builders = [
             {'name': u'Tiger Intel Release', },
@@ -288,7 +305,6 @@ class BuildBotTest(unittest.TestCase):
             {'name': u'GTK Linux 32-bit Release', },
             {'name': u'GTK Linux 32-bit Debug', },
             {'name': u'GTK Linux 64-bit Debug', },
-            {'name': u'GTK Linux 64-bit Release', },
             {'name': u'Qt Linux Release', },
             {'name': u'Qt Linux Release minimal', },
             {'name': u'Qt Linux ARMv5 Release', },

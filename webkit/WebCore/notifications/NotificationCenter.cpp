@@ -49,14 +49,26 @@ int NotificationCenter::checkPermission()
 {
     if (!presenter())
         return NotificationPresenter::PermissionDenied;
-    return m_notificationPresenter->checkPermission(m_scriptExecutionContext->url());
+    return m_notificationPresenter->checkPermission(m_scriptExecutionContext);
 }
 
 void NotificationCenter::requestPermission(PassRefPtr<VoidCallback> callback)
 {
     if (!presenter())
         return;
-    m_notificationPresenter->requestPermission(m_scriptExecutionContext->securityOrigin(), callback);
+    m_notificationPresenter->requestPermission(m_scriptExecutionContext, callback);
+}
+
+void NotificationCenter::disconnectFrame()
+{
+    // m_notificationPresenter should never be 0. But just to be safe, we check it here.
+    // Due to the mysterious bug http://code.google.com/p/chromium/issues/detail?id=49323.
+    ASSERT(m_notificationPresenter);
+    if (!m_notificationPresenter)
+        return;
+    m_notificationPresenter->cancelRequestsForPermission(m_scriptExecutionContext);
+    m_notificationPresenter = 0;
+    m_scriptExecutionContext = 0;
 }
 
 } // namespace WebCore

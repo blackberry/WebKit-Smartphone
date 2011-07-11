@@ -23,7 +23,6 @@
 #if ENABLE(VIDEO)
 
 #include "BitmapImage.h"
-
 #include <gst/gst.h>
 #include <gst/video/video.h>
 #include <wtf/PassRefPtr.h>
@@ -51,7 +50,6 @@ class ImageGStreamer : public RefCounted<ImageGStreamer> {
 
 #if PLATFORM(CAIRO)
         ImageGStreamer(GstBuffer*&, IntSize, cairo_format_t&);
-        cairo_surface_t* m_surface;
 #endif
 
 #if PLATFORM(MAC)
@@ -61,6 +59,5 @@ class ImageGStreamer : public RefCounted<ImageGStreamer> {
     };
 }
 
-#endif
-
+#endif // ENABLE(VIDEO)
 #endif

@@ -23,6 +23,13 @@
 #include <openvg.h>
 #include <wtf/Assertions.h>
 
+#if !defined(WEBKIT_OPENVG_NATIVE_IMAGE_FORMAT_s_8888)
+#define WEBKIT_OPENVG_NATIVE_IMAGE_FORMAT_s_8888 VG_sRGBA_8888_PRE
+#endif
+#if !defined(WEBKIT_OPENVG_NATIVE_IMAGE_FORMAT_l_8888)
+#define WEBKIT_OPENVG_NATIVE_IMAGE_FORMAT_l_8888 VG_lRGBA_8888_PRE
+#endif
+
 static inline const char* toVGErrorConstant(VGErrorCode error)
 {
     switch (error) {

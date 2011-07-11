@@ -82,6 +82,7 @@
 #if ENABLE(JSC_MULTIPLE_THREADS)
 #include <pthread.h>
 #endif
+#include <wtf/StdLibExtras.h>
 
 #ifndef NO_TCMALLOC_SAMPLES
 #ifdef WTF_CHANGES
@@ -383,7 +384,8 @@ size_t fastMallocSize(const void* p)
 {
 #if OS(DARWIN)
     return malloc_size(p);
-#elif COMPILER(MSVC) && !PLATFORM(OLYMPIA)
+#elif COMPILER(MSVC) && !PLATFORM(BREWMP) && !PLATFORM(OLYMPIA)
+    // Brew MP uses its own memory allocator, so _msize does not work on the Brew MP simulator.
     return _msize(const_cast<void*>(p));
 #else
     return 1;
@@ -415,16 +417,18 @@ extern "C" const int jscore_fastmalloc_introspection = 0;
 #include "TCSpinLock.h"
 #include "TCSystemAlloc.h"
 #include <algorithm>
-#include <errno.h>
 #include <limits>
 #include <pthread.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
+#if HAVE(ERRNO_H)
+#include <errno.h>
+#endif
 #if OS(UNIX)
 #include <unistd.h>
 #endif
-#if COMPILER(MSVC)
+#if OS(WINDOWS)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -1015,7 +1019,7 @@ class PageHeapAllocator {
         if (!new_allocation)
           CRASH();
 
-        *(void**)new_allocation = allocated_regions_;
+        *reinterpret_cast_ptr<void**>(new_allocation) = allocated_regions_;
         allocated_regions_ = new_allocation;
         free_area_ = new_allocation + kAlignedSize;
         free_avail_ = kAllocIncrement - kAlignedSize;
@@ -1489,11 +1493,23 @@ void TCMalloc_PageHeap::init()
 
 void TCMalloc_PageHeap::initializeScavenger()
 {
-  pthread_mutex_init(&m_scavengeMutex, 0);
-  pthread_cond_init(&m_scavengeCondition, 0);
-  m_scavengeThreadActive = true;
-  pthread_t thread;
-  pthread_create(&thread, 0, runScavengerThread, this);
+    // Create a non-recursive mutex.
+#if !defined(PTHREAD_MUTEX_NORMAL) || PTHREAD_MUTEX_NORMAL == PTHREAD_MUTEX_DEFAULT
+    pthread_mutex_init(&m_scavengeMutex, 0);
+#else
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_NORMAL);
+
+    pthread_mutex_init(&m_scavengeMutex, &attr);
+
+    pthread_mutexattr_destroy(&attr);
+#endif
+
+    pthread_cond_init(&m_scavengeCondition, 0);
+    m_scavengeThreadActive = true;
+    pthread_t thread;
+    pthread_create(&thread, 0, runScavengerThread, this);
 }
 
 void* TCMalloc_PageHeap::runScavengerThread(void* context)
@@ -1507,8 +1523,10 @@ void* TCMalloc_PageHeap::runScavengerThread(void* context)
 
 ALWAYS_INLINE void TCMalloc_PageHeap::signalScavenger()
 {
-  if (!m_scavengeThreadActive && shouldScavenge())
-    pthread_cond_signal(&m_scavengeCondition);
+    // m_scavengeMutex should be held before accessing m_scavengeThreadActive.
+    ASSERT(pthread_mutex_trylock(m_scavengeMutex));
+    if (!m_scavengeThreadActive && shouldScavenge())
+        pthread_cond_signal(&m_scavengeCondition);
 }
 
 #else // !HAVE(DISPATCH_H)
@@ -1525,10 +1543,11 @@ void TCMalloc_PageHeap::initializeScavenger()
 
 ALWAYS_INLINE void TCMalloc_PageHeap::signalScavenger()
 {
-  if (!m_scavengingScheduled && shouldScavenge()) {
-    m_scavengingScheduled = true;
-    dispatch_resume(m_scavengeTimer);
-  }
+    ASSERT(IsHeld(pageheap_lock));
+    if (!m_scavengingScheduled && shouldScavenge()) {
+        m_scavengingScheduled = true;
+        dispatch_resume(m_scavengeTimer);
+    }
 }
 
 #endif
@@ -1543,7 +1562,8 @@ void TCMalloc_PageHeap::scavenge()
             SpanList* slist = (static_cast<size_t>(i) == kMaxPages) ? &large_ : &free_[i];
             // If the span size is bigger than kMinSpanListsWithSpans pages return all the spans in the list, else return all but 1 span.  
             // Return only 50% of a spanlist at a time so spans of size 1 are not the only ones left.
-            size_t numSpansToReturn = (i > kMinSpanListsWithSpans) ? DLL_Length(&slist->normal) : static_cast<size_t>(.5 * DLL_Length(&slist->normal));
+            size_t length = DLL_Length(&slist->normal);
+            size_t numSpansToReturn = (i > kMinSpanListsWithSpans) ? length : length / 2;
             for (int j = 0; static_cast<size_t>(j) < numSpansToReturn && !DLL_IsEmpty(&slist->normal) && free_committed_pages_ > targetPageCount; j++) {
                 Span* s = slist->normal.prev; 
                 DLL_Remove(s);
@@ -2393,15 +2413,13 @@ void TCMalloc_PageHeap::scavengerThread()
 
 void TCMalloc_PageHeap::periodicScavenge()
 {
-  {
     SpinLockHolder h(&pageheap_lock);
     pageheap->scavenge();
-  }
 
-  if (!shouldScavenge()) {
-    m_scavengingScheduled = false;
-    dispatch_suspend(m_scavengeTimer);
-  }
+    if (!shouldScavenge()) {
+        m_scavengingScheduled = false;
+        dispatch_suspend(m_scavengeTimer);
+    }
 }
 #endif // HAVE(DISPATCH_H)
 
@@ -2687,7 +2705,13 @@ ALWAYS_INLINE void TCMalloc_Central_FreeList::Populate() {
     if (span) pageheap->RegisterSizeClass(span, size_class_);
   }
   if (span == NULL) {
+#if HAVE(ERRNO_H)
     MESSAGE("allocation failed: %d\n", errno);
+#elif OS(WINDOWS)
+    MESSAGE("allocation failed: %d\n", ::GetLastError());
+#else
+    MESSAGE("allocation failed\n");
+#endif
     lock_.Lock();
     return;
   }
@@ -2710,7 +2734,7 @@ ALWAYS_INLINE void TCMalloc_Central_FreeList::Populate() {
   char* nptr;
   while ((nptr = ptr + size) <= limit) {
     *tail = ptr;
-    tail = reinterpret_cast<void**>(ptr);
+    tail = reinterpret_cast_ptr<void**>(ptr);
     ptr = nptr;
     num++;
   }
@@ -3054,7 +3078,7 @@ void TCMalloc_ThreadCache::BecomeIdle() {
   if (heap->in_setspecific_) return;    // Do not disturb the active caller
 
   heap->in_setspecific_ = true;
-  pthread_setspecific(heap_key, NULL);
+  setThreadHeap(NULL);
 #ifdef HAVE_TLS
   // Also update the copy in __thread
   threadlocal_heap = NULL;
@@ -4454,10 +4478,10 @@ extern "C" {
 malloc_introspection_t jscore_fastmalloc_introspection = { &FastMallocZone::enumerate, &FastMallocZone::goodSize, &FastMallocZone::check, &FastMallocZone::print,
     &FastMallocZone::log, &FastMallocZone::forceLock, &FastMallocZone::forceUnlock, &FastMallocZone::statistics
 
-#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !OS(IPHONE_OS)
+#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
     , 0 // zone_locked will not be called on the zone unless it advertises itself as version five or higher.
 #endif
-#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD) && !OS(IPHONE_OS)
+#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
     , 0, 0, 0, 0 // These members will not be used unless the zone advertises itself as version seven or higher.
 #endif
 

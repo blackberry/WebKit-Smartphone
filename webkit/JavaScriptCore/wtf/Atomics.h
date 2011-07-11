@@ -67,6 +67,8 @@
 #include <libkern/OSAtomic.h>
 #elif OS(ANDROID)
 #include <cutils/atomic.h>
+#elif OS(OLYMPIA)
+#include <sys/atomic.h>
 #elif COMPILER(GCC) && !OS(SYMBIAN)
 #if (__GNUC__ > 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ >= 2))
 #include <ext/atomicity.h>
@@ -93,6 +95,12 @@ inline int atomicDecrement(int volatile* addend) { return InterlockedDecrement(r
 
 inline int atomicIncrement(int volatile* addend) { return OSAtomicIncrement32Barrier(const_cast<int*>(addend)); }
 inline int atomicDecrement(int volatile* addend) { return OSAtomicDecrement32Barrier(const_cast<int*>(addend)); }
+
+#elif OS(OLYMPIA)
+#define WTF_USE_LOCKFREE_THREADSAFESHARED 1
+
+inline int atomicIncrement(atomic_t* addend) { return atomic_incr(addend); }
+inline int atomicDecrement(atomic_t* addend) { return atomic_decr(addend); }
 
 #elif OS(ANDROID)
 

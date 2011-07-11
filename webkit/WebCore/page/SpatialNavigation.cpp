@@ -35,6 +35,7 @@
 #include "HTMLFrameOwnerElement.h"
 #include "IntRect.h"
 #include "Node.h"
+#include "RenderLayer.h"
 #include "Page.h"
 
 namespace WebCore {
@@ -102,14 +103,9 @@ void distanceDataForNode(FocusDirection direction, Node* start, FocusCandidate& 
 // FIXME: This function does not behave correctly with transformed frames.
 static IntRect renderRectRelativeToRootDocument(RenderObject* render)
 {
-    ASSERT(render);
+    ASSERT(render && render->node());
 
-    IntRect rect(render->absoluteClippedOverflowRect());
-
-    if (rect.isEmpty()) {
-        Element* e = static_cast<Element*>(render->node());
-        rect = e->getRect();
-    }
+    IntRect rect = render->node()->getRect();
 
     // In cases when the |render|'s associated node is in a scrollable inner
     // document, we only consider its scrollOffset if it is not offscreen.
@@ -124,8 +120,11 @@ static IntRect renderRectRelativeToRootDocument(RenderObject* render)
 
     // Handle nested frames.
     for (Frame* frame = render->document()->frame(); frame; frame = frame->tree()->parent()) {
-        if (HTMLFrameOwnerElement* ownerElement = frame->ownerElement())
-            rect.move(ownerElement->offsetLeft(), ownerElement->offsetTop());
+        if (Element* element = static_cast<Element*>(frame->ownerElement())) {
+            do {
+                rect.move(element->offsetLeft(), element->offsetTop());
+            } while ((element = element->offsetParent()));
+        }
     }
 
     return rect;
@@ -444,7 +443,7 @@ bool hasOffscreenRect(Node* node)
 
 // In a bottom-up way, this method tries to scroll |frame| in a given direction
 // |direction|, going up in the frame tree hierarchy in case it does not succeed.
-bool scrollInDirection(Frame* frame, FocusDirection direction)
+bool scrollInDirection(Frame* frame, FocusDirection direction, const FocusCandidate& candidate)
 {
     if (!frame)
         return false;
@@ -467,6 +466,9 @@ bool scrollInDirection(Frame* frame, FocusDirection direction)
     default:
         return false;
     }
+
+    if (!candidate.isNull() && isScrollableContainerNode(candidate.enclosingScrollableBox))
+        return frame->eventHandler()->scrollRecursively(scrollDirection, ScrollByLine, candidate.enclosingScrollableBox);
 
     return frame->eventHandler()->scrollRecursively(scrollDirection, ScrollByLine);
 }
@@ -510,7 +512,7 @@ static bool checkNegativeCoordsForNode(Node* node, const IntRect& curRect)
 {
     ASSERT(node || node->renderer());
 
-    if (curRect.x() > 0 && curRect.y() > 0)
+    if (curRect.x() >= 0 && curRect.y() >= 0)
         return true;
 
     bool canBeScrolled = false;
@@ -524,6 +526,39 @@ static bool checkNegativeCoordsForNode(Node* node, const IntRect& curRect)
     }
 
     return canBeScrolled;
+}
+
+bool isScrollableContainerNode(Node* node)
+{
+    if (!node)
+        return false;
+
+    if (RenderObject* renderer = node->renderer()) {
+        return (renderer->isBox() && toRenderBox(renderer)->canBeScrolledAndHasScrollableArea()
+             && node->hasChildNodes() && !node->isDocumentNode());
+    }
+
+    return false;
+}
+
+bool isNodeDeepDescendantOfDocument(Node* node, Document* baseDocument)
+{
+    if (!node || !baseDocument)
+        return false;
+
+    bool descendant = baseDocument == node->document();
+
+    Element* currentElement = static_cast<Element*>(node);
+    while (!descendant) {
+        Element* documentOwner = currentElement->document()->ownerElement();
+        if (!documentOwner)
+            break;
+
+        descendant = documentOwner->document() == baseDocument;
+        currentElement = documentOwner;
+    }
+
+    return descendant;
 }
 
 } // namespace WebCore

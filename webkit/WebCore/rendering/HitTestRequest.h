@@ -27,17 +27,20 @@ namespace WebCore {
 class HitTestRequest {
 public:
     enum RequestType {
-        ReadOnly = 0x1,
-        Active = 0x2,
-        MouseMove = 0x4,
-        MouseUp = 0x8,
+        ReadOnly = 1 << 1,
+        Active = 1 << 2,
+        MouseMove = 1 << 3,
+        MouseUp = 1 << 4,
+        IgnoreClipping = 1 << 5,
 #if PLATFORM(OLYMPIA)
-        FingerUp = 0x20,
+        FingerUp = 1 << 10,
 #endif
-        IgnoreClipping = 0x10
+        SVGClipContent = 1 << 6
     };
 
-    HitTestRequest(int requestType)
+    typedef unsigned HitTestRequestType;
+
+    HitTestRequest(HitTestRequestType requestType)
         : m_requestType(requestType)
     {
 #if PLATFORM(OLYMPIA)
@@ -53,9 +56,10 @@ public:
     bool fingerUp() const { return m_requestType & FingerUp; }
 #endif
     bool ignoreClipping() const { return m_requestType & IgnoreClipping; }
+    bool svgClipContent() const { return m_requestType & SVGClipContent; }
 
 private:
-    int m_requestType;
+    HitTestRequestType m_requestType;
 };
 
 } // namespace WebCore

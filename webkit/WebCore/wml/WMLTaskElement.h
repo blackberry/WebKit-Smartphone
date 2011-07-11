@@ -33,9 +33,6 @@ class WMLSetvarElement;
 
 class WMLTaskElement : public WMLElement {
 public:
-    WMLTaskElement(const QualifiedName& tagName, Document*);
-    virtual ~WMLTaskElement();
-
     virtual bool isWMLTaskElement() const { return true; }
 
     virtual void insertedIntoDocument();
@@ -46,6 +43,9 @@ public:
     void deregisterVariableSetter(WMLSetvarElement*);
 
 protected:
+    WMLTaskElement(const QualifiedName& tagName, Document*);
+    virtual ~WMLTaskElement();
+
     void storeVariableState(WMLPageState*);
 
 private:

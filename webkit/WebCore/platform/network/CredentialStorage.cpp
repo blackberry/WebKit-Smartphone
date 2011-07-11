@@ -29,8 +29,8 @@
 #include "Credential.h"
 #include "KURL.h"
 #include "ProtectionSpaceHash.h"
-#include "StringHash.h"
 #include <wtf/text/CString.h>
+#include <wtf/text/StringHash.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/StdLibExtras.h>
@@ -75,11 +75,10 @@ static String protectionSpaceMapKeyFromURL(const KURL& url)
     unsigned directoryURLPathStart = url.pathStart();
     ASSERT(directoryURL[directoryURLPathStart] == '/');
     if (directoryURL.length() > directoryURLPathStart + 1) {
-        int index = directoryURL.reverseFind('/');
-        ASSERT(index > 0);
-        directoryURL = directoryURL.substring(0, (static_cast<unsigned>(index) != directoryURLPathStart) ? index : directoryURLPathStart + 1);
+        size_t index = directoryURL.reverseFind('/');
+        ASSERT(index != notFound);
+        directoryURL = directoryURL.substring(0, (index != directoryURLPathStart) ? index : directoryURLPathStart + 1);
     }
-    ASSERT(directoryURL.length() == directoryURLPathStart + 1 || directoryURL[directoryURL.length() - 1] != '/');
 
     return directoryURL;
 }
@@ -106,6 +105,11 @@ Credential CredentialStorage::get(const ProtectionSpace& protectionSpace)
     return protectionSpaceToCredentialMap().get(protectionSpace);
 }
 
+void CredentialStorage::remove(const ProtectionSpace& protectionSpace)
+{
+    protectionSpaceToCredentialMap().remove(protectionSpace);
+}
+
 static PathToDefaultProtectionSpaceMap::iterator findDefaultProtectionSpaceForURL(const KURL& url)
 {
     ASSERT(url.protocolInHTTPFamily());
@@ -127,9 +131,9 @@ static PathToDefaultProtectionSpaceMap::iterator findDefaultProtectionSpaceForUR
         if (directoryURL.length() == directoryURLPathStart + 1)  // path is "/" already, cannot shorten it any more
             return map.end();
 
-        int index = directoryURL.reverseFind('/', -2);
-        ASSERT(index > 0);
-        directoryURL = directoryURL.substring(0, (static_cast<unsigned>(index) == directoryURLPathStart) ? index + 1 : index);
+        size_t index = directoryURL.reverseFind('/', directoryURL.length() - 2);
+        ASSERT(index != notFound);
+        directoryURL = directoryURL.substring(0, (index == directoryURLPathStart) ? index + 1 : index);
         ASSERT(directoryURL.length() > directoryURLPathStart);
         ASSERT(directoryURL.length() == directoryURLPathStart + 1 || directoryURL[directoryURL.length() - 1] != '/');
     }

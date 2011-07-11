@@ -30,8 +30,6 @@
 #define DatabaseThread_h
 
 #if ENABLE(DATABASE)
-
-#include "Timer.h"
 #include <wtf/Deque.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
@@ -58,21 +56,15 @@ public:
 
     bool start();
     void requestTermination(DatabaseTaskSynchronizer* cleanupSync);
-    bool terminationRequested() const;
+    bool terminationRequested(DatabaseTaskSynchronizer* taskSynchronizer = 0) const;
 
     void scheduleTask(PassOwnPtr<DatabaseTask>);
-    // This just adds the task to the front of the queue - the caller needs to be extremely careful not to create deadlocks when waiting for completion.
-    // When wait is true, the function blocks until the job is finished.
-    void scheduleImmediateTask(PassOwnPtr<DatabaseTask>, bool waitUntilFinish = false);
+    void scheduleImmediateTask(PassOwnPtr<DatabaseTask>); // This just adds the task to the front of the queue - the caller needs to be extremely careful not to create deadlocks when waiting for completion.
     void unscheduleDatabaseTasks(Database*);
 
     void recordDatabaseOpen(Database*);
     void recordDatabaseClosed(Database*);
-#if ENABLE(SINGLE_THREADED)
-    ThreadIdentifier getThreadID() { return currentThread(); }
-#else
     ThreadIdentifier getThreadID() { return m_threadID; }
-#endif
 
     SQLTransactionClient* transactionClient() { return m_transactionClient.get(); }
     SQLTransactionCoordinator* transactionCoordinator() { return m_transactionCoordinator.get(); }
@@ -80,17 +72,6 @@ public:
 private:
     DatabaseThread();
 
-#if ENABLE(SINGLE_THREADED)
-    void timerFired(Timer<DatabaseThread>*);
-    void clearQueue();
-
-    Deque<DatabaseTask*> m_queue;
-    Timer<DatabaseThread> m_timer;
-#ifndef NDEBUG
-    bool m_isPerformingTask;
-#endif
-
-#else
     static void* databaseThreadStart(void*);
     void* databaseThread();
 
@@ -104,7 +85,6 @@ private:
     typedef HashSet<RefPtr<Database> > DatabaseSet;
     DatabaseSet m_openDatabaseSet;
 
-#endif
     OwnPtr<SQLTransactionClient> m_transactionClient;
     OwnPtr<SQLTransactionCoordinator> m_transactionCoordinator;
     DatabaseTaskSynchronizer* m_cleanupSync;

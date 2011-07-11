@@ -35,6 +35,7 @@
 
 namespace WebKit {
 class WebDevToolsAgentClient;
+class WebDevToolsMessageTransport;
 class WebFrame;
 class WebString;
 class WebURLRequest;
@@ -46,20 +47,19 @@ struct WebURLError;
 
 class WebDevToolsAgent {
 public:
-    WEBKIT_API static WebDevToolsAgent* create(WebView*, WebDevToolsAgentClient*);
-
     virtual ~WebDevToolsAgent() {}
 
     virtual void attach() = 0;
     virtual void detach() = 0;
+    virtual void frontendLoaded() = 0;
 
     virtual void didNavigate() = 0;
 
-    virtual void dispatchMessageFromFrontend(const WebDevToolsMessageData&) = 0;
+    virtual void dispatchOnInspectorBackend(const WebString& message) = 0;
 
     virtual void inspectElementAt(const WebPoint&) = 0;
 
-    virtual void setRuntimeFeatureEnabled(const WebString& feature, bool enabled) = 0;
+    virtual void setRuntimeProperty(const WebString& name, const WebString& value) = 0;
 
     // Exposed for LayoutTestController.
     virtual void evaluateInWebInspector(long callId, const WebString& script) = 0;
@@ -73,7 +73,16 @@ public:
     // Asynchronously request debugger to pause immediately.
     WEBKIT_API static void debuggerPauseScript();
 
-    WEBKIT_API static bool dispatchMessageFromFrontendOnIOThread(const WebDevToolsMessageData&);
+    class MessageDescriptor {
+    public:
+        virtual ~MessageDescriptor() { }
+        virtual WebDevToolsAgent* agent() = 0;
+        virtual WebString message() = 0;
+    };
+    // Asynchronously request debugger to pause immediately and run the command.
+    WEBKIT_API static void interruptAndDispatch(MessageDescriptor*);
+    WEBKIT_API static bool shouldInterruptForMessage(const WebString&);
+    WEBKIT_API static void processPendingMessages();
 
     typedef void (*MessageLoopDispatchHandler)();
 
@@ -82,7 +91,7 @@ public:
     WEBKIT_API static void setMessageLoopDispatchHandler(MessageLoopDispatchHandler);
 
     virtual void identifierForInitialRequest(unsigned long resourceId, WebFrame*, const WebURLRequest&) = 0;
-    virtual void willSendRequest(unsigned long resourceId, const WebURLRequest&) = 0;
+    virtual void willSendRequest(unsigned long resourceId, WebURLRequest&) = 0;
     virtual void didReceiveData(unsigned long resourceId, int length) = 0;
     virtual void didReceiveResponse(unsigned long resourceId, const WebURLResponse&) = 0;
     virtual void didFinishLoading(unsigned long resourceId) = 0;

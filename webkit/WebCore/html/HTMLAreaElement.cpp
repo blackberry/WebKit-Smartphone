@@ -72,7 +72,7 @@ void HTMLAreaElement::parseMappedAttribute(Attribute* attr)
 bool HTMLAreaElement::mapMouseEvent(int x, int y, const IntSize& size, HitTestResult& result)
 {
     if (m_lastSize != size) {
-        m_region.set(new Path(getRegion(size)));
+        m_region = adoptPtr(new Path(getRegion(size)));
         m_lastSize = size;
     }
 
@@ -163,21 +163,6 @@ Path HTMLAreaElement::getRegion(const IntSize& size) const
     return path;
 }
 
-KURL HTMLAreaElement::href() const
-{
-    return document()->completeURL(getAttribute(hrefAttr));
-}
-
-bool HTMLAreaElement::noHref() const
-{
-    return !getAttribute(nohrefAttr).isNull();
-}
-
-void HTMLAreaElement::setNoHref(bool noHref)
-{
-    setAttribute(nohrefAttr, noHref ? "" : 0);
-}
-    
 HTMLImageElement* HTMLAreaElement::imageElement() const
 {
     Node* mapElement = parent();

@@ -95,6 +95,12 @@
         },  # target webkit_system_interface
       ],  # targets
     }],  # condition OS == "mac"
+    ['OS!="win" and remove_webcore_debug_symbols==1', {
+      # Remove -g from all targets defined here.
+      'target_defaults': {
+        'cflags!': ['-g'],
+      },
+    }],
   ],  # conditions
 
   'variables': {
@@ -119,14 +125,17 @@
       '../dom',
       '../dom/default',
       '../editing',
+      '../fileapi',
       '../history',
       '../html',
       '../html/canvas',
+      '../html/parser',
       '../inspector',
       '../loader',
       '../loader/appcache',
       '../loader/archive',
       '../loader/icon',
+      '../mathml',
       '../notifications',
       '../page',
       '../page/animation',
@@ -137,6 +146,7 @@
       '../platform/graphics',
       '../platform/graphics/chromium',
       '../platform/graphics/filters',
+      '../platform/graphics/gpu',
       '../platform/graphics/opentype',
       '../platform/graphics/skia',
       '../platform/graphics/transforms',
@@ -159,6 +169,7 @@
       '../plugins/chromium',
       '../rendering',
       '../rendering/style',
+      '../rendering/svg',
       '../storage',
       '../storage/chromium',
       '../svg',
@@ -205,6 +216,7 @@
     ],
 
     'conditions': [
+      # TODO(maruel): Move it in its own project or generate it anyway?
       ['enable_svg!=0', {
         'bindings_idl_files': [
           '<@(webcore_svg_bindings_idl_files)',
@@ -212,22 +224,23 @@
       }],
       ['OS=="mac"', {
         'webcore_include_dirs+': [
-          # platform/graphics/cg and mac needs to come before
+          # platform/graphics/cg and cocoa need to come before
           # platform/graphics/chromium so that the Mac build picks up the
           # version of ImageBufferData.h in the cg directory and
-          # FontPlatformData.h in the mac directory.  The + prepends this
+          # FontPlatformData.h in the cocoa directory.  The + prepends this
           # directory to the list.
           # FIXME: This shouldn't need to be prepended.
-          # FIXME: Eliminate dependency on platform/graphics/mac and
-          # related directories.
-          # platform/graphics/cg may need to stick around, though.
-          '../platform/graphics/mac',
+          '../platform/graphics/cocoa',
           '../platform/graphics/cg',
         ],
         'webcore_include_dirs': [
           # FIXME: Eliminate dependency on platform/mac and related
           # directories.
+          # FIXME: Eliminate dependency on platform/graphics/mac and
+          # related directories.
+          # platform/graphics/cg may need to stick around, though.
           '../loader/archive/cf',
+          '../platform/graphics/mac',
           '../platform/mac',
           '../platform/text/mac',
         ],
@@ -264,6 +277,51 @@
   },
   'targets': [
     {
+      'target_name': 'inspector_protocol_sources',
+      'type': 'none',
+      'actions': [
+        {
+          'action_name': 'generateInspectorProtocolSources',
+          # The second input item will be used as item name in vcproj.
+          # It is not possible to put Inspector.idl there because
+          # all idl files are marking as excluded by gyp generator.
+          'inputs': [
+            '../bindings/scripts/generate-bindings.pl',
+            '../inspector/CodeGeneratorInspector.pm',
+            '../bindings/scripts/CodeGenerator.pm',
+            '../bindings/scripts/IDLParser.pm',
+            '../bindings/scripts/IDLStructure.pm',
+            '../inspector/Inspector.idl',
+          ],
+          'outputs': [
+            '<(SHARED_INTERMEDIATE_DIR)/webcore/InspectorBackendDispatcher.cpp',
+            '<(SHARED_INTERMEDIATE_DIR)/webcore/InspectorBackendStub.js',
+            '<(SHARED_INTERMEDIATE_DIR)/webkit/InspectorBackendDispatcher.h',
+            '<(SHARED_INTERMEDIATE_DIR)/webcore/InspectorFrontend.cpp',
+            '<(SHARED_INTERMEDIATE_DIR)/webkit/InspectorFrontend.h',
+          ],
+          'variables': {
+            'generator_include_dirs': [
+            ],
+          },
+          'action': [
+            'python',
+            'scripts/rule_binding.py',
+            '../inspector/Inspector.idl',
+            '<(SHARED_INTERMEDIATE_DIR)/webcore',
+            '<(SHARED_INTERMEDIATE_DIR)/webkit',
+            '--',
+            '<@(_inputs)',
+            '--',
+            '--defines', '<(feature_defines) LANGUAGE_JAVASCRIPT',
+            '--generator', 'Inspector',
+            '<@(generator_include_dirs)'
+          ],
+          'message': 'Generating Inspector protocol sources from Inspector.idl',
+        },
+      ]
+    },
+    {
       'target_name': 'webcore_bindings_sources',
       'type': 'none',
       'hard_dependency': 1,
@@ -274,7 +332,6 @@
 
         # gperf rule
         '../html/DocTypeStrings.gperf',
-        '../html/HTMLEntityNames.gperf',
         '../platform/ColorData.gperf',
 
         # idl rules
@@ -282,6 +339,22 @@
       ],
       'actions': [
         # Actions to build derived sources.
+        {
+          'action_name': 'HTMLEntityTable',
+          'inputs': [
+            '../html/parser/HTMLEntityNames.in',
+          ],
+          'outputs': [
+            '<(SHARED_INTERMEDIATE_DIR)/webkit/HTMLEntityTable.cpp'
+          ],
+          'action': [
+            'python',
+            '../html/parser/create-html-entity-table',
+            '-o',
+            '<@(_outputs)',
+            '<@(_inputs)'
+          ],
+        },
         {
           'action_name': 'CSSPropertyNames',
           'inputs': [
@@ -300,6 +373,7 @@
             '<@(_inputs)'
           ],
           'conditions': [
+            # TODO(maruel): Move it in its own project or generate it anyway?
             ['enable_svg!=0', {
               'inputs': [
                 '../css/SVGCSSPropertyNames.in',
@@ -314,7 +388,7 @@
             '../css/CSSValueKeywords.in',
           ],
           'outputs': [
-            '<(SHARED_INTERMEDIATE_DIR)/webkit/CSSValueKeywords.c',
+            '<(SHARED_INTERMEDIATE_DIR)/webkit/CSSValueKeywords.cpp',
             '<(SHARED_INTERMEDIATE_DIR)/webkit/CSSValueKeywords.h',
           ],
           'action': [
@@ -325,6 +399,7 @@
             '<@(_inputs)'
           ],
           'conditions': [
+            # TODO(maruel): Move it in its own project or generate it anyway?
             ['enable_svg!=0', {
               'inputs': [
                 '../css/SVGCSSValueKeywords.in',
@@ -386,6 +461,30 @@
           ],
         },
         {
+          'action_name': 'MathMLNames',
+          'inputs': [
+            '../dom/make_names.pl',
+            '../mathml/mathtags.in',
+            '../mathml/mathattrs.in',
+          ],
+          'outputs': [
+            '<(SHARED_INTERMEDIATE_DIR)/webkit/MathMLNames.cpp',
+            '<(SHARED_INTERMEDIATE_DIR)/webkit/MathMLNames.h',
+            '<(SHARED_INTERMEDIATE_DIR)/webkit/MathMLElementFactory.cpp',
+            '<(SHARED_INTERMEDIATE_DIR)/webkit/MathMLElementFactory.h',
+          ],
+          'action': [
+            'python',
+            'scripts/action_makenames.py',
+            '<@(_outputs)',
+            '--',
+            '<@(_inputs)',
+            '--',
+            '--factory',
+            '--extraDefines', '<(feature_defines)'
+          ],
+        },
+        {
           'action_name': 'UserAgentStyleSheets',
           'inputs': [
             '../css/make-css-file-arrays.pl',
@@ -396,6 +495,7 @@
             '../css/themeWin.css',
             '../css/themeWinQuirks.css',
             '../css/svg.css',
+            '../css/mathml.css',
             '../css/mediaControls.css',
             '../css/mediaControlsChromium.css',
           ],
@@ -531,24 +631,20 @@
         {
           'rule_name': 'gperf',
           'extension': 'gperf',
-          # gperf output is only ever #included by other source files.  As
-          # such, process_outputs_as_sources is off.  Some gperf output is
-          # #included as *.c and some as *.cpp.  Since there's no way to tell
-          # which one will be needed in a rule definition, declare both as
-          # outputs.  The harness script will generate one file and copy it to
-          # the other.
           #
-          # This rule places outputs in SHARED_INTERMEDIATE_DIR because glue
-          # needs access to HTMLEntityNames.c.
+          # gperf outputs are generated by WebCore/make-hash-tools.pl
+          #
           'outputs': [
-            '<(SHARED_INTERMEDIATE_DIR)/webkit/<(RULE_INPUT_ROOT).c',
             '<(SHARED_INTERMEDIATE_DIR)/webkit/<(RULE_INPUT_ROOT).cpp',
           ],
+          'inputs': [
+            '../make-hash-tools.pl',
+          ],
           'action': [
-            'python',
-            'scripts/rule_gperf.py',
+            'perl',
+            '../make-hash-tools.pl',
+            '<(SHARED_INTERMEDIATE_DIR)/webkit',
             '<(RULE_INPUT_PATH)',
-            '<(SHARED_INTERMEDIATE_DIR)/webkit'
           ],
           'process_outputs_as_sources': 0,
         },
@@ -574,6 +670,7 @@
             'generator_include_dirs': [
               '--include', '../css',
               '--include', '../dom',
+              '--include', '../fileapi',
               '--include', '../html',
               '--include', '../notifications',
               '--include', '../page',
@@ -613,6 +710,7 @@
       'hard_dependency': 1,
       'dependencies': [
         'webcore_bindings_sources',
+        'inspector_protocol_sources',
         '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:pcre',
         '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:wtf',
         '<(chromium_src_dir)/build/temp_gyp/googleurl.gyp:googleurl',
@@ -653,21 +751,38 @@
         '<(SHARED_INTERMEDIATE_DIR)/webkit/XLinkNames.cpp',
         '<(SHARED_INTERMEDIATE_DIR)/webkit/XMLNSNames.cpp',
         '<(SHARED_INTERMEDIATE_DIR)/webkit/XMLNames.cpp',
+        '<(SHARED_INTERMEDIATE_DIR)/webkit/SVGNames.cpp',
+        '<(SHARED_INTERMEDIATE_DIR)/webkit/MathMLElementFactory.cpp',
+        '<(SHARED_INTERMEDIATE_DIR)/webkit/MathMLNames.cpp',
+
+        # Generated from HTMLEntityNames.in
+        '<(SHARED_INTERMEDIATE_DIR)/webkit/HTMLEntityTable.cpp',
 
         # Additional .cpp files from the webcore_bindings_sources rules.
         '<(SHARED_INTERMEDIATE_DIR)/webkit/CSSGrammar.cpp',
         '<(SHARED_INTERMEDIATE_DIR)/webkit/XPathGrammar.cpp',
+
+        # Additional .cpp files from the webcore_inspector_sources list.
+        '<(SHARED_INTERMEDIATE_DIR)/webcore/InspectorFrontend.cpp',
+        '<(SHARED_INTERMEDIATE_DIR)/webcore/InspectorBackendDispatcher.cpp',
       ],
       'conditions': [
         ['javascript_engine=="v8"', {
           'dependencies': [
             '<(chromium_src_dir)/v8/tools/gyp/v8.gyp:v8',
           ],
+          'conditions': [
+            ['inside_chromium_build==1 and OS=="win" and component=="shared_library"', {
+              'defines': [
+                'USING_V8_SHARED',
+              ],
+            }],
+          ],
         }],
+        # TODO(maruel): Move it in its own project or generate it anyway?
         ['enable_svg!=0', {
           'sources': [
             '<(SHARED_INTERMEDIATE_DIR)/webkit/SVGElementFactory.cpp',
-            '<(SHARED_INTERMEDIATE_DIR)/webkit/SVGNames.cpp',
             '<(SHARED_INTERMEDIATE_DIR)/webkit/V8SVGElementWrapperFactory.cpp',
          ],
         }],
@@ -691,19 +806,13 @@
             'include_dirs+++': ['../dom'],
           },
         }],
-        ['OS!="win" and remove_webcore_debug_symbols==1', {
-          'configurations': {
-            'Debug': {
-              'cflags!': ['-g'],
-            }
-          },
-        }],
       ],
     },
     {
-      'target_name': 'webcore',
-      'type': '<(library)',
-      'msvs_guid': '1C16337B-ACF3-4D03-AA90-851C5B5EADA6',
+      # We'll soon split libwebcore in multiple smaller libraries.
+      # webcore_prerequisites will be the 'base' target of every sub-target.
+      'target_name': 'webcore_prerequisites',
+      'type': 'none',
       'dependencies': [
         'webcore_bindings',
         '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:pcre',
@@ -717,20 +826,185 @@
         '<(chromium_src_dir)/third_party/npapi/npapi.gyp:npapi',
         '<(chromium_src_dir)/third_party/ots/ots.gyp:ots',
         '<(chromium_src_dir)/third_party/sqlite/sqlite.gyp:sqlite',
+        '<(chromium_src_dir)/third_party/angle/src/build_angle.gyp:translator_common',
       ],
-      'defines': [
-        'WEBCORE_NAVIGATOR_VENDOR="Google Inc."',
+      'export_dependent_settings': [
+        'webcore_bindings',
+        '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:pcre',
+        '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:wtf',
+        '<(chromium_src_dir)/build/temp_gyp/googleurl.gyp:googleurl',
+        '<(chromium_src_dir)/skia/skia.gyp:skia',
+        '<(chromium_src_dir)/third_party/libjpeg/libjpeg.gyp:libjpeg',
+        '<(chromium_src_dir)/third_party/libpng/libpng.gyp:libpng',
+        '<(chromium_src_dir)/third_party/libxml/libxml.gyp:libxml',
+        '<(chromium_src_dir)/third_party/libxslt/libxslt.gyp:libxslt',
+        '<(chromium_src_dir)/third_party/npapi/npapi.gyp:npapi',
+        '<(chromium_src_dir)/third_party/ots/ots.gyp:ots',
+        '<(chromium_src_dir)/third_party/sqlite/sqlite.gyp:sqlite',
+        '<(chromium_src_dir)/third_party/angle/src/build_angle.gyp:translator_common',
       ],
-      'include_dirs': [
-        '<(INTERMEDIATE_DIR)',
-        '<@(webcore_include_dirs)',
-        '<(chromium_src_dir)/gpu'
+      # This is needed for mac because of webkit_system_interface. It'd be nice
+      # if this hard dependency could be split off the rest.
+      'hard_dependency': 1,
+      'direct_dependent_settings': {
+        'defines': [
+          'WEBCORE_NAVIGATOR_VENDOR="Google Inc."',
+        ],
+        'include_dirs': [
+          '<(INTERMEDIATE_DIR)',
+          '<@(webcore_include_dirs)',
+          '<(chromium_src_dir)/gpu',
+          '<(chromium_src_dir)/third_party/angle/include/GLSLANG',
+        ],
+        'mac_framework_dirs': [
+          '$(SDKROOT)/System/Library/Frameworks/ApplicationServices.framework/Frameworks',
+        ],
+        'msvs_disabled_warnings': [
+          4138, 4244, 4291, 4305, 4344, 4355, 4521, 4099,
+        ],
+        'scons_line_length' : 1,
+        'xcode_settings': {
+          # Some Mac-specific parts of WebKit won't compile without having this
+          # prefix header injected.
+          # FIXME: make this a first-class setting.
+          'GCC_PREFIX_HEADER': '../WebCorePrefix.h',
+        },
+      },
+      'conditions': [
+        ['javascript_engine=="v8"', {
+          'dependencies': [
+            '<(chromium_src_dir)/v8/tools/gyp/v8.gyp:v8',
+          ],
+          'export_dependent_settings': [
+            '<(chromium_src_dir)/v8/tools/gyp/v8.gyp:v8',
+          ],
+          'conditions': [
+            ['inside_chromium_build==1 and OS=="win" and component=="shared_library"', {
+              'defines': [
+                'USING_V8_SHARED',
+              ],
+            }],
+          ],
+        }],
+        ['use_accelerated_compositing==1', {
+          'dependencies': [
+            '<(chromium_src_dir)/gpu/gpu.gyp:gles2_c_lib',
+          ],
+          'export_dependent_settings': [
+            '<(chromium_src_dir)/gpu/gpu.gyp:gles2_c_lib',
+          ],
+        }],
+        ['OS=="linux" or OS=="freebsd"', {
+          'dependencies': [
+            '<(chromium_src_dir)/build/linux/system.gyp:fontconfig',
+            '<(chromium_src_dir)/build/linux/system.gyp:gtk',
+          ],
+          'export_dependent_settings': [
+            '<(chromium_src_dir)/build/linux/system.gyp:fontconfig',
+            '<(chromium_src_dir)/build/linux/system.gyp:gtk',
+          ],
+          'cflags': [
+            # WebCore does not work with strict aliasing enabled.
+            # https://bugs.webkit.org/show_bug.cgi?id=25864
+            '-fno-strict-aliasing',
+          ],
+        }],
+        ['OS=="linux"', {
+          'defines': [
+            # Mozilla on Linux effectively uses uname -sm, but when running
+            # 32-bit x86 code on an x86_64 processor, it uses
+            # "Linux i686 (x86_64)".  Matching that would require making a
+            # run-time determination.
+            'WEBCORE_NAVIGATOR_PLATFORM="Linux i686"',
+          ],
+        }],
+        ['OS=="mac"', {
+          'dependencies': [
+            'webkit_system_interface',
+          ],
+          'export_dependent_settings': [
+            'webkit_system_interface',
+          ],
+          'defines': [
+            # Match Safari and Mozilla on Mac x86.
+            'WEBCORE_NAVIGATOR_PLATFORM="MacIntel"',
+
+            # Chromium's version of WebCore includes the following Objective-C
+            # classes. The system-provided WebCore framework may also provide
+            # these classes. Because of the nature of Objective-C binding
+            # (dynamically at runtime), it's possible for the Chromium-provided
+            # versions to interfere with the system-provided versions.  This may
+            # happen when a system framework attempts to use WebCore.framework,
+            # such as when converting an HTML-flavored string to an
+            # NSAttributedString.  The solution is to force Objective-C class
+            # names that would conflict to use alternate names.
+
+            # FIXME: This list will hopefully shrink but may also grow.
+            # Periodically run:
+            # nm libwebcore.a | grep -E '[atsATS] ([+-]\[|\.objc_class_name)'
+            # and make sure that everything listed there has the alternate
+            # ChromiumWebCoreObjC name, and that nothing extraneous is listed
+            # here. If all Objective-C can be eliminated from Chromium's WebCore
+            # library, these defines should be removed entirely.
+            'ScrollbarPrefsObserver=ChromiumWebCoreObjCScrollbarPrefsObserver',
+            'WebCoreRenderThemeNotificationObserver=ChromiumWebCoreObjCWebCoreRenderThemeNotificationObserver',
+            'WebFontCache=ChromiumWebCoreObjCWebFontCache',
+          ],
+          'include_dirs': [
+            '../../WebKitLibraries',
+          ],
+        }],
+        ['OS=="win"', {
+          'dependencies': [
+            '<(chromium_src_dir)/build/win/system.gyp:cygwin'
+          ],
+          'export_dependent_settings': [
+            '<(chromium_src_dir)/build/win/system.gyp:cygwin'
+          ],
+          'defines': [
+            # Match Safari and Mozilla on Windows.
+            'WEBCORE_NAVIGATOR_PLATFORM="Win32"',
+            '__PRETTY_FUNCTION__=__FUNCTION__',
+          ],
+          # This is needed because Event.h in this directory is blocked
+          # by a system header on windows.
+          'include_dirs++': ['../dom'],
+        }],
       ],
+    },
+    {
+      'target_name': 'webcore_svg',
+      'type': '<(library)',
+      'dependencies': [
+        'webcore_prerequisites',
+      ],
+      'sources': [
+        '<@(webcore_files)',
+      ],
+      'sources/': [
+        ['exclude', '.*'],
+        ['include', 'svg/'],
+        ['include', 'css/svg/'],
+        ['include', 'rendering/style/SVG'],
+        ['include', 'rendering/RenderSVG'],
+        ['include', 'rendering/SVG'],
+        ['exclude', 'svg/SVGAllInOne\\.cpp$'],
+      ],
+    },
+    {
+      'target_name': 'webcore_remaining',
+      'type': '<(library)',
+      'dependencies': [
+        'webcore_prerequisites',
+      ],
+      # This is needed for mac because of webkit_system_interface. It'd be nice
+      # if this hard dependency could be split off the rest.
+      'hard_dependency': 1,
       'sources': [
         '<@(webcore_files)',
 
         # For WebCoreSystemInterface, Mac-only.
-        '../../WebKit/mac/WebCoreSupport/WebSystemInterface.m',
+        '../../WebKit/mac/WebCoreSupport/WebSystemInterface.mm',
       ],
       'sources/': [
         # Exclude JSC custom bindings.
@@ -762,6 +1036,13 @@
         ['exclude', 'storage/OriginUsageRecord.cpp'],
         ['exclude', 'storage/OriginUsageRecord.h'],
         ['exclude', 'storage/SQLTransactionClient.cpp'],
+
+        # Exclude SVG.
+        ['exclude', 'svg/'],
+        ['exclude', 'css/svg/'],
+        ['exclude', 'rendering/style/SVG'],
+        ['exclude', 'rendering/RenderSVG'],
+        ['exclude', 'rendering/SVG'],
       ],
       'sources!': [
         # A few things can't be excluded by patterns.  List them individually.
@@ -772,11 +1053,14 @@
         # Don't build StorageEventDispatcher.  We have our own implementation.
         '../storage/StorageEventDispatcher.cpp',
 
-        # Don't build IndexedDatabase.  We have our own implementation.
-        '../storage/IndexedDatabase.cpp',
+        # Don't build IDBFactoryBackendInterface.  We have our own implementation.
+        '../storage/IDBFactoryBackendInterface.cpp',
+
+        # Don't build IDBKeyPathBackendImpl.  We have our own implementation.
+        '../storage/IDBKeyPathBackendImpl.cpp',
 
         # Use history/BackForwardListChromium.cpp instead.
-        '../history/BackForwardList.cpp',
+        '../history/BackForwardListImpl.cpp',
 
         # Use loader/icon/IconDatabaseNone.cpp instead.
         '../loader/icon/IconDatabase.cpp',
@@ -815,21 +1099,6 @@
         '../dom/default/PlatformMessagePortChannel.h',
 
       ],
-      'direct_dependent_settings': {
-        'include_dirs': [
-          '<@(webcore_include_dirs)',
-        ],
-        'mac_framework_dirs': [
-          '$(SDKROOT)/System/Library/Frameworks/ApplicationServices.framework/Frameworks',
-        ],
-      },
-      'export_dependent_settings': [
-        'webcore_bindings',
-        '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:wtf',
-        '<(chromium_src_dir)/build/temp_gyp/googleurl.gyp:googleurl',
-        '<(chromium_src_dir)/skia/skia.gyp:skia',
-        '<(chromium_src_dir)/third_party/npapi/npapi.gyp:npapi',
-      ],
       'link_settings': {
         'mac_bundle_resources': [
           '../Resources/aliasCursor.png',
@@ -863,48 +1132,8 @@
           '../Resources/zoomOutCursor.png',
         ],
       },
-      'hard_dependency': 1,
-      'mac_framework_dirs': [
-        '$(SDKROOT)/System/Library/Frameworks/ApplicationServices.framework/Frameworks',
-      ],
-      'msvs_disabled_warnings': [
-        4138, 4244, 4291, 4305, 4344, 4355, 4521, 4099,
-      ],
-      'scons_line_length' : 1,
-      'xcode_settings': {
-        # Some Mac-specific parts of WebKit won't compile without having this
-        # prefix header injected.
-        # FIXME: make this a first-class setting.
-        'GCC_PREFIX_HEADER': '../WebCorePrefix.h',
-      },
       'conditions': [
-        ['javascript_engine=="v8"', {
-          'dependencies': [
-            '<(chromium_src_dir)/v8/tools/gyp/v8.gyp:v8',
-          ],
-          'export_dependent_settings': [
-            '<(chromium_src_dir)/v8/tools/gyp/v8.gyp:v8',
-          ],
-        }],
-        ['enable_svg!=0', {
-          'sources/': [
-            ['exclude', 'svg/[^/]+\\.cpp$'],
-            ['include', 'svg/SVGAllInOne\\.cpp$'],
-          ],
-        }, {  # svg disabled
-          'sources/': [
-            ['exclude', 'svg/'],
-            ['exclude', 'css/svg/'],
-            ['exclude', 'rendering/style/SVG'],
-            ['exclude', 'rendering/RenderSVG'],
-            ['exclude', 'rendering/SVG'],
-          ],
-        }],
         ['OS=="linux" or OS=="freebsd"', {
-          'dependencies': [
-            '<(chromium_src_dir)/build/linux/system.gyp:fontconfig',
-            '<(chromium_src_dir)/build/linux/system.gyp:gtk',
-          ],
           'sources': [
             '../platform/graphics/chromium/VDMXParser.cpp',
             '../platform/graphics/chromium/HarfbuzzSkia.cpp',
@@ -918,49 +1147,14 @@
             ['include', 'platform/graphics/chromium/GlyphPageTreeNodeLinux\\.cpp$'],
             ['include', 'platform/graphics/chromium/SimpleFontDataLinux\\.cpp$'],
           ],
-          'cflags': [
-            # WebCore does not work with strict aliasing enabled.
-            # https://bugs.webkit.org/show_bug.cgi?id=25864
-            '-fno-strict-aliasing',
-          ],
-        }],
-        ['OS=="linux"', {
-          'defines': [
-            # Mozilla on Linux effectively uses uname -sm, but when running
-            # 32-bit x86 code on an x86_64 processor, it uses
-            # "Linux i686 (x86_64)".  Matching that would require making a
-            # run-time determination.
-            'WEBCORE_NAVIGATOR_PLATFORM="Linux i686"',
-          ],
         }],
         ['OS=="mac"', {
+          # Necessary for Mac .mm stuff.
+          'include_dirs': [
+            '../../WebKitLibraries',
+          ],
           'dependencies': [
             'webkit_system_interface',
-          ],
-          'defines': [
-            # Match Safari and Mozilla on Mac x86.
-            'WEBCORE_NAVIGATOR_PLATFORM="MacIntel"',
-
-            # Chromium's version of WebCore includes the following Objective-C
-            # classes. The system-provided WebCore framework may also provide
-            # these classes. Because of the nature of Objective-C binding
-            # (dynamically at runtime), it's possible for the Chromium-provided
-            # versions to interfere with the system-provided versions.  This may
-            # happen when a system framework attempts to use WebCore.framework,
-            # such as when converting an HTML-flavored string to an
-            # NSAttributedString.  The solution is to force Objective-C class
-            # names that would conflict to use alternate names.
-
-            # FIXME: This list will hopefully shrink but may also grow.
-            # Periodically run:
-            # nm libwebcore.a | grep -E '[atsATS] ([+-]\[|\.objc_class_name)'
-            # and make sure that everything listed there has the alternate
-            # ChromiumWebCoreObjC name, and that nothing extraneous is listed
-            # here. If all Objective-C can be eliminated from Chromium's WebCore
-            # library, these defines should be removed entirely.
-            'ScrollbarPrefsObserver=ChromiumWebCoreObjCScrollbarPrefsObserver',
-            'WebCoreRenderThemeNotificationObserver=ChromiumWebCoreObjCWebCoreRenderThemeNotificationObserver',
-            'WebFontCache=ChromiumWebCoreObjCWebFontCache',
           ],
           'actions': [
             {
@@ -975,9 +1169,6 @@
               ],
               'action': ['cp', '<@(_inputs)', '<@(_outputs)'],
             },
-          ],
-          'include_dirs': [
-            '../../WebKitLibraries',
           ],
           'sources/': [
             # Additional files from the WebCore Mac build that are presently
@@ -1010,6 +1201,7 @@
             ['include', 'platform/graphics/mac/GraphicsContextMac\\.mm$'],
             ['include', 'platform/graphics/mac/IntRectMac\\.mm$'],
             ['include', 'platform/mac/BlockExceptions\\.mm$'],
+            ['include', 'platform/mac/KillRingMac\\.mm$'],
             ['include', 'platform/mac/LocalCurrentGraphicsContext\\.mm$'],
             ['include', 'platform/mac/PurgeableBufferMac\\.cpp$'],
             ['include', 'platform/mac/WebCoreSystemInterface\\.mm$'],
@@ -1019,36 +1211,31 @@
             # Use USE_NEW_THEME on Mac.
             ['include', 'platform/Theme\\.cpp$'],
 
-            ['include', 'WebKit/mac/WebCoreSupport/WebSystemInterface\\.m$'],
+            ['include', 'WebKit/mac/WebCoreSupport/WebSystemInterface\\.mm$'],
+
+            # Chromium Mac does not use skia.
+            ['exclude', 'platform/graphics/skia/[^/]*Skia\\.(cpp|h)$'],
           ],
           'sources!': [
+            # The Mac uses platform/mac/KillRingMac.mm instead of the dummy
+            # implementation.
+            '../platform/KillRingNone.cpp',
+
             # The Mac currently uses FontCustomPlatformData.cpp from
             # platform/graphics/mac, included by regex above, instead.
-            '../platform/graphics/chromium/FontCustomPlatformData.cpp',
+            '../platform/graphics/skia/FontCustomPlatformData.cpp',
 
             # The Mac currently uses ScrollbarThemeChromiumMac.mm, which is not
             # related to ScrollbarThemeChromium.cpp.
             '../platform/chromium/ScrollbarThemeChromium.cpp',
 
+            # The Mac currently uses ImageChromiumMac.mm from
+            # platform/graphics/chromium, included by regex above, instead.
+            '../platform/graphics/chromium/ImageChromium.cpp',
+
             # The Mac uses ImageSourceCG.cpp from platform/graphics/cg, included
             # by regex above, instead.
             '../platform/graphics/ImageSource.cpp',
-
-            # These Skia files aren't currently built on the Mac, which uses
-            # CoreGraphics directly for this portion of graphics handling.
-            '../platform/graphics/skia/FloatPointSkia.cpp',
-            '../platform/graphics/skia/FloatRectSkia.cpp',
-            '../platform/graphics/skia/GradientSkia.cpp',
-            '../platform/graphics/skia/GraphicsContext3DSkia.cpp',
-            '../platform/graphics/skia/GraphicsContextSkia.cpp',
-            '../platform/graphics/skia/ImageBufferSkia.cpp',
-            '../platform/graphics/skia/ImageSkia.cpp',
-            '../platform/graphics/skia/ImageSourceSkia.cpp',
-            '../platform/graphics/skia/IntPointSkia.cpp',
-            '../platform/graphics/skia/IntRectSkia.cpp',
-            '../platform/graphics/skia/PathSkia.cpp',
-            '../platform/graphics/skia/PatternSkia.cpp',
-            '../platform/graphics/skia/TransformationMatrixSkia.cpp',
 
             # RenderThemeChromiumSkia is not used on mac since RenderThemeChromiumMac
             # does not reference the Skia code that is used by Windows and Linux.
@@ -1078,34 +1265,16 @@
             # Again, Skia is not used on Mac.
             '../platform/chromium/DragImageChromiumSkia.cpp',
           ],
-          'direct_dependent_settings': {
-            'include_dirs': [
-              '../../WebKitLibraries',
-              '../../WebKit/mac/WebCoreSupport',
-            ],
-          },
         }],
         ['OS=="win"', {
-          'dependencies': [
-            '<(chromium_src_dir)/build/win/system.gyp:cygwin'
-          ],
           'sources/': [
             ['exclude', 'Posix\\.cpp$'],
             ['include', '/opentype/'],
-            ['include', '/TransparencyWin\\.cpp$'],
+            ['include', '/ScrollAnimatorWin\\.cpp$'],
+            ['include', '/ScrollAnimatorWin\\.h$'],
             ['include', '/SkiaFontWin\\.cpp$'],
+            ['include', '/TransparencyWin\\.cpp$'],
           ],
-          'defines': [
-            # Match Safari and Mozilla on Windows.
-            'WEBCORE_NAVIGATOR_PLATFORM="Win32"',
-            '__PRETTY_FUNCTION__=__FUNCTION__',
-          ],
-          # This is needed because Event.h in this directory is blocked
-          # by a system header on windows.
-          'include_dirs++': ['../dom'],
-          'direct_dependent_settings': {
-            'include_dirs+++': ['../dom'],
-          },
         }],
         ['OS!="linux" and OS!="freebsd"', {
           'sources/': [['exclude', '(Gtk|Linux)\\.cpp$']]
@@ -1119,12 +1288,61 @@
             ['exclude', '/(Windows|Uniscribe)[^/]*\\.cpp$']
           ],
         }],
-        ['OS!="win" and remove_webcore_debug_symbols==1', {
-          'configurations': {
-            'Debug': {
-              'cflags!': ['-g'],
-            }
+      ],
+    },
+    {
+      'target_name': 'webcore',
+      'type': 'none',
+      'dependencies': [
+        'webcore_remaining',
+        # Exported.
+        'webcore_bindings',
+        '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:wtf',
+        '<(chromium_src_dir)/build/temp_gyp/googleurl.gyp:googleurl',
+        '<(chromium_src_dir)/skia/skia.gyp:skia',
+        '<(chromium_src_dir)/third_party/npapi/npapi.gyp:npapi',
+      ],
+      'export_dependent_settings': [
+        'webcore_bindings',
+        '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:wtf',
+        '<(chromium_src_dir)/build/temp_gyp/googleurl.gyp:googleurl',
+        '<(chromium_src_dir)/skia/skia.gyp:skia',
+        '<(chromium_src_dir)/third_party/npapi/npapi.gyp:npapi',
+      ],
+      'direct_dependent_settings': {
+        'include_dirs': [
+          '<@(webcore_include_dirs)',
+        ],
+        'mac_framework_dirs': [
+          '$(SDKROOT)/System/Library/Frameworks/ApplicationServices.framework/Frameworks',
+        ],
+      },
+      'conditions': [
+        ['javascript_engine=="v8"', {
+          'dependencies': [
+            '<(chromium_src_dir)/v8/tools/gyp/v8.gyp:v8',
+          ],
+          'export_dependent_settings': [
+            '<(chromium_src_dir)/v8/tools/gyp/v8.gyp:v8',
+          ],
+        }],
+        ['OS=="mac"', {
+          'direct_dependent_settings': {
+            'include_dirs': [
+              '../../WebKitLibraries',
+              '../../WebKit/mac/WebCoreSupport',
+            ],
           },
+        }],
+        ['OS=="win"', {
+          'direct_dependent_settings': {
+            'include_dirs+++': ['../dom'],
+          },
+        }],
+        ['enable_svg!=0', {
+          'dependencies': [
+            'webcore_svg',
+          ],
         }],
       ],
     },

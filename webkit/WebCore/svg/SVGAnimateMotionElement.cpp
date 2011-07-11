@@ -1,25 +1,23 @@
 /*
-    Copyright (C) 2007 Eric Seidel <eric@webkit.org>
-              (C) 2007 Rob Buis <buis@kde.org>
-    Copyright (C) 2008 Apple Inc. All Rights Reserved.
-
-    This file is part of the WebKit project
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2007 Eric Seidel <eric@webkit.org>
+ * Copyright (C) 2007 Rob Buis <buis@kde.org>
+ * Copyright (C) 2008 Apple Inc. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -28,9 +26,11 @@
 
 #include "Attribute.h"
 #include "RenderObject.h"
+#include "RenderSVGResource.h"
 #include "SVGElementInstance.h"
 #include "SVGMPathElement.h"
 #include "SVGParserUtilities.h"
+#include "SVGPathParserFactory.h"
 #include "SVGPathElement.h"
 #include "SVGTransformList.h"
 #include <math.h>
@@ -40,15 +40,16 @@ namespace WebCore {
     
 using namespace SVGNames;
 
-SVGAnimateMotionElement::SVGAnimateMotionElement(const QualifiedName& tagName, Document* doc)
-    : SVGAnimationElement(tagName, doc)
+inline SVGAnimateMotionElement::SVGAnimateMotionElement(const QualifiedName& tagName, Document* document)
+    : SVGAnimationElement(tagName, document)
     , m_baseIndexInTransformList(0)
     , m_angle(0)
 {
 }
 
-SVGAnimateMotionElement::~SVGAnimateMotionElement()
+PassRefPtr<SVGAnimateMotionElement> SVGAnimateMotionElement::create(const QualifiedName& tagName, Document* document)
 {
+    return adoptRef(new SVGAnimateMotionElement(tagName, document));
 }
 
 bool SVGAnimateMotionElement::hasValidTarget() const
@@ -87,7 +88,8 @@ void SVGAnimateMotionElement::parseMappedAttribute(Attribute* attr)
 {
     if (attr->name() == SVGNames::pathAttr) {
         m_path = Path();
-        pathFromSVGData(m_path, attr->value());
+        SVGPathParserFactory* factory = SVGPathParserFactory::self();
+        factory->buildPathFromString(attr->value(), m_path);
     } else
         SVGAnimationElement::parseMappedAttribute(attr);
 }
@@ -214,9 +216,16 @@ void SVGAnimateMotionElement::applyResultsToTarget()
 {
     // We accumulate to the target element transform list so there is not much to do here.
     SVGElement* targetElement = this->targetElement();
-    if (targetElement && targetElement->renderer())
-        targetElement->renderer()->setNeedsLayout(true);
-    
+    if (!targetElement)
+        return;
+
+    if (RenderObject* renderer = targetElement->renderer())
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
+
+    AffineTransform* t = targetElement->supplementalTransform();
+    if (!t)
+        return;
+
     // ...except in case where we have additional instances in <use> trees.
     const HashSet<SVGElementInstance*>& instances = targetElement->instancesForElement();
     const HashSet<SVGElementInstance*>::const_iterator end = instances.end();
@@ -224,11 +233,12 @@ void SVGAnimateMotionElement::applyResultsToTarget()
         SVGElement* shadowTreeElement = (*it)->shadowTreeElement();
         ASSERT(shadowTreeElement);
         AffineTransform* transform = shadowTreeElement->supplementalTransform();
-        AffineTransform* t = targetElement->supplementalTransform();
+        if (!transform)
+            continue;
         transform->setMatrix(t->a(), t->b(), t->c(), t->d(), t->e(), t->f());
         if (RenderObject* renderer = shadowTreeElement->renderer()) {
             renderer->setNeedsTransformUpdate();
-            renderer->setNeedsLayout(true);
+            RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
         }
     }
 }
@@ -248,5 +258,3 @@ float SVGAnimateMotionElement::calculateDistance(const String& fromString, const
 }
 
 #endif // ENABLE(SVG)
-
-// vim:ts=4:noet

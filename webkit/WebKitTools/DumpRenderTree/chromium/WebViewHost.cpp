@@ -35,7 +35,6 @@
 #include "TestNavigationController.h"
 #include "TestShell.h"
 #include "TestWebWorker.h"
-#include "net/base/net_errors.h" // FIXME: can we remove this?
 #include "public/WebCString.h"
 #include "public/WebConsoleMessage.h"
 #include "public/WebContextMenuData.h"
@@ -57,6 +56,7 @@
 #include "skia/ext/platform_canvas.h"
 #include "webkit/support/webkit_support.h"
 #include <wtf/Assertions.h>
+#include <wtf/PassOwnPtr.h>
 
 using namespace WebCore;
 using namespace WebKit;
@@ -165,35 +165,6 @@ static void printResponseDescription(const WebURLResponse& response)
            response.httpStatusCode());
 }
 
-static void printErrorDescription(const WebURLError& error)
-{
-    string domain = error.domain.utf8();
-    int code = error.reason;
-
-    if (domain == net::kErrorDomain) {
-        domain = "NSURLErrorDomain";
-        switch (error.reason) {
-        case net::ERR_ABORTED:
-            code = -999;
-            break;
-        case net::ERR_UNSAFE_PORT:
-            // Our unsafe port checking happens at the network stack level, but we
-            // make this translation here to match the behavior of stock WebKit.
-            domain = "WebKitErrorDomain";
-            code = 103;
-            break;
-        case net::ERR_ADDRESS_INVALID:
-        case net::ERR_ADDRESS_UNREACHABLE:
-            code = -1004;
-            break;
-        }
-    } else
-        LOG_ERROR("Unknown error domain");
-
-    printf("<NSError domain %s, code %d, failing URL \"%s\">",
-           domain.c_str(), code, error.unreachableURL.spec().data());
-}
-
 static void printNodeDescription(const WebNode& node, int exception)
 {
     if (exception) {
@@ -253,12 +224,7 @@ static string textAffinityDescription(WebTextAffinity affinity)
 
 // WebViewClient -------------------------------------------------------------
 
-WebView* WebViewHost::createView(WebFrame* creator)
-{
-    return createView(creator, WebWindowFeatures());
-}
-
-WebView* WebViewHost::createView(WebFrame*, const WebWindowFeatures&)
+WebView* WebViewHost::createView(WebFrame*, const WebWindowFeatures&, const WebString&)
 {
     if (!layoutTestController()->canOpenWindows())
         return 0;
@@ -523,6 +489,12 @@ void WebViewHost::focusAccessibilityObject(const WebAccessibilityObject& object)
     m_shell->accessibilityController()->setFocusedElement(object);
 }
 
+void WebViewHost::didChangeAccessibilityObjectChildren(const WebAccessibilityObject& object)
+{
+    if (m_shell->accessibilityController()->shouldDumpAccessibilityNotifications())
+        printf("didChangeAccessibilityObjectChildren - new count: %d\n", object.childCount());
+}
+
 WebNotificationPresenter* WebViewHost::notificationPresenter()
 {
     return m_shell->notificationPresenter();
@@ -533,6 +505,16 @@ WebKit::WebGeolocationService* WebViewHost::geolocationService()
     if (!m_geolocationServiceMock.get())
         m_geolocationServiceMock.set(WebGeolocationServiceMock::createWebGeolocationServiceMock());
     return m_geolocationServiceMock.get();
+}
+
+WebSpeechInputController* WebViewHost::speechInputController(WebKit::WebSpeechInputListener* listener)
+{
+    return m_shell->layoutTestController()->speechInputController(listener);
+}
+
+WebKit::WebDeviceOrientationClient* WebViewHost::deviceOrientationClient()
+{
+    return m_shell->layoutTestController()->deviceOrientationClient();
 }
 
 // WebWidgetClient -----------------------------------------------------------
@@ -719,11 +701,7 @@ WebURLError WebViewHost::cannotHandleRequestError(WebFrame*, const WebURLRequest
 
 WebURLError WebViewHost::cancelledError(WebFrame*, const WebURLRequest& request)
 {
-    WebURLError error;
-    error.domain = WebString::fromUTF8(net::kErrorDomain);
-    error.reason = net::ERR_ABORTED;
-    error.unreachableURL = request.url();
-    return error;
+    return webkit_support::CreateCancelledError(request);
 }
 
 void WebViewHost::unableToImplementPolicyWithError(WebFrame* frame, const WebURLError& error)
@@ -752,7 +730,7 @@ void WebViewHost::didCancelClientRedirect(WebFrame* frame)
 
 void WebViewHost::didCreateDataSource(WebFrame*, WebDataSource* ds)
 {
-    ds->setExtraData(m_pendingExtraData.release());
+    ds->setExtraData(m_pendingExtraData.leakPtr());
 }
 
 void WebViewHost::didStartProvisionalLoad(WebFrame* frame)
@@ -867,7 +845,7 @@ void WebViewHost::didFinishLoad(WebFrame* frame)
 
 void WebViewHost::didNavigateWithinPage(WebFrame* frame, bool isNewNavigation)
 {
-    frame->dataSource()->setExtraData(m_pendingExtraData.release());
+    frame->dataSource()->setExtraData(m_pendingExtraData.leakPtr());
 
     updateForCommittedLoad(frame, isNewNavigation);
 }
@@ -923,7 +901,8 @@ void WebViewHost::willSendRequest(WebFrame*, unsigned identifier, WebURLRequest&
     if (!host.empty() && (url.SchemeIs("http") || url.SchemeIs("https"))
         && host != "127.0.0.1"
         && host != "255.255.255.255"
-        && host != "localhost") {
+        && host != "localhost"
+        && !m_shell->allowExternalPages()) {
         printf("Blocked access to external URL %s\n", requestURL.c_str());
 
         // To block the request, we set its URL to an empty one.
@@ -941,12 +920,20 @@ void WebViewHost::willSendRequest(WebFrame*, unsigned identifier, WebURLRequest&
 
 void WebViewHost::didReceiveResponse(WebFrame*, unsigned identifier, const WebURLResponse& response)
 {
-    if (!m_shell->shouldDumpResourceLoadCallbacks())
-        return;
-    printResourceDescription(identifier);
-    fputs(" - didReceiveResponse ", stdout);
-    printResponseDescription(response);
-    fputs("\n", stdout);
+    if (m_shell->shouldDumpResourceLoadCallbacks()) {
+        printResourceDescription(identifier);
+        fputs(" - didReceiveResponse ", stdout);
+        printResponseDescription(response);
+        fputs("\n", stdout);
+    }
+    if (m_shell->shouldDumpResourceResponseMIMETypes()) {
+        GURL url = response.url();
+        WebString mimeType = response.mimeType();
+        printf("%s has MIME type %s\n",
+            url.ExtractFileName().c_str(),
+            // Simulate NSURLResponse's mapping of empty/unknown MIME types to application/octet-stream
+            mimeType.isEmpty() ? "application/octet-stream" : mimeType.utf8().data());
+    }
 }
 
 void WebViewHost::didFinishResourceLoad(WebFrame*, unsigned identifier)
@@ -963,7 +950,7 @@ void WebViewHost::didFailResourceLoad(WebFrame*, unsigned identifier, const WebU
     if (m_shell->shouldDumpResourceLoadCallbacks()) {
         printResourceDescription(identifier);
         fputs(" - didFailLoadingWithError: ", stdout);
-        printErrorDescription(error);
+        fputs(webkit_support::MakeURLErrorDescription(error).c_str(), stdout);
         fputs("\n", stdout);
     }
     m_resourceIdentifierMap.remove(identifier);
@@ -1036,7 +1023,7 @@ void WebViewHost::reset()
     this->~WebViewHost();
     new (this) WebViewHost(shell);
     setWebWidget(widget);
-    webView()->mainFrame()->clearName();
+    webView()->mainFrame()->setName(WebString());
 }
 
 void WebViewHost::setSelectTrailingWhitespaceEnabled(bool enabled)
@@ -1084,7 +1071,7 @@ void WebViewHost::loadURLForFrame(const WebURL& url, const WebString& frameName)
     if (!url.isValid())
         return;
     TestShell::resizeWindowForTest(this, url);
-    navigationController()->loadEntry(new TestNavigationEntry(-1, url, WebString(), frameName));
+    navigationController()->loadEntry(TestNavigationEntry::create(-1, url, WebString(), frameName).get());
 }
 
 bool WebViewHost::navigate(const TestNavigationEntry& entry, bool reload)
@@ -1183,7 +1170,7 @@ void WebViewHost::updateURL(WebFrame* frame)
     WebDataSource* ds = frame->dataSource();
     ASSERT(ds);
     const WebURLRequest& request = ds->request();
-    OwnPtr<TestNavigationEntry> entry(new TestNavigationEntry);
+    RefPtr<TestNavigationEntry> entry(TestNavigationEntry::create());
 
     // The referrer will be empty on https->http transitions. It
     // would be nice if we could get the real referrer from somewhere.
@@ -1197,7 +1184,7 @@ void WebViewHost::updateURL(WebFrame* frame)
     if (!historyItem.isNull())
         entry->setContentState(historyItem);
 
-    navigationController()->didNavigateToEntry(entry.release());
+    navigationController()->didNavigateToEntry(entry.get());
     updateAddressBar(frame->view());
     m_lastPageIdUpdated = max(m_lastPageIdUpdated, m_pageId);
 }
@@ -1210,7 +1197,7 @@ void WebViewHost::updateSessionHistory(WebFrame* frame)
     if (m_pageId == -1)
         return;
 
-    TestNavigationEntry* entry = static_cast<TestNavigationEntry*>(navigationController()->entryWithPageID(m_pageId));
+    TestNavigationEntry* entry = navigationController()->entryWithPageID(m_pageId);
     if (!entry)
         return;
 
@@ -1284,7 +1271,7 @@ void WebViewHost::paintRect(const WebRect& rect)
     ASSERT(canvas());
     m_isPainting = true;
 #if PLATFORM(CG)
-    webWidget()->paint(m_canvas->getTopPlatformDevice().GetBitmapContext(), rect);
+    webWidget()->paint(canvas()->getTopPlatformDevice().GetBitmapContext(), rect);
 #else
     webWidget()->paint(canvas(), rect);
 #endif
@@ -1297,12 +1284,12 @@ void WebViewHost::paintInvalidatedRegion()
     WebSize widgetSize = webWidget()->size();
     WebRect clientRect(0, 0, widgetSize.width, widgetSize.height);
 
-    // Paint the canvas if necessary.  Allow painting to generate extra rects the
-    // first time we call it.  This is necessary because some WebCore rendering
+    // Paint the canvas if necessary.  Allow painting to generate extra rects
+    // for the first two calls. This is necessary because some WebCore rendering
     // objects update their layout only when painted.
     // Store the total area painted in total_paint. Then tell the gdk window
     // to update that area after we're done painting it.
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 3; ++i) {
         // m_paintRect = intersect(m_paintRect , clientRect)
         int left = max(m_paintRect.x, clientRect.x);
         int top = max(m_paintRect.y, clientRect.y);
@@ -1318,7 +1305,7 @@ void WebViewHost::paintInvalidatedRegion()
         WebRect rect(m_paintRect);
         m_paintRect = WebRect();
         paintRect(rect);
-        if (i == 1)
+        if (i >= 1)
             LOG_ERROR("painting caused additional invalidations");
     }
     ASSERT(m_paintRect.isEmpty());

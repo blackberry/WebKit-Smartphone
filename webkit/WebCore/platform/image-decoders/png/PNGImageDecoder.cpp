@@ -41,6 +41,12 @@
 #include "PNGImageDecoder.h"
 #include "png.h"
 
+#if defined(PNG_LIBPNG_VER_MAJOR) && defined(PNG_LIBPNG_VER_MINOR) && (PNG_LIBPNG_VER_MAJOR > 1 || (PNG_LIBPNG_VER_MAJOR == 1 && PNG_LIBPNG_VER_MINOR >= 4))
+#define JMPBUF(png_ptr) png_jmpbuf(png_ptr)
+#else
+#define JMPBUF(png_ptr) png_ptr->jmpbuf
+#endif
+
 namespace WebCore {
 
 // Gamma constants.
@@ -54,7 +60,7 @@ const unsigned long cMaxPNGSize = 1000000UL;
 // Called if the decoding of the image fails.
 static void PNGAPI decodingFailed(png_structp png, png_const_charp)
 {
-    longjmp(png->jmpbuf, 1);
+    longjmp(JMPBUF(png), 1);
 }
 
 // Callbacks given to the read struct.  The first is for warnings (we want to
@@ -125,10 +131,8 @@ public:
         PNGImageDecoder* decoder = static_cast<PNGImageDecoder*>(png_get_progressive_ptr(m_png));
 
         // We need to do the setjmp here. Otherwise bad things will happen.
-        if (setjmp(m_png->jmpbuf)) {
-            close();
+        if (setjmp(JMPBUF(m_png)))
             return decoder->setFailed();
-        }
 
         const char* segment;
         while (unsigned segmentLength = data.getSomeData(segment, m_readOffset)) {
@@ -165,7 +169,9 @@ private:
     unsigned m_currentBufferSize;
 };
 
-PNGImageDecoder::PNGImageDecoder()
+PNGImageDecoder::PNGImageDecoder(bool premultiplyAlpha)
+    : ImageDecoder(premultiplyAlpha)
+    , m_doNothingOnFailure(false)
 {
 }
 
@@ -195,13 +201,23 @@ RGBA32Buffer* PNGImageDecoder::frameBufferAtIndex(size_t index)
     if (index)
         return 0;
 
-    if (m_frameBufferCache.isEmpty())
+    if (m_frameBufferCache.isEmpty()) {
         m_frameBufferCache.resize(1);
+        m_frameBufferCache[0].setPremultiplyAlpha(m_premultiplyAlpha);
+    }
 
     RGBA32Buffer& frame = m_frameBufferCache[0];
     if (frame.status() != RGBA32Buffer::FrameComplete)
         decode(false);
     return &frame;
+}
+
+bool PNGImageDecoder::setFailed()
+{
+    if (m_doNothingOnFailure)
+        return false;
+    m_reader.clear();
+    return ImageDecoder::setFailed();
 }
 
 void PNGImageDecoder::headerAvailable()
@@ -213,13 +229,20 @@ void PNGImageDecoder::headerAvailable()
     
     // Protect against large images.
     if (png->width > cMaxPNGSize || png->height > cMaxPNGSize) {
-        longjmp(png->jmpbuf, 1);
+        longjmp(JMPBUF(png), 1);
         return;
     }
     
-    // We can fill in the size now that the header is available.
-    if (!setSize(width, height)) {
-        longjmp(png->jmpbuf, 1);
+    // We can fill in the size now that the header is available.  Avoid memory
+    // corruption issues by neutering setFailed() during this call; if we don't
+    // do this, failures will cause |m_reader| to be deleted, and our jmpbuf
+    // will cease to exist.  Note that we'll still properly set the failure flag
+    // in this case as soon as we longjmp().
+    m_doNothingOnFailure = true;
+    bool result = setSize(width, height);
+    m_doNothingOnFailure = false;
+    if (!result) {
+        longjmp(JMPBUF(png), 1);
         return;
     }
 
@@ -283,7 +306,7 @@ void PNGImageDecoder::rowAvailable(unsigned char* rowBuffer, unsigned rowIndex, 
     RGBA32Buffer& buffer = m_frameBufferCache[0];
     if (buffer.status() == RGBA32Buffer::FrameEmpty) {
         if (!buffer.setSize(scaledSize().width(), scaledSize().height())) {
-            longjmp(m_reader->pngPtr()->jmpbuf, 1);
+            longjmp(JMPBUF(m_reader->pngPtr()), 1);
             return;
         }
         buffer.setStatus(RGBA32Buffer::FramePartial);
@@ -341,7 +364,9 @@ void PNGImageDecoder::rowAvailable(unsigned char* rowBuffer, unsigned rowIndex, 
     // Copy the data into our buffer.
     int width = scaledSize().width();
     int destY = scaledY(rowIndex);
-    if (destY < 0)
+
+    // Check that the row is within the image bounds. LibPNG may supply an extra row.
+    if (destY < 0 || destY >= scaledSize().height())
         return;
     bool sawAlpha = buffer.hasAlpha();
     for (int x = 0; x < width; ++x) {
@@ -373,8 +398,9 @@ void PNGImageDecoder::decode(bool onlySize)
     // has failed.
     if (!m_reader->decode(*m_data, onlySize) && isAllDataReceived())
         setFailed();
-    
-    if (failed() || isComplete())
+    // If we're done decoding the image, we don't need the PNGImageReader
+    // anymore.  (If we failed, |m_reader| has already been cleared.)
+    else if (isComplete())
         m_reader.clear();
 }
 

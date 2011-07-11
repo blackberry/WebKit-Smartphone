@@ -31,16 +31,8 @@ class HTMLAppletElement : public HTMLPlugInElement {
 public:
     static PassRefPtr<HTMLAppletElement> create(const QualifiedName&, Document*);
 
-    String hspace() const;
-    void setHspace(const String&);
-
-    String vspace() const;
-    void setVspace(const String&);
-
 private:
     HTMLAppletElement(const QualifiedName&, Document*);
-
-    virtual int tagPriority() const { return 1; }
 
     virtual void parseMappedAttribute(Attribute*);
     

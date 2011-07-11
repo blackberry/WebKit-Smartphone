@@ -124,7 +124,7 @@
 {
     WebCore::HTMLInputElement* inputElement = core(self);
     if (inputElement) {
-        WebCore::String newValue = inputElement->value();
+        WTF::String newValue = inputElement->value();
         newValue.replace(targetRange.location, targetRange.length, replacementString);
         inputElement->setValue(newValue);
         inputElement->setSelectionRange(index, newValue.length());
@@ -164,6 +164,15 @@
     // Use the setSelectedIndexByUser function so a change event will be fired. <rdar://problem/6760590>
     if (WebCore::HTMLSelectElement* select = core(self))
         select->setSelectedIndexByUser(index, true, true);
+}
+
+- (void)_activateItemAtIndex:(int)index allowMultipleSelection:(BOOL)allowMultipleSelection
+{
+    // Use the setSelectedIndexByUser function so a change event will be fired. <rdar://problem/6760590>
+    // If this is a <select multiple> the allowMultipleSelection flag will allow setting multiple
+    // selections without clearing the other selections.
+    if (WebCore::HTMLSelectElement* select = core(self))
+        select->setSelectedIndexByUser(index, true, true, allowMultipleSelection);
 }
 
 @end

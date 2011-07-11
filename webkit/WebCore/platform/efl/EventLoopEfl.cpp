@@ -27,6 +27,10 @@
 
 namespace WebCore {
 
+void EventLoop::platformInit()
+{
+}
+
 void EventLoop::cycle()
 {
     ecore_main_loop_iterate();

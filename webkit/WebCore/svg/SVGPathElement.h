@@ -1,22 +1,22 @@
 /*
-    Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #ifndef SVGPathElement_h
 #define SVGPathElement_h
@@ -50,19 +50,18 @@ namespace WebCore {
     class SVGPathSegCurvetoCubicSmoothRel;
     class SVGPathSegCurvetoQuadraticSmoothAbs;
     class SVGPathSegCurvetoQuadraticSmoothRel;
+
     class SVGPathElement : public SVGStyledTransformableElement,
                            public SVGTests,
                            public SVGLangSpace,
                            public SVGExternalResourcesRequired,
                            public SVGAnimatedPathData {
     public:
-        SVGPathElement(const QualifiedName&, Document*);
-        virtual ~SVGPathElement();
+        static PassRefPtr<SVGPathElement> create(const QualifiedName&, Document*);
         
-        virtual bool isValid() const { return SVGTests::isValid(); }
         float getTotalLength();
         FloatPoint getPointAtLength(float distance);
-        unsigned long getPathSegAtLength(float distance, ExceptionCode&);
+        unsigned long getPathSegAtLength(float distance);
 
         static PassRefPtr<SVGPathSegClosePath> createSVGPathSegClosePath();
         static PassRefPtr<SVGPathSegMovetoAbs> createSVGPathSegMovetoAbs(float x, float y);
@@ -90,15 +89,19 @@ namespace WebCore {
         virtual SVGPathSegList* animatedPathSegList() const;
         virtual SVGPathSegList* animatedNormalizedPathSegList() const;
 
+        virtual Path toPathData() const;
+
+    private:
+        SVGPathElement(const QualifiedName&, Document*);
+
+        virtual bool isValid() const { return SVGTests::isValid(); }
+
         virtual void parseMappedAttribute(Attribute*);
         virtual void svgAttributeChanged(const QualifiedName&);
         virtual void synchronizeProperty(const QualifiedName&);
 
-        virtual Path toPathData() const;
-
         virtual bool supportsMarkers() const { return true; }
 
-    private:
         mutable RefPtr<SVGPathSegList> m_pathSegList;
 
         DECLARE_ANIMATED_PROPERTY(SVGPathElement, SVGNames::pathLengthAttr, float, PathLength, pathLength)

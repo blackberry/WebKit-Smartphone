@@ -86,6 +86,8 @@ static int calcScrollbarThicknessUsing(const Length& l, int containingLength)
 
 void RenderScrollbarPart::computeScrollbarWidth()
 {
+    if (!m_scrollbar->owningRenderer())
+        return;
     int visibleSize = m_scrollbar->owningRenderer()->width() - m_scrollbar->owningRenderer()->borderLeft() - m_scrollbar->owningRenderer()->borderRight();
     int w = calcScrollbarThicknessUsing(style()->width(), visibleSize);
     int minWidth = calcScrollbarThicknessUsing(style()->minWidth(), visibleSize);
@@ -99,6 +101,8 @@ void RenderScrollbarPart::computeScrollbarWidth()
 
 void RenderScrollbarPart::computeScrollbarHeight()
 {
+    if (!m_scrollbar->owningRenderer())
+        return;
     int visibleSize = m_scrollbar->owningRenderer()->height() -  m_scrollbar->owningRenderer()->borderTop() - m_scrollbar->owningRenderer()->borderBottom();
     int h = calcScrollbarThicknessUsing(style()->height(), visibleSize);
     int minHeight = calcScrollbarThicknessUsing(style()->minHeight(), visibleSize);
@@ -164,7 +168,7 @@ void RenderScrollbarPart::paintIntoRect(GraphicsContext* graphicsContext, int tx
         return;
 
     // Now do the paint.
-    RenderObject::PaintInfo paintInfo(graphicsContext, rect, PaintPhaseBlockBackground, false, 0, 0);
+    PaintInfo paintInfo(graphicsContext, rect, PaintPhaseBlockBackground, false, 0, 0);
     paint(paintInfo, tx, ty);
     paintInfo.phase = PaintPhaseChildBlockBackgrounds;
     paint(paintInfo, tx, ty);

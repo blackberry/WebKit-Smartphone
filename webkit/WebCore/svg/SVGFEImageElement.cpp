@@ -1,23 +1,23 @@
 /*
-    Copyright (C) 2004, 2005, 2007 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005 Rob Buis <buis@kde.org>
-                  2010 Dirk Schulze <krit@webkit.org>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2007 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005 Rob Buis <buis@kde.org>
+ * Copyright (C) 2010 Dirk Schulze <krit@webkit.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -26,21 +26,25 @@
 
 #include "Attr.h"
 #include "CachedImage.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "Document.h"
+#include "RenderObject.h"
+#include "RenderSVGResource.h"
+#include "SVGImageBufferTools.h"
 #include "SVGLength.h"
 #include "SVGNames.h"
 #include "SVGPreserveAspectRatio.h"
-#include "SVGRenderSupport.h"
 
 namespace WebCore {
 
-SVGFEImageElement::SVGFEImageElement(const QualifiedName& tagName, Document* doc)
-    : SVGFilterPrimitiveStandardAttributes(tagName, doc)
-    , SVGURIReference()
-    , SVGLangSpace()
-    , SVGExternalResourcesRequired()
+inline SVGFEImageElement::SVGFEImageElement(const QualifiedName& tagName, Document* document)
+    : SVGFilterPrimitiveStandardAttributes(tagName, document)
 {
+}
+
+PassRefPtr<SVGFEImageElement> SVGFEImageElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new SVGFEImageElement(tagName, document));
 }
 
 SVGFEImageElement::~SVGFEImageElement()
@@ -60,7 +64,7 @@ void SVGFEImageElement::requestImageResource()
     if (hrefElement && hrefElement->isSVGElement() && hrefElement->renderer())
         return;
 
-    m_cachedImage = ownerDocument()->docLoader()->requestImage(href());
+    m_cachedImage = ownerDocument()->cachedResourceLoader()->requestImage(href());
 
     if (m_cachedImage)
         m_cachedImage->addClient(this);
@@ -106,7 +110,16 @@ void SVGFEImageElement::synchronizeProperty(const QualifiedName& attrName)
 
 void SVGFEImageElement::notifyFinished(CachedResource*)
 {
-    SVGStyledElement::invalidateResourcesInAncestorChain();
+    if (!inDocument())
+        return;
+
+    Element* parent = parentElement();
+    ASSERT(parent);
+
+    if (!parent->hasTagName(SVGNames::filterTag) || !parent->renderer())
+        return;
+
+    RenderSVGResource::markForLayoutAndParentResourceInvalidation(parent->renderer());
 }
 
 PassRefPtr<FilterEffect> SVGFEImageElement::build(SVGFilterBuilder*)
@@ -123,10 +136,11 @@ PassRefPtr<FilterEffect> SVGFEImageElement::build(SVGFilterBuilder*)
         IntRect targetRect = enclosingIntRect(renderer->objectBoundingBox());
         m_targetImage = ImageBuffer::create(targetRect.size(), LinearRGB);
 
-        renderSubtreeToImage(m_targetImage.get(), renderer);
+        AffineTransform contentTransformation;
+        SVGImageBufferTools::renderSubtreeToImageBuffer(m_targetImage.get(), renderer, contentTransformation);
     }
 
-    return FEImage::create(m_targetImage ? m_targetImage->image() : m_cachedImage->image(), preserveAspectRatio());
+    return FEImage::create(m_targetImage ? m_targetImage->copyImage() : m_cachedImage->image(), preserveAspectRatio());
 }
 
 void SVGFEImageElement::addSubresourceAttributeURLs(ListHashSet<KURL>& urls) const

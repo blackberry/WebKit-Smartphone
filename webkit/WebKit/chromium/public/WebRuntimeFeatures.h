@@ -77,6 +77,21 @@ public:
     WEBKIT_API static void enableTouch(bool);
     WEBKIT_API static bool isTouchEnabled();
 
+    WEBKIT_API static void enableDeviceMotion(bool);
+    WEBKIT_API static bool isDeviceMotionEnabled();
+
+    WEBKIT_API static void enableDeviceOrientation(bool);
+    WEBKIT_API static bool isDeviceOrientationEnabled();
+
+    WEBKIT_API static void enableSpeechInput(bool);
+    WEBKIT_API static bool isSpeechInputEnabled();
+
+    WEBKIT_API static void enableXHRResponseBlob(bool);
+    WEBKIT_API static bool isXHRResponseBlobEnabled();
+
+    WEBKIT_API static void enableFileSystem(bool);
+    WEBKIT_API static bool isFileSystemEnabled();
+
 private:
     WebRuntimeFeatures();
 };

@@ -82,7 +82,7 @@ bool RuntimeArray::getOwnPropertySlot(ExecState* exec, const Identifier& propert
     }
     
     bool ok;
-    unsigned index = propertyName.toArrayIndex(&ok);
+    unsigned index = propertyName.toArrayIndex(ok);
     if (ok) {
         if (index < getLength()) {
             slot.setCustomIndex(this, index, indexGetter);
@@ -103,7 +103,7 @@ bool RuntimeArray::getOwnPropertyDescriptor(ExecState* exec, const Identifier& p
     }
     
     bool ok;
-    unsigned index = propertyName.toArrayIndex(&ok);
+    unsigned index = propertyName.toArrayIndex(ok);
     if (ok) {
         if (index < getLength()) {
             PropertySlot slot;
@@ -129,12 +129,12 @@ bool RuntimeArray::getOwnPropertySlot(ExecState *exec, unsigned index, PropertyS
 void RuntimeArray::put(ExecState* exec, const Identifier& propertyName, JSValue value, PutPropertySlot& slot)
 {
     if (propertyName == exec->propertyNames().length) {
-        throwError(exec, RangeError);
+        throwError(exec, createRangeError(exec, "Range error"));
         return;
     }
     
     bool ok;
-    unsigned index = propertyName.toArrayIndex(&ok);
+    unsigned index = propertyName.toArrayIndex(ok);
     if (ok) {
         getConcreteArray()->setValueAt(exec, index, value);
         return;
@@ -146,7 +146,7 @@ void RuntimeArray::put(ExecState* exec, const Identifier& propertyName, JSValue 
 void RuntimeArray::put(ExecState* exec, unsigned index, JSValue value)
 {
     if (index >= getLength()) {
-        throwError(exec, RangeError);
+        throwError(exec, createRangeError(exec, "Range error"));
         return;
     }
     

@@ -23,13 +23,9 @@
 #include <GRefPtr.h>
 #include "KURL.h"
 #include "Range.h"
-#include "StringHash.h"
 #include <wtf/RefCounted.h>
 #include <wtf/text/CString.h>
-
-typedef struct _GdkPixbuf GdkPixbuf;
-typedef struct _GdkDragContext GdkDragContext;
-typedef struct _GtkClipboard GtkClipboard;
+#include <wtf/text/StringHash.h>
 
 namespace WebCore {
 
@@ -46,6 +42,7 @@ public:
     void setURIList(const Vector<KURL>& newURIList) {  m_uriList = newURIList; }
     void setImage(GdkPixbuf* newImage) { m_image = newImage; }
     void setDragContext(GdkDragContext* newDragContext) { m_dragContext = newDragContext; }
+    void setURL(const KURL&, const String&);
     bool hasText() { return m_range || !m_text.isEmpty(); }
     bool hasMarkup() { return m_range || !m_markup.isEmpty(); }
     bool hasURIList() { return !m_uriList.isEmpty(); }
@@ -72,8 +69,8 @@ private:
     String m_text;
     String m_markup;
     Vector<KURL> m_uriList;
-    GRefPtr<GdkPixbuf> m_image;
-    GRefPtr<GdkDragContext> m_dragContext;
+    PlatformRefPtr<GdkPixbuf> m_image;
+    PlatformRefPtr<GdkDragContext> m_dragContext;
     RefPtr<Range> m_range;
 };
 

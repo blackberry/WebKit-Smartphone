@@ -27,6 +27,7 @@
 #include "IconFetcher.h"
 
 #include "Frame.h"
+#include "FrameLoaderClient.h"
 #include "HTMLHeadElement.h"
 #include "HTMLLinkElement.h"
 #include "HTMLNames.h"
@@ -87,8 +88,8 @@ static void parseIconLink(HTMLLinkElement* link, Vector<IconLinkEntry>& entries)
     // Try to determine the file type.
     String path = url.path();
     
-    int pos = path.reverseFind('.');
-    if (pos >= 0) {
+    size_t pos = path.reverseFind('.');
+    if (pos != notFound) {
         String extension = path.substring(pos + 1);
         if (equalIgnoringCase(extension, "icns"))
             type = IconLinkEntry::ICNS;
@@ -173,7 +174,7 @@ void IconFetcher::loadEntry()
     ASSERT(m_currentEntry < m_entries.size());
     ASSERT(!m_handle);
     
-    m_handle = ResourceHandle::create(m_entries[m_currentEntry].url(), this, m_frame, false, false);
+    m_handle = ResourceHandle::create(m_frame->loader()->networkingContext(), m_entries[m_currentEntry].url(), this, false, false);
 }
     
 void IconFetcher::loadFailed()

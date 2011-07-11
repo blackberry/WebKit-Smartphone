@@ -28,16 +28,23 @@
 
 #include "Connection.h"
 #include "DrawingArea.h"
+#include "SharedMemory.h"
+#include "VisitedLinkTable.h"
+#include <WebCore/LinkHash.h>
+#include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 
 namespace WebCore {
     class IntSize;
+    class PageGroup;
 }
 
 namespace WebKit {
 
+class InjectedBundle;
+class WebFrame;
 class WebPage;
-class WebPreferencesStore;
+struct WebPreferencesStore;
 
 class WebProcess : CoreIPC::Connection::Client {
 public:
@@ -49,26 +56,63 @@ public:
     RunLoop* runLoop() const { return m_runLoop; }
 
     WebPage* webPage(uint64_t pageID) const;
-    WebPage* createWebPage(uint64_t pageID, const WebCore::IntSize& viewSize, const WebPreferencesStore&, DrawingArea::Type);
+    WebPage* createWebPage(uint64_t pageID, const WebCore::IntSize& viewSize, const WebPreferencesStore&, const DrawingAreaBase::DrawingAreaInfo&);
     void removeWebPage(uint64_t pageID);
 
+    InjectedBundle* injectedBundle() const { return m_injectedBundle.get(); }
+
     bool isSeparateProcess() const;
+
+#if USE(ACCELERATED_COMPOSITING) && PLATFORM(MAC)
+    mach_port_t compositingRenderServerPort() const { return m_compositingRenderServerPort; }
+#endif
     
+    void addVisitedLink(WebCore::LinkHash);
+    bool isLinkVisited(WebCore::LinkHash) const;
+
+    WebFrame* webFrame(uint64_t) const;
+    void addWebFrame(uint64_t, WebFrame*);
+    void removeWebFrame(uint64_t);
+
+    static WebCore::PageGroup* sharedPageGroup();
+
 private:
     WebProcess();
     void shutdown();
 
+#if ENABLE(WEB_PROCESS_SANDBOX)
+    void loadInjectedBundle(const WTF::String&, const WTF::String&);
+#else
+    void loadInjectedBundle(const WTF::String&);
+#endif
+    void setApplicationCacheDirectory(const WTF::String&);
+    void registerURLSchemeAsEmptyDocument(const WTF::String&);
+
+    void setVisitedLinkTable(const SharedMemory::Handle&);
+    void visitedLinkStateChanged(const Vector<WebCore::LinkHash>& linkHashes);
+    void allVisitedLinkStateChanged();
+    
     // CoreIPC::Connection::Client
     void didReceiveMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
-    void didReceiveSyncMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*, CoreIPC::ArgumentEncoder*);
     void didClose(CoreIPC::Connection*);
+    void didReceiveInvalidMessage(CoreIPC::Connection*, CoreIPC::MessageID);
 
     RefPtr<CoreIPC::Connection> m_connection;
     HashMap<uint64_t, RefPtr<WebPage> > m_pageMap;
+    RefPtr<InjectedBundle> m_injectedBundle;
 
     bool m_inDidClose;
 
     RunLoop* m_runLoop;
+
+    // FIXME: The visited link table should not be per process.
+    VisitedLinkTable m_visitedLinkTable;
+
+#if USE(ACCELERATED_COMPOSITING) && PLATFORM(MAC)
+    mach_port_t m_compositingRenderServerPort;
+#endif
+
+    HashMap<uint64_t, WebFrame*> m_frameMap;
 };
 
 } // namespace WebKit

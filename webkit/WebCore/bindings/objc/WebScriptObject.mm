@@ -294,7 +294,7 @@ static void getListFromNSArray(ExecState *exec, NSArray *array, RootObject* root
 
     JSValue function = [self _imp]->get(exec, Identifier(exec, stringToUString(String(name))));
     CallData callData;
-    CallType callType = function.getCallData(callData);
+    CallType callType = getCallData(function, callData);
     if (callType == CallTypeNone)
         return nil;
 
@@ -433,6 +433,27 @@ static void getListFromNSArray(ExecState *exec, NSArray *array, RootObject* root
     _didExecute(self);
 }
 
+- (BOOL)hasWebScriptKey:(NSString *)key
+{
+    if (![self _isSafeScript])
+        return NO;
+
+    ExecState* exec = [self _rootObject]->globalObject()->globalExec();
+    ASSERT(!exec->hadException());
+
+    JSLock lock(SilenceAssertionsOnly);
+    BOOL result = [self _imp]->hasProperty(exec, Identifier(exec, stringToUString(String(key))));
+
+    if (exec->hadException()) {
+        addExceptionToConsole(exec);
+        exec->clearException();
+    }
+
+    _didExecute(self);
+
+    return result;
+}
+
 - (NSString *)stringRepresentation
 {
     if (![self _isSafeScript]) {
@@ -536,7 +557,7 @@ static void getListFromNSArray(ExecState *exec, NSArray *array, RootObject* root
     if (value.isString()) {
         ExecState* exec = rootObject->globalObject()->globalExec();
         const UString& u = asString(value)->value(exec);
-        return [NSString stringWithCharacters:u.data() length:u.size()];
+        return [NSString stringWithCharacters:u.characters() length:u.length()];
     }
 
     if (value.isNumber())

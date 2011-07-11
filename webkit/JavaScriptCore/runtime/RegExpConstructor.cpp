@@ -24,6 +24,7 @@
 
 #include "ArrayPrototype.h"
 #include "Error.h"
+#include "ExceptionHelpers.h"
 #include "JSArray.h"
 #include "JSFunction.h"
 #include "JSString.h"
@@ -33,6 +34,9 @@
 #include "RegExpObject.h"
 #include "RegExpPrototype.h"
 #include "RegExp.h"
+#include "RegExpCache.h"
+#include "StringConcatenate.h"
+#include <wtf/PassOwnPtr.h>
 
 namespace JSC {
 
@@ -93,7 +97,7 @@ const ClassInfo RegExpConstructor::info = { "Function", &InternalFunction::info,
 
 RegExpConstructor::RegExpConstructor(ExecState* exec, JSGlobalObject* globalObject, NonNullPassRefPtr<Structure> structure, RegExpPrototype* regExpPrototype)
     : InternalFunction(&exec->globalData(), globalObject, structure, Identifier(exec, "RegExp"))
-    , d(new RegExpConstructorPrivate)
+    , d(adoptPtr(new RegExpConstructorPrivate))
 {
     // ECMA 15.10.5.1 RegExp.prototype
     putDirectWithoutTransition(exec->propertyNames().prototype, regExpPrototype, DontEnum | DontDelete | ReadOnly);
@@ -103,7 +107,7 @@ RegExpConstructor::RegExpConstructor(ExecState* exec, JSGlobalObject* globalObje
 }
 
 RegExpMatchesArray::RegExpMatchesArray(ExecState* exec, RegExpConstructorPrivate* data)
-    : JSArray(exec->lexicalGlobalObject()->regExpMatchesArrayStructure(), data->lastNumSubPatterns + 1)
+    : JSArray(exec->lexicalGlobalObject()->regExpMatchesArrayStructure(), data->lastNumSubPatterns + 1, CreateInitialized)
 {
     RegExpConstructorPrivate* d = new RegExpConstructorPrivate;
     d->input = data->lastInput;
@@ -182,7 +186,7 @@ JSValue RegExpConstructor::getLeftContext(ExecState* exec) const
 JSValue RegExpConstructor::getRightContext(ExecState* exec) const
 {
     if (!d->lastOvector().isEmpty())
-        return jsSubstring(exec, d->lastInput, d->lastOvector()[1], d->lastInput.size() - d->lastOvector()[1]);
+        return jsSubstring(exec, d->lastInput, d->lastOvector()[1], d->lastInput.length() - d->lastOvector()[1]);
     return jsEmptyString(exec);
 }
     
@@ -294,22 +298,23 @@ JSObject* constructRegExp(ExecState* exec, const ArgList& args)
 
     if (arg0.inherits(&RegExpObject::info)) {
         if (!arg1.isUndefined())
-            return throwError(exec, TypeError, "Cannot supply flags when constructing one RegExp from another.");
+            return throwError(exec, createTypeError(exec, "Cannot supply flags when constructing one RegExp from another."));
         return asObject(arg0);
     }
 
     UString pattern = arg0.isUndefined() ? UString("") : arg0.toString(exec);
     UString flags = arg1.isUndefined() ? UString("") : arg1.toString(exec);
 
-    RefPtr<RegExp> regExp = RegExp::create(&exec->globalData(), pattern, flags);
+    RefPtr<RegExp> regExp = exec->globalData().regExpCache()->lookupOrCreate(pattern, flags);
     if (!regExp->isValid())
-        return throwError(exec, SyntaxError, makeString("Invalid regular expression: ", regExp->errorMessage()));
+        return throwError(exec, createSyntaxError(exec, makeString("Invalid regular expression: ", regExp->errorMessage())));
     return new (exec) RegExpObject(exec->lexicalGlobalObject(), exec->lexicalGlobalObject()->regExpStructure(), regExp.release());
 }
 
-static JSObject* constructWithRegExpConstructor(ExecState* exec, JSObject*, const ArgList& args)
+static EncodedJSValue JSC_HOST_CALL constructWithRegExpConstructor(ExecState* exec)
 {
-    return constructRegExp(exec, args);
+    ArgList args(exec);
+    return JSValue::encode(constructRegExp(exec, args));
 }
 
 ConstructType RegExpConstructor::getConstructData(ConstructData& constructData)
@@ -319,9 +324,10 @@ ConstructType RegExpConstructor::getConstructData(ConstructData& constructData)
 }
 
 // ECMA 15.10.3
-static JSValue JSC_HOST_CALL callRegExpConstructor(ExecState* exec, JSObject*, JSValue, const ArgList& args)
+static EncodedJSValue JSC_HOST_CALL callRegExpConstructor(ExecState* exec)
 {
-    return constructRegExp(exec, args);
+    ArgList args(exec);
+    return JSValue::encode(constructRegExp(exec, args));
 }
 
 CallType RegExpConstructor::getCallData(CallData& callData)

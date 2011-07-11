@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 Apple Inc. All Rights Reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,7 +31,8 @@
 #include "ChromeClient.h"
 #include "Document.h"
 #include "Frame.h"
-#include "IndexedDatabase.h"
+#include "GroupSettings.h"
+#include "IDBFactoryBackendInterface.h"
 #include "Page.h"
 #include "Settings.h"
 #include "StorageNamespace.h"
@@ -55,12 +57,14 @@ PageGroup::PageGroup(const String& name)
     : m_name(name)
     , m_visitedLinksPopulated(false)
     , m_identifier(getUniqueIdentifier())
+    , m_groupSettings(GroupSettings::create())
 {
 }
 
 PageGroup::PageGroup(Page* page)
     : m_visitedLinksPopulated(false)
     , m_identifier(getUniqueIdentifier())
+    , m_groupSettings(GroupSettings::create())
 {
     ASSERT(page);
     addPage(page);
@@ -136,6 +140,12 @@ bool PageGroup::isLinkVisited(LinkHash visitedLinkHash)
 #endif
 }
 
+void PageGroup::addVisitedLinkHash(LinkHash hash)
+{
+    if (shouldTrackVisitedLinks)
+        addVisitedLink(hash);
+}
+
 inline void PageGroup::addVisitedLink(LinkHash hash)
 {
     ASSERT(shouldTrackVisitedLinks);
@@ -194,7 +204,7 @@ StorageNamespace* PageGroup::localStorage()
         // at this point we're stuck with it.
         Page* page = *m_pages.begin();
         const String& path = page->settings()->localStorageDatabasePath();
-        unsigned quota = page->settings()->localStorageQuota();
+        unsigned quota = m_groupSettings->localStorageQuotaBytes();
         m_localStorage = StorageNamespace::localStorageNamespace(path, quota);
     }
 
@@ -206,27 +216,39 @@ void PageGroup::removeLocalStorage()
 {
     m_localStorage = 0;
 }
+
+void PageGroup::removeAllLocalStorages()
+{
+    if (!pageGroups)
+        return;
+
+    PageGroupMap::iterator end = pageGroups->end();
+
+    for (PageGroupMap::iterator it = pageGroups->begin(); it != end; ++it)
+        it->second->removeLocalStorage();
+}
 #endif
 
 #endif
 
 #if ENABLE(INDEXED_DATABASE)
-IndexedDatabase* PageGroup::indexedDatabase()
+IDBFactoryBackendInterface* PageGroup::idbFactory()
 {
     // Do not add page setting based access control here since this object is shared by all pages in
     // the group and having per-page controls is misleading.
-    if (!m_indexedDatabase)
-        m_indexedDatabase = IndexedDatabase::create();
-    return m_indexedDatabase.get();
+    if (!m_factoryBackend)
+        m_factoryBackend = IDBFactoryBackendInterface::create();
+    return m_factoryBackend.get();
 }
 #endif
 
-void PageGroup::addUserScriptToWorld(DOMWrapperWorld* world, const String& source, const KURL& url,  PassOwnPtr<Vector<String> > whitelist,
-                                     PassOwnPtr<Vector<String> > blacklist, UserScriptInjectionTime injectionTime)
+void PageGroup::addUserScriptToWorld(DOMWrapperWorld* world, const String& source, const KURL& url,
+                                     PassOwnPtr<Vector<String> > whitelist, PassOwnPtr<Vector<String> > blacklist,
+                                     UserScriptInjectionTime injectionTime, UserContentInjectedFrames injectedFrames)
 {
     ASSERT_ARG(world, world);
 
-    OwnPtr<UserScript> userScript(new UserScript(source, url, whitelist, blacklist, injectionTime));
+    OwnPtr<UserScript> userScript(new UserScript(source, url, whitelist, blacklist, injectionTime, injectedFrames));
     if (!m_userScripts)
         m_userScripts.set(new UserScriptMap);
     UserScriptVector*& scriptsInWorld = m_userScripts->add(world, 0).first->second;
@@ -235,25 +257,22 @@ void PageGroup::addUserScriptToWorld(DOMWrapperWorld* world, const String& sourc
     scriptsInWorld->append(userScript.release());
 }
 
-void PageGroup::addUserStyleSheetToWorld(DOMWrapperWorld* world, const String& source, const KURL& url, PassOwnPtr<Vector<String> > whitelist,
-                                         PassOwnPtr<Vector<String> > blacklist)
+void PageGroup::addUserStyleSheetToWorld(DOMWrapperWorld* world, const String& source, const KURL& url,
+                                         PassOwnPtr<Vector<String> > whitelist, PassOwnPtr<Vector<String> > blacklist,
+                                         UserContentInjectedFrames injectedFrames,
+                                         UserStyleSheet::Level level)
 {
     ASSERT_ARG(world, world);
 
-    OwnPtr<UserStyleSheet> userStyleSheet(new UserStyleSheet(source, url, whitelist, blacklist));
+    OwnPtr<UserStyleSheet> userStyleSheet(new UserStyleSheet(source, url, whitelist, blacklist, injectedFrames, level));
     if (!m_userStyleSheets)
         m_userStyleSheets.set(new UserStyleSheetMap);
     UserStyleSheetVector*& styleSheetsInWorld = m_userStyleSheets->add(world, 0).first->second;
     if (!styleSheetsInWorld)
         styleSheetsInWorld = new UserStyleSheetVector;
     styleSheetsInWorld->append(userStyleSheet.release());
-    
-    // Clear our cached sheets and have them just reparse.
-    HashSet<Page*>::const_iterator end = m_pages.end();
-    for (HashSet<Page*>::const_iterator it = m_pages.begin(); it != end; ++it) {
-        for (Frame* frame = (*it)->mainFrame(); frame; frame = frame->tree()->traverseNext())
-            frame->document()->clearPageGroupUserSheets();
-    }
+
+    resetUserStyleCacheInAllFrames();
 }
 
 void PageGroup::removeUserScriptFromWorld(DOMWrapperWorld* world, const KURL& url)
@@ -307,13 +326,8 @@ void PageGroup::removeUserStyleSheetFromWorld(DOMWrapperWorld* world, const KURL
         delete it->second;
         m_userStyleSheets->remove(it);
     }
-    
-    // Clear our cached sheets and have them just reparse.
-    HashSet<Page*>::const_iterator end = m_pages.end();
-    for (HashSet<Page*>::const_iterator it = m_pages.begin(); it != end; ++it) {
-        for (Frame* frame = (*it)->mainFrame(); frame; frame = frame->tree()->traverseNext())
-            frame->document()->clearPageGroupUserSheets();
-    }
+
+    resetUserStyleCacheInAllFrames();
 }
 
 void PageGroup::removeUserScriptsFromWorld(DOMWrapperWorld* world)
@@ -345,12 +359,7 @@ void PageGroup::removeUserStyleSheetsFromWorld(DOMWrapperWorld* world)
     delete it->second;
     m_userStyleSheets->remove(it);
 
-    // Clear our cached sheets and have them just reparse.
-    HashSet<Page*>::const_iterator end = m_pages.end();
-    for (HashSet<Page*>::const_iterator it = m_pages.begin(); it != end; ++it) {
-        for (Frame* frame = (*it)->mainFrame(); frame; frame = frame->tree()->traverseNext())
-            frame->document()->clearPageGroupUserSheets();
-    }
+    resetUserStyleCacheInAllFrames();
 }
 
 void PageGroup::removeAllUserContent()
@@ -359,12 +368,24 @@ void PageGroup::removeAllUserContent()
         deleteAllValues(*m_userScripts);
         m_userScripts.clear();
     }
-    
-    
+
     if (m_userStyleSheets) {
         deleteAllValues(*m_userStyleSheets);
         m_userStyleSheets.clear();
+        resetUserStyleCacheInAllFrames();
     }
+}
+
+void PageGroup::resetUserStyleCacheInAllFrames()
+{
+#if !PLATFORM(CHROMIUM)
+    // Clear our cached sheets and have them just reparse.
+    HashSet<Page*>::const_iterator end = m_pages.end();
+    for (HashSet<Page*>::const_iterator it = m_pages.begin(); it != end; ++it) {
+        for (Frame* frame = (*it)->mainFrame(); frame; frame = frame->tree()->traverseNext())
+            frame->document()->updatePageGroupUserSheets();
+    }
+#endif
 }
 
 } // namespace WebCore

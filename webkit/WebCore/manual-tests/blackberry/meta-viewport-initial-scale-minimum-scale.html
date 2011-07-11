@@ -1,0 +1,30 @@
+<html>
+<head>
+<meta name="viewport" content="initial-scale=0.5, minimum-scale=1.0">
+<style>
+body { margin: 0; padding: 0; background-color: red; }
+#square { width: 360px; /* "device screen size" */ height: 480px; background-color: green; }
+</style>
+<script src="resources/meta-viewport-utilities.js"></script>
+<script>
+function updateDisplay() {
+    var body = document.body;
+    var square = document.getElementById("square");
+
+    logStart(square);
+    log(square, 'actual width: ' + body.offsetWidth);
+    log(square, 'should be: ' + square.offsetWidth);
+    logResultAndNotifyDone(square, body.offsetWidth === square.offsetWidth);
+}
+
+window.onload = updateDisplay;
+window.onorientationchange = updateDisplay;
+</script>
+</head>
+<body>
+<!-- This tests assumes that the width of the device (in direction north) is 360 pixels. -->
+<!-- This test can be used to verify that when only initial-scale is specified and initial-scale < minimum-scale then viewport width is taken to be the "actual visible width" / minimum-scale.-->
+<!-- This test PASSED if the background of the entire page is green when loaded in direction north. -->
+<div id="square"></div>
+</body>
+</html>

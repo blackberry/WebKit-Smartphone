@@ -21,6 +21,7 @@
 #include "config.h"
 #include "ScriptController.h"
 
+#include "ScriptableDocumentParser.h"
 #include "Event.h"
 #include "EventNames.h"
 #include "Frame.h"
@@ -60,7 +61,6 @@ void ScriptController::initializeThreading()
 
 ScriptController::ScriptController(Frame* frame)
     : m_frame(frame)
-    , m_handlerLineNumber(0)
     , m_sourceURL(0)
     , m_inExecuteScript(false)
     , m_processingTimerCallback(false)
@@ -86,6 +86,11 @@ ScriptController::ScriptController(Frame* frame)
 ScriptController::~ScriptController()
 {
     disconnectPlatformScriptObjects();
+
+    if (m_cacheableBindingRootObject) {
+        m_cacheableBindingRootObject->invalidate();
+        m_cacheableBindingRootObject = 0;
+    }
 
     // It's likely that destroying m_windowShells will create a lot of garbage.
     if (!m_windowShells.isEmpty()) {
@@ -230,14 +235,35 @@ JSDOMWindowShell* ScriptController::initScript(DOMWrapperWorld* world)
     return windowShell;
 }
 
-bool ScriptController::processingUserGesture(DOMWrapperWorld* world) const
+int ScriptController::eventHandlerLineNumber() const
 {
-    if (m_allowPopupsFromPlugin || isJavaScriptAnchorNavigation())
+    // JSC expects 1-based line numbers, so we must add one here to get it right.
+    ScriptableDocumentParser* parser = m_frame->document()->scriptableDocumentParser();
+    if (parser)
+        return parser->lineNumber() + 1;
+    return 0;
+}
+
+bool ScriptController::processingUserGesture()
+{
+    ExecState* exec = JSMainThreadExecState::currentState();
+    Frame* frame = exec ? toDynamicFrame(exec) : 0;
+    // No script is running, so it is user-initiated unless the gesture stack
+    // explicitly says it is not.
+    if (!frame)
+        return UserGestureIndicator::getUserGestureState() != DefinitelyNotProcessingUserGesture;
+
+    // FIXME: We check the plugin popup flag and javascript anchor navigation
+    // from the dynamic frame becuase they should only be initiated on the
+    // dynamic frame in which execution began if they do happen.
+    ScriptController* scriptController = frame->script();
+    ASSERT(scriptController);
+    if (scriptController->allowPopupsFromPlugin() || scriptController->isJavaScriptAnchorNavigation())
         return true;
 
     // If a DOM event is being processed, check that it was initiated by the user
     // and that it is in the whitelist of event types allowed to generate pop-ups.
-    if (JSDOMWindowShell* shell = existingWindowShell(world))
+    if (JSDOMWindowShell* shell = scriptController->existingWindowShell(currentWorld(exec)))
         if (Event* event = shell->window()->currentEvent())
             return event->fromUserGesture();
 
@@ -329,6 +355,18 @@ void ScriptController::updateSecurityOrigin()
     // Our bindings do not do anything in this case.
 }
 
+Bindings::RootObject* ScriptController::cacheableBindingRootObject()
+{
+    if (!canExecuteScripts(NotAboutToExecuteScript))
+        return 0;
+
+    if (!m_cacheableBindingRootObject) {
+        JSLock lock(SilenceAssertionsOnly);
+        m_cacheableBindingRootObject = Bindings::RootObject::create(0, globalObject(pluginWorld()));
+    }
+    return m_cacheableBindingRootObject.get();
+}
+
 Bindings::RootObject* ScriptController::bindingRootObject()
 {
     if (!canExecuteScripts(NotAboutToExecuteScript))
@@ -352,6 +390,12 @@ PassRefPtr<Bindings::RootObject> ScriptController::createRootObject(void* native
     m_rootObjects.set(nativeHandle, rootObject);
     return rootObject.release();
 }
+
+#if ENABLE(INSPECTOR)
+void ScriptController::setCaptureCallStackForUncaughtExceptions(bool)
+{
+}
+#endif
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
 

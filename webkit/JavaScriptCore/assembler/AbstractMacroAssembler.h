@@ -49,7 +49,6 @@ public:
     class Jump;
 
     typedef typename AssemblerType::RegisterID RegisterID;
-    typedef typename AssemblerType::FPRegisterID FPRegisterID;
     typedef typename AssemblerType::JmpSrc JmpSrc;
     typedef typename AssemblerType::JmpDst JmpDst;
 
@@ -419,12 +418,6 @@ public:
 
 
     // Section 3: Misc admin methods
-
-    static CodePtr trampolineAt(CodeRef ref, Label label)
-    {
-        return CodePtr(AssemblerType::getRelocatedAddress(ref.m_code.dataLocation(), label.m_label));
-    }
-
     size_t size()
     {
         return m_assembler.size();
@@ -480,6 +473,9 @@ public:
     {
         return AssemblerType::getDifferenceBetweenLabels(from.m_label, to.m_jmp);
     }
+    
+    void beginUninterruptedSequence() { }
+    void endUninterruptedSequence() { }
 
 protected:
     AssemblerType m_assembler;

@@ -29,11 +29,11 @@
 #if USE(ACCELERATED_COMPOSITING)
 
 #include "GraphicsLayer.h"
-#include "StringHash.h"
 #include "WebLayer.h"
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/RetainPtr.h>
+#include <wtf/text/StringHash.h>
 
 @class CABasicAnimation;
 @class CAKeyframeAnimation;
@@ -89,10 +89,7 @@ public:
 
     virtual void setNeedsDisplay();
     virtual void setNeedsDisplayInRect(const FloatRect&);
-
-#if ENABLE(3D_CANVAS)
-    virtual void setGraphicsContext3DNeedsDisplay();
-#endif
+    virtual void setContentsNeedsDisplay();
     
     virtual void setContentsRect(const IntRect&);
     
@@ -106,9 +103,9 @@ public:
     
     virtual void setContentsToImage(Image*);
     virtual void setContentsToMedia(PlatformLayer*);
-#if ENABLE(3D_CANVAS)
-    virtual void setContentsToGraphicsContext3D(const GraphicsContext3D*);
-#endif
+    virtual void setContentsToCanvas(PlatformLayer*);
+
+    virtual bool hasContentsLayer() const { return m_contentsLayer; }
     
     virtual PlatformLayer* platformLayer() const;
 
@@ -122,6 +119,7 @@ public:
     void recursiveCommitChanges();
 
     virtual void syncCompositingState();
+    virtual void syncCompositingStateForThisLayerOnly();
 
 protected:
     virtual void setOpacityInternal(float);
@@ -259,15 +257,14 @@ private:
 
     void updateContentsImage();
     void updateContentsMediaLayer();
-#if ENABLE(3D_CANVAS)
-    void updateContentsGraphicsContext3D();
-#endif
+    void updateContentsCanvasLayer();
     void updateContentsRect();
     void updateGeometryOrientation();
     void updateMaskLayer();
     void updateReplicatedLayers();
 
     void updateLayerAnimations();
+    void updateContentsNeedsDisplay();
     
     enum StructuralLayerPurpose {
         NoStructuralLayer = 0,
@@ -305,13 +302,12 @@ private:
         DirtyRectsChanged = 1 << 16,
         ContentsImageChanged = 1 << 17,
         ContentsMediaLayerChanged = 1 << 18,
-#if ENABLE(3D_CANVAS)
-        ContentsGraphicsContext3DChanged = 1 << 19,
-#endif
+        ContentsCanvasLayerChanged = 1 << 19,
         ContentsRectChanged = 1 << 20,
         GeometryOrientationChanged = 1 << 21,
         MaskLayerChanged = 1 << 22,
-        ReplicatedLayerChanged = 1 << 23
+        ReplicatedLayerChanged = 1 << 23,
+        ContentsNeedsDisplay = 1 << 24
     };
     typedef unsigned LayerChangeFlags;
     void noteLayerPropertyChanged(LayerChangeFlags flags);
@@ -331,10 +327,8 @@ private:
     enum ContentsLayerPurpose {
         NoContentsLayer = 0,
         ContentsLayerForImage,
-        ContentsLayerForMedia
-#if ENABLE(3D_CANVAS)
-        ,ContentsLayerForGraphicsLayer3D
-#endif
+        ContentsLayerForMedia,
+        ContentsLayerForCanvas
     };
     
     ContentsLayerPurpose m_contentsLayerPurpose;
@@ -389,11 +383,6 @@ private:
     Vector<FloatRect> m_dirtyRects;
     
     LayerChangeFlags m_uncommittedChanges;
-    
-#if ENABLE(3D_CANVAS)
-    PlatformGraphicsContext3D m_platformGraphicsContext3D;
-    Platform3DObject m_platformTexture;
-#endif
 };
 
 } // namespace WebCore

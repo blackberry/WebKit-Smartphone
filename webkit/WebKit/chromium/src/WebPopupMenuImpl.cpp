@@ -56,7 +56,8 @@ namespace WebKit {
 
 WebPopupMenu* WebPopupMenu::create(WebWidgetClient* client)
 {
-    return new WebPopupMenuImpl(client);
+    // Pass the WebPopupMenuImpl's self-reference to the caller.
+    return adoptRef(new WebPopupMenuImpl(client)).leakRef();
 }
 
 // WebWidget ------------------------------------------------------------------
@@ -173,6 +174,16 @@ void WebPopupMenuImpl::paint(WebCanvas* canvas, const WebRect& rect)
     }
 }
 
+void WebPopupMenuImpl::themeChanged()
+{
+    notImplemented();
+}
+
+void WebPopupMenuImpl::composite(bool finish)
+{
+    notImplemented();
+}
+
 bool WebPopupMenuImpl::handleInputEvent(const WebInputEvent& inputEvent)
 {
     if (!m_widget)
@@ -230,16 +241,26 @@ void WebPopupMenuImpl::setFocus(bool enable)
 {
 }
 
-bool WebPopupMenuImpl::handleCompositionEvent(
-    WebCompositionCommand command, int cursorPosition, int targetStart,
-    int targetEnd, const WebString& imeString)
+bool WebPopupMenuImpl::setComposition(
+    const WebString& text, const WebVector<WebCompositionUnderline>& underlines,
+    int selectionStart, int selectionEnd)
 {
     return false;
 }
 
-bool WebPopupMenuImpl::queryCompositionStatus(bool* enabled, WebRect* caretRect)
+bool WebPopupMenuImpl::confirmComposition()
 {
     return false;
+}
+
+WebTextInputType WebPopupMenuImpl::textInputType()
+{
+    return WebTextInputTypeNone;
+}
+
+WebRect WebPopupMenuImpl::caretOrSelectionBounds()
+{
+    return WebRect();
 }
 
 void WebPopupMenuImpl::setTextDirection(WebTextDirection direction)
@@ -305,6 +326,10 @@ void WebPopupMenuImpl::scrollRectIntoView(const IntRect&, const ScrollView*) con
 void WebPopupMenuImpl::scrollbarsModeDidChange() const
 {
     // Nothing to be done since we have no concept of different scrollbar modes.
+}
+
+void WebPopupMenuImpl::setCursor(const WebCore::Cursor&)
+{
 }
 
 //-----------------------------------------------------------------------------

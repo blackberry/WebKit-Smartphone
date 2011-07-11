@@ -32,6 +32,8 @@ include_paths = webkit_dirs + common_includes + ['.', '..',
                 wk_root,
                 os.path.join(wk_root, 'JavaScriptCore'),
                 os.path.join(wk_root, 'WebCore'),
+                os.path.join(wk_root, 'WebCore', 'bindings', 'wx'),
+                os.path.join(wk_root, 'WebCore', 'DerivedSources'),
                 os.path.join(output_dir),
                 os.path.join(wk_root, 'WebCore', 'page', 'wx'),
                 os.path.join(wk_root, 'WebCore', 'platform', 'network', 'curl'),
@@ -39,6 +41,9 @@ include_paths = webkit_dirs + common_includes + ['.', '..',
                 os.path.join(wk_root, 'WebCore', 'platform', 'bridge', 'wx'),
                 os.path.join(wk_root, 'WebCore', 'platform', 'graphics', 'wx'),
 ]
+
+if sys.platform.startswith("win"):
+    include_paths.append(os.path.join(wk_root, 'WebCore','platform','win'))
 
 windows_deps = [
                 'lib/pthreadVC2.dll',
@@ -106,7 +111,7 @@ def build(bld):
     if sys.platform.startswith('darwin'):
         exts.append('.mm')
         obj.includes += '../mac/WebCoreSupport ../../WebCore/platform/mac'
-        obj.source = "../mac/WebCoreSupport/WebSystemInterface.m"
+        obj.source = "../mac/WebCoreSupport/WebSystemInterface.mm"
     obj.find_sources_in_dirs(webkit_dirs)
 
     if building_on_win32:

@@ -273,9 +273,10 @@ void FullscreenVideoController::enterFullscreen()
 #if USE(ACCELERATED_COMPOSITING)
     m_fullscreenWindow->setRootChildLayer(m_rootChild);
 
-    WKCACFLayer* videoLayer = m_mediaElement->player()->platformLayer();
+    WKCACFLayer* videoLayer = m_mediaElement->platformLayer();
     m_rootChild->addSublayer(videoLayer);
     m_rootChild->setNeedsLayout();
+    m_rootChild->setGeometryFlipped(1);
 #endif
 
     RECT windowRect;
@@ -476,7 +477,7 @@ void FullscreenVideoController::draw()
     HDC windowDC = GetDC(m_hudWindow);
     HDC bitmapDC = CreateCompatibleDC(windowDC);
     ::ReleaseDC(m_hudWindow, windowDC);
-    SelectObject(bitmapDC, m_bitmap.get());
+    HGDIOBJ oldBitmap = SelectObject(bitmapDC, m_bitmap.get());
 
     GraphicsContext context(bitmapDC, true);
 
@@ -543,6 +544,7 @@ void FullscreenVideoController::draw()
 
     context.restore();
 
+    ::SelectObject(bitmapDC, oldBitmap);
     ::DeleteDC(bitmapDC);
 }
 

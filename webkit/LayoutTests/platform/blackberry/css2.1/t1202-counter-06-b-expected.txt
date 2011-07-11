@@ -1,0 +1,115 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x103
+  RenderBlock {HTML} at (0,0) size 800x103
+    RenderBody {BODY} at (8,16) size 784x79
+      RenderBlock {P} at (0,0) size 784x21
+        RenderText {#text} at (0,1) size 292x19
+          text run at (0,1) width 292: "The following two lines should look the same:"
+      RenderBlock {DIV} at (0,37) size 784x21
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (0,1) size 16x19
+              text run at (0,1) width 16: "01"
+        RenderText {#text} at (16,1) size 4x19
+          text run at (16,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (20,1) size 16x19
+              text run at (20,1) width 16: "02"
+        RenderText {#text} at (36,1) size 4x19
+          text run at (36,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (40,1) size 16x19
+              text run at (40,1) width 16: "03"
+        RenderText {#text} at (56,1) size 4x19
+          text run at (56,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (60,1) size 16x19
+              text run at (60,1) width 16: "04"
+        RenderText {#text} at (76,1) size 4x19
+          text run at (76,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (80,1) size 16x19
+              text run at (80,1) width 16: "05"
+        RenderText {#text} at (96,1) size 4x19
+          text run at (96,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (100,1) size 16x19
+              text run at (100,1) width 16: "06"
+        RenderText {#text} at (116,1) size 4x19
+          text run at (116,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (120,1) size 16x19
+              text run at (120,1) width 16: "07"
+        RenderText {#text} at (136,1) size 4x19
+          text run at (136,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (140,1) size 16x19
+              text run at (140,1) width 16: "08"
+        RenderText {#text} at (156,1) size 4x19
+          text run at (156,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (160,1) size 16x19
+              text run at (160,1) width 16: "09"
+        RenderText {#text} at (176,1) size 4x19
+          text run at (176,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (180,1) size 16x19
+              text run at (180,1) width 16: "10"
+        RenderText {#text} at (196,1) size 4x19
+          text run at (196,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (200,1) size 16x19
+              text run at (200,1) width 16: "11"
+        RenderText {#text} at (216,1) size 4x19
+          text run at (216,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (220,1) size 16x19
+              text run at (220,1) width 16: "12"
+        RenderText {#text} at (236,1) size 4x19
+          text run at (236,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 16x19
+          RenderInline (generated) at (0,0) size 16x19
+            RenderCounter at (240,1) size 16x19
+              text run at (240,1) width 16: "99"
+        RenderText {#text} at (256,1) size 4x19
+          text run at (256,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 24x19
+          RenderInline (generated) at (0,0) size 24x19
+            RenderCounter at (260,1) size 24x19
+              text run at (260,1) width 24: "100"
+        RenderText {#text} at (284,1) size 4x19
+          text run at (284,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 24x19
+          RenderInline (generated) at (0,0) size 24x19
+            RenderCounter at (288,1) size 24x19
+              text run at (288,1) width 24: "101"
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {DIV} at (0,58) size 784x21
+        RenderText {#text} at (0,1) size 312x19
+          text run at (0,1) width 20: "01 "
+          text run at (20,1) width 20: "02 "
+          text run at (40,1) width 20: "03 "
+          text run at (60,1) width 20: "04 "
+          text run at (80,1) width 20: "05 "
+          text run at (100,1) width 20: "06 "
+          text run at (120,1) width 20: "07 "
+          text run at (140,1) width 20: "08 "
+          text run at (160,1) width 20: "09 "
+          text run at (180,1) width 20: "10 "
+          text run at (200,1) width 20: "11 "
+          text run at (220,1) width 20: "12 "
+          text run at (240,1) width 20: "99 "
+          text run at (260,1) width 28: "100 "
+          text run at (288,1) width 24: "101"

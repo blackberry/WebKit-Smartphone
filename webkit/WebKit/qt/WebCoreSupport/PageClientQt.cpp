@@ -48,13 +48,10 @@ bool PageClientQWidget::inputMethodEnabled() const
     return view->testAttribute(Qt::WA_InputMethodEnabled);
 }
 
-#if QT_VERSION >= 0x040600
-void PageClientQWidget::setInputMethodHint(Qt::InputMethodHint hint, bool enable)
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
+void PageClientQWidget::setInputMethodHints(Qt::InputMethodHints hints)
 {
-    if (enable)
-        view->setInputMethodHints(view->inputMethodHints() | hint);
-    else
-        view->setInputMethodHints(view->inputMethodHints() & ~hint);
+    view->setInputMethodHints(hints);
 }
 #endif
 
@@ -101,6 +98,11 @@ QObject* PageClientQWidget::pluginParent() const
 QStyle* PageClientQWidget::style() const
 {
     return view->style();
+}
+
+QRectF PageClientQWidget::windowRect() const
+{
+    return QRectF(view->window()->geometry());
 }
 
 PageClientQGraphicsWidget::~PageClientQGraphicsWidget()
@@ -227,13 +229,10 @@ bool PageClientQGraphicsWidget::inputMethodEnabled() const
 #endif
 }
 
-#if QT_VERSION >= 0x040600
-void PageClientQGraphicsWidget::setInputMethodHint(Qt::InputMethodHint hint, bool enable)
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
+void PageClientQGraphicsWidget::setInputMethodHints(Qt::InputMethodHints hints)
 {
-    if (enable)
-        view->setInputMethodHints(view->inputMethodHints() | hint);
-    else
-        view->setInputMethodHints(view->inputMethodHints() & ~hint);
+    view->setInputMethodHints(hints);
 }
 #endif
 
@@ -292,14 +291,14 @@ QRect PageClientQGraphicsWidget::geometryRelativeToOwnerWidget() const
 
 #if ENABLE(TILED_BACKING_STORE)
 QRectF PageClientQGraphicsWidget::graphicsItemVisibleRect() const
-{ 
+{
     if (!view->scene())
         return QRectF();
 
     QList<QGraphicsView*> views = view->scene()->views();
     if (views.isEmpty())
         return QRectF();
-    
+
     QGraphicsView* graphicsView = views.at(0);
     int xOffset = graphicsView->horizontalScrollBar()->value();
     int yOffset = graphicsView->verticalScrollBar()->value();
@@ -317,6 +316,16 @@ QStyle* PageClientQGraphicsWidget::style() const
     return view->style();
 }
 
+QRectF PageClientQGraphicsWidget::windowRect() const
+{
+    if (!view->deviceSize().isEmpty())
+        return QRectF(QRect(QPoint(0, 0), view->deviceSize()));
 
+    if (!view->scene())
+        return QRectF();
 
+    // The sceneRect is a good approximation of the size of the application, independent of the view.
+    return view->scene()->sceneRect();
 }
+
+} // namespace WebCore

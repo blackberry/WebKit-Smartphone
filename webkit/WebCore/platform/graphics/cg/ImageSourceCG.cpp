@@ -29,6 +29,7 @@
 #if PLATFORM(CG)
 #include "ImageSourceCG.h"
 
+#include "IntPoint.h"
 #include "IntSize.h"
 #include "MIMETypeRegistry.h"
 #include "SharedBuffer.h"
@@ -62,8 +63,10 @@ void sharedBufferRelease(void* info)
 }
 #endif
 
-ImageSource::ImageSource()
+ImageSource::ImageSource(bool premultiplyAlpha)
     : m_decoder(0)
+    // FIXME: m_premultiplyAlpha is ignored in cg at the moment.
+    , m_premultiplyAlpha(premultiplyAlpha)
 {
 }
 
@@ -196,20 +199,45 @@ IntSize ImageSource::size() const
     return frameSizeAtIndex(0);
 }
 
+bool ImageSource::getHotSpot(IntPoint& hotSpot) const
+{
+    RetainPtr<CFDictionaryRef> properties(AdoptCF, CGImageSourceCopyPropertiesAtIndex(m_decoder, 0, imageSourceOptions()));
+    if (!properties)
+        return false;
+
+    int x = -1, y = -1;
+    CFNumberRef num = (CFNumberRef)CFDictionaryGetValue(properties.get(), CFSTR("hotspotX"));
+    if (!num || !CFNumberGetValue(num, kCFNumberIntType, &x))
+        return false;
+
+    num = (CFNumberRef)CFDictionaryGetValue(properties.get(), CFSTR("hotspotY"));
+    if (!num || !CFNumberGetValue(num, kCFNumberIntType, &y))
+        return false;
+
+    if (x < 0 || y < 0)
+        return false;
+
+    hotSpot = IntPoint(x, y);
+    return true;
+}
+
 int ImageSource::repetitionCount()
 {
     int result = cAnimationLoopOnce; // No property means loop once.
     if (!initialized())
         return result;
 
-    // A property with value 0 means loop forever.
     RetainPtr<CFDictionaryRef> properties(AdoptCF, CGImageSourceCopyProperties(m_decoder, imageSourceOptions()));
     if (properties) {
         CFDictionaryRef gifProperties = (CFDictionaryRef)CFDictionaryGetValue(properties.get(), kCGImagePropertyGIFDictionary);
         if (gifProperties) {
             CFNumberRef num = (CFNumberRef)CFDictionaryGetValue(gifProperties, kCGImagePropertyGIFLoopCount);
-            if (num)
+            if (num) {
+                // A property with value 0 means loop forever.
                 CFNumberGetValue(num, kCFNumberIntType, &result);
+                if (!result)
+                    result = cAnimationLoopInfinite;
+            }
         } else
             result = cAnimationNone; // Turns out we're not a GIF after all, so we don't animate.
     }

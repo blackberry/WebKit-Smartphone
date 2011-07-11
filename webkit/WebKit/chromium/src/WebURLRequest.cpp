@@ -55,6 +55,8 @@ public:
         : m_resourceRequestAllocation(*p->m_resourceRequest)
     {
         m_resourceRequest = &m_resourceRequestAllocation;
+        m_allowStoredCredentials = p->m_allowStoredCredentials;
+        m_downloadToFile = p->m_downloadToFile;
     }
 
     virtual void dispose() { delete this; }
@@ -194,6 +196,16 @@ void WebURLRequest::setReportUploadProgress(bool reportUploadProgress)
     m_private->m_resourceRequest->setReportUploadProgress(reportUploadProgress);
 }
 
+bool WebURLRequest::reportLoadTiming() const
+{
+    return m_private->m_resourceRequest->reportLoadTiming();
+}
+
+void WebURLRequest::setReportLoadTiming(bool reportLoadTiming)
+{
+    m_private->m_resourceRequest->setReportLoadTiming(reportLoadTiming);
+}
+
 WebURLRequest::TargetType WebURLRequest::targetType() const
 {
     return static_cast<TargetType>(m_private->m_resourceRequest->targetType());
@@ -233,6 +245,16 @@ int WebURLRequest::appCacheHostID() const
 void WebURLRequest::setAppCacheHostID(int appCacheHostID)
 {
     m_private->m_resourceRequest->setAppCacheHostID(appCacheHostID);
+}
+
+bool WebURLRequest::downloadToFile() const
+{
+    return m_private->m_downloadToFile;
+}
+
+void WebURLRequest::setDownloadToFile(bool downloadToFile)
+{
+    m_private->m_downloadToFile = downloadToFile;
 }
 
 ResourceRequest& WebURLRequest::toMutableResourceRequest()

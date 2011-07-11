@@ -82,6 +82,7 @@ SOFT_LINK_POINTER(QTKit, QTMediaTypeSound, NSString *)
 SOFT_LINK_POINTER(QTKit, QTMediaTypeText, NSString *)
 SOFT_LINK_POINTER(QTKit, QTMediaTypeVideo, NSString *)
 SOFT_LINK_POINTER(QTKit, QTMovieAskUnresolvedDataRefsAttribute, NSString *)
+SOFT_LINK_POINTER(QTKit, QTMovieLoopsAttribute, NSString *)
 SOFT_LINK_POINTER(QTKit, QTMovieDataSizeAttribute, NSString *)
 SOFT_LINK_POINTER(QTKit, QTMovieDidEndNotification, NSString *)
 SOFT_LINK_POINTER(QTKit, QTMovieHasVideoAttribute, NSString *)
@@ -118,6 +119,7 @@ SOFT_LINK_POINTER(QTKit, QTMovieApertureModeAttribute, NSString *)
 #define QTMediaTypeText getQTMediaTypeText()
 #define QTMediaTypeVideo getQTMediaTypeVideo()
 #define QTMovieAskUnresolvedDataRefsAttribute getQTMovieAskUnresolvedDataRefsAttribute()
+#define QTMovieLoopsAttribute getQTMovieLoopsAttribute()
 #define QTMovieDataSizeAttribute getQTMovieDataSizeAttribute()
 #define QTMovieDidEndNotification getQTMovieDidEndNotification()
 #define QTMovieHasVideoAttribute getQTMovieHasVideoAttribute()
@@ -152,6 +154,10 @@ enum {
     QTMovieLoadStateComplete = 100000L
 };
 #endif
+
+@interface FakeQTMovieView : NSObject
+- (WebCoreMovieObserver *)delegate;
+@end
 
 using namespace WebCore;
 using namespace std;
@@ -217,6 +223,7 @@ MediaPlayerPrivate::MediaPlayerPrivate(MediaPlayer* player)
     , m_visible(false)
     , m_hasUnsupportedTracks(false)
     , m_videoFrameHasDrawn(false)
+    , m_isAllowedToRender(false)
 #if DRAW_FRAME_RATE
     , m_frameCountWhilePlaying(0)
     , m_timeStartedPlaying(0)
@@ -242,6 +249,7 @@ void MediaPlayerPrivate::createQTMovie(const String& url)
                        [NSNumber numberWithBool:YES], QTMoviePreventExternalURLLinksAttribute,
                        [NSNumber numberWithBool:YES], QTSecurityPolicyNoCrossSiteAttribute,
                        [NSNumber numberWithBool:NO], QTMovieAskUnresolvedDataRefsAttribute,
+                       [NSNumber numberWithBool:NO], QTMovieLoopsAttribute,
 #if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
                        [NSNumber numberWithBool:YES], @"QTMovieOpenForPlaybackAttribute",
 #endif
@@ -253,8 +261,41 @@ void MediaPlayerPrivate::createQTMovie(const String& url)
     createQTMovie(cocoaURL, movieAttributes);
 }
 
+static void disableComponentsOnce()
+{
+    static bool sComponentsDisabled = false;
+    if (sComponentsDisabled)
+        return;
+    sComponentsDisabled = true;
+
+    // eat/PDF and grip/PDF components must be disabled twice since they are registered twice
+    // with different flags.  However, there is currently a bug in 64-bit QTKit (<rdar://problem/8378237>)
+    // which causes subsequent disable component requests of exactly the same type to be ignored if
+    // QTKitServer has not yet started.  As a result, we must pass in exactly the flags we want to
+    // disable per component.  As a failsafe, if in the future these flags change, we will disable the
+    // PDF components for a third time with a wildcard flags field:
+    uint32_t componentsToDisable[11][5] = {
+        {'eat ', 'TEXT', 'text', 0, 0},
+        {'eat ', 'TXT ', 'text', 0, 0},    
+        {'eat ', 'utxt', 'text', 0, 0},  
+        {'eat ', 'TEXT', 'tx3g', 0, 0},  
+        {'eat ', 'PDF ', 'vide', 0x44802, 0},
+        {'eat ', 'PDF ', 'vide', 0x45802, 0},
+        {'eat ', 'PDF ', 'vide', 0, 0},  
+        {'grip', 'PDF ', 'appl', 0x844a00, 0},
+        {'grip', 'PDF ', 'appl', 0x845a00, 0},
+        {'grip', 'PDF ', 'appl', 0, 0},  
+        {'imdc', 'pdf ', 'appl', 0, 0},  
+    };
+
+    for (size_t i = 0; i < sizeof(componentsToDisable)/sizeof(componentsToDisable[0]); ++i) 
+        wkQTMovieDisableComponent(componentsToDisable[i]);
+}
+
 void MediaPlayerPrivate::createQTMovie(NSURL *url, NSDictionary *movieAttributes)
 {
+    disableComponentsOnce();
+
     [[NSNotificationCenter defaultCenter] removeObserver:m_objcObserver.get()];
     
     bool recreating = false;
@@ -314,11 +355,12 @@ void MediaPlayerPrivate::createQTMovie(NSURL *url, NSDictionary *movieAttributes
 
 static void mainThreadSetNeedsDisplay(id self, SEL)
 {
-    id movieView = [self superview];
-    ASSERT(!movieView || [movieView isKindOfClass:[QTMovieView class]]);
-    if (!movieView || ![movieView isKindOfClass:[QTMovieView class]])
+    id view = [self superview];
+    ASSERT(!view || [view isKindOfClass:[QTMovieView class]]);
+    if (!view || ![view isKindOfClass:[QTMovieView class]])
         return;
 
+    FakeQTMovieView *movieView = static_cast<FakeQTMovieView *>(view);
     WebCoreMovieObserver* delegate = [movieView delegate];
     ASSERT(!delegate || [delegate isKindOfClass:[WebCoreMovieObserver class]]);
     if (!delegate || ![delegate isKindOfClass:[WebCoreMovieObserver class]])
@@ -495,7 +537,7 @@ MediaPlayerPrivate::MediaRenderingMode MediaPlayerPrivate::preferredRenderingMod
 
 void MediaPlayerPrivate::setUpVideoRendering()
 {
-    if (!isReadyForRendering())
+    if (!isReadyForVideoSetup())
         return;
 
     MediaRenderingMode currentMode = currentRenderingMode();
@@ -519,10 +561,9 @@ void MediaPlayerPrivate::setUpVideoRendering()
         break;
     }
 
-#if USE(ACCELERATED_COMPOSITING)
+    // If using a movie layer, inform the client so the compositing tree is updated.
     if (currentMode == MediaRenderingMovieLayer || preferredMode == MediaRenderingMovieLayer)
         m_player->mediaPlayerClient()->mediaPlayerRenderingModeChanged(m_player);
-#endif
 }
 
 void MediaPlayerPrivate::tearDownVideoRendering()
@@ -915,9 +956,24 @@ void MediaPlayerPrivate::cacheMovieScale()
         m_scaleFactor.setHeight(initialSize.height / naturalSize.height);
 }
 
-bool MediaPlayerPrivate::isReadyForRendering() const
+bool MediaPlayerPrivate::isReadyForVideoSetup() const
 {
     return m_readyState >= MediaPlayer::HaveMetadata && m_player->visible();
+}
+
+void MediaPlayerPrivate::prepareForRendering()
+{
+    if (m_isAllowedToRender)
+        return;
+    m_isAllowedToRender = true;
+
+    if (!hasSetUpVideoRendering())
+        setUpVideoRendering();
+
+    // If using a movie layer, inform the client so the compositing tree is updated. This is crucial if the movie
+    // has a poster, as it will most likely not have a layer and we will now be rendering frames to the movie layer.
+    if (currentRenderingMode() == MediaRenderingMovieLayer || preferredRenderingMode() == MediaRenderingMovieLayer)
+        m_player->mediaPlayerClient()->mediaPlayerRenderingModeChanged(m_player);
 }
 
 void MediaPlayerPrivate::updateStates()
@@ -1009,7 +1065,7 @@ void MediaPlayerPrivate::updateStates()
         }
     }
 
-    if (!hasSetUpVideoRendering())
+    if (isReadyForVideoSetup() && !hasSetUpVideoRendering())
         setUpVideoRendering();
 
     if (seeking())
@@ -1252,22 +1308,22 @@ static void addFileTypesToCache(NSArray * fileTypes, HashSet<String> &cache)
         if (!uti)
             continue;
         RetainPtr<CFStringRef> mime(AdoptCF, UTTypeCopyPreferredTagWithClass(uti.get(), kUTTagClassMIMEType));
+        if (mime)
+            cache.add(mime.get());
 
-        // UTI types are missing many media related MIME types supported by QTKit, see rdar://6434168,
-        // and not all third party movie importers register their types, so if we didn't find a type for
-        // this extension look it up in the hard coded table in the MIME type regsitry.
-        if (!mime) {
-            // -movieFileTypes: returns both file extensions and OSTypes. The later are surrounded by single
-            // quotes, eg. 'MooV', so don't bother looking at those.
-            if (CFStringGetCharacterAtIndex(ext, 0) != '\'') {
-                String mediaType = MIMETypeRegistry::getMediaMIMETypeForExtension(String(ext));
-                if (!mediaType.isEmpty())
-                    mime.adoptCF(mediaType.createCFString());
+        // -movieFileTypes: returns both file extensions and OSTypes. The later are surrounded by single
+        // quotes, eg. 'MooV', so don't bother looking at those.
+        if (CFStringGetCharacterAtIndex(ext, 0) != '\'') {
+            // UTI is missing many media related MIME types supported by QTKit (see rdar://6434168), and not all
+            // web servers use the MIME type UTI returns for an extension (see rdar://7875393), so even if UTI 
+            // has a type for this extension add any types in hard coded table in the MIME type regsitry.
+            Vector<String> typesForExtension = MIMETypeRegistry::getMediaMIMETypesForExtension(ext);
+            unsigned count = typesForExtension.size();
+            for (unsigned ndx = 0; ndx < count; ++ndx) {
+                if (!cache.contains(typesForExtension[ndx]))
+                    cache.add(typesForExtension[ndx]);
             }
         }
-        if (!mime)
-            continue;
-        cache.add(mime.get());
     }    
 }
 
@@ -1299,11 +1355,17 @@ static HashSet<String> mimeModernTypesCache()
     return cache;
 } 
 
-void MediaPlayerPrivate::getSupportedTypes(HashSet<String>& types)
+void MediaPlayerPrivate::getSupportedTypes(HashSet<String>& supportedTypes)
 {
+    supportedTypes = mimeModernTypesCache();
+    
     // Note: this method starts QTKitServer if it isn't already running when in 64-bit because it has to return the list 
     // of every MIME type supported by QTKit.
-    types = mimeCommonTypesCache();
+    HashSet<String> commonTypes = mimeCommonTypesCache();
+    HashSet<String>::const_iterator it = commonTypes.begin();
+    HashSet<String>::const_iterator end = commonTypes.end();
+    for (; it != end; ++it)
+        supportedTypes.add(*it);
 } 
 
 MediaPlayer::SupportsType MediaPlayerPrivate::supportsType(const String& type, const String& codecs)
@@ -1361,6 +1423,7 @@ void MediaPlayerPrivate::disableUnsupportedTracks()
         allowedTrackTypes->add("sdsm"); // MPEG-4 scene description stream
         allowedTrackTypes->add("tmcd"); // timecode
         allowedTrackTypes->add("tc64"); // timcode-64
+        allowedTrackTypes->add("tmet"); // timed metadata
     }
     
     NSArray *tracks = [m_qtMovie.get() tracks];
@@ -1437,8 +1500,9 @@ void MediaPlayerPrivate::sawUnsupportedTracks()
 #if USE(ACCELERATED_COMPOSITING)
 bool MediaPlayerPrivate::supportsAcceleratedRendering() const
 {
-    // When in the media document we render via QTMovieView, which is already accelerated.
-    return isReadyForRendering() && getQTMovieLayerClass() != Nil && !m_player->inMediaDocument();
+    // Also don't claim to support accelerated rendering when in the media document, as we will then render 
+    // via QTMovieView which is already accelerated.
+    return isReadyForVideoSetup() && getQTMovieLayerClass() != Nil && !m_player->inMediaDocument();
 }
 
 void MediaPlayerPrivate::acceleratedRenderingStateChanged()

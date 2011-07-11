@@ -1,0 +1,16 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x47
+  RenderBlock {html} at (0,0) size 800x47
+    RenderBody {body} at (8,8) size 784x31
+      RenderTable {table} at (0,0) size 528x31 [border: (1px outset #808080)]
+        RenderTableSection (anonymous) at (1,1) size 526x29
+          RenderTableRow {tr} at (0,2) size 526x25
+            RenderTableCell {td} at (2,2) size 260x25 [bgcolor=#00FF00] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 256x19
+                text run at (2,3) width 180: "This cell should have a lime "
+                text run at (182,3) width 76: "background"
+            RenderTableCell {td} at (264,2) size 260x25 [bgcolor=#00FF00] [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 256x19
+                text run at (2,3) width 180: "This cell should have a lime "
+                text run at (182,3) width 76: "background"

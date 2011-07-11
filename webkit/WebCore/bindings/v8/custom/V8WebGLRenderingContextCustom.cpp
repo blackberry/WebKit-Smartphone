@@ -44,7 +44,7 @@
 #include "V8ArrayBufferView.h"
 #include "V8WebGLBuffer.h"
 #include "V8Int8Array.h"
-#include "V8FloatArray.h"
+#include "V8Float32Array.h"
 #include "V8WebGLFramebuffer.h"
 #include "V8Int32Array.h"
 #include "V8WebGLProgram.h"
@@ -110,6 +110,13 @@ static v8::Handle<v8::Value> toV8Object(const WebGLGetInfo& info)
     switch (info.getType()) {
     case WebGLGetInfo::kTypeBool:
         return v8::Boolean::New(info.getBool());
+    case WebGLGetInfo::kTypeBoolArray: {
+        const Vector<bool>& value = info.getBoolArray();
+        v8::Local<v8::Array> array = v8::Array::New(value.size());
+        for (size_t ii = 0; ii < value.size(); ++ii)
+            array->Set(v8::Integer::New(ii), v8::Boolean::New(value[ii]));
+        return array;
+    }
     case WebGLGetInfo::kTypeFloat:
         return v8::Number::New(info.getFloat());
     case WebGLGetInfo::kTypeLong:
@@ -209,6 +216,36 @@ enum WhichProgramCall {
     kProgramParameter, kUniform
 };
 
+v8::Handle<v8::Value> V8WebGLRenderingContext::getAttachedShadersCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.WebGLRenderingContext.getAttachedShaders()");
+
+    if (args.Length() < 1) {
+        V8Proxy::setDOMException(SYNTAX_ERR);
+        return notHandledByInterceptor();
+    }
+
+    ExceptionCode ec = 0;
+    WebGLRenderingContext* context = V8WebGLRenderingContext::toNative(args.Holder());
+    if (args.Length() > 0 && !isUndefinedOrNull(args[0]) && !V8WebGLProgram::HasInstance(args[0])) {
+        V8Proxy::throwTypeError();
+        return notHandledByInterceptor();
+    }
+    WebGLProgram* program = V8WebGLProgram::HasInstance(args[0]) ? V8WebGLProgram::toNative(v8::Handle<v8::Object>::Cast(args[0])) : 0;
+    Vector<WebGLShader*> shaders;
+    bool succeed = context->getAttachedShaders(program, shaders, ec);
+    if (ec) {
+        V8Proxy::setDOMException(ec);
+        return v8::Undefined();
+    }
+    if (!succeed)
+        return v8::Undefined();
+    v8::Local<v8::Array> array = v8::Array::New(shaders.size());
+    for (size_t ii = 0; ii < shaders.size(); ++ii)
+        array->Set(v8::Integer::New(ii), toV8(shaders[ii]));
+    return array;
+}
+
 v8::Handle<v8::Value> V8WebGLRenderingContext::getBufferParameterCallback(const v8::Arguments& args)
 {
     INC_STATS("DOM.WebGLRenderingContext.getBufferParameter()");
@@ -286,6 +323,10 @@ v8::Handle<v8::Value> V8WebGLRenderingContext::getProgramParameterCallback(const
 
     ExceptionCode ec = 0;
     WebGLRenderingContext* context = V8WebGLRenderingContext::toNative(args.Holder());
+    if (args.Length() > 0 && !isUndefinedOrNull(args[0]) && !V8WebGLProgram::HasInstance(args[0])) {
+        V8Proxy::throwTypeError();
+        return notHandledByInterceptor();
+    }
     WebGLProgram* program = V8WebGLProgram::HasInstance(args[0]) ? V8WebGLProgram::toNative(v8::Handle<v8::Object>::Cast(args[0])) : 0;
     bool ok;
     unsigned pname = toInt32(args[1], ok);
@@ -318,6 +359,10 @@ v8::Handle<v8::Value> V8WebGLRenderingContext::getShaderParameterCallback(const 
 
     ExceptionCode ec = 0;
     WebGLRenderingContext* context = V8WebGLRenderingContext::toNative(args.Holder());
+    if (args.Length() > 0 && !isUndefinedOrNull(args[0]) && !V8WebGLShader::HasInstance(args[0])) {
+        V8Proxy::throwTypeError();
+        return notHandledByInterceptor();
+    }
     WebGLShader* shader = V8WebGLShader::HasInstance(args[0]) ? V8WebGLShader::toNative(v8::Handle<v8::Object>::Cast(args[0])) : 0;
     bool ok;
     unsigned pname = toInt32(args[1], ok);
@@ -350,8 +395,16 @@ v8::Handle<v8::Value> V8WebGLRenderingContext::getUniformCallback(const v8::Argu
 
     ExceptionCode ec = 0;
     WebGLRenderingContext* context = V8WebGLRenderingContext::toNative(args.Holder());
+    if (args.Length() > 0 && !isUndefinedOrNull(args[0]) && !V8WebGLProgram::HasInstance(args[0])) {
+        V8Proxy::throwTypeError();
+        return notHandledByInterceptor();
+    }
     WebGLProgram* program = V8WebGLProgram::HasInstance(args[0]) ? V8WebGLProgram::toNative(v8::Handle<v8::Object>::Cast(args[0])) : 0;
 
+    if (args.Length() > 1 && !isUndefinedOrNull(args[1]) && !V8WebGLUniformLocation::HasInstance(args[1])) {
+        V8Proxy::throwTypeError();
+        return notHandledByInterceptor();
+    }
     bool ok = false;
     WebGLUniformLocation* location = toWebGLUniformLocation(args[1], ok);
 
@@ -392,21 +445,21 @@ static v8::Handle<v8::Value> vertexAttribAndUniformHelperf(const v8::Arguments& 
                                                            FunctionToCall functionToCall) {
     // Forms:
     // * glUniform1fv(WebGLUniformLocation location, Array data);
-    // * glUniform1fv(WebGLUniformLocation location, FloatArray data);
+    // * glUniform1fv(WebGLUniformLocation location, Float32Array data);
     // * glUniform2fv(WebGLUniformLocation location, Array data);
-    // * glUniform2fv(WebGLUniformLocation location, FloatArray data);
+    // * glUniform2fv(WebGLUniformLocation location, Float32Array data);
     // * glUniform3fv(WebGLUniformLocation location, Array data);
-    // * glUniform3fv(WebGLUniformLocation location, FloatArray data);
+    // * glUniform3fv(WebGLUniformLocation location, Float32Array data);
     // * glUniform4fv(WebGLUniformLocation location, Array data);
-    // * glUniform4fv(WebGLUniformLocation location, FloatArray data);
+    // * glUniform4fv(WebGLUniformLocation location, Float32Array data);
     // * glVertexAttrib1fv(GLint index, Array data);
-    // * glVertexAttrib1fv(GLint index, FloatArray data);
+    // * glVertexAttrib1fv(GLint index, Float32Array data);
     // * glVertexAttrib2fv(GLint index, Array data);
-    // * glVertexAttrib2fv(GLint index, FloatArray data);
+    // * glVertexAttrib2fv(GLint index, Float32Array data);
     // * glVertexAttrib3fv(GLint index, Array data);
-    // * glVertexAttrib3fv(GLint index, FloatArray data);
+    // * glVertexAttrib3fv(GLint index, Float32Array data);
     // * glVertexAttrib4fv(GLint index, Array data);
-    // * glVertexAttrib4fv(GLint index, FloatArray data);
+    // * glVertexAttrib4fv(GLint index, Float32Array data);
 
     if (args.Length() != 2) {
         V8Proxy::setDOMException(SYNTAX_ERR);
@@ -419,13 +472,18 @@ static v8::Handle<v8::Value> vertexAttribAndUniformHelperf(const v8::Arguments& 
 
     if (isFunctionToCallForAttribute(functionToCall))
         index = toInt32(args[0], ok);
-    else
+    else {
+        if (args.Length() > 0 && !isUndefinedOrNull(args[0]) && !V8WebGLUniformLocation::HasInstance(args[0])) {
+            V8Proxy::throwTypeError();
+            return notHandledByInterceptor();
+        }
         location = toWebGLUniformLocation(args[0], ok);
+    }
 
     WebGLRenderingContext* context = V8WebGLRenderingContext::toNative(args.Holder());
 
-    if (V8FloatArray::HasInstance(args[1])) {
-        FloatArray* array = V8FloatArray::toNative(args[1]->ToObject());
+    if (V8Float32Array::HasInstance(args[1])) {
+        Float32Array* array = V8Float32Array::toNative(args[1]->ToObject());
         ASSERT(array != NULL);
         ExceptionCode ec = 0;
         switch (functionToCall) {
@@ -444,12 +502,12 @@ static v8::Handle<v8::Value> vertexAttribAndUniformHelperf(const v8::Arguments& 
         return v8::Undefined();
     }
 
-    v8::Handle<v8::Array> array =
-      v8::Local<v8::Array>::Cast(args[1]);
-    if (array.IsEmpty()) {
-        V8Proxy::setDOMException(SYNTAX_ERR);
+    if (args[1].IsEmpty() || !args[1]->IsArray()) {
+        V8Proxy::throwTypeError();
         return notHandledByInterceptor();
     }
+    v8::Handle<v8::Array> array =
+      v8::Local<v8::Array>::Cast(args[1]);
     uint32_t len = array->Length();
     float* data = jsArrayToFloatArray(array, len);
     if (!data) {
@@ -493,6 +551,10 @@ static v8::Handle<v8::Value> uniformHelperi(const v8::Arguments& args,
     }
 
     WebGLRenderingContext* context = V8WebGLRenderingContext::toNative(args.Holder());
+    if (args.Length() > 0 && !isUndefinedOrNull(args[0]) && !V8WebGLUniformLocation::HasInstance(args[0])) {
+        V8Proxy::throwTypeError();
+        return notHandledByInterceptor();
+    }
     bool ok = false;
     WebGLUniformLocation* location = toWebGLUniformLocation(args[0], ok);
 
@@ -512,12 +574,12 @@ static v8::Handle<v8::Value> uniformHelperi(const v8::Arguments& args,
         return v8::Undefined();
     }
 
-    v8::Handle<v8::Array> array =
-      v8::Local<v8::Array>::Cast(args[1]);
-    if (array.IsEmpty()) {
-        V8Proxy::setDOMException(SYNTAX_ERR);
+    if (args[1].IsEmpty() || !args[1]->IsArray()) {
+        V8Proxy::throwTypeError();
         return notHandledByInterceptor();
     }
+    v8::Handle<v8::Array> array =
+      v8::Local<v8::Array>::Cast(args[1]);
     uint32_t len = array->Length();
     int* data = jsArrayToIntArray(array, len);
     if (!data) {
@@ -592,13 +654,13 @@ static v8::Handle<v8::Value> uniformMatrixHelper(const v8::Arguments& args,
 {
     // Forms:
     // * glUniformMatrix2fv(GLint location, GLboolean transpose, Array data);
-    // * glUniformMatrix2fv(GLint location, GLboolean transpose, FloatArray data);
+    // * glUniformMatrix2fv(GLint location, GLboolean transpose, Float32Array data);
     // * glUniformMatrix3fv(GLint location, GLboolean transpose, Array data);
-    // * glUniformMatrix3fv(GLint location, GLboolean transpose, FloatArray data);
+    // * glUniformMatrix3fv(GLint location, GLboolean transpose, Float32Array data);
     // * glUniformMatrix4fv(GLint location, GLboolean transpose, Array data);
-    // * glUniformMatrix4fv(GLint location, GLboolean transpose, FloatArray data);
+    // * glUniformMatrix4fv(GLint location, GLboolean transpose, Float32Array data);
     //
-    // FIXME: need to change to accept FloatArray as well.
+    // FIXME: need to change to accept Float32Array as well.
     if (args.Length() != 3) {
         V8Proxy::setDOMException(SYNTAX_ERR);
         return notHandledByInterceptor();
@@ -606,12 +668,16 @@ static v8::Handle<v8::Value> uniformMatrixHelper(const v8::Arguments& args,
 
     WebGLRenderingContext* context = V8WebGLRenderingContext::toNative(args.Holder());
 
+    if (args.Length() > 0 && !isUndefinedOrNull(args[0]) && !V8WebGLUniformLocation::HasInstance(args[0])) {
+        V8Proxy::throwTypeError();
+        return notHandledByInterceptor();
+    }
     bool ok = false;
     WebGLUniformLocation* location = toWebGLUniformLocation(args[0], ok);
     
     bool transpose = args[1]->BooleanValue();
-    if (V8FloatArray::HasInstance(args[2])) {
-        FloatArray* array = V8FloatArray::toNative(args[2]->ToObject());
+    if (V8Float32Array::HasInstance(args[2])) {
+        Float32Array* array = V8Float32Array::toNative(args[2]->ToObject());
         ASSERT(array != NULL);
         ExceptionCode ec = 0;
         switch (matrixSize) {
@@ -625,12 +691,12 @@ static v8::Handle<v8::Value> uniformMatrixHelper(const v8::Arguments& args,
         return v8::Undefined();
     }
 
-    v8::Handle<v8::Array> array =
-      v8::Local<v8::Array>::Cast(args[2]);
-    if (array.IsEmpty()) {
-        V8Proxy::setDOMException(SYNTAX_ERR);
+    if (args[2].IsEmpty() || !args[2]->IsArray()) {
+        V8Proxy::throwTypeError();
         return notHandledByInterceptor();
     }
+    v8::Handle<v8::Array> array =
+      v8::Local<v8::Array>::Cast(args[2]);
     uint32_t len = array->Length();
     float* data = jsArrayToFloatArray(array, len);
     if (!data) {

@@ -24,6 +24,7 @@
 #ifndef DOMImplementation_h
 #define DOMImplementation_h
 
+#include <wtf/Forward.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
 
@@ -34,7 +35,7 @@ class Document;
 class DocumentType;
 class Frame;
 class HTMLDocument;
-class String;
+class KURL;
 
 typedef int ExceptionCode;
 
@@ -56,7 +57,7 @@ public:
     static PassRefPtr<HTMLDocument> createHTMLDocument(const String& title);
 
     // Other methods (not part of DOM)
-    static PassRefPtr<Document> createDocument(const String& MIMEType, Frame*, bool inViewSourceMode);
+    static PassRefPtr<Document> createDocument(const String& MIMEType, Frame*, const KURL&, bool inViewSourceMode);
 
     static bool isXMLMIMEType(const String& MIMEType);
     static bool isTextMIMEType(const String& MIMEType);

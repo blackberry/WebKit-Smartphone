@@ -4,6 +4,7 @@
  *           (C) 2005 Allan Sandfeld Jensen (kde@carewolf.com)
  *           (C) 2005, 2006 Samuel Weinig (sam.weinig@gmail.com)
  * Copyright (C) 2005, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Google Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -26,9 +27,10 @@
 #include "RenderBoxModelObject.h"
 
 #include "GraphicsContext.h"
-#include "HTMLElement.h"
+#include "HTMLFrameOwnerElement.h"
 #include "HTMLNames.h"
 #include "ImageBuffer.h"
+#include "Path.h"
 #include "RenderBlock.h"
 #include "RenderInline.h"
 #include "RenderLayer.h"
@@ -48,77 +50,57 @@ bool RenderBoxModelObject::s_layerWasSelfPainting = false;
 static const double cInterpolationCutoff = 800. * 800.;
 static const double cLowQualityTimeThreshold = 0.500; // 500 ms
 
-class RenderBoxModelScaleData : public Noncopyable {
+typedef HashMap<RenderBoxModelObject*, IntSize> LastPaintSizeMap;
+
+class ImageQualityController : public Noncopyable {
 public:
-    RenderBoxModelScaleData(RenderBoxModelObject* object, const IntSize& size, const AffineTransform& transform, double time, bool lowQualityScale)
-        : m_size(size)
-        , m_transform(transform)
-        , m_lastPaintTime(time)
-        , m_lowQualityScale(lowQualityScale)
-        , m_highQualityRepaintTimer(object, &RenderBoxModelObject::highQualityRepaintTimerFired)
-    {
-    }
-
-    ~RenderBoxModelScaleData()
-    {
-        m_highQualityRepaintTimer.stop();
-    }
-
-    Timer<RenderBoxModelObject>& hiqhQualityRepaintTimer() { return m_highQualityRepaintTimer; }
-
-    const IntSize& size() const { return m_size; }
-    void setSize(const IntSize& s) { m_size = s; }
-    double lastPaintTime() const { return m_lastPaintTime; }
-    void setLastPaintTime(double t) { m_lastPaintTime = t; }
-    bool useLowQualityScale() const { return m_lowQualityScale; }
-    const AffineTransform& transform() const { return m_transform; }
-    void setTransform(const AffineTransform& transform) { m_transform = transform; }
-    void setUseLowQualityScale(bool b)
-    {
-        m_highQualityRepaintTimer.stop();
-        m_lowQualityScale = b;
-        if (b)
-            m_highQualityRepaintTimer.startOneShot(cLowQualityTimeThreshold);
-    }
+    ImageQualityController();
+    bool shouldPaintAtLowQuality(GraphicsContext*, RenderBoxModelObject*, Image*, const IntSize&);
+    void objectDestroyed(RenderBoxModelObject*);
 
 private:
-    IntSize m_size;
-    AffineTransform m_transform;
-    double m_lastPaintTime;
-    bool m_lowQualityScale;
-    Timer<RenderBoxModelObject> m_highQualityRepaintTimer;
+    void highQualityRepaintTimerFired(Timer<ImageQualityController>*);
+    void restartTimer();
+
+    LastPaintSizeMap m_lastPaintSizeMap;
+    Timer<ImageQualityController> m_timer;
+    bool m_animatedResizeIsActive;
 };
 
-class RenderBoxModelScaleObserver {
-public:
-    static bool shouldPaintBackgroundAtLowQuality(GraphicsContext*, RenderBoxModelObject*, Image*, const IntSize&);
+ImageQualityController::ImageQualityController()
+    : m_timer(this, &ImageQualityController::highQualityRepaintTimerFired)
+    , m_animatedResizeIsActive(false)
+{
+}
 
-    static void boxModelObjectDestroyed(RenderBoxModelObject* object)
-    {
-        if (gBoxModelObjects) {
-            RenderBoxModelScaleData* data = gBoxModelObjects->take(object);
-            delete data;
-            if (!gBoxModelObjects->size()) {
-                delete gBoxModelObjects;
-                gBoxModelObjects = 0;
-            }
-        }
+void ImageQualityController::objectDestroyed(RenderBoxModelObject* object)
+{
+    m_lastPaintSizeMap.remove(object);
+    if (m_lastPaintSizeMap.isEmpty()) {
+        m_animatedResizeIsActive = false;
+        m_timer.stop();
     }
-
-    static void highQualityRepaintTimerFired(RenderBoxModelObject* object)
-    {
-        RenderBoxModelScaleObserver::boxModelObjectDestroyed(object);
-        object->repaint();
+}
+    
+void ImageQualityController::highQualityRepaintTimerFired(Timer<ImageQualityController>*)
+{
+    if (m_animatedResizeIsActive) {
+        m_animatedResizeIsActive = false;
+        for (LastPaintSizeMap::iterator it = m_lastPaintSizeMap.begin(); it != m_lastPaintSizeMap.end(); ++it)
+            it->first->repaint();
     }
+}
 
-    static HashMap<RenderBoxModelObject*, RenderBoxModelScaleData*>* gBoxModelObjects;
-};
+void ImageQualityController::restartTimer()
+{
+    m_timer.startOneShot(cLowQualityTimeThreshold);
+}
 
-bool RenderBoxModelScaleObserver::shouldPaintBackgroundAtLowQuality(GraphicsContext* context, RenderBoxModelObject* object, Image* image, const IntSize& size)
+bool ImageQualityController::shouldPaintAtLowQuality(GraphicsContext* context, RenderBoxModelObject* object, Image* image, const IntSize& size)
 {
     // If the image is not a bitmap image, then none of this is relevant and we just paint at high
     // quality.
-    if (!image || !image->isBitmapImage())
+    if (!image || !image->isBitmapImage() || context->paintingDisabled())
         return false;
 
     // Make sure to use the unzoomed image size, since if a full page zoom is in effect, the image
@@ -126,59 +108,84 @@ bool RenderBoxModelScaleObserver::shouldPaintBackgroundAtLowQuality(GraphicsCont
     IntSize imageSize(image->width(), image->height());
 
     // Look ourselves up in the hashtable.
-    RenderBoxModelScaleData* data = 0;
-    if (gBoxModelObjects)
-        data = gBoxModelObjects->get(object);
+    LastPaintSizeMap::iterator i = m_lastPaintSizeMap.find(object);
 
     const AffineTransform& currentTransform = context->getCTM();
     bool contextIsScaled = !currentTransform.isIdentityOrTranslationOrFlipped();
     if (!contextIsScaled && imageSize == size) {
-        // There is no scale in effect.  If we had a scale in effect before, we can just delete this data.
-        if (data) {
-            gBoxModelObjects->remove(object);
-            delete data;
-        }
+        // There is no scale in effect. If we had a scale in effect before, we can just remove this object from the list.
+        if (i != m_lastPaintSizeMap.end())
+            m_lastPaintSizeMap.remove(object);
+
         return false;
     }
 
-    // There is no need to hash scaled images that always use low quality mode when the page demands it.  This is the iChat case.
+    // There is no need to hash scaled images that always use low quality mode when the page demands it. This is the iChat case.
     if (object->document()->page()->inLowQualityImageInterpolationMode()) {
         double totalPixels = static_cast<double>(image->width()) * static_cast<double>(image->height());
         if (totalPixels > cInterpolationCutoff)
             return true;
     }
-
-    // If there is no data yet, we will paint the first scale at high quality and record the paint time in case a second scale happens
-    // very soon.
-    if (!data) {
-        data = new RenderBoxModelScaleData(object, size, currentTransform, currentTime(), false);
-        if (!gBoxModelObjects)
-            gBoxModelObjects = new HashMap<RenderBoxModelObject*, RenderBoxModelScaleData*>;
-        gBoxModelObjects->set(object, data);
+    // If an animated resize is active, paint in low quality and kick the timer ahead.
+    if (m_animatedResizeIsActive) {
+        m_lastPaintSizeMap.set(object, size);
+        restartTimer();
+        return true;
+    }
+    // If this is the first time resizing this image, or its size is the
+    // same as the last resize, draw at high res, but record the paint
+    // size and set the timer.
+    if (i == m_lastPaintSizeMap.end() || size == i->second) {
+        restartTimer();
+        m_lastPaintSizeMap.set(object, size);
         return false;
     }
-
-    const AffineTransform& tr = data->transform();
-    bool scaleUnchanged = tr.a() == currentTransform.a() && tr.b() == currentTransform.b() && tr.c() == currentTransform.c() && tr.d() == currentTransform.d();
-    // We are scaled, but we painted already at this size, so just keep using whatever mode we last painted with.
-    if ((!contextIsScaled || scaleUnchanged) && data->size() == size)
-        return data->useLowQualityScale();
-
-    // We have data and our size just changed.  If this change happened quickly, go into low quality mode and then set a repaint
-    // timer to paint in high quality mode.  Otherwise it is ok to just paint in high quality mode.
-    double newTime = currentTime();
-    data->setUseLowQualityScale(newTime - data->lastPaintTime() < cLowQualityTimeThreshold);
-    data->setLastPaintTime(newTime);
-    data->setTransform(currentTransform);
-    data->setSize(size);
-    return data->useLowQualityScale();
+    // If the timer is no longer active, draw at high quality and don't
+    // set the timer.
+    if (!m_timer.isActive()) {
+        objectDestroyed(object);
+        return false;
+    }
+    // This object has been resized to two different sizes while the timer
+    // is active, so draw at low quality, set the flag for animated resizes and
+    // the object to the list for high quality redraw.
+    m_lastPaintSizeMap.set(object, size);
+    m_animatedResizeIsActive = true;
+    restartTimer();
+    return true;
 }
 
-HashMap<RenderBoxModelObject*, RenderBoxModelScaleData*>* RenderBoxModelScaleObserver::gBoxModelObjects = 0;
-
-void RenderBoxModelObject::highQualityRepaintTimerFired(Timer<RenderBoxModelObject>*)
+static ImageQualityController* imageQualityController()
 {
-    RenderBoxModelScaleObserver::highQualityRepaintTimerFired(this);
+    static ImageQualityController* controller = new ImageQualityController;
+    return controller;
+}
+
+void RenderBoxModelObject::setSelectionState(SelectionState s)
+{
+    if (selectionState() == s)
+        return;
+    
+    if (s == SelectionInside && selectionState() != SelectionNone)
+        return;
+
+    if ((s == SelectionStart && selectionState() == SelectionEnd)
+        || (s == SelectionEnd && selectionState() == SelectionStart))
+        RenderObject::setSelectionState(SelectionBoth);
+    else
+        RenderObject::setSelectionState(s);
+    
+    // FIXME:
+    // We should consider whether it is OK propagating to ancestor RenderInlines.
+    // This is a workaround for http://webkit.org/b/32123
+    RenderBlock* cb = containingBlock();
+    if (cb && !cb->isRenderView())
+        cb->setSelectionState(s);
+}
+
+bool RenderBoxModelObject::shouldPaintAtLowQuality(GraphicsContext* context, Image* image, const IntSize& size)
+{
+    return imageQualityController()->shouldPaintAtLowQuality(context, this, image, size);
 }
 
 RenderBoxModelObject::RenderBoxModelObject(Node* node)
@@ -192,7 +199,7 @@ RenderBoxModelObject::~RenderBoxModelObject()
     // Our layer should have been destroyed and cleared by now
     ASSERT(!hasLayer());
     ASSERT(!m_layer);
-    RenderBoxModelScaleObserver::boxModelObjectDestroyed(this);
+    imageQualityController()->objectDestroyed(this);
 }
 
 void RenderBoxModelObject::destroyLayer()
@@ -330,10 +337,25 @@ int RenderBoxModelObject::relativePositionOffsetX() const
 
 int RenderBoxModelObject::relativePositionOffsetY() const
 {
-    if (!style()->top().isAuto())
-        return style()->top().calcValue(containingBlock()->availableHeight());
-    else if (!style()->bottom().isAuto())
-        return -style()->bottom().calcValue(containingBlock()->availableHeight());
+    RenderBlock* containingBlock = this->containingBlock();
+
+    // If the containing block of a relatively positioned element does not
+    // specify a height, a percentage top or bottom offset should be resolved as
+    // auto. An exception to this is if the containing block has the WinIE quirk
+    // where <html> and <body> assume the size of the viewport. In this case,
+    // calculate the percent offset based on this height.
+    // See <https://bugs.webkit.org/show_bug.cgi?id=26396>.
+    if (!style()->top().isAuto()
+        && (!containingBlock->style()->height().isAuto()
+            || !style()->top().isPercent()
+            || containingBlock->stretchesToViewHeight()))
+        return style()->top().calcValue(containingBlock->availableHeight());
+
+    if (!style()->bottom().isAuto()
+        && (!containingBlock->style()->height().isAuto()
+            || !style()->bottom().isPercent()
+            || containingBlock->stretchesToViewHeight()))
+        return -style()->bottom().calcValue(containingBlock->availableHeight());
 
     return 0;
 }
@@ -441,7 +463,6 @@ int RenderBoxModelObject::paddingRight(bool) const
     return padding.calcMinValue(w);
 }
 
-
 void RenderBoxModelObject::paintFillLayerExtended(const PaintInfo& paintInfo, const Color& c, const FillLayer* bgLayer, int tx, int ty, int w, int h, InlineFlowBox* box, CompositeOperator op, RenderObject* backgroundObject)
 {
     GraphicsContext* context = paintInfo.context;
@@ -525,7 +546,7 @@ void RenderBoxModelObject::paintFillLayerExtended(const PaintInfo& paintInfo, co
         
         // The mask has been created.  Now we just need to clip to it.
         context->save();
-        context->clipToImageBuffer(maskRect, maskImage.get());
+        context->clipToImageBuffer(maskImage.get(), maskRect);
     }
     
     StyleImage* bg = bgLayer->image();
@@ -608,7 +629,7 @@ void RenderBoxModelObject::paintFillLayerExtended(const PaintInfo& paintInfo, co
             CompositeOperator compositeOp = op == CompositeSourceOver ? bgLayer->composite() : op;
             RenderObject* clientForBackgroundImage = backgroundObject ? backgroundObject : this;
             Image* image = bg->image(clientForBackgroundImage, tileSize);
-            bool useLowQualityScaling = RenderBoxModelScaleObserver::shouldPaintBackgroundAtLowQuality(context, this, image, tileSize);
+            bool useLowQualityScaling = shouldPaintAtLowQuality(context, image, tileSize);
             context->drawTiledImage(image, style()->colorSpace(), destRect, phase, tileSize, compositeOp, useLowQualityScaling);
         }
     }
@@ -926,9 +947,187 @@ bool RenderBoxModelObject::paintNinePieceImage(GraphicsContext* graphicsContext,
     return true;
 }
 
+#if HAVE(PATH_BASED_BORDER_RADIUS_DRAWING)
+static bool borderWillArcInnerEdge(const IntSize& firstRadius, const IntSize& secondRadius, int firstBorderWidth, int secondBorderWidth, int middleBorderWidth)
+{
+    // FIXME: This test is insufficient. We need to take border style into account.
+    return (!firstRadius.width() || firstRadius.width() >= firstBorderWidth)
+            && (!firstRadius.height() || firstRadius.height() >= middleBorderWidth)
+            && (!secondRadius.width() || secondRadius.width() >= secondBorderWidth)
+            && (!secondRadius.height() || secondRadius.height() >= middleBorderWidth);
+}
+
 void RenderBoxModelObject::paintBorder(GraphicsContext* graphicsContext, int tx, int ty, int w, int h,
                                        const RenderStyle* style, bool begin, bool end)
 {
+    if (paintNinePieceImage(graphicsContext, tx, ty, w, h, style, style->borderImage()))
+        return;
+
+    if (graphicsContext->paintingDisabled())
+        return;
+
+    const Color& topColor = style->visitedDependentColor(CSSPropertyBorderTopColor);
+    const Color& bottomColor = style->visitedDependentColor(CSSPropertyBorderBottomColor);
+    const Color& leftColor = style->visitedDependentColor(CSSPropertyBorderLeftColor);
+    const Color& rightColor = style->visitedDependentColor(CSSPropertyBorderRightColor);
+
+    bool topTransparent = style->borderTopIsTransparent();
+    bool bottomTransparent = style->borderBottomIsTransparent();
+    bool rightTransparent = style->borderRightIsTransparent();
+    bool leftTransparent = style->borderLeftIsTransparent();
+
+    EBorderStyle topStyle = style->borderTopStyle();
+    EBorderStyle bottomStyle = style->borderBottomStyle();
+    EBorderStyle leftStyle = style->borderLeftStyle();
+    EBorderStyle rightStyle = style->borderRightStyle();
+
+    bool renderTop = topStyle > BHIDDEN && !topTransparent;
+    bool renderLeft = leftStyle > BHIDDEN && begin && !leftTransparent;
+    bool renderRight = rightStyle > BHIDDEN && end && !rightTransparent;
+    bool renderBottom = bottomStyle > BHIDDEN && !bottomTransparent;
+
+    bool renderRadii = false;
+    Path roundedPath;
+    IntSize topLeft, topRight, bottomLeft, bottomRight;
+    IntRect borderRect(tx, ty, w, h);
+
+    if (style->hasBorderRadius()) {
+        IntSize topLeftRadius, topRightRadius, bottomLeftRadius, bottomRightRadius;
+        style->getBorderRadiiForRect(borderRect, topLeftRadius, topRightRadius, bottomLeftRadius, bottomRightRadius);
+
+        IntRect innerBorderRect = borderInnerRect(borderRect, style->borderTopWidth(), style->borderBottomWidth(), 
+            style->borderLeftWidth(), style->borderRightWidth());
+
+        IntSize innerTopLeftRadius, innerTopRightRadius, innerBottomLeftRadius, innerBottomRightRadius;
+        style->getInnerBorderRadiiForRectWithBorderWidths(innerBorderRect, style->borderTopWidth(), style->borderBottomWidth(), 
+            style->borderLeftWidth(), style->borderRightWidth(), innerTopLeftRadius, innerTopRightRadius, 
+            innerBottomLeftRadius, innerBottomRightRadius);
+
+        if (begin) {
+            topLeft = topLeftRadius;
+            bottomLeft = bottomLeftRadius;
+        }
+        if (end) {
+            topRight = topRightRadius;
+            bottomRight = bottomRightRadius;
+        }
+
+        renderRadii = true;
+
+        // Clip to the inner and outer radii rects.
+        graphicsContext->save();
+        graphicsContext->addRoundedRectClip(borderRect, topLeft, topRight, bottomLeft, bottomRight);
+        graphicsContext->clipOutRoundedRect(innerBorderRect, innerTopLeftRadius, innerTopRightRadius, innerBottomLeftRadius, innerBottomRightRadius);
+
+        roundedPath = Path::createRoundedRectangle(borderRect, topLeft, topRight, bottomLeft, bottomRight);
+        graphicsContext->addPath(roundedPath);
+    }
+
+    bool upperLeftBorderStylesMatch = renderLeft && (topStyle == leftStyle) && (topColor == leftColor);
+    bool upperRightBorderStylesMatch = renderRight && (topStyle == rightStyle) && (topColor == rightColor) && (topStyle != OUTSET) && (topStyle != RIDGE) && (topStyle != INSET) && (topStyle != GROOVE);
+    bool lowerLeftBorderStylesMatch = renderLeft && (bottomStyle == leftStyle) && (bottomColor == leftColor) && (bottomStyle != OUTSET) && (bottomStyle != RIDGE) && (bottomStyle != INSET) && (bottomStyle != GROOVE);
+    bool lowerRightBorderStylesMatch = renderRight && (bottomStyle == rightStyle) && (bottomColor == rightColor);
+
+    if (renderTop) {
+        int x = tx;
+        int x2 = tx + w;
+
+        if (renderRadii && borderWillArcInnerEdge(topLeft, topRight, style->borderLeftWidth(), style->borderRightWidth(), style->borderTopWidth())) {
+            graphicsContext->save();
+            clipBorderSidePolygon(graphicsContext, borderRect, topLeft, topRight, bottomLeft, bottomRight, BSTop, upperLeftBorderStylesMatch, upperRightBorderStylesMatch, style);
+            float thickness = max(max(style->borderTopWidth(), style->borderLeftWidth()), style->borderRightWidth());
+            drawBoxSideFromPath(graphicsContext, borderRect, roundedPath, style->borderTopWidth(), thickness, BSTop, style, topColor, topStyle);
+            graphicsContext->restore();
+        } else {
+            bool ignoreLeft = (topColor == leftColor && topTransparent == leftTransparent && topStyle >= OUTSET
+                && (leftStyle == DOTTED || leftStyle == DASHED || leftStyle == SOLID || leftStyle == OUTSET));
+            bool ignoreRight = (topColor == rightColor && topTransparent == rightTransparent && topStyle >= OUTSET
+                && (rightStyle == DOTTED || rightStyle == DASHED || rightStyle == SOLID || rightStyle == INSET));
+
+            drawLineForBoxSide(graphicsContext, x, ty, x2, ty + style->borderTopWidth(), BSTop, topColor, topStyle,
+                    ignoreLeft ? 0 : style->borderLeftWidth(), ignoreRight ? 0 : style->borderRightWidth());               
+        }
+    }
+
+    if (renderBottom) {
+        int x = tx;
+        int x2 = tx + w;
+
+        if (renderRadii && borderWillArcInnerEdge(bottomLeft, bottomRight, style->borderLeftWidth(), style->borderRightWidth(), style->borderBottomWidth())) {
+            graphicsContext->save();
+            clipBorderSidePolygon(graphicsContext, borderRect, topLeft, topRight, bottomLeft, bottomRight, BSBottom, lowerLeftBorderStylesMatch, lowerRightBorderStylesMatch, style);
+            float thickness = max(max(style->borderBottomWidth(), style->borderLeftWidth()), style->borderRightWidth());
+            drawBoxSideFromPath(graphicsContext, borderRect, roundedPath, style->borderBottomWidth(), thickness, BSBottom, style, bottomColor, bottomStyle);
+            graphicsContext->restore();
+        } else {
+            bool ignoreLeft = (bottomColor == leftColor && bottomTransparent == leftTransparent && bottomStyle >= OUTSET
+                && (leftStyle == DOTTED || leftStyle == DASHED || leftStyle == SOLID || leftStyle == OUTSET));
+
+            bool ignoreRight = (bottomColor == rightColor && bottomTransparent == rightTransparent && bottomStyle >= OUTSET
+                && (rightStyle == DOTTED || rightStyle == DASHED || rightStyle == SOLID || rightStyle == INSET));
+
+            drawLineForBoxSide(graphicsContext, x, ty + h - style->borderBottomWidth(), x2, ty + h, BSBottom, bottomColor, 
+                        bottomStyle, ignoreLeft ? 0 : style->borderLeftWidth(), 
+                        ignoreRight ? 0 : style->borderRightWidth());
+        }
+    }
+
+    if (renderLeft) {
+        int y = ty;
+        int y2 = ty + h;
+
+        if (renderRadii && borderWillArcInnerEdge(bottomLeft, topLeft, style->borderBottomWidth(), style->borderTopWidth(), style->borderLeftWidth())) {
+            graphicsContext->save();
+            clipBorderSidePolygon(graphicsContext, borderRect, topLeft, topRight, bottomLeft, bottomRight, BSLeft, upperLeftBorderStylesMatch, lowerLeftBorderStylesMatch, style);
+            float thickness = max(max(style->borderLeftWidth(), style->borderTopWidth()), style->borderBottomWidth());
+            drawBoxSideFromPath(graphicsContext, borderRect, roundedPath, style->borderLeftWidth(), thickness, BSLeft, style, leftColor, leftStyle);
+            graphicsContext->restore();
+        } else {
+            bool ignoreTop = (topColor == leftColor && topTransparent == leftTransparent && leftStyle >= OUTSET
+                && (topStyle == DOTTED || topStyle == DASHED || topStyle == SOLID || topStyle == OUTSET));
+
+            bool ignoreBottom = (bottomColor == leftColor && bottomTransparent == leftTransparent && leftStyle >= OUTSET
+                && (bottomStyle == DOTTED || bottomStyle == DASHED || bottomStyle == SOLID || bottomStyle == INSET));
+
+            drawLineForBoxSide(graphicsContext, tx, y, tx + style->borderLeftWidth(), y2, BSLeft, leftColor,
+                        leftStyle, ignoreTop ? 0 : style->borderTopWidth(), ignoreBottom ? 0 : style->borderBottomWidth());
+        }
+    }
+
+    if (renderRight) {
+        if (renderRadii && borderWillArcInnerEdge(bottomRight, topRight, style->borderBottomWidth(), style->borderTopWidth(), style->borderRightWidth())) {
+            graphicsContext->save();
+            clipBorderSidePolygon(graphicsContext, borderRect, topLeft, topRight, bottomLeft, bottomRight, BSRight, upperRightBorderStylesMatch, lowerRightBorderStylesMatch, style);
+            float thickness = max(max(style->borderRightWidth(), style->borderTopWidth()), style->borderBottomWidth());
+            drawBoxSideFromPath(graphicsContext, borderRect, roundedPath, style->borderRightWidth(), thickness, BSRight, style, rightColor, rightStyle);
+            graphicsContext->restore();
+        } else {
+            bool ignoreTop = ((topColor == rightColor) && (topTransparent == rightTransparent)
+                && (rightStyle >= DOTTED || rightStyle == INSET)
+                && (topStyle == DOTTED || topStyle == DASHED || topStyle == SOLID || topStyle == OUTSET));
+
+            bool ignoreBottom = ((bottomColor == rightColor) && (bottomTransparent == rightTransparent)
+                && (rightStyle >= DOTTED || rightStyle == INSET)
+                && (bottomStyle == DOTTED || bottomStyle == DASHED || bottomStyle == SOLID || bottomStyle == INSET));
+
+            int y = ty;
+            int y2 = ty + h;
+
+            drawLineForBoxSide(graphicsContext, tx + w - style->borderRightWidth(), y, tx + w, y2, BSRight, rightColor, 
+                rightStyle, ignoreTop ? 0 : style->borderTopWidth(), 
+                ignoreBottom ? 0 : style->borderBottomWidth());
+        }
+    }
+
+    if (renderRadii)
+        graphicsContext->restore();
+}
+#else
+void RenderBoxModelObject::paintBorder(GraphicsContext* graphicsContext, int tx, int ty, int w, int h,
+                                       const RenderStyle* style, bool begin, bool end)
+{
+    // FIXME: This old version of paintBorder should be removed when all ports implement 
+    // GraphicsContext::clipConvexPolygon()!! This should happen soon.
     if (paintNinePieceImage(graphicsContext, tx, ty, w, h, style, style->borderImage()))
         return;
 
@@ -1273,6 +1472,86 @@ void RenderBoxModelObject::paintBorder(GraphicsContext* graphicsContext, int tx,
 
     if (renderRadii)
         graphicsContext->restore();
+}
+#endif
+
+void RenderBoxModelObject::clipBorderSidePolygon(GraphicsContext* graphicsContext, const IntRect& box, const IntSize& topLeft, const IntSize& topRight, const IntSize& bottomLeft, const IntSize& bottomRight, const BoxSide side, bool firstEdgeMatches, bool secondEdgeMatches, const RenderStyle* style)
+{
+    FloatPoint quad[4];
+    int tx = box.x();
+    int ty = box.y();
+    int w = box.width();
+    int h = box.height();
+
+    // For each side, create an array of FloatPoints where each point is based on whichever value in each corner
+    // is larger -- the radius width/height or the border width/height -- as appropriate.
+    switch (side) {
+    case BSTop:
+        quad[0] = FloatPoint(tx, ty);
+        quad[1] = FloatPoint(
+            tx + max(topLeft.width(), (int) style->borderLeftWidth()), 
+            ty + max(topLeft.height(), (int) style->borderTopWidth()));
+        quad[2] = FloatPoint(
+            tx + w - max(topRight.width(), (int) style->borderRightWidth()), 
+            ty + max(topRight.height(), (int)style->borderTopWidth()));
+        quad[3] = FloatPoint(tx + w, ty);
+        break;
+    case BSLeft:
+        quad[0] = FloatPoint(tx, ty);
+        quad[1] = FloatPoint(
+            tx + max(topLeft.width(), (int) style->borderLeftWidth()), 
+            ty + max(topLeft.height(), (int) style->borderTopWidth()));
+        quad[2] = FloatPoint(
+            tx + max(bottomLeft.width(), (int) style->borderLeftWidth()), 
+            ty + h - max(bottomLeft.height(), (int)style->borderBottomWidth()));
+        quad[3] = FloatPoint(tx, ty + h);
+        break;
+    case BSBottom:
+        quad[0] = FloatPoint(tx, ty + h);
+        quad[1] = FloatPoint(
+            tx + max(bottomLeft.width(), (int) style->borderLeftWidth()), 
+            ty + h - max(bottomLeft.height(), (int)style->borderBottomWidth()));
+        quad[2] = FloatPoint(
+            tx + w - max(bottomRight.width(), (int) style->borderRightWidth()), 
+            ty + h - max(bottomRight.height(), (int)style->borderBottomWidth()));
+        quad[3] = FloatPoint(tx + w, ty + h);
+        break;
+    case BSRight:
+        quad[0] = FloatPoint(tx + w, ty);
+        quad[1] = FloatPoint(
+            tx + w - max(topRight.width(), (int) style->borderRightWidth()), 
+            ty + max(topRight.height(), (int) style->borderTopWidth()));
+        quad[2] = FloatPoint(
+            tx + w - max(bottomRight.width(), (int) style->borderRightWidth()), 
+            ty + h - max(bottomRight.height(), (int)style->borderBottomWidth()));
+        quad[3] = FloatPoint(tx + w, ty + h);
+        break;
+    default:
+        break;
+    }
+
+    // If the border matches both of its adjacent sides, don't anti-alias the clip, and
+    // if neither side matches, anti-alias the clip.
+    if (firstEdgeMatches == secondEdgeMatches) {
+        graphicsContext->clipConvexPolygon(4, quad, !firstEdgeMatches);
+        return;
+    }
+
+    FloatPoint firstQuad[4];
+    firstQuad[0] = quad[0];
+    firstQuad[1] = quad[1];
+    firstQuad[2] = side == BSTop || side == BSBottom ? FloatPoint(quad[3].x(), quad[2].y())
+        : FloatPoint(quad[2].x(), quad[3].y());
+    firstQuad[3] = quad[3];
+    graphicsContext->clipConvexPolygon(4, firstQuad, !firstEdgeMatches);
+
+    FloatPoint secondQuad[4];
+    secondQuad[0] = quad[0];
+    secondQuad[1] = side == BSTop || side == BSBottom ? FloatPoint(quad[0].x(), quad[1].y())
+        : FloatPoint(quad[1].x(), quad[0].y());
+    secondQuad[2] = quad[2];
+    secondQuad[3] = quad[3];
+    graphicsContext->clipConvexPolygon(4, secondQuad, !secondEdgeMatches);
 }
 
 void RenderBoxModelObject::paintBoxShadow(GraphicsContext* context, int tx, int ty, int w, int h, const RenderStyle* s, ShadowStyle shadowStyle, bool begin, bool end)

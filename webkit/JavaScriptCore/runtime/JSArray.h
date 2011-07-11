@@ -23,26 +23,50 @@
 
 #include "JSObject.h"
 
+#define CHECK_ARRAY_CONSISTENCY 0
+
 namespace JSC {
 
     typedef HashMap<unsigned, JSValue> SparseArrayValueMap;
 
+    // This struct holds the actual data values of an array.  A JSArray object points to it's contained ArrayStorage
+    // struct by pointing to m_vector.  To access the contained ArrayStorage struct, use the getStorage() and 
+    // setStorage() methods.  It is important to note that there may be space before the ArrayStorage that 
+    // is used to quick unshift / shift operation.  The actual allocated pointer is available by using:
+    //     getStorage() - m_indexBias * sizeof(JSValue)
     struct ArrayStorage {
-        unsigned m_length;
+        unsigned m_length; // The "length" property on the array
         unsigned m_numValuesInVector;
         SparseArrayValueMap* m_sparseValueMap;
         void* subclassData; // A JSArray subclass can use this to fill the vector lazily.
+        void* m_allocBase; // Pointer to base address returned by malloc().  Keeping this pointer does eliminate false positives from the leak detector.
         size_t reportedMapCapacity;
+#if CHECK_ARRAY_CONSISTENCY
+        bool m_inCompactInitialization;
+#endif
         JSValue m_vector[1];
     };
+
+    // The CreateCompact creation mode is used for fast construction of arrays
+    // whose size and contents are known at time of creation.
+    //
+    // There are two obligations when using this mode:
+    //
+    //   - uncheckedSetIndex() must be used when initializing the array.
+    //   - setLength() must be called after initialization.
+
+    enum ArrayCreationMode { CreateCompact, CreateInitialized };
 
     class JSArray : public JSObject {
         friend class JIT;
         friend class Walker;
 
     public:
+        enum VPtrStealingHackType { VPtrStealingHack };
+        JSArray(VPtrStealingHackType);
+
         explicit JSArray(NonNullPassRefPtr<Structure>);
-        JSArray(NonNullPassRefPtr<Structure>, unsigned initialLength);
+        JSArray(NonNullPassRefPtr<Structure>, unsigned initialLength, ArrayCreationMode);
         JSArray(NonNullPassRefPtr<Structure>, const ArgList& initialValues);
         virtual ~JSArray();
 
@@ -52,7 +76,7 @@ namespace JSC {
         virtual void put(ExecState*, unsigned propertyName, JSValue); // FIXME: Make protected and add setItem.
 
         static JS_EXPORTDATA const ClassInfo info;
-
+        
         unsigned length() const { return m_storage->m_length; }
         void setLength(unsigned); // OK to use on new arrays, but not if it might be a RegExpMatchArray.
 
@@ -62,6 +86,9 @@ namespace JSC {
 
         void push(ExecState*, JSValue);
         JSValue pop();
+
+        void shiftCount(ExecState*, int count);
+        void unshiftCount(ExecState*, int count);
 
         bool canGetIndex(unsigned i) { return i < m_vectorLength && m_storage->m_vector[i]; }
         JSValue getIndex(unsigned i)
@@ -74,13 +101,25 @@ namespace JSC {
         void setIndex(unsigned i, JSValue v)
         {
             ASSERT(canSetIndex(i));
+            
             JSValue& x = m_storage->m_vector[i];
             if (!x) {
-                ++m_storage->m_numValuesInVector;
-                if (i >= m_storage->m_length)
-                    m_storage->m_length = i + 1;
+                ArrayStorage *storage = m_storage;
+                ++storage->m_numValuesInVector;
+                if (i >= storage->m_length)
+                    storage->m_length = i + 1;
             }
             x = v;
+        }
+        
+        void uncheckedSetIndex(unsigned i, JSValue v)
+        {
+            ASSERT(canSetIndex(i));
+            ArrayStorage *storage = m_storage;
+#if CHECK_ARRAY_CONSISTENCY
+            ASSERT(storage->m_inCompactInitialization);
+#endif
+            storage->m_vector[i] = v;
         }
 
         void fillArgList(ExecState*, MarkedArgumentBuffer&);
@@ -103,22 +142,25 @@ namespace JSC {
 
         void* subclassData() const;
         void setSubclassData(void*);
-
+        
     private:
         virtual const ClassInfo* classInfo() const { return &info; }
 
         bool getOwnPropertySlotSlowCase(ExecState*, unsigned propertyName, PropertySlot&);
         void putSlowCase(ExecState*, unsigned propertyName, JSValue);
 
+        unsigned getNewVectorLength(unsigned desiredLength);
         bool increaseVectorLength(unsigned newLength);
+        bool increaseVectorPrefixLength(unsigned newLength);
         
         unsigned compactForSorting();
 
         enum ConsistencyCheckType { NormalConsistencyCheck, DestructorConsistencyCheck, SortConsistencyCheck };
         void checkConsistency(ConsistencyCheckType = NormalConsistencyCheck);
 
-        unsigned m_vectorLength;
-        ArrayStorage* m_storage;
+        unsigned m_vectorLength; // The valid length of m_vector
+        int m_indexBias; // The number of JSValue sized blocks before ArrayStorage.
+        ArrayStorage *m_storage;
     };
 
     JSArray* asArray(JSValue);
@@ -194,7 +236,7 @@ namespace JSC {
                 current.m_values++;
 
                 JSCell* cell;
-                if (!value || !value.isCell() || Heap::isCellMarked(cell = value.asCell())) {
+                if (!value || !value.isCell() || Heap::checkMarkCell(cell = value.asCell())) {
                     if (current.m_values == end) {
                         m_markSets.removeLast();
                         continue;
@@ -202,7 +244,6 @@ namespace JSC {
                     goto findNextUnmarkedNullValue;
                 }
 
-                Heap::markCell(cell);
                 if (cell->structure()->typeInfo().type() < CompoundType) {
                     if (current.m_values == end) {
                         m_markSets.removeLast();
@@ -220,7 +261,17 @@ namespace JSC {
                 markChildren(m_values.removeLast());
         }
     }
-    
+
+    // Rule from ECMA 15.2 about what an array index is.
+    // Must exactly match string form of an unsigned integer, and be less than 2^32 - 1.
+    inline unsigned Identifier::toArrayIndex(bool& ok) const
+    {
+        unsigned i = toUInt32(ok);
+        if (ok && i >= 0xFFFFFFFFU)
+            ok = false;
+        return i;
+    }
+
 } // namespace JSC
 
 #endif // JSArray_h

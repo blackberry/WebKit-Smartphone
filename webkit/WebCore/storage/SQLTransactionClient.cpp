@@ -33,21 +33,15 @@
 
 #if ENABLE(DATABASE)
 
-#include "Chrome.h"
-#include "ChromeClient.h"
-#include "Database.h"
-#include "DatabaseThread.h"
+#include "AbstractDatabase.h"
 #include "DatabaseTracker.h"
-#include "Document.h"
-#include "Page.h"
-#include "SQLTransaction.h"
+#include "ScriptExecutionContext.h"
+#include "SecurityOrigin.h"
 
 namespace WebCore {
 
-void SQLTransactionClient::didCommitTransaction(SQLTransaction* transaction)
+void SQLTransactionClient::didCommitWriteTransaction(AbstractDatabase* database)
 {
-    ASSERT(currentThread() == transaction->database()->scriptExecutionContext()->databaseThread()->getThreadID());
-    Database* database = transaction->database();
 #if OS(OLYMPIA)
     DatabaseTracker::tracker(database->groupName()).scheduleNotifyDatabaseChanged(
         database->securityOrigin(), database->stringIdentifier());
@@ -57,21 +51,18 @@ void SQLTransactionClient::didCommitTransaction(SQLTransaction* transaction)
 #endif
 }
 
-void SQLTransactionClient::didExecuteStatement(SQLTransaction* transaction)
+void SQLTransactionClient::didExecuteStatement(AbstractDatabase* database)
 {
-    ASSERT(currentThread() == transaction->database()->scriptExecutionContext()->databaseThread()->getThreadID());
 #if OS(OLYMPIA)
-    Database* database = transaction->database();
     DatabaseTracker::tracker(database->groupName()).databaseChanged(database);
 #else
-    DatabaseTracker::tracker().databaseChanged(transaction->database());
+    DatabaseTracker::tracker().databaseChanged(database);
 #endif
 }
 
-bool SQLTransactionClient::didExceedQuota(SQLTransaction* transaction)
+bool SQLTransactionClient::didExceedQuota(AbstractDatabase* database)
 {
-    ASSERT(transaction->database()->scriptExecutionContext()->isContextThread());
-    Database* database = transaction->database();
+    ASSERT(database->scriptExecutionContext()->isContextThread());
 
 #if OS(OLYMPIA)
     unsigned long long currentQuota = DatabaseTracker::tracker(database->groupName()).quotaForOrigin(database->securityOrigin());

@@ -30,9 +30,7 @@
 
 WebInspector.ElementsPanel = function()
 {
-    WebInspector.Panel.call(this);
-
-    this.element.addStyleClass("elements");
+    WebInspector.Panel.call(this, "elements");
 
     this.contentElement = document.createElement("div");
     this.contentElement.id = "elements-content";
@@ -58,8 +56,10 @@ WebInspector.ElementsPanel = function()
         this.panel.updateProperties();
         this.panel.updateEventListeners();
 
-        if (this._focusedDOMNode)
-            InjectedScriptAccess.get(this._focusedDOMNode.injectedScriptId).addInspectedNode(this._focusedDOMNode.id, function() {});
+        if (this._focusedDOMNode) {
+            InspectorBackend.addInspectedNode(this._focusedDOMNode.id);
+            WebInspector.extensionServer.notifyObjectSelected(this.panel.name, "DOMNode");
+        }
     };
 
     this.contentElement.appendChild(this.treeOutline.element);
@@ -74,6 +74,8 @@ WebInspector.ElementsPanel = function()
     this.sidebarPanes.styles = new WebInspector.StylesSidebarPane(this.sidebarPanes.computedStyle);
     this.sidebarPanes.metrics = new WebInspector.MetricsSidebarPane();
     this.sidebarPanes.properties = new WebInspector.PropertiesSidebarPane();
+    if (Preferences.domBreakpointsEnabled)
+        this.sidebarPanes.domBreakpoints = WebInspector.createDOMBreakpointsSidebarPane();
     this.sidebarPanes.eventListeners = new WebInspector.EventListenersSidebarPane();
 
     this.sidebarPanes.styles.onexpand = this.updateStyles.bind(this);
@@ -90,18 +92,15 @@ WebInspector.ElementsPanel = function()
     this.sidebarElement = document.createElement("div");
     this.sidebarElement.id = "elements-sidebar";
 
-    this.sidebarElement.appendChild(this.sidebarPanes.computedStyle.element);
-    this.sidebarElement.appendChild(this.sidebarPanes.styles.element);
-    this.sidebarElement.appendChild(this.sidebarPanes.metrics.element);
-    this.sidebarElement.appendChild(this.sidebarPanes.properties.element);
-    this.sidebarElement.appendChild(this.sidebarPanes.eventListeners.element);
+    for (var pane in this.sidebarPanes)
+        this.sidebarElement.appendChild(this.sidebarPanes[pane].element);
 
     this.sidebarResizeElement = document.createElement("div");
     this.sidebarResizeElement.className = "sidebar-resizer-vertical";
     this.sidebarResizeElement.addEventListener("mousedown", this.rightSidebarResizerDragStart.bind(this), false);
 
     this._nodeSearchButton = new WebInspector.StatusBarButton(WebInspector.UIString("Select an element in the page to inspect it."), "node-search-status-bar-item");
-    this._nodeSearchButton.addEventListener("click", this._nodeSearchButtonClicked.bind(this), false);
+    this._nodeSearchButton.addEventListener("click", this.toggleSearchingForNode.bind(this), false);
 
     this.element.appendChild(this.contentElement);
     this.element.appendChild(this.sidebarElement);
@@ -114,8 +113,6 @@ WebInspector.ElementsPanel = function()
 }
 
 WebInspector.ElementsPanel.prototype = {
-    toolbarItemClass: "elements",
-
     get toolbarItemLabel()
     {
         return WebInspector.UIString("Elements");
@@ -162,16 +159,8 @@ WebInspector.ElementsPanel.prototype = {
 
     reset: function()
     {
-        if (this.focusedDOMNode) {
-            this._selectedPathOnReset = [];
-            var node = this.focusedDOMNode;
-            while ("index" in node) {
-                this._selectedPathOnReset.push(node.nodeName);
-                this._selectedPathOnReset.push(node.index);
-                node = node.parentNode;
-            }
-            this._selectedPathOnReset.reverse();
-        }
+        if (this.focusedDOMNode)
+            this._selectedPathOnReset = this.focusedDOMNode.path();
 
         this.rootDOMNode = null;
         this.focusedDOMNode = null;
@@ -181,12 +170,15 @@ WebInspector.ElementsPanel.prototype = {
         this.recentlyModifiedNodes = [];
 
         delete this.currentQuery;
-        this.searchCanceled();
+
+        if (Preferences.domBreakpointsEnabled)
+            this.sidebarPanes.domBreakpoints.reset();
     },
 
     setDocument: function(inspectedRootDocument)
     {
         this.reset();
+        this.searchCanceled();
 
         if (!inspectedRootDocument)
             return;
@@ -225,7 +217,7 @@ WebInspector.ElementsPanel.prototype = {
         }
 
         if (this._selectedPathOnReset)
-            InjectedScriptAccess.getDefault().nodeByPath(this._selectedPathOnReset, selectLastSelectedNode.bind(this));
+            InspectorBackend.pushNodeByPathToFrontend(this._selectedPathOnReset, selectLastSelectedNode.bind(this));
         else
             selectNode.call(this);
         delete this._selectedPathOnReset;
@@ -240,7 +232,7 @@ WebInspector.ElementsPanel.prototype = {
 
         this._currentSearchResultIndex = 0;
         this._searchResults = [];
-        InjectedScriptAccess.getDefault().searchCanceled(function() {});
+        InspectorBackend.searchCanceled();
     },
 
     performSearch: function(query)
@@ -256,7 +248,7 @@ WebInspector.ElementsPanel.prototype = {
         this._matchesCountUpdateTimeout = null;
         this._searchQuery = query;
 
-        InjectedScriptAccess.getDefault().performSearch(whitespaceTrimmedQuery, false, function() {});
+        InspectorBackend.performSearch(whitespaceTrimmedQuery, false);
     },
 
     searchingForNodeWasEnabled: function()
@@ -267,6 +259,23 @@ WebInspector.ElementsPanel.prototype = {
     searchingForNodeWasDisabled: function()
     {
         this._nodeSearchButton.toggled = false;
+    },
+
+    populateHrefContextMenu: function(contextMenu, event, anchorElement)
+    {
+        if (!anchorElement.href)
+            return false;
+
+        var resourceURL = WebInspector.resourceURLForRelatedNode(this.focusedDOMNode, anchorElement.href);
+        if (!resourceURL)
+            return false;
+
+        // Add resource-related actions.
+        // Keep these consistent with those added in WebInspector.StylesSidebarPane.prototype._populateHrefContextMenu().
+        contextMenu.appendItem(WebInspector.UIString("Open Link in New Window"), WebInspector.openResource.bind(null, resourceURL, false));
+        if (WebInspector.resourceForURL(resourceURL))
+            contextMenu.appendItem(WebInspector.UIString("Open Link in Resources Panel"), WebInspector.openResource.bind(null, resourceURL, true));
+        return true;
     },
 
     _updateMatchesCount: function()
@@ -288,12 +297,11 @@ WebInspector.ElementsPanel.prototype = {
 
     addNodesToSearchResult: function(nodeIds)
     {
-        if (!nodeIds)
+        if (!nodeIds.length)
             return;
 
-        var nodeIdsArray = nodeIds.split(",");
-        for (var i = 0; i < nodeIdsArray.length; ++i) {
-            var nodeId = nodeIdsArray[i];
+        for (var i = 0; i < nodeIds.length; ++i) {
+            var nodeId = nodeIds[i];
             var node = WebInspector.domAgent.nodeForId(nodeId);
             if (!node)
                 continue;
@@ -457,7 +465,7 @@ WebInspector.ElementsPanel.prototype = {
         }
 
         WebInspector.showConsole();
-        WebInspector.console.addMessage(new WebInspector.ConsoleTextMessage(builder.join("\n")));
+        WebInspector.console.addMessage(WebInspector.ConsoleMessage.createTextMessage(builder.join("\n")));
     },
 
     get rootDOMNode()
@@ -1028,7 +1036,8 @@ WebInspector.ElementsPanel.prototype = {
     updateStyles: function(forceUpdate)
     {
         var stylesSidebarPane = this.sidebarPanes.styles;
-        if (!stylesSidebarPane.expanded || !stylesSidebarPane.needsUpdate)
+        var computedStylePane = this.sidebarPanes.computedStyle;
+        if ((!stylesSidebarPane.expanded && !computedStylePane.expanded) || !stylesSidebarPane.needsUpdate)
             return;
 
         stylesSidebarPane.update(this.focusedDOMNode, null, forceUpdate);
@@ -1095,7 +1104,7 @@ WebInspector.ElementsPanel.prototype = {
                 var isNodeSearchKey = event.ctrlKey && !event.metaKey && !event.altKey && event.shiftKey;
 
             if (isNodeSearchKey) {
-                this._nodeSearchButtonClicked(event);
+                this.toggleSearchingForNode();
                 event.handled = true;
                 return;
             }
@@ -1120,23 +1129,26 @@ WebInspector.ElementsPanel.prototype = {
     rightSidebarResizerDragEnd: function(event)
     {
         WebInspector.elementDragEnd(event);
+        this.saveSidebarWidth();
     },
 
     rightSidebarResizerDrag: function(event)
     {
         var x = event.pageX;
         var newWidth = Number.constrain(window.innerWidth - x, Preferences.minElementsSidebarWidth, window.innerWidth * 0.66);
-
-        this.sidebarElement.style.width = newWidth + "px";
-        this.contentElement.style.right = newWidth + "px";
-        this.sidebarResizeElement.style.right = (newWidth - 3) + "px";
-
-        this.treeOutline.updateSelection();
-
+        this.setSidebarWidth(newWidth);
         event.preventDefault();
     },
 
-    _nodeSearchButtonClicked: function(event)
+    setSidebarWidth: function(newWidth)
+    {
+        this.sidebarElement.style.width = newWidth + "px";
+        this.contentElement.style.right = newWidth + "px";
+        this.sidebarResizeElement.style.right = (newWidth - 3) + "px";
+        this.treeOutline.updateSelection();
+    },
+
+    toggleSearchingForNode: function()
     {
         if (!this._nodeSearchButton.toggled)
             InspectorBackend.enableSearchingForNode();

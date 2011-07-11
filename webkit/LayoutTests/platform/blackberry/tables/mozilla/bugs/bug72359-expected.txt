@@ -1,0 +1,30 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x71
+  RenderBlock {html} at (0,0) size 800x8
+    RenderBody {body} at (8,8) size 784x0
+      RenderBlock (floating) {float} at (0,0) size 158x63 [bgcolor=#FF0000]
+        RenderTable at (0,0) size 158x63
+          RenderTableSection (anonymous) at (0,0) size 158x63
+            RenderTableRow (anonymous) at (0,0) size 158x21
+              RenderTableCell {cell} at (0,0) size 158x21 [color=#FFFFFF] [bgcolor=#008000] [r=0 c=0 rs=1 cs=1]
+                RenderText {#text} at (52,1) size 53x19
+                  text run at (52,1) width 53: "THERE"
+            RenderTableRow {row} at (0,21) size 158x21
+              RenderTableCell (anonymous) at (0,21) size 158x21 [r=1 c=0 rs=1 cs=1]
+                RenderTable {table} at (0,0) size 158x21
+                  RenderTableSection (anonymous) at (0,0) size 158x21
+                    RenderTableRow (anonymous) at (0,0) size 158x21
+                      RenderTableCell {cell} at (0,0) size 82x21 [color=#FFFFFF] [bgcolor=#008000] [r=0 c=0 rs=1 cs=1]
+                        RenderText {#text} at (0,1) size 82x19
+                          text run at (0,1) width 82: "SHOULD B"
+                      RenderTableCell {cell} at (82,0) size 27x21 [color=#FFFFFF] [bgcolor=#008000] [r=0 c=1 rs=1 cs=1]
+                        RenderText {#text} at (0,1) size 27x19
+                          text run at (0,1) width 27: "E N"
+                      RenderTableCell {cell} at (109,0) size 49x21 [color=#FFFFFF] [bgcolor=#008000] [r=0 c=2 rs=1 cs=1]
+                        RenderText {#text} at (0,1) size 49x19
+                          text run at (0,1) width 49: "O RED"
+            RenderTableRow (anonymous) at (0,42) size 158x21
+              RenderTableCell {cell} at (0,42) size 158x21 [color=#FFFFFF] [bgcolor=#008000] [r=2 c=0 rs=1 cs=1]
+                RenderText {#text} at (32,1) size 94x19
+                  text run at (32,1) width 94: "ANYWHERE"

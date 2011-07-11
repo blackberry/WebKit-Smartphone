@@ -225,8 +225,8 @@ void NamedNodeMap::setAttributes(const NamedNodeMap& other)
 
     // If assigning the map changes the id attribute, we need to call
     // updateId.
-    Attribute* oldId = getAttributeItem(m_element->idAttributeName());
-    Attribute* newId = other.getAttributeItem(m_element->idAttributeName());
+    Attribute* oldId = getAttributeItem(m_element->document()->idAttributeName());
+    Attribute* newId = other.getAttributeItem(m_element->document()->idAttributeName());
 
     if (oldId || newId)
         m_element->updateId(oldId ? oldId->value() : nullAtom, newId ? newId->value() : nullAtom);
@@ -309,7 +309,7 @@ void NamedNodeMap::setClass(const String& classStr)
         return;
     }
 
-    m_classNames.set(classStr, element()->document()->inCompatMode()); 
+    m_classNames.set(classStr, element()->document()->inQuirksMode()); 
 }
 
 int NamedNodeMap::declCount() const

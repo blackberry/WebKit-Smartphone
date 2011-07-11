@@ -26,23 +26,26 @@
 #ifndef WebPageProxy_h
 #define WebPageProxy_h
 
+#include "APIObject.h"
 #include "DrawingAreaProxy.h"
 #include "GenericCallback.h"
 #include "WKBase.h"
 #include "WebEvent.h"
+#include "WebFormClient.h"
 #include "WebFrameProxy.h"
 #include "WebHistoryClient.h"
 #include "WebLoaderClient.h"
 #include "WebPolicyClient.h"
 #include "WebUIClient.h"
+#include <WebCore/EditAction.h>
 #include <WebCore/FrameLoaderTypes.h>
-#include <WebCore/PlatformString.h>
 #include <wtf/HashMap.h>
+#include <wtf/HashSet.h>
 #include <wtf/OwnPtr.h>
 #include <wtf/PassOwnPtr.h>
 #include <wtf/PassRefPtr.h>
-#include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
+#include <wtf/text/WTFString.h>
 
 namespace CoreIPC {
     class ArgumentDecoder;
@@ -52,6 +55,7 @@ namespace CoreIPC {
 
 namespace WebCore {
     class IntSize;
+    class Cursor;
 }
 
 struct WKContextStatistics;
@@ -60,33 +64,43 @@ namespace WebKit {
 
 class DrawingAreaProxy;
 class PageClient;
+class WebBackForwardList;
+class WebBackForwardListItem;
+class WebData;
+class WebEditCommandProxy;
 class WebKeyboardEvent;
 class WebMouseEvent;
 class WebPageNamespace;
 class WebProcessProxy;
+class WebURLRequest;
 class WebWheelEvent;
-class WebNavigationDataStore;
+struct WebNavigationDataStore;
 
-typedef GenericCallback<WKStringRef> RenderTreeExternalRepresentationCallback;
-typedef GenericCallback<WKStringRef> ScriptReturnValueCallback;
+typedef GenericCallback<WKStringRef, WTF::StringImpl*> FrameSourceCallback;
+typedef GenericCallback<WKStringRef, WTF::StringImpl*> RenderTreeExternalRepresentationCallback;
+typedef GenericCallback<WKStringRef, WTF::StringImpl*> ScriptReturnValueCallback;
 
-class WebPageProxy : public RefCounted<WebPageProxy> {
+class WebPageProxy : public APIObject {
 public:
+    static const Type APIType = TypePage;
+
     static PassRefPtr<WebPageProxy> create(WebPageNamespace*, uint64_t pageID);
     ~WebPageProxy();
 
     uint64_t pageID() const { return m_pageID; }
 
-    WebFrameProxy* webFrame(uint64_t) const;
     WebFrameProxy* mainFrame() const { return m_mainFrame.get(); }
 
     DrawingAreaProxy* drawingArea() { return m_drawingArea.get(); }
+    void setDrawingArea(PassOwnPtr<DrawingAreaProxy>);
+
+    WebBackForwardList* backForwardList() { return m_backForwardList.get(); }
 
     void setPageClient(PageClient*);
-    void initializeLoaderClient(WKPageLoaderClient*);
-    void initializePolicyClient(WKPagePolicyClient*);
-    void initializeUIClient(WKPageUIClient*);
-    void initializeHistoryClient(WKPageHistoryClient*);
+    void initializeLoaderClient(const WKPageLoaderClient*);
+    void initializePolicyClient(const WKPagePolicyClient*);
+    void initializeFormClient(const WKPageFormClient*);
+    void initializeUIClient(const WKPageUIClient*);
 
     void revive();
 
@@ -97,39 +111,72 @@ public:
     bool tryClose();
     bool isClosed() const { return m_closed; }
 
-    void loadURL(const WebCore::String&);
+    void loadURL(const WTF::String&);
+    void loadURLRequest(WebURLRequest*);
+
     void stopLoading();
-    void reload();
+    void reload(bool reloadFromOrigin);
 
     void goForward();
-    bool canGoForward() const { return m_canGoForward; }
+    bool canGoForward() const;
     void goBack();
-    bool canGoBack() const { return m_canGoBack; }
+    bool canGoBack() const;
+
+    void goToBackForwardItem(WebBackForwardListItem*);
+    void didChangeBackForwardList();
 
     void setFocused(bool isFocused);
     void setActive(bool active);
+    void setIsInWindow(bool isInWindow);
 
     void mouseEvent(const WebMouseEvent&);
     void wheelEvent(const WebWheelEvent&);
     void keyEvent(const WebKeyboardEvent&);
+#if ENABLE(TOUCH_EVENTS)
+    void touchEvent(const WebTouchEvent&);
+#endif
 
-    const WebCore::String& pageTitle() const { return m_pageTitle; }
-    const WebCore::String& toolTip() const { return m_toolTip; }
+    const WTF::String& pageTitle() const { return m_pageTitle; }
+    const WTF::String& toolTip() const { return m_toolTip; }
+
+    double estimatedProgress() const { return m_estimatedProgress; }
+
+    void setCustomUserAgent(const String&);
 
     void terminateProcess();
+    
+    PassRefPtr<WebData> sessionState() const;
+    void restoreFromSessionState(WebData*);
 
-    void runJavaScriptInMainFrame(const WebCore::String&, PassRefPtr<ScriptReturnValueCallback>);
+    double textZoomFactor() const { return m_textZoomFactor; }
+    void setTextZoomFactor(double);
+    double pageZoomFactor() const { return m_pageZoomFactor; }
+    void setPageZoomFactor(double);
+    void setPageAndTextZoomFactors(double pageZoomFactor, double textZoomFactor);
+
+    void runJavaScriptInMainFrame(const WTF::String&, PassRefPtr<ScriptReturnValueCallback>);
     void getRenderTreeExternalRepresentation(PassRefPtr<RenderTreeExternalRepresentationCallback>);
+    void getSourceForFrame(WebFrameProxy*, PassRefPtr<FrameSourceCallback>);
 
     void receivedPolicyDecision(WebCore::PolicyAction, WebFrameProxy*, uint64_t listenerID);
 
-    void didReceiveMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder&);
-    void didReceiveSyncMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder&, CoreIPC::ArgumentEncoder&);
+    void didReceiveMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
+    void didReceiveSyncMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*, CoreIPC::ArgumentEncoder*);
 
     void processDidBecomeUnresponsive();
     void processDidBecomeResponsive();
     void processDidExit();
     void processDidRevive();
+
+#if USE(ACCELERATED_COMPOSITING)
+    void didEnterAcceleratedCompositing();
+    void didLeaveAcceleratedCompositing();
+#endif
+
+    void addEditCommand(WebEditCommandProxy*);
+    void removeEditCommand(WebEditCommandProxy*);
+    void registerEditCommandForUndo(PassRefPtr<WebEditCommandProxy>);
+    void registerEditCommandForRedo(PassRefPtr<WebEditCommandProxy>);
 
     WebProcessProxy* process() const;
     WebPageNamespace* pageNamespace() const { return m_pageNamespace.get(); }
@@ -137,7 +184,7 @@ public:
     bool isValid();
 
     // REMOVE: For demo purposes only.
-    const WebCore::String& urlAtProcessExit() const { return m_urlAtProcessExit; }
+    const WTF::String& urlAtProcessExit() const { return m_urlAtProcessExit; }
 
     void preferencesDidChange();
 
@@ -146,66 +193,95 @@ public:
 private:
     WebPageProxy(WebPageNamespace*, uint64_t pageID);
 
+    virtual Type type() const { return APIType; }
+
     void didCreateMainFrame(uint64_t frameID);
     void didCreateSubFrame(uint64_t frameID);
 
-    void didStartProvisionalLoadForFrame(WebFrameProxy*, const WebCore::String&);
-    void didReceiveServerRedirectForProvisionalLoadForFrame(WebFrameProxy*);
+    void didStartProvisionalLoadForFrame(WebFrameProxy*, const String&);
+    void didReceiveServerRedirectForProvisionalLoadForFrame(WebFrameProxy*, const String&);
     void didFailProvisionalLoadForFrame(WebFrameProxy*);
     void didCommitLoadForFrame(WebFrameProxy*);
+    void didFinishDocumentLoadForFrame(WebFrameProxy*);
     void didFinishLoadForFrame(WebFrameProxy*);
     void didFailLoadForFrame(WebFrameProxy*);
-    void didReceiveTitleForFrame(WebFrameProxy*, const WebCore::String&);
+    void didReceiveTitleForFrame(WebFrameProxy*, const WTF::String&);
     void didFirstLayoutForFrame(WebFrameProxy*);
     void didFirstVisuallyNonEmptyLayoutForFrame(WebFrameProxy*);
     void didStartProgress();
     void didChangeProgress(double);
     void didFinishProgress();
     
-    void decidePolicyForNavigationAction(WebFrameProxy*, uint32_t navigationType, const WebCore::String& url, uint64_t listenerID);
-    void decidePolicyForNewWindowAction(WebFrameProxy*, uint32_t navigationType, const WebCore::String& url, uint64_t listenerID);
-    void decidePolicyForMIMEType(WebFrameProxy*, const WebCore::String& MIMEType, const WebCore::String& url, uint64_t listenerID);
+    void decidePolicyForNavigationAction(WebFrameProxy*, WebCore::NavigationType navigationType, WebEvent::Modifiers modifiers, const WTF::String& url, uint64_t listenerID);
+    void decidePolicyForNewWindowAction(WebFrameProxy*, WebCore::NavigationType navigationType, WebEvent::Modifiers modifiers, const WTF::String& url, uint64_t listenerID);
+    void decidePolicyForMIMEType(WebFrameProxy*, const WTF::String& MIMEType, const WTF::String& url, uint64_t listenerID);
 
-    WebPageProxy* createNewPage();
+    void willSubmitForm(WebFrameProxy* frame, WebFrameProxy* frameSource, Vector<std::pair<WTF::String, WTF::String> >& textFieldValues, APIObject* userData, uint64_t listenerID);
+
+    PassRefPtr<WebPageProxy> createNewPage();
     void showPage();
     void closePage();
-    void runJavaScriptAlert(WebFrameProxy*, const WebCore::String&);
+    void runJavaScriptAlert(WebFrameProxy*, const WTF::String&);
+    bool runJavaScriptConfirm(WebFrameProxy* frame, const WTF::String&);
+    WTF::String runJavaScriptPrompt(WebFrameProxy* frame, const WTF::String&, const WTF::String&);
+    void setStatusText(const String&);
+    void contentsSizeChanged(WebFrameProxy*, const WebCore::IntSize&);
 
-    void didNavigateWithNavigationData(WebFrameProxy*, const WebNavigationDataStore&); 
-    void didPerformClientRedirect(WebFrameProxy*, const WebCore::String& sourceURLString, const WebCore::String& destinationURLString);
-    void didPerformServerRedirect(WebFrameProxy*, const WebCore::String& sourceURLString, const WebCore::String& destinationURLString);
-    void didUpdateHistoryTitle(WebFrameProxy*, const WebCore::String& title, const WebCore::String& url);
+    // Back/Forward list management
+    void addItemToBackForwardList(WebBackForwardListItem*);
+    void goToItemInBackForwardList(WebBackForwardListItem*);
+
+    // Undo management
+    void registerEditCommandForUndo(uint64_t commandID, WebCore::EditAction);
+    void clearAllEditCommands();
 
     void takeFocus(bool direction);
-    void setToolTip(const WebCore::String&);
+    void setToolTip(const WTF::String&);
+    void setCursor(const WebCore::Cursor&);
 
     void didReceiveEvent(WebEvent::Type);
-    void didRunJavaScriptInMainFrame(const WebCore::String&, uint64_t);
-    void didGetRenderTreeExternalRepresentation(const WebCore::String&, uint64_t);
 
-    OwnPtr<PageClient> m_pageClient;
+    void didRunJavaScriptInMainFrame(const WTF::String&, uint64_t);
+    void didGetRenderTreeExternalRepresentation(const WTF::String&, uint64_t);
+    void didGetSourceForFrame(const String&, uint64_t);
+
+#if USE(ACCELERATED_COMPOSITING)
+    void didChangeAcceleratedCompositing(bool compositing);
+#endif    
+
+    PageClient* m_pageClient;
     WebLoaderClient m_loaderClient;
     WebPolicyClient m_policyClient;
+    WebFormClient m_formClient;
     WebUIClient m_uiClient;
-    WebHistoryClient m_historyClient;
 
     OwnPtr<DrawingAreaProxy> m_drawingArea;
-
     RefPtr<WebPageNamespace> m_pageNamespace;
     RefPtr<WebFrameProxy> m_mainFrame;
-    HashMap<uint64_t, RefPtr<WebFrameProxy> > m_frameMap;
-    WebCore::String m_pageTitle;
+    WTF::String m_pageTitle;
 
     HashMap<uint64_t, RefPtr<ScriptReturnValueCallback> > m_scriptReturnValueCallbacks;
     HashMap<uint64_t, RefPtr<RenderTreeExternalRepresentationCallback> > m_renderTreeExternalRepresentationCallbacks;
+    HashMap<uint64_t, RefPtr<FrameSourceCallback> > m_frameSourceCallbacks;
+
+    HashSet<WebEditCommandProxy*> m_editCommandSet;
+
+    double m_estimatedProgress;
+
+    // Whether the web page is contained in a top-level window.
+    bool m_isInWindow;
 
     bool m_canGoBack;
     bool m_canGoForward;
+    RefPtr<WebBackForwardList> m_backForwardList;
 
-    WebCore::String m_toolTip;
+    WTF::String m_toolTip;
 
     // REMOVE: For demo purposes only.
-    WebCore::String m_urlAtProcessExit;
+    WTF::String m_urlAtProcessExit;
+
+    double m_textZoomFactor;
+    double m_pageZoomFactor;
     
     bool m_valid;
     bool m_closed;

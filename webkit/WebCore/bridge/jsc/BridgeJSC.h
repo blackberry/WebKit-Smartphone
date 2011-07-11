@@ -84,7 +84,7 @@ public:
     void end();
 
     virtual Class* getClass() const = 0;
-    RuntimeObject* createRuntimeObject(ExecState*);
+    JSObject* createRuntimeObject(ExecState*);
     void willInvalidateRuntimeObject();
     void willDestroyRuntimeObject();
 
@@ -92,10 +92,10 @@ public:
     virtual bool setValueOfUndefinedField(ExecState*, const Identifier&, JSValue) { return false; }
 
     virtual JSValue getMethod(ExecState* exec, const Identifier& propertyName) = 0;
-    virtual JSValue invokeMethod(ExecState*, RuntimeMethod* method, const ArgList& args) = 0;
+    virtual JSValue invokeMethod(ExecState*, RuntimeMethod* method) = 0;
 
     virtual bool supportsInvokeDefaultMethod() const { return false; }
-    virtual JSValue invokeDefaultMethod(ExecState*, const ArgList&) { return jsUndefined(); }
+    virtual JSValue invokeDefaultMethod(ExecState*) { return jsUndefined(); }
 
     virtual bool supportsConstruct() const { return false; }
     virtual JSValue invokeConstruct(ExecState*, const ArgList&) { return JSValue(); }
@@ -140,9 +140,9 @@ protected:
 
 const char* signatureForParameters(const ArgList&);
 
-typedef HashMap<RefPtr<UString::Rep>, MethodList*> MethodListMap;
-typedef HashMap<RefPtr<UString::Rep>, Method*> MethodMap;
-typedef HashMap<RefPtr<UString::Rep>, Field*> FieldMap;
+typedef HashMap<RefPtr<StringImpl>, MethodList*> MethodListMap;
+typedef HashMap<RefPtr<StringImpl>, Method*> MethodMap;
+typedef HashMap<RefPtr<StringImpl>, Field*> FieldMap;
 
 } // namespace Bindings
 

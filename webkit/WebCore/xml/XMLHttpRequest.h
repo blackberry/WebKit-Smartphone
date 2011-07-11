@@ -21,7 +21,6 @@
 #define XMLHttpRequest_h
 
 #include "ActiveDOMObject.h"
-#include "AtomicStringHash.h"
 #include "EventListener.h"
 #include "EventNames.h"
 #include "EventTarget.h"
@@ -31,6 +30,7 @@
 #include "ThreadableLoaderClient.h"
 #include "XMLHttpRequestProgressEventThrottle.h"
 #include <wtf/OwnPtr.h>
+#include <wtf/text/AtomicStringHash.h>
 
 namespace WebCore {
 
@@ -59,7 +59,7 @@ public:
 
     virtual void contextDestroyed();
     virtual bool canSuspend() const;
-    virtual void suspend();
+    virtual void suspend(ReasonForSuspension);
     virtual void resume();
     virtual void stop();
 
@@ -70,6 +70,10 @@ public:
     State readyState() const;
     bool withCredentials() const { return m_includeCredentials; }
     void setWithCredentials(bool, ExceptionCode&);
+#if ENABLE(XHR_RESPONSE_BLOB)
+    bool asBlob() const { return m_asBlob; }
+    void setAsBlob(bool, ExceptionCode&);
+#endif
     void open(const String& method, const KURL&, ExceptionCode&);
     void open(const String& method, const KURL&, bool async, ExceptionCode&);
     void open(const String& method, const KURL&, bool async, const String& user, ExceptionCode&);
@@ -84,8 +88,11 @@ public:
     void overrideMimeType(const String& override);
     String getAllResponseHeaders(ExceptionCode&) const;
     String getResponseHeader(const AtomicString& name, ExceptionCode&) const;
-    const ScriptString& responseText() const;
-    Document* responseXML() const;
+    const ScriptString& responseText(ExceptionCode&) const;
+    Document* responseXML(ExceptionCode&) const;
+#if ENABLE(XHR_RESPONSE_BLOB)
+    Blob* responseBlob(ExceptionCode&) const;
+#endif
     void setLastSendLineNumber(unsigned lineNumber) { m_lastSendLineNumber = lineNumber; }
     void setLastSendURL(const String& url) { m_lastSendURL = url; }
 
@@ -155,6 +162,10 @@ private:
     String m_mimeTypeOverride;
     bool m_async;
     bool m_includeCredentials;
+#if ENABLE(XHR_RESPONSE_BLOB)
+    bool m_asBlob;
+    RefPtr<Blob> m_responseBlob;
+#endif
 
     RefPtr<ThreadableLoader> m_loader;
     State m_state;
@@ -164,7 +175,7 @@ private:
 
     RefPtr<TextResourceDecoder> m_decoder;
 
-    // Unlike most strings in the DOM, we keep this as a ScriptString, not a WebCore::String.
+    // Unlike most strings in the DOM, we keep this as a ScriptString, not a WTF::String.
     // That's because these strings can easily get huge (they are filled from the network with
     // no parsing) and because JS can easily observe many intermediate states, so it's very useful
     // to be able to share the buffer with JavaScript versions of the whole or partial string.

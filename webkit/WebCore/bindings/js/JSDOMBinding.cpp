@@ -38,11 +38,14 @@
 #include "HTMLImageElement.h"
 #include "HTMLNames.h"
 #include "HTMLScriptElement.h"
+#include "JSBinding.h"
+#include "JSBindingState.h"
 #include "JSDOMCoreException.h"
 #include "JSDOMWindowCustom.h"
 #include "JSDebugWrapperSet.h"
 #include "JSEventException.h"
 #include "JSExceptionBase.h"
+#include "JSMainThreadExecState.h"
 #include "JSNode.h"
 #include "JSRangeException.h"
 #include "JSXMLHttpRequestException.h"
@@ -69,6 +72,11 @@
 #if ENABLE(XPATH)
 #include "JSXPathException.h"
 #include "XPathException.h"
+#endif
+
+#if ENABLE(DATABASE)
+#include "JSSQLException.h"
+#include "SQLException.h"
 #endif
 
 using namespace JSC;
@@ -496,7 +504,7 @@ AtomicStringImpl* findAtomicString(const Identifier& identifier)
 {
     if (identifier.isNull())
         return 0;
-    UStringImpl* impl = identifier.ustring().rep();
+    StringImpl* impl = identifier.impl();
     ASSERT(impl->existingHash());
     return AtomicString::find(impl->characters(), impl->length(), impl->existingHash());
 }
@@ -600,10 +608,15 @@ void setDOMException(ExecState* exec, ExceptionCode ec)
             errorObject = toJS(exec, globalObject, XPathException::create(description));
             break;
 #endif
+#if ENABLE(DATABASE)
+        case SQLExceptionType:
+            errorObject = toJS(exec, globalObject, SQLException::create(description));
+            break;
+#endif
     }
 
     ASSERT(errorObject);
-    exec->setException(errorObject);
+    throwError(exec, errorObject);
 }
 
 bool checkNodeSecurity(ExecState* exec, Node* node)
@@ -629,8 +642,8 @@ bool allowsAccessFromFrame(ExecState* exec, Frame* frame, String& message)
 
 bool shouldAllowNavigation(ExecState* exec, Frame* frame)
 {
-    Frame* lexicalFrame = toLexicalFrame(exec);
-    return lexicalFrame && lexicalFrame->loader()->shouldAllowNavigation(frame);
+    JSBindingState state(exec);
+    return JSBindingSecurity::shouldAllowNavigation(&state, frame);
 }
 
 bool allowSettingSrcToJavascriptURL(ExecState* exec, Element* element, const String& name, const String& value)
@@ -661,27 +674,23 @@ void printErrorMessageForFrame(Frame* frame, const String& message)
 
 Frame* toLexicalFrame(ExecState* exec)
 {
-    return asJSDOMWindow(exec->lexicalGlobalObject())->impl()->frame();
+    return JSBindingState(exec).getActiveFrame();
 }
 
 Frame* toDynamicFrame(ExecState* exec)
 {
-    return asJSDOMWindow(exec->dynamicGlobalObject())->impl()->frame();
+    return JSBindingState(exec).getFirstFrame();
 }
 
-bool processingUserGesture(ExecState* exec)
+bool processingUserGesture()
 {
-    Frame* frame = toDynamicFrame(exec);
-    return frame && frame->script()->processingUserGesture(currentWorld(exec));
+    return JSBindingState(JSMainThreadExecState::currentState()).processingUserGesture();
 }
 
 KURL completeURL(ExecState* exec, const String& relativeURL)
 {
-    // For historical reasons, we need to complete the URL using the dynamic frame.
-    Frame* frame = toDynamicFrame(exec);
-    if (!frame)
-        return KURL();
-    return frame->loader()->completeURL(relativeURL);
+    JSBindingState state(exec);
+    return completeURL(&state, relativeURL);
 }
 
 JSValue objectToStringFunctionGetter(ExecState* exec, JSValue, const Identifier& propertyName)
@@ -729,7 +738,7 @@ JSC::JSObject* toJSSequence(ExecState* exec, JSValue value, unsigned& length)
 {
     JSObject* object = value.getObject();
     if (!object) {
-        throwError(exec, TypeError);
+        throwTypeError(exec);
         return 0;
     }
     JSValue lengthValue = object->get(exec, exec->propertyNames().length);
@@ -737,7 +746,7 @@ JSC::JSObject* toJSSequence(ExecState* exec, JSValue value, unsigned& length)
         return 0;
 
     if (lengthValue.isUndefinedOrNull()) {
-        throwError(exec, TypeError);
+        throwTypeError(exec);
         return 0;
     }
 

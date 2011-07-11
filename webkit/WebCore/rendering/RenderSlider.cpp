@@ -28,22 +28,20 @@
 #include "EventNames.h"
 #include "Frame.h"
 #include "HTMLInputElement.h"
-#include "HTMLDivElement.h"
 #include "HTMLNames.h"
-#include "HTMLParser.h"
+#include "HTMLParserIdioms.h"
 #include "MediaControlElements.h"
 #include "MouseEvent.h"
 #include "RenderLayer.h"
 #include "RenderTheme.h"
 #include "RenderView.h"
+#include "ShadowElement.h"
 #include "StepRange.h"
 #include <wtf/MathExtras.h>
 
 using std::min;
 
 namespace WebCore {
-
-using namespace HTMLNames;
 
 static const int defaultTrackLength = 129;
 
@@ -54,35 +52,37 @@ static double sliderPosition(HTMLInputElement* element)
     return range.proportionFromValue(range.valueFromElement(element));
 }
 
-class SliderThumbElement : public HTMLDivElement {
+class SliderThumbElement : public ShadowBlockElement {
 public:
-    SliderThumbElement(Document*, Node* shadowParent);
-    
+    static PassRefPtr<SliderThumbElement> create(HTMLElement* shadowParent);
+
     bool inDragMode() const { return m_inDragMode; }
 
     virtual void defaultEventHandler(Event*);
     virtual void detach();
 
 private:        
-    virtual bool isShadowNode() const { return true; }
-    virtual Node* shadowParentNode() { return m_shadowParent; }
+    SliderThumbElement(HTMLElement* shadowParent);
 
     FloatPoint m_offsetToThumb;
-    Node* m_shadowParent;
     bool m_inDragMode;
 };
 
-SliderThumbElement::SliderThumbElement(Document* document, Node* shadowParent)
-    : HTMLDivElement(divTag, document)
-    , m_shadowParent(shadowParent)
+inline SliderThumbElement::SliderThumbElement(HTMLElement* shadowParent)
+    : ShadowBlockElement(shadowParent)
     , m_inDragMode(false)
 {
+}
+
+inline PassRefPtr<SliderThumbElement> SliderThumbElement::create(HTMLElement* shadowParent)
+{
+    return adoptRef(new SliderThumbElement(shadowParent));
 }
 
 void SliderThumbElement::defaultEventHandler(Event* event)
 {
     if (!event->isMouseEvent()) {
-        HTMLDivElement::defaultEventHandler(event);
+        ShadowBlockElement::defaultEventHandler(event);
         return;
     }
 
@@ -106,7 +106,7 @@ void SliderThumbElement::defaultEventHandler(Event* event)
                 }
 
                 m_inDragMode = true;
-                document()->frame()->eventHandler()->setCapturingMouseEventsNode(m_shadowParent);
+                document()->frame()->eventHandler()->setCapturingMouseEventsNode(shadowParent());
                 event->setDefaultHandled();
                 return;
             }
@@ -132,7 +132,7 @@ void SliderThumbElement::defaultEventHandler(Event* event)
         }
     }
 
-    HTMLDivElement::defaultEventHandler(event);
+    ShadowBlockElement::defaultEventHandler(event);
 }
 
 void SliderThumbElement::detach()
@@ -141,7 +141,7 @@ void SliderThumbElement::detach()
         if (Frame* frame = document()->frame())
             frame->eventHandler()->setCapturingMouseEventsNode(0);      
     }
-    HTMLDivElement::detach();
+    ShadowBlockElement::detach();
 }
 
 RenderSlider::RenderSlider(HTMLInputElement* element)
@@ -305,7 +305,7 @@ void RenderSlider::updateFromElement()
 {
     // Layout will take care of the thumb's size and position.
     if (!m_thumb) {
-        m_thumb = new SliderThumbElement(document(), node());
+        m_thumb = SliderThumbElement::create(static_cast<HTMLElement*>(node()));
         RefPtr<RenderStyle> thumbStyle = createThumbStyle(style());
         m_thumb->setRenderer(m_thumb->createRenderer(renderArena(), thumbStyle.get()));
         m_thumb->renderer()->setStyle(thumbStyle.release());

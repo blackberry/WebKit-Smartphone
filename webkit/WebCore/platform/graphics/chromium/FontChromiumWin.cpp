@@ -273,10 +273,10 @@ bool TransparencyAwareGlyphPainter::drawGlyphs(int numGlyphs,
 
     // If there is a non-blur shadow and both the fill color and shadow color 
     // are opaque, handle without skia. 
-    IntSize shadowSize;
-    int shadowBlur;
+    FloatSize shadowOffset;
+    float shadowBlur;
     Color shadowColor;
-    if (m_graphicsContext->getShadow(shadowSize, shadowBlur, shadowColor)) {
+    if (m_graphicsContext->getShadow(shadowOffset, shadowBlur, shadowColor)) {
         // If there is a shadow and this code is reached, windowsCanHandleDrawTextShadow()
         // will have already returned true during the ctor initiatization of m_useGDI
         ASSERT(shadowColor.alpha() == 255);
@@ -285,7 +285,7 @@ bool TransparencyAwareGlyphPainter::drawGlyphs(int numGlyphs,
         COLORREF textColor = skia::SkColorToCOLORREF(SkColorSetARGB(255, shadowColor.red(), shadowColor.green(), shadowColor.blue()));
         COLORREF savedTextColor = GetTextColor(m_hdc);
         SetTextColor(m_hdc, textColor);
-        ExtTextOut(m_hdc, x + shadowSize.width(), y + shadowSize.height(), ETO_GLYPH_INDEX, 0, reinterpret_cast<const wchar_t*>(&glyphs[0]), numGlyphs, &advances[0]);
+        ExtTextOut(m_hdc, x + shadowOffset.width(), y + shadowOffset.height(), ETO_GLYPH_INDEX, 0, reinterpret_cast<const wchar_t*>(&glyphs[0]), numGlyphs, &advances[0]);
         SetTextColor(m_hdc, savedTextColor);
     }
     
@@ -372,6 +372,8 @@ void Font::drawGlyphs(GraphicsContext* graphicsContext,
                       int numGlyphs,
                       const FloatPoint& point) const
 {
+    graphicsContext->platformContext()->prepareForSoftwareDraw();
+
     SkColor color = graphicsContext->platformContext()->effectiveFillColor();
     unsigned char alpha = SkColorGetA(color);
     // Skip 100% transparent text; no need to draw anything.
@@ -434,7 +436,7 @@ void Font::drawGlyphs(GraphicsContext* graphicsContext,
 }
 
 FloatRect Font::selectionRectForComplexText(const TextRun& run,
-                                            const IntPoint& point,
+                                            const FloatPoint& point,
                                             int h,
                                             int from,
                                             int to) const
@@ -445,10 +447,10 @@ FloatRect Font::selectionRectForComplexText(const TextRun& run,
 
     // If the text is RTL, left will actually be after right.
     if (left < right)
-        return FloatRect(left, static_cast<float>(point.y()),
+        return FloatRect(left, point.y(),
                        right - left, static_cast<float>(h));
 
-    return FloatRect(right, static_cast<float>(point.y()),
+    return FloatRect(right, point.y(),
                      left - right, static_cast<float>(h));
 }
 
@@ -483,15 +485,15 @@ void Font::drawComplexText(GraphicsContext* graphicsContext,
 
     // If there is a non-blur shadow and both the fill color and shadow color 
     // are opaque, handle without skia. 
-    IntSize shadowSize;
-    int shadowBlur;
+    FloatSize shadowOffset;
+    float shadowBlur;
     Color shadowColor;
-    if (graphicsContext->getShadow(shadowSize, shadowBlur, shadowColor) && windowsCanHandleDrawTextShadow(graphicsContext)) {
+    if (graphicsContext->getShadow(shadowOffset, shadowBlur, shadowColor) && windowsCanHandleDrawTextShadow(graphicsContext)) {
         COLORREF textColor = skia::SkColorToCOLORREF(SkColorSetARGB(255, shadowColor.red(), shadowColor.green(), shadowColor.blue()));
         COLORREF savedTextColor = GetTextColor(hdc);
         SetTextColor(hdc, textColor);
-        state.draw(graphicsContext, hdc, static_cast<int>(point.x()) + shadowSize.width(),
-                   static_cast<int>(point.y() - ascent()) + shadowSize.height(), from, to);
+        state.draw(graphicsContext, hdc, static_cast<int>(point.x()) + shadowOffset.width(),
+                   static_cast<int>(point.y() - ascent()) + shadowOffset.height(), from, to);
         SetTextColor(hdc, savedTextColor); 
     }
 
@@ -509,9 +511,13 @@ float Font::floatWidthForComplexText(const TextRun& run, HashSet<const SimpleFon
     return static_cast<float>(state.width());
 }
 
-int Font::offsetForPositionForComplexText(const TextRun& run, int x,
+int Font::offsetForPositionForComplexText(const TextRun& run, float xFloat,
                                           bool includePartialGlyphs) const
 {
+    // FIXME: This truncation is not a problem for HTML, but only affects SVG, which passes floating-point numbers
+    // to Font::offsetForPosition(). Bug http://webkit.org/b/40673 tracks fixing this problem.
+    int x = static_cast<int>(xFloat);
+
     // Mac code ignores includePartialGlyphs, and they don't know what it's
     // supposed to do, so we just ignore it as well.
     UniscribeHelperTextRun state(run, *this);

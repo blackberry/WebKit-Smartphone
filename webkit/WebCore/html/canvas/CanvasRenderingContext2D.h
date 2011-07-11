@@ -20,7 +20,7 @@
  * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
  * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #ifndef CanvasRenderingContext2D_h
@@ -34,246 +34,277 @@
 #include "GraphicsTypes.h"
 #include "Path.h"
 #include "PlatformString.h"
+
 #include <wtf/Vector.h>
+#include <wtf/text/StringHash.h>
 
 #if PLATFORM(CG)
 #include <ApplicationServices/ApplicationServices.h>
 #endif
 
+#if USE(ACCELERATED_COMPOSITING)
+#include "GraphicsLayer.h"
+#endif
+
 namespace WebCore {
 
-    class CanvasGradient;
-    class CanvasPattern;
-    class CanvasStyle;
-    class FloatRect;
-    class GraphicsContext;
-    class HTMLCanvasElement;
-    class HTMLImageElement;
-    class HTMLVideoElement;
-    class ImageData;
-    class KURL;
-    class TextMetrics;
+class CanvasGradient;
+class CanvasPattern;
+class CanvasStyle;
+class FloatRect;
+class GraphicsContext;
+class HTMLCanvasElement;
+class HTMLImageElement;
+class HTMLVideoElement;
+class ImageData;
+class KURL;
+class TextMetrics;
 
-    typedef int ExceptionCode;
+#if ENABLE(ACCELERATED_2D_CANVAS)
+class DrawingBuffer;
+class SharedGraphicsContext3D;
+#endif
 
-    class CanvasRenderingContext2D : public CanvasRenderingContext {
-    public:
-        CanvasRenderingContext2D(HTMLCanvasElement*, bool usesCSSCompatibilityParseMode, bool usesDashboardCompatibilityMode);
+typedef int ExceptionCode;
 
-        virtual ~CanvasRenderingContext2D();
-        
-        virtual bool is2d() const { return true; }
+class CanvasRenderingContext2D : public CanvasRenderingContext {
+public:
+    CanvasRenderingContext2D(HTMLCanvasElement*, bool usesCSSCompatibilityParseMode, bool usesDashboardCompatibilityMode);
 
-        CanvasStyle* strokeStyle() const;
-        void setStrokeStyle(PassRefPtr<CanvasStyle>);
+    virtual ~CanvasRenderingContext2D();
 
-        CanvasStyle* fillStyle() const;
-        void setFillStyle(PassRefPtr<CanvasStyle>);
+    virtual bool is2d() const { return true; }
+    virtual bool isAccelerated() const;
+    virtual bool paintsIntoCanvasBuffer() const;
 
-        float lineWidth() const;
-        void setLineWidth(float);
+    CanvasStyle* strokeStyle() const;
+    void setStrokeStyle(PassRefPtr<CanvasStyle>);
 
-        String lineCap() const;
-        void setLineCap(const String&);
+    CanvasStyle* fillStyle() const;
+    void setFillStyle(PassRefPtr<CanvasStyle>);
 
-        String lineJoin() const;
-        void setLineJoin(const String&);
+    float lineWidth() const;
+    void setLineWidth(float);
 
-        float miterLimit() const;
-        void setMiterLimit(float);
+    String lineCap() const;
+    void setLineCap(const String&);
 
-        float shadowOffsetX() const;
-        void setShadowOffsetX(float);
+    String lineJoin() const;
+    void setLineJoin(const String&);
 
-        float shadowOffsetY() const;
-        void setShadowOffsetY(float);
+    float miterLimit() const;
+    void setMiterLimit(float);
 
-        float shadowBlur() const;
-        void setShadowBlur(float);
+    float shadowOffsetX() const;
+    void setShadowOffsetX(float);
 
-        String shadowColor() const;
-        void setShadowColor(const String&);
+    float shadowOffsetY() const;
+    void setShadowOffsetY(float);
 
-        float globalAlpha() const;
-        void setGlobalAlpha(float);
+    float shadowBlur() const;
+    void setShadowBlur(float);
 
-        String globalCompositeOperation() const;
-        void setGlobalCompositeOperation(const String&);
+    String shadowColor() const;
+    void setShadowColor(const String&);
 
-        void save();
-        void restore();
+    float globalAlpha() const;
+    void setGlobalAlpha(float);
 
-        void scale(float sx, float sy);
-        void rotate(float angleInRadians);
-        void translate(float tx, float ty);
-        void transform(float m11, float m12, float m21, float m22, float dx, float dy);
-        void setTransform(float m11, float m12, float m21, float m22, float dx, float dy);
+    String globalCompositeOperation() const;
+    void setGlobalCompositeOperation(const String&);
 
-        void setStrokeColor(const String& color);
-        void setStrokeColor(float grayLevel);
-        void setStrokeColor(const String& color, float alpha);
-        void setStrokeColor(float grayLevel, float alpha);
-        void setStrokeColor(float r, float g, float b, float a);
-        void setStrokeColor(float c, float m, float y, float k, float a);
+    void save();
+    void restore();
+    void setAllAttributesToDefault();
 
-        void setFillColor(const String& color);
-        void setFillColor(float grayLevel);
-        void setFillColor(const String& color, float alpha);
-        void setFillColor(float grayLevel, float alpha);
-        void setFillColor(float r, float g, float b, float a);
-        void setFillColor(float c, float m, float y, float k, float a);
+    void scale(float sx, float sy);
+    void rotate(float angleInRadians);
+    void translate(float tx, float ty);
+    void transform(float m11, float m12, float m21, float m22, float dx, float dy);
+    void setTransform(float m11, float m12, float m21, float m22, float dx, float dy);
 
-        void beginPath();
-        void closePath();
+    void setStrokeColor(const String& color);
+    void setStrokeColor(float grayLevel);
+    void setStrokeColor(const String& color, float alpha);
+    void setStrokeColor(float grayLevel, float alpha);
+    void setStrokeColor(float r, float g, float b, float a);
+    void setStrokeColor(float c, float m, float y, float k, float a);
 
-        void moveTo(float x, float y);
-        void lineTo(float x, float y);
-        void quadraticCurveTo(float cpx, float cpy, float x, float y);
-        void bezierCurveTo(float cp1x, float cp1y, float cp2x, float cp2y, float x, float y);
-        void arcTo(float x0, float y0, float x1, float y1, float radius, ExceptionCode&);
-        void arc(float x, float y, float r, float sa, float ea, bool clockwise, ExceptionCode&);
-        void rect(float x, float y, float width, float height);
+    void setFillColor(const String& color);
+    void setFillColor(float grayLevel);
+    void setFillColor(const String& color, float alpha);
+    void setFillColor(float grayLevel, float alpha);
+    void setFillColor(float r, float g, float b, float a);
+    void setFillColor(float c, float m, float y, float k, float a);
 
-        void fill();
-        void stroke();
-        void clip();
+    void beginPath();
+    void closePath();
 
-        bool isPointInPath(const float x, const float y);
+    void moveTo(float x, float y);
+    void lineTo(float x, float y);
+    void quadraticCurveTo(float cpx, float cpy, float x, float y);
+    void bezierCurveTo(float cp1x, float cp1y, float cp2x, float cp2y, float x, float y);
+    void arcTo(float x0, float y0, float x1, float y1, float radius, ExceptionCode&);
+    void arc(float x, float y, float r, float sa, float ea, bool clockwise, ExceptionCode&);
+    void rect(float x, float y, float width, float height);
 
-        void clearRect(float x, float y, float width, float height);
-        void fillRect(float x, float y, float width, float height);
-        void strokeRect(float x, float y, float width, float height);
-        void strokeRect(float x, float y, float width, float height, float lineWidth);
+    void fill();
+    void stroke();
+    void clip();
 
-        void setShadow(float width, float height, float blur);
-        void setShadow(float width, float height, float blur, const String& color);
-        void setShadow(float width, float height, float blur, float grayLevel);
-        void setShadow(float width, float height, float blur, const String& color, float alpha);
-        void setShadow(float width, float height, float blur, float grayLevel, float alpha);
-        void setShadow(float width, float height, float blur, float r, float g, float b, float a);
-        void setShadow(float width, float height, float blur, float c, float m, float y, float k, float a);
+    bool isPointInPath(const float x, const float y);
 
-        void clearShadow();
+    void clearRect(float x, float y, float width, float height);
+    void fillRect(float x, float y, float width, float height);
+    void strokeRect(float x, float y, float width, float height);
+    void strokeRect(float x, float y, float width, float height, float lineWidth);
 
-        void drawImage(HTMLImageElement*, float x, float y, ExceptionCode&);
-        void drawImage(HTMLImageElement*, float x, float y, float width, float height, ExceptionCode&);
-        void drawImage(HTMLImageElement*, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh, ExceptionCode&);
-        void drawImage(HTMLImageElement*, const FloatRect& srcRect, const FloatRect& dstRect, ExceptionCode&);
-        void drawImage(HTMLCanvasElement*, float x, float y, ExceptionCode&);
-        void drawImage(HTMLCanvasElement*, float x, float y, float width, float height, ExceptionCode&);
-        void drawImage(HTMLCanvasElement*, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh, ExceptionCode&);
-        void drawImage(HTMLCanvasElement*, const FloatRect& srcRect, const FloatRect& dstRect, ExceptionCode&);
+    void setShadow(float width, float height, float blur);
+    void setShadow(float width, float height, float blur, const String& color);
+    void setShadow(float width, float height, float blur, float grayLevel);
+    void setShadow(float width, float height, float blur, const String& color, float alpha);
+    void setShadow(float width, float height, float blur, float grayLevel, float alpha);
+    void setShadow(float width, float height, float blur, float r, float g, float b, float a);
+    void setShadow(float width, float height, float blur, float c, float m, float y, float k, float a);
+
+    void clearShadow();
+
+    void drawImage(HTMLImageElement*, float x, float y, ExceptionCode&);
+    void drawImage(HTMLImageElement*, float x, float y, float width, float height, ExceptionCode&);
+    void drawImage(HTMLImageElement*, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh, ExceptionCode&);
+    void drawImage(HTMLImageElement*, const FloatRect& srcRect, const FloatRect& dstRect, ExceptionCode&);
+    void drawImage(HTMLCanvasElement*, float x, float y, ExceptionCode&);
+    void drawImage(HTMLCanvasElement*, float x, float y, float width, float height, ExceptionCode&);
+    void drawImage(HTMLCanvasElement*, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh, ExceptionCode&);
+    void drawImage(HTMLCanvasElement*, const FloatRect& srcRect, const FloatRect& dstRect, ExceptionCode&);
 #if ENABLE(VIDEO)
-        void drawImage(HTMLVideoElement*, float x, float y, ExceptionCode&);
-        void drawImage(HTMLVideoElement*, float x, float y, float width, float height, ExceptionCode&);
-        void drawImage(HTMLVideoElement*, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh, ExceptionCode&);
-        void drawImage(HTMLVideoElement*, const FloatRect& srcRect, const FloatRect& dstRect, ExceptionCode&);
+    void drawImage(HTMLVideoElement*, float x, float y, ExceptionCode&);
+    void drawImage(HTMLVideoElement*, float x, float y, float width, float height, ExceptionCode&);
+    void drawImage(HTMLVideoElement*, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh, ExceptionCode&);
+    void drawImage(HTMLVideoElement*, const FloatRect& srcRect, const FloatRect& dstRect, ExceptionCode&);
 #endif
 
-        void drawImageFromRect(HTMLImageElement*, float sx, float sy, float sw, float sh,
-            float dx, float dy, float dw, float dh, const String& compositeOperation);
+    void drawImageFromRect(HTMLImageElement*, float sx, float sy, float sw, float sh,
+        float dx, float dy, float dw, float dh, const String& compositeOperation);
 
-        void setAlpha(float);
+    void setAlpha(float);
 
-        void setCompositeOperation(const String&);
+    void setCompositeOperation(const String&);
 
-        PassRefPtr<CanvasGradient> createLinearGradient(float x0, float y0, float x1, float y1, ExceptionCode&);
-        PassRefPtr<CanvasGradient> createRadialGradient(float x0, float y0, float r0, float x1, float y1, float r1, ExceptionCode&);
-        PassRefPtr<CanvasPattern> createPattern(HTMLImageElement*, const String& repetitionType, ExceptionCode&);
-        PassRefPtr<CanvasPattern> createPattern(HTMLCanvasElement*, const String& repetitionType, ExceptionCode&);
-        
-        PassRefPtr<ImageData> createImageData(PassRefPtr<ImageData> imageData, ExceptionCode&) const;
-        PassRefPtr<ImageData> createImageData(float width, float height, ExceptionCode&) const;
-        PassRefPtr<ImageData> getImageData(float sx, float sy, float sw, float sh, ExceptionCode&) const;
-        void putImageData(ImageData*, float dx, float dy, ExceptionCode&);
-        void putImageData(ImageData*, float dx, float dy, float dirtyX, float dirtyY, float dirtyWidth, float dirtyHeight, ExceptionCode&);
-        
-        void reset();
+    PassRefPtr<CanvasGradient> createLinearGradient(float x0, float y0, float x1, float y1, ExceptionCode&);
+    PassRefPtr<CanvasGradient> createRadialGradient(float x0, float y0, float r0, float x1, float y1, float r1, ExceptionCode&);
+    PassRefPtr<CanvasPattern> createPattern(HTMLImageElement*, const String& repetitionType, ExceptionCode&);
+    PassRefPtr<CanvasPattern> createPattern(HTMLCanvasElement*, const String& repetitionType, ExceptionCode&);
 
-        String font() const;
-        void setFont(const String&);
-        void updateFont();
-        
-        String textAlign() const;
-        void setTextAlign(const String&);
-        
-        String textBaseline() const;
-        void setTextBaseline(const String&);
-        
-        void fillText(const String& text, float x, float y);
-        void fillText(const String& text, float x, float y, float maxWidth);
-        void strokeText(const String& text, float x, float y);
-        void strokeText(const String& text, float x, float y, float maxWidth);
-        PassRefPtr<TextMetrics> measureText(const String& text);
+    PassRefPtr<ImageData> createImageData(PassRefPtr<ImageData> imageData, ExceptionCode&) const;
+    PassRefPtr<ImageData> createImageData(float width, float height, ExceptionCode&) const;
+    PassRefPtr<ImageData> getImageData(float sx, float sy, float sw, float sh, ExceptionCode&) const;
+    void putImageData(ImageData*, float dx, float dy, ExceptionCode&);
+    void putImageData(ImageData*, float dx, float dy, float dirtyX, float dirtyY, float dirtyWidth, float dirtyHeight, ExceptionCode&);
 
-        LineCap getLineCap() const { return state().m_lineCap; }
-        LineJoin getLineJoin() const { return state().m_lineJoin; }
+    void reset();
 
-    private:
-        struct State {
-            State();
-            
-            RefPtr<CanvasStyle> m_strokeStyle;
-            RefPtr<CanvasStyle> m_fillStyle;
-            float m_lineWidth;
-            LineCap m_lineCap;
-            LineJoin m_lineJoin;
-            float m_miterLimit;
-            FloatSize m_shadowOffset;
-            float m_shadowBlur;
-            RGBA32 m_shadowColor;
-            float m_globalAlpha;
-            CompositeOperator m_globalComposite;
-            AffineTransform m_transform;
-            bool m_invertibleCTM;
-            
-            // Text state.
-            TextAlign m_textAlign;
-            TextBaseline m_textBaseline;
-            
-            String m_unparsedFont;
-            Font m_font;
-            bool m_realizedFont;
-        };
-        Path m_path;
+    String font() const;
+    void setFont(const String&);
+    void updateFont();
 
-        State& state() { return m_stateStack.last(); }
-        const State& state() const { return m_stateStack.last(); }
+    String textAlign() const;
+    void setTextAlign(const String&);
 
-        void applyShadow();
+    String textBaseline() const;
+    void setTextBaseline(const String&);
 
-        enum CanvasWillDrawOption {
-            CanvasWillDrawApplyTransform = 1,
-            CanvasWillDrawApplyShadow = 1 << 1,
-            CanvasWillDrawApplyClip = 1 << 2,
-            CanvasWillDrawApplyAll = 0xffffffff
-        };
-        
-        void willDraw(const FloatRect&, unsigned options = CanvasWillDrawApplyAll);
+    void fillText(const String& text, float x, float y);
+    void fillText(const String& text, float x, float y, float maxWidth);
+    void strokeText(const String& text, float x, float y);
+    void strokeText(const String& text, float x, float y, float maxWidth);
+    PassRefPtr<TextMetrics> measureText(const String& text);
 
-        GraphicsContext* drawingContext() const;
+    LineCap getLineCap() const { return state().m_lineCap; }
+    LineJoin getLineJoin() const { return state().m_lineJoin; }
 
-        void applyStrokePattern();
-        void applyFillPattern();
+    virtual void paintRenderingResultsToCanvas();
 
-        void drawTextInternal(const String& text, float x, float y, bool fill, float maxWidth = 0, bool useMaxWidth = false);
-
-        const Font& accessFont();
-
-#if ENABLE(DASHBOARD_SUPPORT)
-        void clearPathForDashboardBackwardCompatibilityMode();
+#if ENABLE(ACCELERATED_2D_CANVAS) && USE(ACCELERATED_COMPOSITING)
+    virtual PlatformLayer* platformLayer() const;
 #endif
-        
-        void prepareGradientForDashboard(CanvasGradient* gradient) const;
-        void checkOrigin(const KURL&);
-        void checkOrigin(const String&);
 
-        Vector<State, 1> m_stateStack;
-        bool m_usesCSSCompatibilityParseMode;
-#if ENABLE(DASHBOARD_SUPPORT)
-        bool m_usesDashboardCompatibilityMode;
-#endif
+private:
+    struct State {
+        State();
+
+        String m_unparsedStrokeColor;
+        String m_unparsedFillColor;
+        RefPtr<CanvasStyle> m_strokeStyle;
+        RefPtr<CanvasStyle> m_fillStyle;
+        float m_lineWidth;
+        LineCap m_lineCap;
+        LineJoin m_lineJoin;
+        float m_miterLimit;
+        FloatSize m_shadowOffset;
+        float m_shadowBlur;
+        RGBA32 m_shadowColor;
+        float m_globalAlpha;
+        CompositeOperator m_globalComposite;
+        AffineTransform m_transform;
+        bool m_invertibleCTM;
+
+        // Text state.
+        TextAlign m_textAlign;
+        TextBaseline m_textBaseline;
+
+        String m_unparsedFont;
+        Font m_font;
+        bool m_realizedFont;
     };
+    Path m_path;
+
+    State& state() { return m_stateStack.last(); }
+    const State& state() const { return m_stateStack.last(); }
+
+    void applyShadow();
+
+    enum CanvasDidDrawOption {
+        CanvasDidDrawApplyNone = 0,
+        CanvasDidDrawApplyTransform = 1,
+        CanvasDidDrawApplyShadow = 1 << 1,
+        CanvasDidDrawApplyClip = 1 << 2,
+        CanvasDidDrawApplyAll = 0xffffffff
+    };
+
+    void didDraw(const FloatRect&, unsigned options = CanvasDidDrawApplyAll);
+
+    GraphicsContext* drawingContext() const;
+
+    void applyStrokePattern();
+    void applyFillPattern();
+
+    void drawTextInternal(const String& text, float x, float y, bool fill, float maxWidth = 0, bool useMaxWidth = false);
+
+    const Font& accessFont();
+
+#if ENABLE(DASHBOARD_SUPPORT)
+    void clearPathForDashboardBackwardCompatibilityMode();
+#endif
+
+    void prepareGradientForDashboard(CanvasGradient* gradient) const;
+
+    HashSet<String> m_cleanOrigins;
+
+    void checkOrigin(const KURL&);
+    void checkOrigin(const String&);
+
+    Vector<State, 1> m_stateStack;
+    bool m_usesCSSCompatibilityParseMode;
+#if ENABLE(DASHBOARD_SUPPORT)
+    bool m_usesDashboardCompatibilityMode;
+#endif
+
+#if ENABLE(ACCELERATED_2D_CANVAS)
+    OwnPtr<DrawingBuffer> m_drawingBuffer;
+    RefPtr<SharedGraphicsContext3D> m_context3D;
+#endif
+};
 
 } // namespace WebCore
 

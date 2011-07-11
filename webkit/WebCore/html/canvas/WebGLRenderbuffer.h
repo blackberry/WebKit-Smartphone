@@ -26,33 +26,37 @@
 #ifndef WebGLRenderbuffer_h
 #define WebGLRenderbuffer_h
 
-#include "CanvasObject.h"
+#include "WebGLObject.h"
 
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
 
 namespace WebCore {
-    
-    class WebGLRenderbuffer : public CanvasObject {
-    public:
-        virtual ~WebGLRenderbuffer() { deleteObject(); }
-        
-        static PassRefPtr<WebGLRenderbuffer> create(WebGLRenderingContext*);
 
-        void setInternalformat(unsigned long internalformat) { m_internalformat = internalformat; }
-        unsigned long getInternalformat() const { return m_internalformat; }
+class WebGLRenderbuffer : public WebGLObject {
+public:
+    virtual ~WebGLRenderbuffer() { deleteObject(); }
 
-    protected:
-        WebGLRenderbuffer(WebGLRenderingContext*);
-        
-        virtual void _deleteObject(Platform3DObject);
+    static PassRefPtr<WebGLRenderbuffer> create(WebGLRenderingContext*);
 
-    private:
-        virtual bool isRenderbuffer() const { return true; }
+    void setInternalFormat(unsigned long internalformat) { m_internalFormat = internalformat; }
+    unsigned long getInternalFormat() const { return m_internalFormat; }
 
-        unsigned long m_internalformat;
-    };
-    
+    bool isInitialized() const { return m_initialized; }
+    void setInitialized() { m_initialized = true; }
+
+protected:
+    WebGLRenderbuffer(WebGLRenderingContext*);
+
+    virtual void deleteObjectImpl(Platform3DObject);
+
+private:
+    virtual bool isRenderbuffer() const { return true; }
+
+    unsigned long m_internalFormat;
+    bool m_initialized;
+};
+
 } // namespace WebCore
 
 #endif // WebGLRenderbuffer_h

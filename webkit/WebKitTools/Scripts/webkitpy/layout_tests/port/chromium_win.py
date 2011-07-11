@@ -69,9 +69,9 @@ class ChromiumWinPort(chromium.ChromiumPort):
 
     def baseline_search_path(self):
         port_names = []
-        if self._name == 'chromium-win-xp':
+        if self._name.endswith('-win-xp'):
             port_names.append("chromium-win-xp")
-        if self._name in ('chromium-win-xp', 'chromium-win-vista'):
+        if self._name.endswith('-win-xp') or self._name.endswith('-win-vista'):
             port_names.append("chromium-win-vista")
         # FIXME: This may need to include mac-snowleopard like win.py.
         port_names.extend(["chromium-win", "chromium", "win", "mac"])
@@ -117,13 +117,14 @@ class ChromiumWinPort(chromium.ChromiumPort):
     #
 
     def _build_path(self, *comps):
-        if self._options.use_drt:
-            return os.path.join(self.path_from_webkit_base(), 'WebKit',
-                                'chromium', *comps)
         p = self.path_from_chromium_base('webkit', *comps)
         if os.path.exists(p):
             return p
-        return self.path_from_chromium_base('chrome', *comps)
+        p = self.path_from_chromium_base('chrome', *comps)
+        if os.path.exists(p) or not self._options.use_drt:
+            return p
+        return os.path.join(self.path_from_webkit_base(), 'WebKit', 'chromium',
+                            *comps)
 
     def _lighttpd_path(self, *comps):
         return self.path_from_chromium_base('third_party', 'lighttpd', 'win',
@@ -149,13 +150,22 @@ class ChromiumWinPort(chromium.ChromiumPort):
     def _path_to_driver(self, configuration=None):
         if not configuration:
             configuration = self._options.configuration
-        return self._build_path(configuration, 'test_shell.exe')
+        binary_name = 'test_shell.exe'
+        if self._options.use_drt:
+            binary_name = 'DumpRenderTree.exe'
+        return self._build_path(configuration, binary_name)
 
     def _path_to_helper(self):
-        return self._build_path(self._options.configuration, 'layout_test_helper.exe')
+        binary_name = 'layout_test_helper.exe'
+        if self._options.use_drt:
+            binary_name = 'LayoutTestHelper.exe'
+        return self._build_path(self._options.configuration, binary_name)
 
     def _path_to_image_diff(self):
-        return self._build_path(self._options.configuration, 'image_diff.exe')
+        binary_name = 'image_diff.exe'
+        if self._options.use_drt:
+            binary_name = 'ImageDiff.exe'
+        return self._build_path(self._options.configuration, binary_name)
 
     def _path_to_wdiff(self):
         return self.path_from_chromium_base('third_party', 'cygwin', 'bin',

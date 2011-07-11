@@ -70,6 +70,13 @@ static inline double solveCubicBezierFunction(double p1x, double p1y, double p2x
     return bezier.solve(t, solveEpsilon(duration));
 }
 
+static inline double solveStepsFunction(int numSteps, bool stepAtStart, double t)
+{
+    if (stepAtStart)
+        return min(1.0, (floor(numSteps * t) + 1) / numSteps);
+    return floor(numSteps * t) / numSteps;
+}
+
 static inline int blendFunc(const AnimationBase*, int from, int to, double progress)
 {  
     return int(from + (to - from) * progress);
@@ -189,6 +196,22 @@ static inline EVisibility blendFunc(const AnimationBase* anim, EVisibility from,
         return to;
     double result = blendFunc(anim, fromVal, toVal, progress);
     return result > 0. ? VISIBLE : (to != VISIBLE ? to : from);
+}
+
+static inline LengthBox blendFunc(const AnimationBase* anim, const LengthBox& from, const LengthBox& to, double progress)
+{
+    // Length types have to match to animate
+    if (from.top().type() != to.top().type()
+        || from.right().type() != to.right().type()
+        || from.bottom().type() != to.bottom().type()
+        || from.left().type() != to.left().type())
+        return to;
+    
+    LengthBox result(blendFunc(anim, from.top(), to.top(), progress),
+                     blendFunc(anim, from.right(), to.right(), progress),
+                     blendFunc(anim, from.bottom(), to.bottom(), progress),
+                     blendFunc(anim, from.left(), to.left(), progress));
+    return result;
 }
 
 class PropertyWrapperBase;
@@ -628,12 +651,14 @@ void AnimationBase::ensurePropertyMap()
         gPropertyWrappers->append(new PropertyWrapper<Length>(CSSPropertyWebkitTransformOriginX, &RenderStyle::transformOriginX, &RenderStyle::setTransformOriginX));
         gPropertyWrappers->append(new PropertyWrapper<Length>(CSSPropertyWebkitTransformOriginY, &RenderStyle::transformOriginY, &RenderStyle::setTransformOriginY));
         gPropertyWrappers->append(new PropertyWrapper<float>(CSSPropertyWebkitTransformOriginZ, &RenderStyle::transformOriginZ, &RenderStyle::setTransformOriginZ));
-        gPropertyWrappers->append(new PropertyWrapper<const IntSize&>(CSSPropertyBorderTopLeftRadius, &RenderStyle::borderTopLeftRadius, &RenderStyle::setBorderTopLeftRadius));
-        gPropertyWrappers->append(new PropertyWrapper<const IntSize&>(CSSPropertyBorderTopRightRadius, &RenderStyle::borderTopRightRadius, &RenderStyle::setBorderTopRightRadius));
-        gPropertyWrappers->append(new PropertyWrapper<const IntSize&>(CSSPropertyBorderBottomLeftRadius, &RenderStyle::borderBottomLeftRadius, &RenderStyle::setBorderBottomLeftRadius));
-        gPropertyWrappers->append(new PropertyWrapper<const IntSize&>(CSSPropertyBorderBottomRightRadius, &RenderStyle::borderBottomRightRadius, &RenderStyle::setBorderBottomRightRadius));
+        gPropertyWrappers->append(new PropertyWrapper<const LengthSize&>(CSSPropertyBorderTopLeftRadius, &RenderStyle::borderTopLeftRadius, &RenderStyle::setBorderTopLeftRadius));
+        gPropertyWrappers->append(new PropertyWrapper<const LengthSize&>(CSSPropertyBorderTopRightRadius, &RenderStyle::borderTopRightRadius, &RenderStyle::setBorderTopRightRadius));
+        gPropertyWrappers->append(new PropertyWrapper<const LengthSize&>(CSSPropertyBorderBottomLeftRadius, &RenderStyle::borderBottomLeftRadius, &RenderStyle::setBorderBottomLeftRadius));
+        gPropertyWrappers->append(new PropertyWrapper<const LengthSize&>(CSSPropertyBorderBottomRightRadius, &RenderStyle::borderBottomRightRadius, &RenderStyle::setBorderBottomRightRadius));
         gPropertyWrappers->append(new PropertyWrapper<EVisibility>(CSSPropertyVisibility, &RenderStyle::visibility, &RenderStyle::setVisibility));
         gPropertyWrappers->append(new PropertyWrapper<float>(CSSPropertyZoom, &RenderStyle::zoom, &RenderStyle::setZoom));
+
+        gPropertyWrappers->append(new PropertyWrapper<LengthBox>(CSSPropertyClip, &RenderStyle::clip, &RenderStyle::setClip));
         
 #if USE(ACCELERATED_COMPOSITING)
         gPropertyWrappers->append(new PropertyWrapperAcceleratedOpacity());
@@ -652,7 +677,6 @@ void AnimationBase::ensurePropertyMap()
         gPropertyWrappers->append(new PropertyWrapperMaybeInvalidColor(CSSPropertyBorderBottomColor, &RenderStyle::borderBottomColor, &RenderStyle::setBorderBottomColor));
         gPropertyWrappers->append(new PropertyWrapperMaybeInvalidColor(CSSPropertyOutlineColor, &RenderStyle::outlineColor, &RenderStyle::setOutlineColor));
 
-        // These are for shadows
         gPropertyWrappers->append(new PropertyWrapperShadow(CSSPropertyWebkitBoxShadow, &RenderStyle::boxShadow, &RenderStyle::setBoxShadow));
         gPropertyWrappers->append(new PropertyWrapperShadow(CSSPropertyTextShadow, &RenderStyle::textShadow, &RenderStyle::setTextShadow));
 
@@ -757,7 +781,7 @@ AnimationBase::AnimationBase(const Animation* transition, RenderObject* renderer
     , m_object(renderer)
     , m_animation(const_cast<Animation*>(transition))
     , m_compAnim(compAnim)
-    , m_fallbackAnimating(false)
+    , m_isAccelerated(false)
     , m_transformFunctionListValid(false)
     , m_nextIterationDuration(-1)
     , m_next(0)
@@ -820,7 +844,7 @@ bool AnimationBase::blendProperties(const AnimationBase* anim, int prop, RenderS
     if (wrapper) {
         wrapper->blend(anim, dst, a, b, progress);
 #if USE(ACCELERATED_COMPOSITING)
-        return !wrapper->animationIsAccelerated() || anim->isFallbackAnimating();
+        return !wrapper->animationIsAccelerated() || !anim->isAccelerated();
 #else
         return true;
 #endif
@@ -947,28 +971,33 @@ void AnimationBase::updateStateMachine(AnimStateInput input, double param)
         case AnimationStateStartWaitStyleAvailable:
             ASSERT(input == AnimationStateInputStyleAvailable || input == AnimationStateInputPlayStatePaused);
 
-            // Start timer has fired, tell the animation to start and wait for it to respond with start time
-            m_animState = AnimationStateStartWaitResponse;
-
-            overrideAnimations();
-
-            // Start the animation
-            if (overridden()) {
-                // We won't try to start accelerated animations if we are overridden and
-                // just move on to the next state.
+            if (input == AnimationStateInputStyleAvailable) {
+                // Start timer has fired, tell the animation to start and wait for it to respond with start time
                 m_animState = AnimationStateStartWaitResponse;
-                m_fallbackAnimating = true;
-                updateStateMachine(AnimationStateInputStartTimeSet, beginAnimationUpdateTime());
-            }
-            else {
-                double timeOffset = 0;
-                // If the value for 'animation-delay' is negative then the animation appears to have started in the past.
-                if (m_animation->delay() < 0)
-                    timeOffset = -m_animation->delay();
-                bool started = startAnimation(timeOffset);
 
-                m_compAnim->animationController()->addToStartTimeResponseWaitList(this, started);
-                m_fallbackAnimating = !started;
+                overrideAnimations();
+
+                // Start the animation
+                if (overridden()) {
+                    // We won't try to start accelerated animations if we are overridden and
+                    // just move on to the next state.
+                    m_animState = AnimationStateStartWaitResponse;
+                    m_isAccelerated = false;
+                    updateStateMachine(AnimationStateInputStartTimeSet, beginAnimationUpdateTime());
+                } else {
+                    double timeOffset = 0;
+                    // If the value for 'animation-delay' is negative then the animation appears to have started in the past.
+                    if (m_animation->delay() < 0)
+                        timeOffset = -m_animation->delay();
+                    bool started = startAnimation(timeOffset);
+
+                    m_compAnim->animationController()->addToStartTimeResponseWaitList(this, started);
+                    m_isAccelerated = started;
+                }
+            } else {
+                // We're waiting for the style to be available and we got a pause. Pause and wait
+                m_pauseTime = beginAnimationUpdateTime();
+                m_animState = AnimationStatePausedWaitStyleAvailable;
             }
             break;
         case AnimationStateStartWaitResponse:
@@ -1058,17 +1087,51 @@ void AnimationBase::updateStateMachine(AnimStateInput input, double param)
             updateStateMachine(AnimationStateInputStartAnimation, 0);
             break;
         case AnimationStatePausedWaitResponse:
+        case AnimationStatePausedWaitStyleAvailable:
         case AnimationStatePausedRun:
             // We treat these two cases the same. The only difference is that, when we are in
             // AnimationStatePausedWaitResponse, we don't yet have a valid startTime, so we send 0 to startAnimation.
             // When the AnimationStateInputStartTimeSet comes in and we were in AnimationStatePausedRun, we will notice
             // that we have already set the startTime and will ignore it.
-            ASSERT(input == AnimationStateInputPlayStateRunning || input == AnimationStateInputStartTimeSet);
+            ASSERT(input == AnimationStateInputPlayStateRunning || input == AnimationStateInputStartTimeSet || input == AnimationStateInputStyleAvailable);
             ASSERT(paused());
             
-            // If we are paused, but we get the callback that notifies us that an accelerated animation started,
-            // then we ignore the start time and just move into the paused-run state.
-            if (m_animState == AnimationStatePausedWaitResponse && input == AnimationStateInputStartTimeSet) {
+            if (input == AnimationStateInputPlayStateRunning) {
+                // Update the times
+                if (m_animState == AnimationStatePausedRun)
+                    m_startTime += beginAnimationUpdateTime() - m_pauseTime;
+                else
+                    m_startTime = 0;
+                m_pauseTime = -1;
+
+                if (m_animState == AnimationStatePausedWaitStyleAvailable)
+                    m_animState = AnimationStateStartWaitStyleAvailable;
+                else {
+                    // We were either running or waiting for a begin time response from the animation.
+                    // Either way we need to restart the animation (possibly with an offset if we
+                    // had already been running) and wait for it to start.
+                    m_animState = AnimationStateStartWaitResponse;
+
+                    // Start the animation
+                    if (overridden()) {
+                        // We won't try to start accelerated animations if we are overridden and
+                        // just move on to the next state.
+                        updateStateMachine(AnimationStateInputStartTimeSet, beginAnimationUpdateTime());
+                        m_isAccelerated = true;
+                    } else {
+                        bool started = startAnimation(beginAnimationUpdateTime() - m_startTime);
+                        m_compAnim->animationController()->addToStartTimeResponseWaitList(this, started);
+                        m_isAccelerated = started;
+                    }
+                }
+                break;
+            }
+            
+            if (input == AnimationStateInputStartTimeSet) {
+                ASSERT(m_animState == AnimationStatePausedWaitResponse);
+                
+                // We are paused but we got the callback that notifies us that an accelerated animation started.
+                // We ignore the start time and just move into the paused-run state.
                 m_animState = AnimationStatePausedRun;
                 ASSERT(m_startTime == 0);
                 m_startTime = param;
@@ -1076,27 +1139,11 @@ void AnimationBase::updateStateMachine(AnimStateInput input, double param)
                 break;
             }
             
-            // Update the times
-            if (m_animState == AnimationStatePausedRun)
-                m_startTime += beginAnimationUpdateTime() - m_pauseTime;
-            else
-                m_startTime = 0;
-            m_pauseTime = -1;
-
-            // We were waiting for a begin time response from the animation, go back and wait again
-            m_animState = AnimationStateStartWaitResponse;
-
-            // Start the animation
-            if (overridden()) {
-                // We won't try to start accelerated animations if we are overridden and
-                // just move on to the next state.
-                updateStateMachine(AnimationStateInputStartTimeSet, beginAnimationUpdateTime());
-                m_fallbackAnimating = true;
-            } else {
-                bool started = startAnimation(beginAnimationUpdateTime() - m_startTime);
-                m_compAnim->animationController()->addToStartTimeResponseWaitList(this, started);
-                m_fallbackAnimating = !started;
-            }
+            ASSERT(m_animState == AnimationStatePausedWaitStyleAvailable);
+            // We are paused but we got the callback that notifies us that style has been updated.
+            // We move to the AnimationStatePausedWaitResponse state
+            m_animState = AnimationStatePausedWaitResponse;
+            overrideAnimations();
             break;
         case AnimationStateFillingForwards:
         case AnimationStateDone:
@@ -1202,34 +1249,32 @@ double AnimationBase::progress(double scale, double offset, const TimingFunction
     int integralTime = static_cast<int>(fractionalTime);
     fractionalTime -= integralTime;
 
-    if (m_animation->direction() && (integralTime & 1))
+    if ((m_animation->direction() == Animation::AnimationDirectionAlternate) && (integralTime & 1))
         fractionalTime = 1 - fractionalTime;
 
     if (scale != 1 || offset)
         fractionalTime = (fractionalTime - offset) * scale;
         
     if (!tf)
-        tf = &m_animation->timingFunction();
+        tf = m_animation->timingFunction().get();
 
-    if (tf->type() == LinearTimingFunction)
+    if (tf->isCubicBezierTimingFunction()) {
+        const CubicBezierTimingFunction* ctf = static_cast<const CubicBezierTimingFunction*>(tf);
+        return solveCubicBezierFunction(ctf->x1(),
+                                        ctf->y1(),
+                                        ctf->x2(),
+                                        ctf->y2(),
+                                        fractionalTime, m_animation->duration());
+    } else if (tf->isStepsTimingFunction()) {
+        const StepsTimingFunction* stf = static_cast<const StepsTimingFunction*>(tf);
+        return solveStepsFunction(stf->numberOfSteps(), stf->stepAtStart(), fractionalTime);
+    } else
         return fractionalTime;
-
-    // Cubic bezier.
-    double result = solveCubicBezierFunction(tf->x1(),
-                                            tf->y1(),
-                                            tf->x2(),
-                                            tf->y2(),
-                                            fractionalTime, m_animation->duration());
-    return result;
 }
 
 void AnimationBase::getTimeToNextEvent(double& time, bool& isLooping) const
 {
     // Decide when the end or loop event needs to fire
-    double totalDuration = -1;
-    if (m_animation->iterationCount() > 0)
-        totalDuration = m_animation->duration() * m_animation->iterationCount();
-
     const double elapsedDuration = max(beginAnimationUpdateTime() - m_startTime, 0.0);
     double durationLeft = 0;
     double nextIterationTime = m_totalDuration;

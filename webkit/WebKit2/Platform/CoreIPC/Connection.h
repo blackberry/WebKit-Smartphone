@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies)
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,15 +32,19 @@
 #include "Arguments.h"
 #include "MessageID.h"
 #include "WorkQueue.h"
-#include <memory>
 #include <wtf/HashMap.h>
 #include <wtf/PassRefPtr.h>
+#include <wtf/OwnPtr.h>
 #include <wtf/Threading.h>
 
 #if PLATFORM(MAC)
 #include <mach/mach_port.h>
 #elif PLATFORM(WIN)
 #include <string>
+#elif PLATFORM(QT)
+#include <QString>
+class QLocalServer;
+class QLocalSocket;
 #endif
 
 class RunLoop;
@@ -50,19 +55,31 @@ class MessageID;
     
 class Connection : public ThreadSafeShared<Connection> {
 public:
-    class Client {
+    class MessageReceiver {
+    protected:
+        virtual ~MessageReceiver() { }
+
     public:
-        virtual ~Client() { }
-        
         virtual void didReceiveMessage(Connection*, MessageID, ArgumentDecoder*) = 0;
-        virtual void didReceiveSyncMessage(Connection*, MessageID, ArgumentDecoder*, ArgumentEncoder*) = 0;
+        virtual void didReceiveSyncMessage(Connection*, MessageID, ArgumentDecoder*, ArgumentEncoder*) { ASSERT_NOT_REACHED(); }
+    };
+    
+    class Client : public MessageReceiver {
+    protected:
+        virtual ~Client() { }
+
+    public:
         virtual void didClose(Connection*) = 0;
+        virtual void didReceiveInvalidMessage(Connection*, MessageID) = 0;
     };
 
 #if PLATFORM(MAC)
     typedef mach_port_t Identifier;
 #elif PLATFORM(WIN)
-    typedef const std::wstring& Identifier;
+    typedef HANDLE Identifier;
+    static bool createServerAndClientIdentifiers(Identifier& serverIdentifier, Identifier& clientIdentifier);
+#elif PLATFORM(QT)
+    typedef const QString Identifier;
 #endif
 
     static PassRefPtr<Connection> createServerConnection(Identifier, Client*, RunLoop* clientRunLoop);
@@ -74,10 +91,45 @@ public:
 
     template<typename E, typename T> bool send(E messageID, uint64_t destinationID, const T& arguments);
     
-    static const unsigned long long NoTimeout = 1e10;
+    static const unsigned long long NoTimeout = 10000000000ULL;
     template<typename E, typename T, typename U> bool sendSync(E messageID, uint64_t destinationID, const T& arguments, const U& reply, double timeout);
 
-    template<typename E> std::auto_ptr<ArgumentDecoder> waitFor(E messageID, uint64_t destinationID, double timeout);
+    template<typename E> PassOwnPtr<ArgumentDecoder> waitFor(E messageID, uint64_t destinationID, double timeout);
+
+    bool sendMessage(MessageID, PassOwnPtr<ArgumentEncoder>);
+
+private:
+    template<typename T> class Message {
+    public:
+        Message()
+            : m_arguments(0)
+        {
+        }
+
+        Message(MessageID messageID, PassOwnPtr<T> arguments)
+            : m_messageID(messageID)
+            , m_arguments(arguments.leakPtr())
+        {
+        }
+        
+        MessageID messageID() const { return m_messageID; }
+        T* arguments() const { return m_arguments; }
+        
+        PassOwnPtr<T> releaseArguments()
+        {
+            T* arguments = m_arguments;
+            m_arguments = 0;
+
+            return arguments;
+        }
+        
+    private:
+        MessageID m_messageID;
+        T* m_arguments;
+    };
+
+public:
+    typedef Message<ArgumentEncoder> OutgoingMessage;
 
 private:
     Connection(Identifier, bool isServer, Client*, RunLoop* clientRunLoop);
@@ -86,14 +138,15 @@ private:
     
     bool isValid() const { return m_client; }
     
-    bool sendMessage(MessageID, std::auto_ptr<ArgumentEncoder>);
-    std::auto_ptr<ArgumentDecoder> sendSyncMessage(MessageID, uint64_t syncRequestID, std::auto_ptr<ArgumentEncoder>, double timeout);
-    std::auto_ptr<ArgumentDecoder> waitForMessage(MessageID, uint64_t destinationID, double timeout);
+    PassOwnPtr<ArgumentDecoder> sendSyncMessage(MessageID, uint64_t syncRequestID, PassOwnPtr<ArgumentEncoder>, double timeout);
+    PassOwnPtr<ArgumentDecoder> waitForMessage(MessageID, uint64_t destinationID, double timeout);
     
     // Called on the connection work queue.
-    void processIncomingMessage(MessageID, std::auto_ptr<ArgumentDecoder>);
+    void processIncomingMessage(MessageID, PassOwnPtr<ArgumentDecoder>);
+    bool canSendOutgoingMessages() const;
+    bool platformCanSendOutgoingMessages() const;
     void sendOutgoingMessages();
-    void sendOutgoingMessage(MessageID, std::auto_ptr<ArgumentEncoder>);
+    bool sendOutgoingMessage(MessageID, PassOwnPtr<ArgumentEncoder>);
     void connectionDidClose();
     
     // Called on the listener thread.
@@ -109,54 +162,14 @@ private:
     RunLoop* m_clientRunLoop;
 
     // Incoming messages.
-    class IncomingMessage {
-    public:
-        IncomingMessage(MessageID messageID, std::auto_ptr<ArgumentDecoder> arguments)
-            : m_messageID(messageID)
-            , m_arguments(arguments.release())
-        {
-        }
-
-        MessageID messageID() const { return m_messageID; }
-        ArgumentDecoder* arguments() const { return m_arguments; }
-        
-        void destroy() 
-        {
-            delete m_arguments;
-        }
-        
-    private:
-        MessageID m_messageID;
-        ArgumentDecoder* m_arguments;
-    };
+    typedef Message<ArgumentDecoder> IncomingMessage;
 
     Mutex m_incomingMessagesLock;
     Vector<IncomingMessage> m_incomingMessages;
 
     // Outgoing messages.
-    class OutgoingMessage {
-    public:
-        OutgoingMessage(MessageID messageID, std::auto_ptr<ArgumentEncoder> arguments)
-            : m_messageID(messageID)
-            , m_arguments(arguments.release())
-        {
-        }
-        
-        MessageID messageID() const { return m_messageID; }
-        ArgumentEncoder* arguments() const { return m_arguments; }
-        
-        void destroy()
-        {
-            delete m_arguments;
-        }
-        
-    private:
-        MessageID m_messageID;
-        ArgumentEncoder* m_arguments;
-    };
-    
     Mutex m_outgoingMessagesLock;
-    Vector<OutgoingMessage> m_outgoingMessages;
+    Deque<OutgoingMessage> m_outgoingMessages;
     
     ThreadCondition m_waitForMessageCondition;
     Mutex m_waitForMessageMutex;
@@ -172,27 +185,37 @@ private:
 #elif PLATFORM(WIN)
     // Called on the connection queue.
     void readEventHandler();
+    void writeEventHandler();
 
     Vector<uint8_t> m_readBuffer;
     OVERLAPPED m_readState;
+    OwnPtr<ArgumentEncoder> m_pendingWriteArguments;
+    OVERLAPPED m_writeState;
     HANDLE m_connectionPipe;
+#elif PLATFORM(QT)
+    // Called on the connection queue.
+    void readyReadHandler();
+
+    Vector<uint8_t> m_readBuffer;
+    size_t m_currentMessageSize;
+    QLocalSocket* m_socket;
+    QString m_serverName;
 #endif
-    
 };
 
 template<typename E, typename T>
 bool Connection::send(E messageID, uint64_t destinationID, const T& arguments)
 {
-    std::auto_ptr<ArgumentEncoder> argumentEncoder(new ArgumentEncoder(destinationID));
+    OwnPtr<ArgumentEncoder> argumentEncoder(new ArgumentEncoder(destinationID));
     argumentEncoder->encode(arguments);
 
-    return sendMessage(MessageID(messageID), argumentEncoder);
+    return sendMessage(MessageID(messageID), argumentEncoder.release());
 }
 
 template<typename E, typename T, typename U>
 inline bool Connection::sendSync(E messageID, uint64_t destinationID, const T& arguments, const U& reply, double timeout)
 {
-    std::auto_ptr<ArgumentEncoder> argumentEncoder(new ArgumentEncoder(destinationID));
+    OwnPtr<ArgumentEncoder> argumentEncoder(new ArgumentEncoder(destinationID));
 
     uint64_t syncRequestID = ++m_syncRequestID;
     
@@ -203,15 +226,15 @@ inline bool Connection::sendSync(E messageID, uint64_t destinationID, const T& a
     argumentEncoder->encode(arguments);
     
     // Now send the message and wait for a reply.
-    std::auto_ptr<ArgumentDecoder> replyDecoder = sendSyncMessage(MessageID(messageID, MessageID::SyncMessage), syncRequestID, argumentEncoder, timeout);
-    if (!replyDecoder.get())
+    OwnPtr<ArgumentDecoder> replyDecoder = sendSyncMessage(MessageID(messageID, MessageID::SyncMessage), syncRequestID, argumentEncoder.release(), timeout);
+    if (!replyDecoder)
         return false;
     
     // Decode the reply.
     return replyDecoder->decode(const_cast<U&>(reply));
 }
 
-template<typename E> inline std::auto_ptr<ArgumentDecoder> Connection::waitFor(E messageID, uint64_t destinationID, double timeout)
+template<typename E> inline PassOwnPtr<ArgumentDecoder> Connection::waitFor(E messageID, uint64_t destinationID, double timeout)
 {
     return waitForMessage(MessageID(messageID), destinationID, timeout);
 }

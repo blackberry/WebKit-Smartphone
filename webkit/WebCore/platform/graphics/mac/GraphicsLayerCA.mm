@@ -31,9 +31,6 @@
 
 #import "Animation.h"
 #import "BlockExceptions.h"
-#if ENABLE(3D_CANVAS)
-#import "Canvas3DLayer.h"
-#endif
 #import "FloatConversion.h"
 #import "FloatRect.h"
 #import "Image.h"
@@ -275,16 +272,16 @@ static TransformationMatrix flipTransform()
 }
 #endif
 
-static CAMediaTimingFunction* getCAMediaTimingFunction(const TimingFunction& timingFunction)
+static CAMediaTimingFunction* getCAMediaTimingFunction(const TimingFunction* timingFunction)
 {
-    switch (timingFunction.type()) {
-        case LinearTimingFunction:
-            return [CAMediaTimingFunction functionWithName:@"linear"];
-        case CubicBezierTimingFunction:
-            return [CAMediaTimingFunction functionWithControlPoints:static_cast<float>(timingFunction.x1()) :static_cast<float>(timingFunction.y1())
-                        :static_cast<float>(timingFunction.x2()) :static_cast<float>(timingFunction.y2())];
-    }
-    return 0;
+    // By this point, timing functions can only be linear or cubic, not steps.
+    ASSERT(!timingFunction->isStepsTimingFunction());
+    if (timingFunction->isCubicBezierTimingFunction()) {
+        const CubicBezierTimingFunction* ctf = static_cast<const CubicBezierTimingFunction*>(timingFunction);
+        return [CAMediaTimingFunction functionWithControlPoints:static_cast<float>(ctf->x1()) :static_cast<float>(ctf->y1())
+                                                               :static_cast<float>(ctf->x2()) :static_cast<float>(ctf->y2())];
+    } else
+        return [CAMediaTimingFunction functionWithName:@"linear"];
 }
 
 static void setLayerBorderColor(PlatformLayer* layer, const Color& color)
@@ -359,6 +356,20 @@ static NSDictionary* nullActionsDictionary()
     return actions;
 }
 
+static bool animationHasStepsTimingFunction(const KeyframeValueList& valueList, const Animation* anim)
+{
+    if (anim->timingFunction()->isStepsTimingFunction())
+        return true;
+    
+    for (unsigned i = 0; i < valueList.size(); ++i) {
+        const TimingFunction* timingFunction = valueList.at(i)->timingFunction();
+        if (timingFunction && timingFunction->isStepsTimingFunction())
+            return true;
+    }
+
+    return false;
+}
+
 PassOwnPtr<GraphicsLayer> GraphicsLayer::create(GraphicsLayerClient* client)
 {
     return new GraphicsLayerCA(client);
@@ -369,10 +380,6 @@ GraphicsLayerCA::GraphicsLayerCA(GraphicsLayerClient* client)
     , m_contentsLayerPurpose(NoContentsLayer)
     , m_contentsLayerHasBackgroundColor(false)
     , m_uncommittedChanges(NoChange)
-#if ENABLE(3D_CANVAS)
-    , m_platformGraphicsContext3D(NullPlatformGraphicsContext3D)
-    , m_platformTexture(NullPlatform3DObject)
-#endif
 {
     BEGIN_BLOCK_OBJC_EXCEPTIONS
     m_layer.adoptNS([[WebLayer alloc] init]);
@@ -697,6 +704,11 @@ void GraphicsLayerCA::setNeedsDisplayInRect(const FloatRect& rect)
     noteLayerPropertyChanged(DirtyRectsChanged);
 }
 
+void GraphicsLayerCA::setContentsNeedsDisplay()
+{
+    noteLayerPropertyChanged(ContentsNeedsDisplay);
+}
+
 void GraphicsLayerCA::setContentsRect(const IntRect& rect)
 {
     if (rect == m_contentsRect)
@@ -717,6 +729,11 @@ bool GraphicsLayerCA::addAnimation(const KeyframeValueList& valueList, const Int
     if (valueList.property() == AnimatedPropertyOpacity)
         return false;
 #endif
+
+    // CoreAnimation does not handle the steps() timing function. Fall back
+    // to software animation in that case.
+    if (animationHasStepsTimingFunction(valueList, anim))
+        return false;
 
     bool createdAnimations = false;
     if (valueList.property() == AnimatedPropertyWebkitTransform)
@@ -870,6 +887,12 @@ void GraphicsLayerCA::syncCompositingState()
     recursiveCommitChanges();
 }
 
+void GraphicsLayerCA::syncCompositingStateForThisLayerOnly()
+{
+    commitLayerChangesBeforeSublayers();
+    commitLayerChangesAfterSublayers();
+}
+
 void GraphicsLayerCA::recursiveCommitChanges()
 {
     commitLayerChangesBeforeSublayers();
@@ -913,10 +936,8 @@ void GraphicsLayerCA::commitLayerChangesBeforeSublayers()
     if (m_uncommittedChanges & ContentsMediaLayerChanged) // Needs to happen before ChildrenChanged
         updateContentsMediaLayer();
     
-#if ENABLE(3D_CANVAS)
-    if (m_uncommittedChanges & ContentsGraphicsContext3DChanged) // Needs to happen before ChildrenChanged
-        updateContentsGraphicsContext3D();
-#endif
+    if (m_uncommittedChanges & ContentsCanvasLayerChanged) // Needs to happen before ChildrenChanged
+        updateContentsCanvasLayer();
     
     if (m_uncommittedChanges & BackgroundColorChanged)  // Needs to happen before ChildrenChanged, and after updating image or video
         updateLayerBackgroundColor();
@@ -968,6 +989,9 @@ void GraphicsLayerCA::commitLayerChangesBeforeSublayers()
 
     if (m_uncommittedChanges & MaskLayerChanged)
         updateMaskLayer();
+
+    if (m_uncommittedChanges & ContentsNeedsDisplay)
+        updateContentsNeedsDisplay();
 
     END_BLOCK_OBJC_EXCEPTIONS
 }
@@ -1050,11 +1074,11 @@ void GraphicsLayerCA::updateSublayerList()
 
 void GraphicsLayerCA::updateLayerPosition()
 {
-    // FIXME: if constrained the size, the position will be wrong. Fixing this is not trivial.
+    FloatSize usedSize = m_usingTiledLayer ? constrainedSize() : m_size;
 
     // Position is offset on the layer by the layer anchor point.
-    CGPoint posPoint = CGPointMake(m_position.x() + m_anchorPoint.x() * m_size.width(),
-                                   m_position.y() + m_anchorPoint.y() * m_size.height());
+    CGPoint posPoint = CGPointMake(m_position.x() + m_anchorPoint.x() * usedSize.width(),
+                                   m_position.y() + m_anchorPoint.y() * usedSize.height());
     
     [primaryLayer() setPosition:posPoint];
 
@@ -1208,6 +1232,18 @@ void GraphicsLayerCA::updateContentsOpaque()
 
 void GraphicsLayerCA::updateBackfaceVisibility()
 {
+    if (m_structuralLayer && structuralLayerPurpose() == StructuralLayerForReplicaFlattening) {
+        [m_structuralLayer.get() setDoubleSided:m_backfaceVisibility];
+
+        if (LayerMap* layerCloneMap = m_structuralLayerClones.get()) {
+            LayerMap::const_iterator end = layerCloneMap->end();
+            for (LayerMap::const_iterator it = layerCloneMap->begin(); it != end; ++it) {
+                CALayer *currLayer = it->second.get();
+                [currLayer setDoubleSided:m_backfaceVisibility];
+            }
+        }
+    }
+
     [m_layer.get() setDoubleSided:m_backfaceVisibility];
 
     if (LayerMap* layerCloneMap = m_layerClones.get()) {
@@ -1238,7 +1274,7 @@ void GraphicsLayerCA::ensureStructuralLayer(StructuralLayerPurpose purpose)
             // Release the structural layer.
             m_structuralLayer = 0;
 
-            // Update the properties of m_layer now that we no loner have a structural layer.
+            // Update the properties of m_layer now that we no longer have a structural layer.
             updateLayerPosition();
             updateLayerSize();
             updateAnchorPoint();
@@ -1289,6 +1325,7 @@ void GraphicsLayerCA::ensureStructuralLayer(StructuralLayerPurpose purpose)
     updateAnchorPoint();
     updateTransform();
     updateChildrenTransform();
+    updateBackfaceVisibility();
     
     // Set properties of m_layer to their default values, since these are expressed on on the structural layer.
     CGPoint point = CGPointMake(m_size.width() / 2.0f, m_size.height() / 2.0f);
@@ -1389,18 +1426,16 @@ void GraphicsLayerCA::updateContentsMediaLayer()
     }
 }
 
-#if ENABLE(3D_CANVAS)
-void GraphicsLayerCA::updateContentsGraphicsContext3D()
+void GraphicsLayerCA::updateContentsCanvasLayer()
 {
-    // Canvas3D layer was set as m_contentsLayer, and will get parented in updateSublayerList().
+    // CanvasLayer was set as m_contentsLayer, and will get parented in updateSublayerList().
     if (m_contentsLayer) {
         setupContentsLayer(m_contentsLayer.get());
         [m_contentsLayer.get() setNeedsDisplay];
         updateContentsRect();
     }
 }
-#endif
-    
+
 void GraphicsLayerCA::updateContentsRect()
 {
     if (!m_contentsLayer)
@@ -1715,41 +1750,20 @@ void GraphicsLayerCA::pauseAnimationOnLayer(AnimatedPropertyID property, const S
     }
 }
 
-#if ENABLE(3D_CANVAS)
-void GraphicsLayerCA::setContentsToGraphicsContext3D(const GraphicsContext3D* graphicsContext3D)
+void GraphicsLayerCA::setContentsToCanvas(PlatformLayer* canvasLayer)
 {
-    PlatformGraphicsContext3D context = graphicsContext3D->platformGraphicsContext3D();
-    Platform3DObject texture = graphicsContext3D->platformTexture();
-    
-    if (context == m_platformGraphicsContext3D && texture == m_platformTexture)
+    if (canvasLayer == m_contentsLayer)
         return;
         
-    m_platformGraphicsContext3D = context;
-    m_platformTexture = texture;
+    m_contentsLayer = canvasLayer;
+    if (m_contentsLayer && [m_contentsLayer.get() respondsToSelector:@selector(setLayerOwner:)])
+        [(id)m_contentsLayer.get() setLayerOwner:this];
     
-    noteSublayersChanged();
-    
-    BEGIN_BLOCK_OBJC_EXCEPTIONS
+    m_contentsLayerPurpose = canvasLayer ? ContentsLayerForCanvas : NoContentsLayer;
 
-    if (m_platformGraphicsContext3D != NullPlatformGraphicsContext3D && m_platformTexture != NullPlatform3DObject) {
-        // create the inner 3d layer
-        m_contentsLayer.adoptNS([[Canvas3DLayer alloc] initWithContext:const_cast<GraphicsContext3D*>(graphicsContext3D)]);
-#ifndef NDEBUG
-        [m_contentsLayer.get() setName:@"3D Layer"];
-#endif
-        [m_contentsLayer.get() setLayerOwner:this];
-    } else {
-        // remove the inner layer
-        [m_contentsLayer.get() setLayerOwner:0];
-        m_contentsLayer = 0;
-    }
-    
-    END_BLOCK_OBJC_EXCEPTIONS
-    
-    noteLayerPropertyChanged(ContentsGraphicsContext3DChanged);
-    m_contentsLayerPurpose = m_contentsLayer ? ContentsLayerForGraphicsLayer3D : NoContentsLayer;
+    noteSublayersChanged();
+    noteLayerPropertyChanged(ContentsCanvasLayerChanged);
 }
-#endif
     
 void GraphicsLayerCA::repaintLayerDirtyRects()
 {
@@ -1760,6 +1774,12 @@ void GraphicsLayerCA::repaintLayerDirtyRects()
         [m_layer.get() setNeedsDisplayInRect:m_dirtyRects[i]];
     
     m_dirtyRects.clear();
+}
+
+void GraphicsLayerCA::updateContentsNeedsDisplay()
+{
+    if (m_contentsLayer)
+        [m_contentsLayer.get() setNeedsDisplay];
 }
 
 bool GraphicsLayerCA::createAnimationFromKeyframes(const KeyframeValueList& valueList, const Animation* animation, const String& keyframesName, double timeOffset)
@@ -1826,9 +1846,13 @@ bool GraphicsLayerCA::createTransformAnimationsFromKeyframes(const KeyframeValue
         TransformOperation::OperationType transformOp = isMatrixAnimation ? TransformOperation::MATRIX_3D : functionList[animationIndex];
         CAPropertyAnimation* caAnimation;
 
+#if defined(BUILDING_ON_LEOPARD) || defined(BUILDING_ON_SNOW_LEOPARD)
         // CA applies animations in reverse order (<rdar://problem/7095638>) so we need the last one we add (per property)
         // to be non-additive.
         bool additive = animationIndex < (numAnimations - 1);
+#else
+        bool additive = animationIndex > 0;
+#endif
         if (isKeyframe) {
             CAKeyframeAnimation* keyframeAnim = createKeyframeAnimation(animation, valueList.property(), additive);
             validMatrices = setTransformAnimationKeyframes(valueList, animation, keyframeAnim, animationIndex, transformOp, isMatrixAnimation, boxSize);
@@ -1908,9 +1932,9 @@ CAMediaTimingFunction* GraphicsLayerCA::timingFunctionForAnimationValue(const An
     if (animValue->timingFunction())
         tf = animValue->timingFunction();
     else if (anim->isTimingFunctionSet())
-        tf = &anim->timingFunction();
+        tf = anim->timingFunction().get();
 
-    return getCAMediaTimingFunction(tf ? *tf : TimingFunction());
+    return getCAMediaTimingFunction(tf ? tf : CubicBezierTimingFunction::create().get());
 }
 
 bool GraphicsLayerCA::setAnimationEndpoints(const KeyframeValueList& valueList, const Animation* anim, CABasicAnimation* basicAnim)
@@ -2273,8 +2297,6 @@ void GraphicsLayerCA::updateContentsTransform()
         contentsTransform = CGAffineTransformTranslate(contentsTransform, 0, -[m_layer.get() bounds].size.height);
         [m_layer.get() setContentsTransform:contentsTransform];
     }
-#else
-    ASSERT(contentsOrientation() == CompositingCoordinatesTopDown);
 #endif
 }
 
@@ -2566,14 +2588,6 @@ void GraphicsLayerCA::noteLayerPropertyChanged(LayerChangeFlags flags)
     m_uncommittedChanges |= flags;
 }
 
-#if ENABLE(3D_CANVAS)
-void GraphicsLayerCA::setGraphicsContext3DNeedsDisplay()
-{
-    if (m_contentsLayerPurpose == ContentsLayerForGraphicsLayer3D)
-        [m_contentsLayer.get() setNeedsDisplay];
-}
-#endif
-    
 } // namespace WebCore
 
 #endif // USE(ACCELERATED_COMPOSITING)

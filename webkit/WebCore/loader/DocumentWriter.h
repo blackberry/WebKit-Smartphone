@@ -43,12 +43,13 @@ class DocumentWriter : public Noncopyable {
 public:
     DocumentWriter(Frame*);
 
+    // This is only called by ScriptController::executeIfJavaScriptURL
+    // and always contains the result of evaluating a javascript: url.
     void replaceDocument(const String&);
 
     void begin();
     void begin(const KURL&, bool dispatchWindowObjectAvailable = true, SecurityOrigin* forcedSecurityOrigin = 0);
     void addData(const char* string, int length = -1, bool flush = false);
-    void addData(const String&);
     void end();
     void endIfNotLoadingMainResource();
     void clear();
@@ -66,8 +67,12 @@ public:
 
     void setDecoder(TextResourceDecoder*);
 
+    // Exposed for DoucmentParser::appendBytes
+    TextResourceDecoder* createDecoderIfNeeded();
+    void reportDataReceived();
+
 private:
-    PassRefPtr<Document> createDocument();
+    PassRefPtr<Document> createDocument(const KURL&);
 
     Frame* m_frame;
 

@@ -51,6 +51,23 @@ namespace JSC {
     class ScopeChain;
     class ScopeNode;
 
+    class CallArguments {
+    public:
+        CallArguments(BytecodeGenerator& generator, ArgumentsNode* argumentsNode);
+
+        RegisterID* thisRegister() { return m_argv[0].get(); }
+        RegisterID* argumentRegister(unsigned i) { return m_argv[i + 1].get(); }
+        unsigned callFrame() { return thisRegister()->index() + count() + RegisterFile::CallFrameHeaderSize; }
+        unsigned count() { return m_argv.size(); }
+        RegisterID* profileHookRegister() { return m_profileHookRegister.get(); }
+        ArgumentsNode* argumentsNode() { return m_argumentsNode; }
+
+    private:
+        RefPtr<RegisterID> m_profileHookRegister;
+        ArgumentsNode* m_argumentsNode;
+        Vector<RefPtr<RegisterID>, 16> m_argv;
+    };
+
     struct FinallyContext {
         Label* finallyAddr;
         RegisterID* retAddrDst;
@@ -91,7 +108,12 @@ namespace JSC {
         // such register exists. Registers returned by registerFor do not
         // require explicit reference counting.
         RegisterID* registerFor(const Identifier&);
-        
+
+        // Returns the agument number if this is an argument, or 0 if not.
+        int argumentNumberFor(const Identifier&);
+
+        void setIsNumericCompareFunction(bool isNumericCompareFunction);
+
         bool willResolveToArguments(const Identifier&);
         RegisterID* uncheckedRegisterForArguments();
 
@@ -311,6 +333,7 @@ namespace JSC {
 
         RegisterID* emitGetById(RegisterID* dst, RegisterID* base, const Identifier& property);
         RegisterID* emitPutById(RegisterID* base, const Identifier& property, RegisterID* value);
+        RegisterID* emitDirectPutById(RegisterID* base, const Identifier& property, RegisterID* value);
         RegisterID* emitDeleteById(RegisterID* dst, RegisterID* base, const Identifier&);
         RegisterID* emitGetByVal(RegisterID* dst, RegisterID* base, RegisterID* property);
         RegisterID* emitPutByVal(RegisterID* base, RegisterID* property, RegisterID* value);
@@ -319,15 +342,15 @@ namespace JSC {
         RegisterID* emitPutGetter(RegisterID* base, const Identifier& property, RegisterID* value);
         RegisterID* emitPutSetter(RegisterID* base, const Identifier& property, RegisterID* value);
 
-        RegisterID* emitCall(RegisterID* dst, RegisterID* func, RegisterID* thisRegister, ArgumentsNode*, unsigned divot, unsigned startOffset, unsigned endOffset);
-        RegisterID* emitCallEval(RegisterID* dst, RegisterID* func, RegisterID* thisRegister, ArgumentsNode*, unsigned divot, unsigned startOffset, unsigned endOffset);
+        RegisterID* emitCall(RegisterID* dst, RegisterID* func, CallArguments&, unsigned divot, unsigned startOffset, unsigned endOffset);
+        RegisterID* emitCallEval(RegisterID* dst, RegisterID* func, CallArguments&, unsigned divot, unsigned startOffset, unsigned endOffset);
         RegisterID* emitCallVarargs(RegisterID* dst, RegisterID* func, RegisterID* thisRegister, RegisterID* argCount, unsigned divot, unsigned startOffset, unsigned endOffset);
         RegisterID* emitLoadVarargs(RegisterID* argCountDst, RegisterID* args);
 
         RegisterID* emitReturn(RegisterID* src);
         RegisterID* emitEnd(RegisterID* src) { return emitUnaryNoDstOp(op_end, src); }
 
-        RegisterID* emitConstruct(RegisterID* dst, RegisterID* func, ArgumentsNode*, unsigned divot, unsigned startOffset, unsigned endOffset);
+        RegisterID* emitConstruct(RegisterID* dst, RegisterID* func, CallArguments&, unsigned divot, unsigned startOffset, unsigned endOffset);
         RegisterID* emitStrcat(RegisterID* dst, RegisterID* src, int count);
         void emitToPrimitive(RegisterID* dst, RegisterID* src);
 
@@ -346,8 +369,13 @@ namespace JSC {
         RegisterID* emitNextPropertyName(RegisterID* dst, RegisterID* base, RegisterID* i, RegisterID* size, RegisterID* iter, Label* target);
 
         RegisterID* emitCatch(RegisterID*, Label* start, Label* end);
-        void emitThrow(RegisterID* exc) { emitUnaryNoDstOp(op_throw, exc); }
-        RegisterID* emitNewError(RegisterID* dst, ErrorType type, JSValue message);
+        void emitThrow(RegisterID* exc)
+        { 
+            m_usesExceptions = true;
+            emitUnaryNoDstOp(op_throw, exc);
+        }
+
+        RegisterID* emitNewError(RegisterID* dst, bool isReferenceError, JSValue message);
         void emitPushNewScope(RegisterID* dst, const Identifier& property, RegisterID* value);
 
         RegisterID* emitPushScope(RegisterID* scope);
@@ -386,6 +414,8 @@ namespace JSC {
             m_codeBlockBeingRegeneratedFrom = originalCodeBlock;
         }
 
+        bool shouldEmitProfileHooks() { return m_shouldEmitProfileHooks; }
+
     private:
         void emitOpcode(OpcodeID);
         void retrieveLastBinaryOp(int& dstIndex, int& src1Index, int& src2Index);
@@ -406,11 +436,11 @@ namespace JSC {
             static const bool needsRef = false;
         };
 
-        typedef HashMap<RefPtr<UString::Rep>, int, IdentifierRepHash, HashTraits<RefPtr<UString::Rep> >, IdentifierMapIndexHashTraits> IdentifierMap;
+        typedef HashMap<RefPtr<StringImpl>, int, IdentifierRepHash, HashTraits<RefPtr<StringImpl> >, IdentifierMapIndexHashTraits> IdentifierMap;
         typedef HashMap<double, JSValue> NumberMap;
-        typedef HashMap<UString::Rep*, JSString*, IdentifierRepHash> IdentifierStringMap;
+        typedef HashMap<StringImpl*, JSString*, IdentifierRepHash> IdentifierStringMap;
         
-        RegisterID* emitCall(OpcodeID, RegisterID* dst, RegisterID* func, RegisterID* thisRegister, ArgumentsNode*, unsigned divot, unsigned startOffset, unsigned endOffset);
+        RegisterID* emitCall(OpcodeID, RegisterID* dst, RegisterID* func, CallArguments&, unsigned divot, unsigned startOffset, unsigned endOffset);
         
         RegisterID* newRegister();
 
@@ -442,7 +472,7 @@ namespace JSC {
         // Returns true if a new RegisterID was added, false if a pre-existing RegisterID was re-used.
         bool addGlobalVar(const Identifier&, bool isConstant, RegisterID*&);
 
-        RegisterID* addParameter(const Identifier&);
+        void addParameter(const Identifier&, int parameterIndex);
         
         void preserveLastVar();
 
@@ -494,7 +524,7 @@ namespace JSC {
 
         // Some of these objects keep pointers to one another. They are arranged
         // to ensure a sane destruction order that avoids references to freed memory.
-        HashSet<RefPtr<UString::Rep>, IdentifierRepHash> m_functions;
+        HashSet<RefPtr<StringImpl>, IdentifierRepHash> m_functions;
         RegisterID m_ignoredResultRegister;
         RegisterID m_thisRegister;
         RegisterID* m_activationRegister;
@@ -515,7 +545,6 @@ namespace JSC {
         Vector<ForInContext> m_forInContextStack;
 
         int m_nextGlobalIndex;
-        int m_nextParameterIndex;
         int m_firstConstantIndex;
         int m_nextConstantOffset;
         unsigned m_globalConstantIndex;
@@ -531,9 +560,13 @@ namespace JSC {
         JSGlobalData* m_globalData;
 
         OpcodeID m_lastOpcodeID;
+#ifndef NDEBUG
+        size_t m_lastOpcodePosition;
+#endif
 
         unsigned m_emitNodeDepth;
 
+        bool m_usesExceptions;
         bool m_regeneratingForExceptionInfo;
         CodeBlock* m_codeBlockBeingRegeneratedFrom;
 

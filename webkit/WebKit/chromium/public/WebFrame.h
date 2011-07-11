@@ -102,7 +102,11 @@ public:
 
     // The name of this frame.
     virtual WebString name() const = 0;
-    virtual void clearName() = 0;
+
+    // Sets the name of this frame. For child frames (frames that are not a
+    // top-most frame) the actual name may have a suffix appended to make the
+    // frame name unique within the hierarchy.
+    virtual void setName(const WebString&) = 0;
 
     // The url of the document loaded in this frame.  This is equivalent to
     // dataSource()->request().url().
@@ -399,6 +403,21 @@ public:
     // Reformats the WebFrame for screen display.
     virtual void printEnd() = 0;
 
+    // CSS3 Paged Media ----------------------------------------------------
+
+    // Returns true if page box (margin boxes and page borders) is visible.
+    virtual bool isPageBoxVisible(int pageIndex) = 0;
+
+    // Returns the preferred page size and margins in pixels, assuming 96
+    // pixels per inch. pageSize, marginTop, marginRight, marginBottom,
+    // marginLeft must be initialized to the default values that are used if
+    // auto is specified.
+    virtual void pageSizeAndMarginsInPixels(int pageIndex,
+                                            WebSize& pageSize,
+                                            int& marginTop,
+                                            int& marginRight,
+                                            int& marginBottom,
+                                            int& marginLeft) = 0;
 
     // Find-in-page --------------------------------------------------------
 
@@ -469,6 +488,11 @@ public:
         WebInputElement,
         WebPasswordAutocompleteListener*) = 0;
 
+    // Dispatches an Autocompletion notification to registered listener if one
+    // exists that is registered against the WebInputElement specified.
+    virtual void notifiyPasswordListenerOfAutocomplete(
+        const WebInputElement&) = 0;
+
 
     // Utility -------------------------------------------------------------
 
@@ -494,6 +518,8 @@ public:
     // used to support layout tests.
     virtual WebString counterValueForElementById(const WebString& id) const = 0;
 
+    // Calls markerTextForListItem() defined in WebCore/rendering/RenderTreeAsText.h.
+    virtual WebString markerTextForListItem(const WebElement&) const = 0;
 
     // Returns the number of page where the specified element will be put.
     // This method is used to support layout tests.
@@ -507,6 +533,9 @@ public:
     // empty ((0,0), (0,0)).
     virtual WebRect selectionBoundsRect() const = 0;
 
+    // Only for testing purpose: 
+    // Returns true if selection.anchorNode has a marker on range from |from| with |length|.
+    virtual bool selectionStartHasSpellingMarkerFor(int from, int length) const = 0;
 protected:
     ~WebFrame() { }
 };

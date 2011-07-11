@@ -26,9 +26,9 @@
 #ifndef Position_h
 #define Position_h
 
+#include "ContainerNode.h"
 #include "TextAffinity.h"
 #include "TextDirection.h"
-#include "Node.h" // for position creation functions
 #include <wtf/Assertions.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
@@ -138,6 +138,7 @@ public:
 
     // Returns true if the visually equivalent positions around have different editability
     bool atEditingBoundary() const;
+    Node* parentEditingBoundary() const;
     
     bool atStartOfTree() const;
     bool atEndOfTree() const;
@@ -234,7 +235,7 @@ inline Position positionAfterNode(Node* anchorNode)
 
 inline int lastOffsetInNode(Node* node)
 {
-    return node->offsetInCharacters() ? node->maxCharacterOffset() : node->childNodeCount();
+    return node->offsetInCharacters() ? node->maxCharacterOffset() : static_cast<int>(node->childNodeCount());
 }
 
 // firstPositionInNode and lastPositionInNode return parent-anchored positions, lastPositionInNode construction is O(n) due to childNodeCount()

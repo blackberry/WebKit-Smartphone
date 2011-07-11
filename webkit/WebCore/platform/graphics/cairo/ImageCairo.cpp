@@ -33,6 +33,7 @@
 #include "AffineTransform.h"
 #include "Color.h"
 #include "FloatRect.h"
+#include "PlatformRefPtrCairo.h"
 #include "GraphicsContext.h"
 #include "ImageBuffer.h"
 #include "ImageObserver.h"
@@ -134,14 +135,14 @@ void BitmapImage::draw(GraphicsContext* context, const FloatRect& dst, const Flo
 
     // Draw the shadow
 #if ENABLE(FILTERS)
-    IntSize shadowSize;
-    int shadowBlur;
+    FloatSize shadowOffset;
+    float shadowBlur;
     Color shadowColor;
-    if (context->getShadow(shadowSize, shadowBlur, shadowColor)) {
+    if (context->getShadow(shadowOffset, shadowBlur, shadowColor)) {
         IntSize shadowBufferSize;
         FloatRect shadowRect;
-        float kernelSize (0.0);
-        GraphicsContext::calculateShadowBufferDimensions(shadowBufferSize, shadowRect, kernelSize, dstRect, shadowSize, shadowBlur);
+        float radius = 0;
+        context->calculateShadowBufferDimensions(shadowBufferSize, shadowRect, radius, dstRect, shadowOffset, shadowBlur);
         shadowColor = colorWithOverrideAlpha(shadowColor.rgb(), (shadowColor.alpha() *  context->getAlpha()) / 255.f);
 
         //draw shadow into a new ImageBuffer
@@ -152,7 +153,7 @@ void BitmapImage::draw(GraphicsContext* context, const FloatRect& dst, const Flo
         cairo_rectangle(shadowContext, 0, 0, dstRect.width(), dstRect.height());
         cairo_fill(shadowContext);
 
-        context->createPlatformShadow(shadowBuffer.release(), shadowColor, shadowRect, kernelSize);
+        context->applyPlatformShadow(shadowBuffer.release(), shadowColor, shadowRect, radius);
     }
 #endif
 
@@ -184,17 +185,14 @@ void Image::drawPattern(GraphicsContext* context, const FloatRect& tileRect, con
     cairo_t* cr = context->platformContext();
     context->save();
 
-    IntRect imageSize = enclosingIntRect(tileRect);
-    OwnPtr<ImageBuffer> imageSurface = ImageBuffer::create(imageSize.size());
-
-    if (!imageSurface)
-        return;
-
+    PlatformRefPtr<cairo_surface_t> clippedImageSurface = 0;
     if (tileRect.size() != size()) {
-        cairo_t* clippedImageContext = imageSurface->context()->platformContext();
-        cairo_set_source_surface(clippedImageContext, image, -tileRect.x(), -tileRect.y());
-        cairo_paint(clippedImageContext);
-        image = imageSurface->image()->nativeImageForCurrentFrame();
+        IntRect imageSize = enclosingIntRect(tileRect);
+        clippedImageSurface = adoptPlatformRef(cairo_image_surface_create(CAIRO_FORMAT_ARGB32, imageSize.width(), imageSize.height()));
+        PlatformRefPtr<cairo_t> clippedImageContext(cairo_create(clippedImageSurface.get()));
+        cairo_set_source_surface(clippedImageContext.get(), image, -tileRect.x(), -tileRect.y());
+        cairo_paint(clippedImageContext.get());
+        image = clippedImageSurface.get();
     }
 
     cairo_pattern_t* pattern = cairo_pattern_create_for_surface(image);

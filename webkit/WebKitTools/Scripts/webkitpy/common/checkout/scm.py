@@ -31,10 +31,45 @@
 
 import os
 import re
+import sys
+import shutil
 
 from webkitpy.common.system.executive import Executive, run_command, ScriptError
-from webkitpy.common.system.user import User
 from webkitpy.common.system.deprecated_logging import error, log
+
+
+def find_checkout_root():
+    """Returns the current checkout root (as determined by default_scm().
+
+    Returns the absolute path to the top of the WebKit checkout, or None
+    if it cannot be determined.
+
+    """
+    scm_system = default_scm()
+    if scm_system:
+        return scm_system.checkout_root
+    return None
+
+
+def default_scm():
+    """Return the default SCM object as determined by the CWD and running code.
+
+    Returns the default SCM object for the current working directory; if the
+    CWD is not in a checkout, then we attempt to figure out if the SCM module
+    itself is part of a checkout, and return that one. If neither is part of
+    a checkout, None is returned.
+
+    """
+    cwd = os.getcwd()
+    scm_system = detect_scm_system(cwd)
+    if not scm_system:
+        script_directory = os.path.abspath(sys.path[0])
+        scm_system = detect_scm_system(script_directory)
+        if scm_system:
+            log("The current directory (%s) is not a WebKit checkout, using %s" % (cwd, scm_system.checkout_root))
+        else:
+            error("FATAL: Failed to determine the SCM system for either %s or %s" % (cwd, script_directory))
+    return scm_system
 
 
 def detect_scm_system(path):
@@ -90,6 +125,17 @@ def commit_error_handler(error):
     if re.search("resource out of date", error.output):
         raise CheckoutNeedsUpdate(script_args=error.script_args, exit_code=error.exit_code, output=error.output, cwd=error.cwd)
     Executive.default_error_handler(error)
+
+
+class AuthenticationError(Exception):
+    def __init__(self, server_host):
+        self.server_host = server_host
+
+
+class AmbiguousCommitError(Exception):
+    def __init__(self, num_local_commits, working_directory_is_clean):
+        self.num_local_commits = num_local_commits
+        self.working_directory_is_clean = working_directory_is_clean
 
 
 # SCM methods are expected to return paths relative to self.checkout_root.
@@ -166,82 +212,92 @@ class SCM:
         return match.group('svn_revision')
 
     @staticmethod
+    def _subclass_must_implement():
+        raise NotImplementedError("subclasses must implement")
+
+    @staticmethod
     def in_working_directory(path):
-        raise NotImplementedError, "subclasses must implement"
+        SCM._subclass_must_implement()
 
     @staticmethod
     def find_checkout_root(path):
-        raise NotImplementedError, "subclasses must implement"
+        SCM._subclass_must_implement()
 
     @staticmethod
     def commit_success_regexp():
-        raise NotImplementedError, "subclasses must implement"
+        SCM._subclass_must_implement()
 
     def working_directory_is_clean(self):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
     def clean_working_directory(self):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
     def status_command(self):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
-    def add(self, path):
-        raise NotImplementedError, "subclasses must implement"
+    def add(self, path, return_exit_code=False):
+        self._subclass_must_implement()
 
-    def changed_files(self, git_commit=None, squash=None):
-        raise NotImplementedError, "subclasses must implement"
+    def delete(self, path):
+        self._subclass_must_implement()
+
+    def changed_files(self, git_commit=None):
+        self._subclass_must_implement()
 
     def changed_files_for_revision(self):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
     def added_files(self):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
     def conflicted_files(self):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
     def display_name(self):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
-    def create_patch(self, git_commit=None, squash=None):
-        raise NotImplementedError, "subclasses must implement"
+    def create_patch(self, git_commit=None):
+        self._subclass_must_implement()
 
     def committer_email_for_revision(self, revision):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
     def contents_at_revision(self, path, revision):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
     def diff_for_revision(self, revision):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
+
+    def diff_for_file(self, path, log=None):
+        self._subclass_must_implement()
+
+    def show_head(self, path):
+        self._subclass_must_implement()
 
     def apply_reverse_diff(self, revision):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
     def revert_files(self, file_paths):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
-    def should_squash(self, squash):
-        raise NotImplementedError, "subclasses must implement"
-
-    def commit_with_message(self, message, username=None, git_commit=None, squash=None):
-        raise NotImplementedError, "subclasses must implement"
+    def commit_with_message(self, message, username=None, git_commit=None, force_squash=False):
+        self._subclass_must_implement()
 
     def svn_commit_log(self, svn_revision):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
     def last_svn_commit_log(self):
-        raise NotImplementedError, "subclasses must implement"
+        self._subclass_must_implement()
 
     # Subclasses must indicate if they support local commits,
     # but the SCM baseclass will only call local_commits methods when this is true.
     @staticmethod
     def supports_local_commits():
-        raise NotImplementedError, "subclasses must implement"
+        SCM._subclass_must_implement()
 
-    def svn_merge_base():
-        raise NotImplementedError, "subclasses must implement"
+    def remote_merge_base():
+        SCM._subclass_must_implement()
 
     def commit_locally_with_message(self, message):
         error("Your source control manager does not support local commits.")
@@ -261,7 +317,8 @@ class SVN(SCM):
     def __init__(self, cwd):
         SCM.__init__(self, cwd)
         self.cached_version = None
-    
+        self._bogus_dir = None
+
     @staticmethod
     def in_working_directory(path):
         return os.path.isdir(os.path.join(path, '.svn'))
@@ -343,11 +400,25 @@ class SVN(SCM):
         field_count = 6 if self.svn_version() > "1.6" else 5
         return "^(?P<status>[%s]).{%s} (?P<filename>.+)$" % (expected_types, field_count)
 
-    def add(self, path):
-        # path is assumed to be cwd relative?
-        self.run(["svn", "add", path])
+    def _add_parent_directories(self, path):
+        """Does 'svn add' to the path and its parents."""
+        if self.in_working_directory(path):
+            return
+        dirname = os.path.dirname(path)
+        # We have dirname directry - ensure it added.
+        if dirname != path:
+            self._add_parent_directories(dirname)
+        self.add(path)
 
-    def changed_files(self, git_commit=None, squash=None):
+    def add(self, path, return_exit_code=False):
+        self._add_parent_directories(os.path.dirname(os.path.abspath(path)))
+        return self.run(["svn", "add", path], return_exit_code=return_exit_code)
+
+    def delete(self, path):
+        parent, base = os.path.split(os.path.abspath(path))
+        return self.run(["svn", "delete", "--force", base], cwd=parent)
+
+    def changed_files(self, git_commit=None):
         return self.run_status_and_extract_filenames(self.status_command(), self._status_regexp("ACDMR"))
 
     def changed_files_for_revision(self, revision):
@@ -362,6 +433,9 @@ class SVN(SCM):
     def added_files(self):
         return self.run_status_and_extract_filenames(self.status_command(), self._status_regexp("A"))
 
+    def deleted_files(self):
+        return self.run_status_and_extract_filenames(self.status_command(), self._status_regexp("D"))
+
     @staticmethod
     def supports_local_commits():
         return False
@@ -370,7 +444,7 @@ class SVN(SCM):
         return "svn"
 
     # FIXME: This method should be on Checkout.
-    def create_patch(self, git_commit=None, squash=None):
+    def create_patch(self, git_commit=None):
         """Returns a byte array (str()) representing the patch file.
         Patch files are effectively binary since they may contain
         files of multiple different encodings."""
@@ -391,6 +465,44 @@ class SVN(SCM):
         # FIXME: This should probably use cwd=self.checkout_root
         return self.run(['svn', 'diff', '-c', revision])
 
+    def _bogus_dir_name(self):
+        if sys.platform.startswith("win"):
+            parent_dir = tempfile.gettempdir()
+        else:
+            parent_dir = sys.path[0]  # tempdir is not secure.
+        return os.path.join(parent_dir, "temp_svn_config")
+
+    def _setup_bogus_dir(self, log):
+        self._bogus_dir = self._bogus_dir_name()
+        if not os.path.exists(self._bogus_dir):
+            os.mkdir(self._bogus_dir)
+            self._delete_bogus_dir = True
+        else:
+            self._delete_bogus_dir = False
+        if log:
+            log.debug('  Html: temp config dir: "%s".', self._bogus_dir)
+
+    def _teardown_bogus_dir(self, log):
+        if self._delete_bogus_dir:
+            shutil.rmtree(self._bogus_dir, True)
+            if log:
+                log.debug('  Html: removed temp config dir: "%s".', self._bogus_dir)
+        self._bogus_dir = None
+
+    def diff_for_file(self, path, log=None):
+        self._setup_bogus_dir(log)
+        try:
+            args = ['svn', 'diff']
+            if self._bogus_dir:
+                args += ['--config-dir', self._bogus_dir]
+            args.append(path)
+            return self.run(args)
+        finally:
+            self._teardown_bogus_dir(log)
+
+    def show_head(self, path):
+        return self.run(['svn', 'cat', '-r', 'BASE', path], decode_output=False)
+
     def _repository_url(self):
         return self.value_from_svn_info(self.checkout_root, 'URL')
 
@@ -406,22 +518,19 @@ class SVN(SCM):
         # FIXME: This should probably use cwd=self.checkout_root.
         self.run(['svn', 'revert'] + file_paths)
 
-    def should_squash(self, squash):
-        # SVN doesn't support the concept of squashing.
-        return False
-
-    def commit_with_message(self, message, username=None, git_commit=None, squash=None):
-        # squash and git-commit are not used by SVN.
+    def commit_with_message(self, message, username=None, git_commit=None, force_squash=False):
+        # git-commit and force are not used by SVN.
         if self.dryrun:
             # Return a string which looks like a commit so that things which parse this output will succeed.
             return "Dry run, no commit.\nCommitted revision 0."
+
         svn_commit_args = ["svn", "commit"]
+
         if not username and not self.has_authorization_for_realm():
-            username = User.prompt("%s login: " % self.svn_server_host, repeat=5)
-            if not username:
-                raise Exception("You need to specify the username on %s to perform the commit as." % self.svn_server_host)
+            raise AuthenticationError(self.svn_server_host)
         if username:
             svn_commit_args.extend(["--username", username])
+
         svn_commit_args.extend(["-m", message])
         # FIXME: Should this use cwd=self.checkout_root?
         return self.run(svn_commit_args, error_handler=commit_error_handler)
@@ -435,6 +544,14 @@ class SVN(SCM):
         # http://svnbook.red-bean.com/en/1.0/ch03s03.html
         return self.svn_commit_log('BASE')
 
+    def propset(self, pname, pvalue, path):
+        dir, base = os.path.split(path)
+        return self.run(['svn', 'pset', pname, pvalue, base], cwd=dir)
+
+    def propget(self, pname, path):
+        dir, base = os.path.split(path)
+        return self.run(['svn', 'pget', pname, base], cwd=dir).encode('utf-8').rstrip("\n")
+
 # All git-specific logic should go here.
 class Git(SCM):
     def __init__(self, cwd):
@@ -447,11 +564,16 @@ class Git(SCM):
     @classmethod
     def find_checkout_root(cls, path):
         # "git rev-parse --show-cdup" would be another way to get to the root
-        (checkout_root, dot_git) = os.path.split(run_command(['git', 'rev-parse', '--git-dir'], cwd=path))
+        (checkout_root, dot_git) = os.path.split(run_command(['git', 'rev-parse', '--git-dir'], cwd=(path or "./")))
         # If we were using 2.6 # checkout_root = os.path.relpath(checkout_root, path)
         if not os.path.isabs(checkout_root): # Sometimes git returns relative paths
             checkout_root = os.path.join(path, checkout_root)
         return checkout_root
+
+    @classmethod
+    def to_object_name(cls, filepath):
+        root_end_with_slash = os.path.join(cls.find_checkout_root(os.path.dirname(filepath)), '')
+        return filepath.replace(root_end_with_slash, '')
 
     @classmethod
     def read_git_config(cls, key):
@@ -465,11 +587,11 @@ class Git(SCM):
 
     def discard_local_commits(self):
         # FIXME: This should probably use cwd=self.checkout_root
-        self.run(['git', 'reset', '--hard', self.svn_branch_name()])
+        self.run(['git', 'reset', '--hard', self.remote_branch_ref()])
     
     def local_commits(self):
         # FIXME: This should probably use cwd=self.checkout_root
-        return self.run(['git', 'log', '--pretty=oneline', 'HEAD...' + self.svn_branch_name()]).splitlines()
+        return self.run(['git', 'log', '--pretty=oneline', 'HEAD...' + self.remote_branch_ref()]).splitlines()
 
     def rebase_in_progress(self):
         return os.path.exists(os.path.join(self.checkout_root, '.git/rebase-apply'))
@@ -494,28 +616,31 @@ class Git(SCM):
     def _status_regexp(self, expected_types):
         return '^(?P<status>[%s])\t(?P<filename>.+)$' % expected_types
 
-    def add(self, path):
-        # path is assumed to be cwd relative?
-        self.run(["git", "add", path])
+    def add(self, path, return_exit_code=False):
+        return self.run(["git", "add", path], return_exit_code=return_exit_code)
 
-    def _merge_base(self, git_commit, squash):
+    def delete(self, path):
+        return self.run(["git", "rm", "-f", path])
+
+    def _assert_synced(self):
+        if len(run_command(['git', 'rev-list', '--max-count=1', self.remote_branch_ref(), '^HEAD'])):
+            raise ScriptError(message="Not fully merged/rebased to %s. This branch needs to be synced first." % self.remote_branch_ref())
+
+    def merge_base(self, git_commit):
         if git_commit:
-            # FIXME: Calling code should turn commit ranges into a list of commit IDs
-            # and then treat each commit separately.
+            # Special-case HEAD.. to mean working-copy changes only.
+            if git_commit.upper() == 'HEAD..':
+                return 'HEAD'
+
             if '..' not in git_commit:
                 git_commit = git_commit + "^.." + git_commit
             return git_commit
 
-        if self.should_squash(squash):
-            return self.svn_merge_base()
+        self._assert_synced()
+        return self.remote_merge_base()
 
-        # FIXME: Non-squash behavior should match commit_with_message. It raises an error
-        # if there are working copy changes and --squash or --no-squash wasn't passed in.
-        # If --no-squash, then it should proceed with each local commit as a separate patch.
-        return 'HEAD'
-
-    def changed_files(self, git_commit=None, squash=None):
-        status_command = ['git', 'diff', '-r', '--name-status', '-C', '-M', "--no-ext-diff", "--full-index", self._merge_base(git_commit, squash)]
+    def changed_files(self, git_commit=None):
+        status_command = ['git', 'diff', '-r', '--name-status', '-C', '-M', "--no-ext-diff", "--full-index", self.merge_base(git_commit)]
         return self.run_status_and_extract_filenames(status_command, self._status_regexp("ADM"))
 
     def _changes_files_for_commit(self, git_commit):
@@ -537,6 +662,9 @@ class Git(SCM):
     def added_files(self):
         return self.run_status_and_extract_filenames(self.status_command(), self._status_regexp("A"))
 
+    def deleted_files(self):
+        return self.run_status_and_extract_filenames(self.status_command(), self._status_regexp("D"))
+
     @staticmethod
     def supports_local_commits():
         return True
@@ -544,12 +672,12 @@ class Git(SCM):
     def display_name(self):
         return "git"
 
-    def create_patch(self, git_commit=None, squash=None):
+    def create_patch(self, git_commit=None):
         """Returns a byte array (str()) representing the patch file.
         Patch files are effectively binary since they may contain
         files of multiple different encodings."""
         # FIXME: This should probably use cwd=self.checkout_root
-        return self.run(['git', 'diff', '--binary', "--no-ext-diff", "--full-index", "-M", self._merge_base(git_commit, squash)], decode_output=False)
+        return self.run(['git', 'diff', '--binary', "--no-ext-diff", "--full-index", "-M", self.merge_base(git_commit)], decode_output=False)
 
     @classmethod
     def git_commit_from_svn_revision(cls, revision):
@@ -569,6 +697,12 @@ class Git(SCM):
         git_commit = self.git_commit_from_svn_revision(revision)
         return self.create_patch(git_commit)
 
+    def diff_for_file(self, path, log=None):
+        return self.run(['git', 'diff', 'HEAD', '--', path])
+
+    def show_head(self, path):
+        return self.run(['git', 'show', 'HEAD:' + self.to_object_name(path)], decode_output=False)
+
     def committer_email_for_revision(self, revision):
         git_commit = self.git_commit_from_svn_revision(revision)
         committer_email = self.run(["git", "log", "-1", "--pretty=format:%ce", git_commit])
@@ -584,63 +718,41 @@ class Git(SCM):
     def revert_files(self, file_paths):
         self.run(['git', 'checkout', 'HEAD'] + file_paths)
 
-    def _get_squash_error_message(self, num_local_commits):
-        working_directory_message = "" if self.working_directory_is_clean() else " and working copy changes"
-        return ("""There are %s local commits%s. Do one of the following:
-            1) Use --squash or --no-squash
-            2) git config webkit-patch.squash true/false
-            """ % (num_local_commits, working_directory_message))
+    def _assert_can_squash(self, working_directory_is_clean):
+        squash = Git.read_git_config('webkit-patch.commit-should-always-squash')
+        should_squash = squash and squash.lower() == "true"
 
-    def should_squash(self, squash):
-        if squash is None:
-            config_squash = Git.read_git_config('webkit-patch.squash')
-            if (config_squash and config_squash is not ""):
-                squash = config_squash.lower() == "true"
-            else:
-                # Only raise an error if there are actually multiple commits to squash.
-                num_local_commits = len(self.local_commits())
-                if num_local_commits > 1 or (num_local_commits > 0 and not self.working_directory_is_clean()):
-                    raise ScriptError(message=self._get_squash_error_message(num_local_commits))
+        if not should_squash:
+            # Only warn if there are actually multiple commits to squash.
+            num_local_commits = len(self.local_commits())
+            if num_local_commits > 1 or (num_local_commits > 0 and not working_directory_is_clean):
+                raise AmbiguousCommitError(num_local_commits, working_directory_is_clean)
 
-        if squash and self._svn_branch_has_extra_commits():
-            raise ScriptError(message="Cannot use --squash when HEAD is not fully merged/rebased to %s. "
-                                      "This branch needs to be synced first." % self.svn_branch_name())
-
-        return squash
-
-    def _svn_branch_has_extra_commits(self):
-        return len(run_command(['git', 'rev-list', '--max-count=1', self.svn_branch_name(), '^HEAD']))
-
-    def commit_with_message(self, message, username=None, git_commit=None, squash=None):
+    def commit_with_message(self, message, username=None, git_commit=None, force_squash=False):
         # Username is ignored during Git commits.
+        working_directory_is_clean = self.working_directory_is_clean()
+
         if git_commit:
+            # Special-case HEAD.. to mean working-copy changes only.
+            if git_commit.upper() == 'HEAD..':
+                if working_directory_is_clean:
+                    raise ScriptError(message="The working copy is not modified. --git-commit=HEAD.. only commits working copy changes.")
+                self.commit_locally_with_message(message)
+                return self._commit_on_branch(message, 'HEAD')
+
             # Need working directory changes to be committed so we can checkout the merge branch.
-            if not self.working_directory_is_clean():
+            if not working_directory_is_clean:
                 # FIXME: webkit-patch land will modify the ChangeLogs to correct the reviewer.
                 # That will modify the working-copy and cause us to hit this error.
-                # The ChangeLog modification could be made to modify the existing local commit?
+                # The ChangeLog modification could be made to modify the existing local commit.
                 raise ScriptError(message="Working copy is modified. Cannot commit individual git_commits.")
             return self._commit_on_branch(message, git_commit)
 
-        squash = self.should_squash(squash)
-        if squash:
-            self.run(['git', 'reset', '--soft', self.svn_branch_name()])
-            self.commit_locally_with_message(message)
-        elif not self.working_directory_is_clean():
-            if not len(self.local_commits()):
-                # There are only working copy changes. Assume they should be committed.
-                self.commit_locally_with_message(message)
-            elif squash is None:
-                # The user didn't explicitly say to squash or not squash. There are local commits
-                # and working copy changes. Not clear what the user wants.
-                raise ScriptError(message="""There are local commits and working copy changes. Do one of the following:
-1) Commit/revert working copy changes.
-2) Use --squash or --no-squash
-3) git config webkit-patch.squash true/false
-""")
-
-        # FIXME: This will commit all local commits, each with it's own message. We should restructure
-        # so that each local commit has the appropriate commit message based off it's ChangeLogs.
+        if not force_squash:
+            self._assert_can_squash(working_directory_is_clean)
+        self._assert_synced()
+        self.run(['git', 'reset', '--soft', self.remote_branch_ref()])
+        self.commit_locally_with_message(message)
         return self.push_local_commits_to_server()
 
     def _commit_on_branch(self, message, git_commit):
@@ -650,8 +762,8 @@ class Git(SCM):
 
         # We want to squash all this branch's commits into one commit with the proper description.
         # We do this by doing a "merge --squash" into a new commit branch, then dcommitting that.
-        MERGE_BRANCH = 'webkit-patch-land'
-        self.delete_branch(MERGE_BRANCH)
+        MERGE_BRANCH_NAME = 'webkit-patch-land'
+        self.delete_branch(MERGE_BRANCH_NAME)
 
         # We might be in a directory that's present in this branch but not in the
         # trunk.  Move up to the top of the tree so that git commands that expect a
@@ -662,7 +774,7 @@ class Git(SCM):
         # We wrap in a try...finally block so if anything goes wrong, we clean up the branches.
         commit_succeeded = True
         try:
-            self.run(['git', 'checkout', '-q', '-b', MERGE_BRANCH, self.svn_branch_name()])
+            self.run(['git', 'checkout', '-q', '-b', MERGE_BRANCH_NAME, self.remote_branch_ref()])
 
             for commit in commit_ids:
                 # We're on a different branch now, so convert "head" to the branch name.
@@ -681,7 +793,7 @@ class Git(SCM):
             # And then swap back to the original branch and clean up.
             self.clean_working_directory()
             self.run(['git', 'checkout', '-q', branch_name])
-            self.delete_branch(MERGE_BRANCH)
+            self.delete_branch(MERGE_BRANCH_NAME)
 
         return output
 
@@ -693,18 +805,31 @@ class Git(SCM):
         return self.run(['git', 'svn', 'log', '--limit=1'])
 
     # Git-specific methods:
+    def _branch_ref_exists(self, branch_ref):
+        return self.run(['git', 'show-ref', '--quiet', '--verify', branch_ref], return_exit_code=True) == 0
 
-    def delete_branch(self, branch):
-        if self.run(['git', 'show-ref', '--quiet', '--verify', 'refs/heads/' + branch], return_exit_code=True) == 0:
-            self.run(['git', 'branch', '-D', branch])
+    def delete_branch(self, branch_name):
+        if self._branch_ref_exists('refs/heads/' + branch_name):
+            self.run(['git', 'branch', '-D', branch_name])
 
-    def svn_merge_base(self):
-        return self.run(['git', 'merge-base', self.svn_branch_name(), 'HEAD']).strip()
+    def remote_merge_base(self):
+        return self.run(['git', 'merge-base', self.remote_branch_ref(), 'HEAD']).strip()
 
-    def svn_branch_name(self):
+    def remote_branch_ref(self):
+        # Use references so that we can avoid collisions, e.g. we don't want to operate on refs/heads/trunk if it exists.
+
         # FIXME: This should so something like: Git.read_git_config('svn-remote.svn.fetch').split(':')[1]
         # but that doesn't work if the git repo is tracking multiple svn branches.
-        return 'trunk'
+        remote_branch_refs = [
+            'refs/remotes/trunk',  # A git-svn checkout as per http://trac.webkit.org/wiki/UsingGitWithWebKit.
+            'refs/remotes/origin/master',  # A git clone of git://git.webkit.org/WebKit.git that is not tracking svn.
+        ]
+
+        for ref in remote_branch_refs:
+            if self._branch_ref_exists(ref):
+                return ref
+
+        raise ScriptError(message="Can't find a branch to diff against. %s branches do not exist." % " and ".join(remote_branch_refs))
 
     def commit_locally_with_message(self, message):
         self.run(['git', 'commit', '--all', '-F', '-'], input=message)
@@ -726,7 +851,7 @@ class Git(SCM):
     # A B     : [A, B]  (different from git diff, which would use "rev-list A..B")
     def commit_ids_from_commitish_arguments(self, args):
         if not len(args):
-            args.append('%s..HEAD' % self.svn_branch_name())
+            args.append('%s..HEAD' % self.remote_branch_ref())
 
         commit_ids = []
         for commitish in args:

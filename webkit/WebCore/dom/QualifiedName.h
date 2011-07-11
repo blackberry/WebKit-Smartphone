@@ -21,8 +21,8 @@
 #ifndef QualifiedName_h
 #define QualifiedName_h
 
-#include "AtomicString.h"
 #include <wtf/HashTraits.h>
+#include <wtf/text/AtomicString.h>
 
 namespace WebCore {
 
@@ -170,7 +170,7 @@ namespace WTF {
     
     template<> struct HashTraits<WebCore::QualifiedName> : GenericHashTraits<WebCore::QualifiedName> {
         static const bool emptyValueIsZero = false;
-        static WebCore::QualifiedName emptyValue() { return WebCore::QualifiedName(WebCore::nullAtom, WebCore::nullAtom, WebCore::nullAtom); }
+        static WebCore::QualifiedName emptyValue() { return WebCore::QualifiedName(nullAtom, nullAtom, nullAtom); }
         static void constructDeletedValue(WebCore::QualifiedName& slot) { new (&slot) WebCore::QualifiedName(WTF::HashTableDeletedValue); }
         static bool isDeletedValue(const WebCore::QualifiedName& slot) { return slot.isHashTableDeletedValue(); }
     };

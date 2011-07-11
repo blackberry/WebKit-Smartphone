@@ -1,4 +1,5 @@
 /*
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  * Copyright (C) 2003, 2004, 2005, 2006, 2009 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,6 +31,7 @@
 #include "Font.h"
 #include "Generator.h"
 #include "GraphicsContextPrivate.h"
+#include "ImageBuffer.h"
 
 using namespace std;
 
@@ -129,29 +131,29 @@ void GraphicsContext::setStrokeColor(const Color& color, ColorSpace colorSpace)
     setPlatformStrokeColor(color, colorSpace);
 }
 
-void GraphicsContext::setShadow(const IntSize& size, int blur, const Color& color, ColorSpace colorSpace)
+void GraphicsContext::setShadow(const FloatSize& offset, float blur, const Color& color, ColorSpace colorSpace)
 {
-    m_common->state.shadowSize = size;
+    m_common->state.shadowOffset = offset;
     m_common->state.shadowBlur = blur;
     m_common->state.shadowColor = color;
-    setPlatformShadow(size, blur, color, colorSpace);
+    setPlatformShadow(offset, blur, color, colorSpace);
 }
 
 void GraphicsContext::clearShadow()
 {
-    m_common->state.shadowSize = IntSize();
+    m_common->state.shadowOffset = FloatSize();
     m_common->state.shadowBlur = 0;
     m_common->state.shadowColor = Color();
     clearPlatformShadow();
 }
 
-bool GraphicsContext::getShadow(IntSize& size, int& blur, Color& color) const
+bool GraphicsContext::getShadow(FloatSize& offset, float& blur, Color& color) const
 {
-    size = m_common->state.shadowSize;
+    offset = m_common->state.shadowOffset;
     blur = m_common->state.shadowBlur;
     color = m_common->state.shadowColor;
 
-    return color.isValid() && color.alpha() && (blur || size.width() || size.height());
+    return color.isValid() && color.alpha() && (blur || offset.width() || offset.height());
 }
 
 float GraphicsContext::strokeThickness() const
@@ -374,12 +376,20 @@ void GraphicsContext::drawBidiText(const Font& font, const TextRun& run, const F
     bidiResolver.deleteRuns();
 }
 
+#if OS(OLYMPIA)
+void GraphicsContext::drawHighlightForText(const Font& font, const TextRun& run, const IntPoint& point, int h, const Color& backgroundColor, ColorSpace colorSpace, int from, int to, int width)
+#else
 void GraphicsContext::drawHighlightForText(const Font& font, const TextRun& run, const IntPoint& point, int h, const Color& backgroundColor, ColorSpace colorSpace, int from, int to)
+#endif
 {
     if (paintingDisabled())
         return;
 
+#if OS(OLYMPIA)
+    fillRect(font.selectionRectForText(run, point, h, from, to, width), backgroundColor, colorSpace);
+#else
     fillRect(font.selectionRectForText(run, point, h, from, to), backgroundColor, colorSpace);
+#endif
 }
 
 void GraphicsContext::drawImage(Image* image, ColorSpace styleColorSpace, const FloatRect& dest, const FloatRect& src, CompositeOperator op, bool useLowQualityScale)
@@ -442,6 +452,57 @@ void GraphicsContext::drawTiledImage(Image* image, ColorSpace styleColorSpace, c
         restore();
 }
 
+void GraphicsContext::drawImageBuffer(ImageBuffer* image, ColorSpace styleColorSpace, const IntPoint& p, CompositeOperator op)
+{
+    drawImageBuffer(image, styleColorSpace, p, IntRect(0, 0, -1, -1), op);
+}
+
+void GraphicsContext::drawImageBuffer(ImageBuffer* image, ColorSpace styleColorSpace, const IntRect& r, CompositeOperator op, bool useLowQualityScale)
+{
+    drawImageBuffer(image, styleColorSpace, r, IntRect(0, 0, -1, -1), op, useLowQualityScale);
+}
+
+void GraphicsContext::drawImageBuffer(ImageBuffer* image, ColorSpace styleColorSpace, const IntPoint& dest, const IntRect& srcRect, CompositeOperator op)
+{
+    drawImageBuffer(image, styleColorSpace, IntRect(dest, srcRect.size()), srcRect, op);
+}
+
+void GraphicsContext::drawImageBuffer(ImageBuffer* image, ColorSpace styleColorSpace, const IntRect& dest, const IntRect& srcRect, CompositeOperator op, bool useLowQualityScale)
+{
+    drawImageBuffer(image, styleColorSpace, FloatRect(dest), srcRect, op, useLowQualityScale);
+}
+
+void GraphicsContext::drawImageBuffer(ImageBuffer* image, ColorSpace styleColorSpace, const FloatRect& dest, const FloatRect& src, CompositeOperator op, bool useLowQualityScale)
+{
+    if (paintingDisabled() || !image)
+        return;
+
+    float tsw = src.width();
+    float tsh = src.height();
+    float tw = dest.width();
+    float th = dest.height();
+
+    if (tsw == -1)
+        tsw = image->width();
+    if (tsh == -1)
+        tsh = image->height();
+
+    if (tw == -1)
+        tw = image->width();
+    if (th == -1)
+        th = image->height();
+
+    if (useLowQualityScale) {
+        save();
+        setImageInterpolationQuality(InterpolationNone);
+    }
+
+    image->draw(this, styleColorSpace, dest, src, op, useLowQualityScale);
+
+    if (useLowQualityScale)
+        restore();
+}
+
 void GraphicsContext::addRoundedRectClip(const IntRect& rect, const IntSize& topLeft, const IntSize& topRight,
     const IntSize& bottomLeft, const IntSize& bottomRight)
 {
@@ -458,6 +519,13 @@ void GraphicsContext::clipOutRoundedRect(const IntRect& rect, const IntSize& top
         return;
 
     clipOut(Path::createRoundedRectangle(rect, topLeft, topRight, bottomLeft, bottomRight));
+}
+
+void GraphicsContext::clipToImageBuffer(ImageBuffer* buffer, const FloatRect& rect)
+{
+    if (paintingDisabled())
+        return;
+    buffer->clip(this, rect);
 }
 
 int GraphicsContext::textDrawingMode()
@@ -511,6 +579,21 @@ void GraphicsContext::setPlatformStrokeStyle(const StrokeStyle&)
 {
 }
 #endif
+
+#if !PLATFORM(SKIA)
+void GraphicsContext::setSharedGraphicsContext3D(SharedGraphicsContext3D*, DrawingBuffer*, const IntSize&)
+{
+}
+
+void GraphicsContext::syncSoftwareCanvas()
+{
+}
+
+void GraphicsContext::markDirtyRect(const IntRect&)
+{
+}
+#endif
+
 
 void GraphicsContext::adjustLineToPixelBoundaries(FloatPoint& p1, FloatPoint& p2, float strokeWidth, const StrokeStyle& penStyle)
 {

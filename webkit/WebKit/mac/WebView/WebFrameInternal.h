@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005, 2006, 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,7 +30,6 @@
 
 #import "WebFramePrivate.h"
 #import "WebPreferencesPrivate.h"
-
 #import <WebCore/EditAction.h>
 #import <WebCore/FrameLoaderTypes.h>
 #import <WebCore/SelectionController.h>
@@ -71,7 +70,7 @@ WebView *kit(WebCore::Page*);
 
 WebCore::EditableLinkBehavior core(WebKitEditableLinkBehavior);
 WebCore::TextDirectionSubmenuInclusionBehavior core(WebTextDirectionSubmenuInclusionBehavior);
-WebCore::EditingBehavior core(WebKitEditingBehavior);
+WebCore::EditingBehaviorType core(WebKitEditingBehavior);
 
 WebView *getWebView(WebFrame *webFrame);
 
@@ -92,8 +91,8 @@ WebView *getWebView(WebFrame *webFrame);
 
 @interface WebFrame (WebInternal)
 
-+ (void)_createMainFrameWithPage:(WebCore::Page*)page frameName:(const WebCore::String&)name frameView:(WebFrameView *)frameView;
-+ (PassRefPtr<WebCore::Frame>)_createSubframeWithOwnerElement:(WebCore::HTMLFrameOwnerElement*)ownerElement frameName:(const WebCore::String&)name frameView:(WebFrameView *)frameView;
++ (void)_createMainFrameWithPage:(WebCore::Page*)page frameName:(const WTF::String&)name frameView:(WebFrameView *)frameView;
++ (PassRefPtr<WebCore::Frame>)_createSubframeWithOwnerElement:(WebCore::HTMLFrameOwnerElement*)ownerElement frameName:(const WTF::String&)name frameView:(WebFrameView *)frameView;
 - (id)_initWithWebFrameView:(WebFrameView *)webFrameView webView:(WebView *)webView;
 
 - (void)_clearCoreFrame;
@@ -142,7 +141,6 @@ WebView *getWebView(WebFrame *webFrame);
 - (id)_accessibilityTree;
 
 - (DOMRange *)_rangeByAlteringCurrentSelection:(WebCore::SelectionController::EAlteration)alteration direction:(WebCore::SelectionController::EDirection)direction granularity:(WebCore::TextGranularity)granularity;
-- (void)_smartInsertForString:(NSString *)pasteString replacingRange:(DOMRange *)charRangeToReplace beforeString:(NSString **)beforeString afterString:(NSString **)afterString;
 - (NSRange)_convertToNSRange:(WebCore::Range*)range;
 - (DOMRange *)_convertNSRangeToDOMRange:(NSRange)range;
 - (NSRange)_convertDOMRangeToNSRange:(DOMRange *)range;
@@ -164,7 +162,7 @@ WebView *getWebView(WebFrame *webFrame);
 - (BOOL)_canProvideDocumentSource;
 - (BOOL)_canSaveAsWebArchive;
 
-- (void)_receivedData:(NSData *)data textEncodingName:(NSString *)textEncodingName;
+- (void)_commitData:(NSData *)data;
 
 @end
 

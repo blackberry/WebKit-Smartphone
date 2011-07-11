@@ -70,8 +70,13 @@ namespace WTF {
 class ThreadSafeSharedBase : public Noncopyable {
 public:
     ThreadSafeSharedBase(int initialRefCount = 1)
+#if !OS(OLYMPIA)
         : m_refCount(initialRefCount)
+#endif
     {
+#if OS(OLYMPIA)
+        m_refCount.counter = initialRefCount;
+#endif
     }
 
     void ref()
@@ -94,7 +99,11 @@ public:
 #if !USE(LOCKFREE_THREADSAFESHARED)
         MutexLocker locker(m_mutex);
 #endif
+#if OS(OLYMPIA)
+        return static_cast<atomic_t const volatile &>(m_refCount).counter;
+#else
         return static_cast<int const volatile &>(m_refCount);
+#endif
     }
 
 protected:
@@ -121,7 +130,11 @@ private:
     template<class T>
     friend class CrossThreadRefCounted;
 
+#if OS(OLYMPIA)
+    atomic_t m_refCount;
+#else
     int m_refCount;
+#endif
 #if !USE(LOCKFREE_THREADSAFESHARED)
     mutable Mutex m_mutex;
 #endif
@@ -129,15 +142,15 @@ private:
 
 template<class T> class ThreadSafeShared : public ThreadSafeSharedBase {
 public:
-    ThreadSafeShared(int initialRefCount = 1)
-        : ThreadSafeSharedBase(initialRefCount)
-    {
-    }
-
     void deref()
     {
         if (derefBase())
             delete static_cast<T*>(this);
+    }
+
+protected:
+    ThreadSafeShared()
+    {
     }
 };
 

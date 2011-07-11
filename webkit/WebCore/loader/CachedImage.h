@@ -32,7 +32,7 @@
 
 namespace WebCore {
 
-class DocLoader;
+class CachedResourceLoader;
 class Cache;
 
 class CachedImage : public CachedResource, public ImageObserver {
@@ -43,7 +43,7 @@ public:
     CachedImage(Image*);
     virtual ~CachedImage();
     
-    virtual void load(DocLoader* docLoader);
+    virtual void load(CachedResourceLoader* cachedResourceLoader);
 
     Image* image() const;
 
@@ -74,8 +74,6 @@ public:
     virtual void httpStatusCodeError() { m_httpStatusCodeErrorOccurred = true; }
     bool httpStatusCodeErrorOccurred() const { return m_httpStatusCodeErrorOccurred; }
     
-    virtual bool schedule() const { return true; }
-
     void checkNotify();
     
     virtual bool isImage() const { return true; }

@@ -34,6 +34,7 @@ module core {
     interface [Conditional=INSPECTOR] InspectorFrontendHost {
         void loaded();
         void closeWindow();
+        void disconnectFromBackend();
         void bringToFront();
         void inspectedURLChanged(in DOMString newURL);
 
@@ -41,6 +42,7 @@ module core {
         void requestDetachWindow();
         void setAttachedWindowHeight(in unsigned long height);
         void moveWindowBy(in float x, in float y);
+        void setExtensionAPI(in DOMString script);
 
         DOMString localizedStringsURL();
         DOMString hiddenPanels();
@@ -50,5 +52,6 @@ module core {
         [Custom] DOMString platform();
         [Custom] DOMString port();
         [Custom] void showContextMenu(in MouseEvent event, in DOMObject items);
+        void sendMessageToBackend(in DOMString message);
     };
 }

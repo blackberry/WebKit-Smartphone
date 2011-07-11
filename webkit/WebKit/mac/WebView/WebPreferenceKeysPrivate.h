@@ -83,6 +83,8 @@
 #define WebKitLocalStorageDatabasePathPreferenceKey @"WebKitLocalStorageDatabasePathPreferenceKey"
 #define WebKitEnableFullDocumentTeardownPreferenceKey @"WebKitEnableFullDocumentTeardown"
 #define WebKitOfflineWebApplicationCacheEnabledPreferenceKey @"WebKitOfflineWebApplicationCacheEnabled"
+#define WebKitApplicationCacheTotalQuota @"WebKitApplicationCacheTotalQuota"
+#define WebKitApplicationCacheDefaultOriginQuota @"WebKitApplicationCacheDefaultOriginQuota"
 #define WebKitZoomsTextOnlyPreferenceKey @"WebKitZoomsTextOnly"
 #define WebKitJavaScriptCanAccessClipboardPreferenceKey @"WebKitJavaScriptCanAccessClipboard"
 #define WebKitXSSAuditorEnabledPreferenceKey @"WebKitXSSAuditorEnabled"
@@ -93,7 +95,10 @@
 #define WebKitUsesProxiedOpenPanelPreferenceKey @"WebKitUsesProxiedOpenPanel"
 #define WebKitPluginAllowedRunTimePreferenceKey @"WebKitPluginAllowedRunTime"
 #define WebKitFrameFlatteningEnabledPreferenceKey @"WebKitFrameFlatteningEnabled"
-#define WebKitHTML5ParserEnabledPreferenceKey @"WebKitHTML5ParserEnabled"
+#define WebKitPaginateDuringLayoutEnabledPreferenceKey @"WebKitPaginateDuringLayoutEnabled"
+#define WebKitDNSPrefetchingEnabledPreferenceKey @"WebKitDNSPrefetchingEnabled"
+#define WebKitFullScreenEnabledPreferenceKey @"WebKitFullScreenEnabled"
+#define WebKitMemoryInfoEnabledPreferenceKey @"WebKitMemoryInfoEnabled"
 
 // These are private both because callers should be using the cover methods and because the
 // cover methods themselves are private.

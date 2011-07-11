@@ -143,3 +143,7 @@
 #define WebKitShowRepaintCounterPreferenceKey "WebKitShowRepaintCounter"
 
 #define WebKitCustomDragCursorsEnabledPreferenceKey "WebKitCustomDragCursorsEnabled"
+
+#define WebKitDNSPrefetchingEnabledPreferenceKey "WebKitDNSPrefetchingEnabled"
+
+#define WebKitMemoryInfoEnabledPreferenceKey "WebKitMemoryInfoEnabled"

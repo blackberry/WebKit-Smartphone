@@ -24,6 +24,7 @@
 #include "Parser.h"
 
 #include "Debugger.h"
+#include "JSParser.h"
 #include "Lexer.h"
 #include <wtf/HashSet.h>
 #include <wtf/Vector.h>
@@ -52,9 +53,9 @@ void Parser::parse(JSGlobalData* globalData, int* errLine, UString* errMsg)
     Lexer& lexer = *globalData->lexer;
     lexer.setCode(*m_source, m_arena);
 
-    int parseError = jscyyparse(globalData);
-    bool lexError = lexer.sawError();
+    int parseError = jsParse(globalData, m_source);
     int lineNumber = lexer.lineNumber();
+    bool lexError = lexer.sawError();
     lexer.clear();
 
     if (parseError || lexError) {

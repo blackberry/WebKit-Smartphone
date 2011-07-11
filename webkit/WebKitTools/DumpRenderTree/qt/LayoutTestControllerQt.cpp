@@ -53,6 +53,7 @@ void LayoutTestController::reset()
     m_textDump = false;
     m_dumpBackForwardList = false;
     m_dumpChildrenAsText = false;
+    m_dumpChildFrameScrollPositions = false;
     m_canOpenWindows = false;
     m_waitForDone = false;
     m_dumpTitleChanges = false;
@@ -64,13 +65,24 @@ void LayoutTestController::reset()
     m_handleErrorPages = false;
     m_webHistory = 0;
     m_globalFlag = false;
+    m_userStyleSheetEnabled = false;
+    m_desktopNotificationAllowedOrigins.clear();
+    m_ignoreDesktopNotification = false;
+    m_isGeolocationPermissionSet = false;
+    m_geolocationPermission = false;
+
     DumpRenderTreeSupportQt::dumpEditingCallbacks(false);
     DumpRenderTreeSupportQt::dumpFrameLoader(false);
     DumpRenderTreeSupportQt::dumpResourceLoadCallbacks(false);
+    DumpRenderTreeSupportQt::dumpResourceResponseMIMETypes(false);
+    DumpRenderTreeSupportQt::setDeferMainResourceDataLoad(true);
     DumpRenderTreeSupportQt::setWillSendRequestReturnsNullOnRedirect(false);
     DumpRenderTreeSupportQt::setWillSendRequestReturnsNull(false);
     DumpRenderTreeSupportQt::setWillSendRequestClearHeaders(QStringList());
+    DumpRenderTreeSupportQt::clearScriptWorlds();
+    DumpRenderTreeSupportQt::setCustomPolicyDelegate(false, false);
     setIconDatabaseEnabled(false);
+
     emit hidePage();
 }
 
@@ -181,13 +193,22 @@ int LayoutTestController::windowCount()
 
 void LayoutTestController::grantDesktopNotificationPermission(const QString& origin)
 {
-    // FIXME: Implement for notification security
+    m_desktopNotificationAllowedOrigins.append(origin);
+}
+
+void LayoutTestController::ignoreDesktopNotificationPermissionRequests()
+{
+    m_ignoreDesktopNotification = true;
 }
 
 bool LayoutTestController::checkDesktopNotificationPermission(const QString& origin)
 {
-    // FIXME: Implement for notification security
-    return true;
+    return !m_ignoreDesktopNotification && m_desktopNotificationAllowedOrigins.contains(origin);
+}
+
+void LayoutTestController::simulateDesktopNotificationClick(const QString& title)
+{
+    DumpRenderTreeSupportQt::simulateDesktopNotificationClick(title);
 }
 
 void LayoutTestController::display()
@@ -206,6 +227,12 @@ QString LayoutTestController::pathToLocalResource(const QString& url)
     return QDir::toNativeSeparators(url);
 }
 
+void LayoutTestController::dumpConfigurationForViewport(int availableWidth, int availableHeight)
+{
+    QString res = DumpRenderTreeSupportQt::viewportAsText(m_drt->webPage(), QSize(availableWidth, availableHeight));
+    fputs(qPrintable(res), stdout);
+}
+
 void LayoutTestController::dumpEditingCallbacks()
 {
     qDebug() << ">>>dumpEditingCallbacks";
@@ -222,6 +249,11 @@ void LayoutTestController::dumpResourceLoadCallbacks()
     DumpRenderTreeSupportQt::dumpResourceLoadCallbacks(true);
 }
 
+void LayoutTestController::dumpResourceResponseMIMETypes()
+{
+    DumpRenderTreeSupportQt::dumpResourceResponseMIMETypes(true);
+}
+
 void LayoutTestController::setWillSendRequestReturnsNullOnRedirect(bool enabled)
 {
     DumpRenderTreeSupportQt::setWillSendRequestReturnsNullOnRedirect(enabled);
@@ -235,6 +267,11 @@ void LayoutTestController::setWillSendRequestReturnsNull(bool enabled)
 void LayoutTestController::setWillSendRequestClearHeader(const QStringList& headers)
 {
     DumpRenderTreeSupportQt::setWillSendRequestClearHeaders(headers);
+}
+
+void LayoutTestController::setDeferMainResourceDataLoad(bool defer)
+{
+    DumpRenderTreeSupportQt::setDeferMainResourceDataLoad(defer);
 }
 
 void LayoutTestController::queueBackNavigation(int howFarBackward)
@@ -255,6 +292,11 @@ void LayoutTestController::queueLoad(const QString& url, const QString& target)
     QUrl mainResourceUrl = m_drt->webPage()->mainFrame()->url();
     QString absoluteUrl = mainResourceUrl.resolved(QUrl(url)).toEncoded();
     WorkQueue::shared()->queue(new LoadItem(absoluteUrl, target, m_drt->webPage()));
+}
+
+void LayoutTestController::queueLoadHTMLString(const QString& content, const QString& baseURL)
+{
+    WorkQueue::shared()->queue(new LoadHTMLStringItem(content, baseURL, m_drt->webPage()));
 }
 
 void LayoutTestController::queueReload()
@@ -408,7 +450,7 @@ void LayoutTestController::setMainFrameIsFirstResponder(bool isFirst)
 
 void LayoutTestController::setJavaScriptCanAccessClipboard(bool enable)
 {
-    m_drt->webPage()->settings()->setAttribute(QWebSettings::JavaScriptCanAccessClipboard, enable);
+    m_drt->webPage()->settings()->setAttribute(QWebSettings::JavascriptCanAccessClipboard, enable);
 }
 
 void LayoutTestController::setXSSAuditorEnabled(bool enable)
@@ -455,6 +497,20 @@ unsigned LayoutTestController::numberOfActiveAnimations() const
     return DumpRenderTreeSupportQt::numberOfActiveAnimations(frame);
 }
 
+void LayoutTestController::suspendAnimations() const
+{
+    QWebFrame* frame = m_drt->webPage()->mainFrame();
+    Q_ASSERT(frame);
+    DumpRenderTreeSupportQt::suspendAnimations(frame);
+}
+
+void LayoutTestController::resumeAnimations() const
+{
+    QWebFrame* frame = m_drt->webPage()->mainFrame();
+    Q_ASSERT(frame);
+    DumpRenderTreeSupportQt::resumeAnimations(frame);
+}
+
 void LayoutTestController::disableImageLoading()
 {
     m_drt->webPage()->settings()->setAttribute(QWebSettings::AutoLoadImages, false);
@@ -463,6 +519,16 @@ void LayoutTestController::disableImageLoading()
 void LayoutTestController::dispatchPendingLoadRequests()
 {
     // FIXME: Implement for testing fix for 6727495
+}
+
+void LayoutTestController::clearAllApplicationCaches()
+{
+    // FIXME: implement to support Application Cache quotas.
+}
+
+void LayoutTestController::setApplicationCacheOriginQuota(unsigned long long quota)
+{
+    // FIXME: implement to support Application Cache quotas.
 }
 
 void LayoutTestController::setDatabaseQuota(int size)
@@ -485,6 +551,11 @@ void LayoutTestController::addOriginAccessWhitelistEntry(const QString& sourceOr
 void LayoutTestController::removeOriginAccessWhitelistEntry(const QString& sourceOrigin, const QString& destinationProtocol, const QString& destinationHost, bool allowDestinationSubdomains)
 {
     DumpRenderTreeSupportQt::removeWhiteListAccessFromOrigin(sourceOrigin, destinationProtocol, destinationHost, allowDestinationSubdomains);
+}
+
+void LayoutTestController::setCustomPolicyDelegate(bool enabled, bool permissive)
+{
+    DumpRenderTreeSupportQt::setCustomPolicyDelegate(enabled, permissive);
 }
 
 void LayoutTestController::waitForPolicyDelegate()
@@ -511,6 +582,8 @@ void LayoutTestController::overridePreference(const QString& name, const QVarian
         setCaretBrowsingEnabled(value.toBool());
     else if (name == "WebKitPluginsEnabled")
         settings->setAttribute(QWebSettings::PluginsEnabled, value.toBool());
+    else if (name == "WebKitWebGLEnabled")
+        settings->setAttribute(QWebSettings::WebGLEnabled, value.toBool());
     else
         printf("ERROR: LayoutTestController::overridePreference() does not support the '%s' preference\n",
             name.toLatin1().data());
@@ -519,6 +592,9 @@ void LayoutTestController::overridePreference(const QString& name, const QVarian
 void LayoutTestController::setUserStyleSheetLocation(const QString& url)
 {
     m_userStyleSheetLocation = QUrl(url);
+
+    if (m_userStyleSheetEnabled)
+        setUserStyleSheetEnabled(true);
 }
 
 void LayoutTestController::setCaretBrowsingEnabled(bool value)
@@ -528,6 +604,8 @@ void LayoutTestController::setCaretBrowsingEnabled(bool value)
 
 void LayoutTestController::setUserStyleSheetEnabled(bool enabled)
 {
+    m_userStyleSheetEnabled = enabled;
+
     if (enabled)
         m_drt->webPage()->settings()->setUserStyleSheetUrl(m_userStyleSheetLocation);
     else
@@ -562,8 +640,7 @@ int LayoutTestController::numberOfPages(float width, float height)
 
 bool LayoutTestController::callShouldCloseOnWebView()
 {
-    // FIXME: Implement for testing fix for https://bugs.webkit.org/show_bug.cgi?id=27481
-    return false;
+    return DumpRenderTreeSupportQt::shouldClose(m_drt->webPage()->mainFrame());
 }
 
 void LayoutTestController::setScrollbarPolicy(const QString& orientation, const QString& policy)
@@ -641,6 +718,66 @@ void LayoutTestController::setIconDatabaseEnabled(bool enable)
 void LayoutTestController::setEditingBehavior(const QString& editingBehavior)
 {
     DumpRenderTreeSupportQt::setEditingBehavior(m_drt->webPage(), editingBehavior);
+}
+
+void LayoutTestController::setMockDeviceOrientation(bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma)
+{
+    // FIXME: Implement for DeviceOrientation layout tests.
+    // See https://bugs.webkit.org/show_bug.cgi?id=30335.
+}
+
+void LayoutTestController::setGeolocationPermission(bool allow)
+{
+    setGeolocationPermissionCommon(allow);
+    emit geolocationPermissionSet();
+}
+
+void LayoutTestController::setGeolocationPermissionCommon(bool allow)
+{
+     m_isGeolocationPermissionSet = true;
+     m_geolocationPermission = allow;
+}
+
+void LayoutTestController::setMockGeolocationError(int code, const QString& message)
+{
+    DumpRenderTreeSupportQt::setMockGeolocationError(code, message);
+}
+
+void LayoutTestController::setMockGeolocationPosition(double latitude, double longitude, double accuracy)
+{
+    DumpRenderTreeSupportQt::setMockGeolocationPosition(latitude, longitude, accuracy);
+}
+
+void LayoutTestController::setMockSpeechInputResult(const QString& result)
+{
+    // FIXME: Implement for speech input layout tests.
+    // See https://bugs.webkit.org/show_bug.cgi?id=39485.
+}
+
+void LayoutTestController::evaluateScriptInIsolatedWorld(int worldID, const QString& script)
+{
+    DumpRenderTreeSupportQt::evaluateScriptInIsolatedWorld(m_drt->webPage()->mainFrame(), worldID, script);
+}
+
+bool LayoutTestController::isPageBoxVisible(int pageIndex)
+{
+    return DumpRenderTreeSupportQt::isPageBoxVisible(m_drt->webPage()->mainFrame(), pageIndex);
+}
+
+QString LayoutTestController::pageSizeAndMarginsInPixels(int pageIndex, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft)
+{
+    return DumpRenderTreeSupportQt::pageSizeAndMarginsInPixels(m_drt->webPage()->mainFrame(), pageIndex,
+                                                               width, height, marginTop, marginRight, marginBottom, marginLeft);
+}
+
+QString LayoutTestController::pageProperty(const QString& propertyName, int pageNumber)
+{
+    return DumpRenderTreeSupportQt::pageProperty(m_drt->webPage()->mainFrame(), propertyName, pageNumber);
+}
+
+void LayoutTestController::addUserStyleSheet(const QString& sourceCode)
+{
+    DumpRenderTreeSupportQt::addUserStyleSheet(m_drt->webPage(), sourceCode);
 }
 
 const unsigned LayoutTestController::maxViewWidth = 800;

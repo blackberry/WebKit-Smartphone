@@ -109,6 +109,9 @@ namespace JSC {
         virtual void put(ExecState*, const Identifier& propertyName, JSValue value, PutPropertySlot&);
         virtual void put(ExecState*, unsigned propertyName, JSValue value);
 
+        virtual void putWithAttributes(JSGlobalData*, const Identifier& propertyName, JSValue value, unsigned attributes, bool checkReadOnly, PutPropertySlot& slot);
+        virtual void putWithAttributes(JSGlobalData*, const Identifier& propertyName, JSValue value, unsigned attributes);
+        virtual void putWithAttributes(JSGlobalData*, unsigned propertyName, JSValue value, unsigned attributes);
         virtual void putWithAttributes(ExecState*, const Identifier& propertyName, JSValue value, unsigned attributes, bool checkReadOnly, PutPropertySlot& slot);
         virtual void putWithAttributes(ExecState*, const Identifier& propertyName, JSValue value, unsigned attributes);
         virtual void putWithAttributes(ExecState*, unsigned propertyName, JSValue value, unsigned attributes);
@@ -174,6 +177,7 @@ namespace JSC {
 
         void putDirect(const Identifier& propertyName, JSValue value, unsigned attr, bool checkReadOnly, PutPropertySlot& slot);
         void putDirect(const Identifier& propertyName, JSValue value, unsigned attr = 0);
+        void putDirect(const Identifier& propertyName, JSValue value, PutPropertySlot&);
 
         void putDirectFunction(const Identifier& propertyName, JSCell* value, unsigned attr = 0);
         void putDirectFunction(const Identifier& propertyName, JSCell* value, unsigned attr, bool checkReadOnly, PutPropertySlot& slot);
@@ -587,6 +591,11 @@ inline void JSObject::putDirect(const Identifier& propertyName, JSValue value, u
     putDirectInternal(propertyName, value, attributes, false, slot, 0);
 }
 
+inline void JSObject::putDirect(const Identifier& propertyName, JSValue value, PutPropertySlot& slot)
+{
+    putDirectInternal(propertyName, value, 0, false, slot, 0);
+}
+
 inline void JSObject::putDirectFunction(const Identifier& propertyName, JSCell* value, unsigned attributes, bool checkReadOnly, PutPropertySlot& slot)
 {
     putDirectInternal(propertyName, value, attributes, checkReadOnly, slot, value);
@@ -687,6 +696,12 @@ inline void JSValue::put(ExecState* exec, const Identifier& propertyName, JSValu
         return;
     }
     asCell()->put(exec, propertyName, value, slot);
+}
+
+inline void JSValue::putDirect(ExecState*, const Identifier& propertyName, JSValue value, PutPropertySlot& slot)
+{
+    ASSERT(isCell() && isObject());
+    asObject(asCell())->putDirect(propertyName, value, slot);
 }
 
 inline void JSValue::put(ExecState* exec, unsigned propertyName, JSValue value)

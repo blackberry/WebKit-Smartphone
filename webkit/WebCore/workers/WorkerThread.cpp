@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 Apple Inc. All Rights Reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,7 +31,6 @@
 
 #include "WorkerThread.h"
 
-#include "DatabaseTask.h"
 #include "DedicatedWorkerContext.h"
 #include "KURL.h"
 #include "PlatformString.h"
@@ -40,6 +40,15 @@
 
 #include <utility>
 #include <wtf/Noncopyable.h>
+
+#if ENABLE(DATABASE)
+#include "DatabaseTask.h"
+#include "DatabaseTracker.h"
+#endif
+
+#if OS(OLYMPIA)
+#include "OlympiaPlatformMisc.h"
+#endif
 
 namespace WebCore {
 
@@ -149,6 +158,7 @@ void* WorkerThread::workerThread()
 
 #if OS(OLYMPIA)
         m_workerContext = createWorkerContext(m_startupData->m_scriptURL, m_startupData->m_groupName, m_startupData->m_userAgent);
+        Olympia::Platform::didStartWorker();
 #else
         m_workerContext = createWorkerContext(m_startupData->m_scriptURL, m_startupData->m_userAgent);
 #endif
@@ -258,6 +268,15 @@ void WorkerThread::stop()
     // Ensure that tasks are being handled by thread event loop. If script execution weren't forbidden, a while(1) loop in JS could keep the thread alive forever.
     if (m_workerContext) {
         m_workerContext->script()->forbidExecution(WorkerScriptController::TerminateRunningScript);
+
+#if ENABLE(DATABASE)
+#if OS(OLYMPIA)
+        DatabaseTracker& tracker = DatabaseTracker::tracker(m_workerContext->groupName());
+        tracker.interruptAllDatabasesForContext(m_workerContext.get());
+#else
+        DatabaseTracker::tracker().interruptAllDatabasesForContext(m_workerContext.get());
+#endif
+#endif
 
     // FIXME: Rudely killing the thread won't work when we allow nested workers, because they will try to post notifications of their destruction.
     // This can likely use the same mechanism as used for databases above.

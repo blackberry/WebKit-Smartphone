@@ -27,20 +27,30 @@
 #define WorkQueue_h
 
 #if PLATFORM(MAC)
+#if HAVE(DISPATCH_H)
 #include <dispatch/dispatch.h>
+#endif
 #endif
 
 #include "WorkItem.h"
 #include <wtf/HashMap.h>
+#include <wtf/PassOwnPtr.h>
+#include <wtf/RefCounted.h>
 #include <wtf/Threading.h>
 #include <wtf/Vector.h>
+
+#if PLATFORM(QT)
+class QLocalSocket;
+class QObject;
+class QThread;
+#endif
 
 class WorkQueue {
 public:
     explicit WorkQueue(const char* name);
     ~WorkQueue();
 
-    void scheduleWork(std::auto_ptr<WorkItem>);
+    void scheduleWork(PassOwnPtr<WorkItem>);
     void invalidate();
 
 #if PLATFORM(MAC)
@@ -54,11 +64,16 @@ public:
     
     // Will execute the given work item whenever the given mach port event fires.
     // Note that this will adopt the mach port and destroy it when the work queue is invalidated.
-    void registerMachPortEventHandler(mach_port_t, MachPortEventType, std::auto_ptr<WorkItem>);
+    void registerMachPortEventHandler(mach_port_t, MachPortEventType, PassOwnPtr<WorkItem>);
     void unregisterMachPortEventHandler(mach_port_t);
 #elif PLATFORM(WIN)
-    void registerHandle(HANDLE, std::auto_ptr<WorkItem>);
-    void unregisterHandle(HANDLE);
+    void registerHandle(HANDLE, PassOwnPtr<WorkItem>);
+    void unregisterAndCloseHandle(HANDLE);
+#elif PLATFORM(QT)
+    void connectSignal(QObject*, const char* signal, PassOwnPtr<WorkItem>);
+    void disconnectSignal(QObject*, const char* signal);
+
+    void moveSocketToWorkThread(QLocalSocket*);
 #endif
 
 private:
@@ -70,26 +85,67 @@ private:
     void platformInvalidate();
 
 #if PLATFORM(MAC)
+#if HAVE(DISPATCH_H)
     static void executeWorkItem(void*);
-    
     Mutex m_eventSourcesMutex;
     class EventSource;
     HashMap<mach_port_t, EventSource*> m_eventSources;
     dispatch_queue_t m_dispatchQueue;
+#endif
 #elif PLATFORM(WIN)
-    static void* workQueueThreadBody(void*);
-    void workQueueThreadBody();
-    void performWork();
+    class WorkItemWin : public ThreadSafeShared<WorkItemWin> {
+    public:
+        static PassRefPtr<WorkItemWin> create(PassOwnPtr<WorkItem>, WorkQueue*);
+        virtual ~WorkItemWin();
 
-    ThreadIdentifier m_workQueueThread;
+        WorkItem* item() const { return m_item.get(); }
+        WorkQueue* queue() const { return m_queue; }
 
-    HANDLE m_performWorkEvent;
+    protected:
+        WorkItemWin(PassOwnPtr<WorkItem>, WorkQueue*);
+
+    private:
+        OwnPtr<WorkItem> m_item;
+        WorkQueue* m_queue;
+    };
+
+    class HandleWorkItem : public WorkItemWin {
+    public:
+        static PassRefPtr<HandleWorkItem> createByAdoptingHandle(HANDLE, PassOwnPtr<WorkItem>, WorkQueue*);
+        virtual ~HandleWorkItem();
+
+        void setWaitHandle(HANDLE waitHandle) { m_waitHandle = waitHandle; }
+        HANDLE waitHandle() const { return m_waitHandle; }
+
+    private:
+        HandleWorkItem(HANDLE, PassOwnPtr<WorkItem>, WorkQueue*);
+
+        HANDLE m_handle;
+        HANDLE m_waitHandle;
+    };
+
+    static void CALLBACK handleCallback(void* context, BOOLEAN timerOrWaitFired);
+    static DWORD WINAPI workThreadCallback(void* context);
+
+    bool tryRegisterAsWorkThread();
+    void unregisterAsWorkThread();
+    void performWorkOnRegisteredWorkThread();
+
+    static void unregisterWaitAndDestroyItemSoon(PassRefPtr<HandleWorkItem>);
+    static DWORD WINAPI unregisterWaitAndDestroyItemCallback(void* context);
+
+    volatile LONG m_isWorkThreadRegistered;
 
     Mutex m_workItemQueueLock;
-    Vector<WorkItem*> m_workItemQueue;
+    Vector<RefPtr<WorkItemWin> > m_workItemQueue;
 
     Mutex m_handlesLock;
-    HashMap<HANDLE, WorkItem*> m_handles;
+    HashMap<HANDLE, RefPtr<HandleWorkItem> > m_handles;
+#elif PLATFORM(QT)
+    class WorkItemQt;
+    HashMap<QObject*, WorkItemQt*> m_signalListeners;
+    QThread* m_workThread;
+    friend class WorkItemQt;
 #endif
 };
 

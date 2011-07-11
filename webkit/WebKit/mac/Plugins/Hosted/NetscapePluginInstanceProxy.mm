@@ -23,7 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#if USE(PLUGIN_HOST_PROCESS)
+#if USE(PLUGIN_HOST_PROCESS) && ENABLE(NETSCAPE_PLUGIN_API)
 
 #import "NetscapePluginInstanceProxy.h"
 
@@ -206,6 +206,8 @@ bool NetscapePluginInstanceProxy::LocalObjectMap::forget(uint32_t objectID)
 
 static uint32_t pluginIDCounter;
 
+bool NetscapePluginInstanceProxy::m_inDestroy;
+
 #ifndef NDEBUG
 static WTF::RefCountedLeakCounter netscapePluginInstanceProxyCounter("NetscapePluginInstanceProxy");
 #endif
@@ -222,7 +224,6 @@ NetscapePluginInstanceProxy::NetscapePluginInstanceProxy(NetscapePluginHostProxy
     , m_pluginFunctionCallDepth(0)
     , m_shouldStopSoon(false)
     , m_currentRequestID(0)
-    , m_inDestroy(false)
     , m_pluginIsWaitingForDraw(false)
 {
     ASSERT(m_pluginView);
@@ -237,12 +238,17 @@ NetscapePluginInstanceProxy::NetscapePluginInstanceProxy(NetscapePluginHostProxy
     do {
         m_pluginID = ++pluginIDCounter;
     } while (pluginHostProxy->pluginInstance(m_pluginID) || !m_pluginID);
-    
-    pluginHostProxy->addPluginInstance(this);
 
 #ifndef NDEBUG
     netscapePluginInstanceProxyCounter.increment();
 #endif
+}
+
+PassRefPtr<NetscapePluginInstanceProxy> NetscapePluginInstanceProxy::create(NetscapePluginHostProxy* pluginHostProxy, WebHostedNetscapePluginView *pluginView, bool fullFramePlugin)
+{
+    RefPtr<NetscapePluginInstanceProxy> proxy = adoptRef(new NetscapePluginInstanceProxy(pluginHostProxy, pluginView, fullFramePlugin));
+    pluginHostProxy->addPluginInstance(proxy.get());
+    return proxy.release();
 }
 
 NetscapePluginInstanceProxy::~NetscapePluginInstanceProxy()
@@ -316,7 +322,8 @@ void NetscapePluginInstanceProxy::invalidate()
 void NetscapePluginInstanceProxy::destroy()
 {
     uint32_t requestID = nextRequestID();
-    
+
+    ASSERT(!m_inDestroy);
     m_inDestroy = true;
     
     FrameLoadMap::iterator end = m_pendingFrameLoads.end();
@@ -755,7 +762,7 @@ NPError NetscapePluginInstanceProxy::loadRequest(NSURLRequest *request, const ch
             return NPERR_GENERIC_ERROR;
         }
     } else {
-        if (!SecurityOrigin::canLoad(URL, String(), core([m_pluginView webFrame])->document()))
+        if (!core([m_pluginView webFrame])->document()->securityOrigin()->canDisplay(URL))
             return NPERR_GENERIC_ERROR;
     }
     
@@ -843,6 +850,9 @@ bool NetscapePluginInstanceProxy::evaluate(uint32_t objectID, const String& scri
     resultData = 0;
     resultLength = 0;
 
+    if (m_inDestroy)
+        return false;
+
     if (!m_localObjects.contains(objectID)) {
         LOG_ERROR("NetscapePluginInstanceProxy::evaluate: local object %u doesn't exist.", objectID);
         return false;
@@ -901,7 +911,7 @@ bool NetscapePluginInstanceProxy::invoke(uint32_t objectID, const Identifier& me
     JSLock lock(SilenceAssertionsOnly);
     JSValue function = object->get(exec, methodName);
     CallData callData;
-    CallType callType = function.getCallData(callData);
+    CallType callType = getCallData(function, callData);
     if (callType == CallTypeNone)
         return false;
 
@@ -1228,7 +1238,7 @@ bool NetscapePluginInstanceProxy::enumerate(uint32_t objectID, data_t& resultDat
 
     RetainPtr<NSMutableArray*> array(AdoptNS, [[NSMutableArray alloc] init]);
     for (unsigned i = 0; i < propertyNames.size(); i++) {
-        uint64_t methodName = reinterpret_cast<uint64_t>(_NPN_GetStringIdentifier(propertyNames[i].ustring().UTF8String().data()));
+        uint64_t methodName = reinterpret_cast<uint64_t>(_NPN_GetStringIdentifier(propertyNames[i].ustring().utf8().data()));
 
         [array.get() addObject:[NSNumber numberWithLongLong:methodName]];
     }
@@ -1659,7 +1669,7 @@ void NetscapePluginInstanceProxy::moveGlobalExceptionToExecState(ExecState* exec
 
     {
         JSLock lock(SilenceAssertionsOnly);
-        throwError(exec, GeneralError, stringToUString(globalExceptionString()));
+        throwError(exec, createError(exec, stringToUString(globalExceptionString())));
     }
 
     globalExceptionString() = String();
@@ -1667,4 +1677,4 @@ void NetscapePluginInstanceProxy::moveGlobalExceptionToExecState(ExecState* exec
 
 } // namespace WebKit
 
-#endif // USE(PLUGIN_HOST_PROCESS)
+#endif // USE(PLUGIN_HOST_PROCESS) && ENABLE(NETSCAPE_PLUGIN_API)

@@ -28,14 +28,20 @@
 
 #include "AffineTransform.h"
 #include "CachedResourceClient.h"
+#include "CSSPrimitiveValue.h"
 #include "Document.h"
 #include "Element.h"
 #include "FloatQuad.h"
+#include "PaintInfo.h"
 #include "RenderObjectChildList.h"
 #include "RenderStyle.h"
 #include "TextAffinity.h"
 #include "TransformationMatrix.h"
 #include <wtf/UnusedParam.h>
+
+#if PLATFORM(CG) || PLATFORM(CAIRO) || PLATFORM(QT)
+#define HAVE_PATH_BASED_BORDER_RADIUS_DRAWING 1
+#endif
 
 namespace WebCore {
 
@@ -44,6 +50,7 @@ class HitTestResult;
 class InlineBox;
 class InlineFlowBox;
 class OverlapTestRequestClient;
+class Path;
 class Position;
 class RenderBoxModelObject;
 class RenderInline;
@@ -56,38 +63,6 @@ class VisiblePosition;
 #if ENABLE(SVG)
 class RenderSVGResourceContainer;
 #endif
-
-/*
- *  The painting of a layer occurs in three distinct phases.  Each phase involves
- *  a recursive descent into the layer's render objects. The first phase is the background phase.
- *  The backgrounds and borders of all blocks are painted.  Inlines are not painted at all.
- *  Floats must paint above block backgrounds but entirely below inline content that can overlap them.
- *  In the foreground phase, all inlines are fully painted.  Inline replaced elements will get all
- *  three phases invoked on them during this phase.
- */
-
-enum PaintPhase {
-    PaintPhaseBlockBackground,
-    PaintPhaseChildBlockBackground,
-    PaintPhaseChildBlockBackgrounds,
-    PaintPhaseFloat,
-    PaintPhaseForeground,
-    PaintPhaseOutline,
-    PaintPhaseChildOutlines,
-    PaintPhaseSelfOutline,
-    PaintPhaseSelection,
-    PaintPhaseCollapsedTableBorders,
-    PaintPhaseTextClip,
-    PaintPhaseMask
-};
-
-enum PaintBehaviorFlags {
-    PaintBehaviorNormal = 0,
-    PaintBehaviorSelectionOnly = 1 << 0,
-    PaintBehaviorForceBlackText = 1 << 1,
-    PaintBehaviorFlattenCompositingLayers = 1 << 2
-};
-typedef unsigned PaintBehavior;
 
 enum HitTestFilter {
     HitTestAll,
@@ -341,9 +316,12 @@ public:
     virtual bool isSVGHiddenContainer() const { return false; }
     virtual bool isRenderPath() const { return false; }
     virtual bool isSVGText() const { return false; }
+    virtual bool isSVGInline() const { return false; }
+    virtual bool isSVGInlineText() const { return false; }
     virtual bool isSVGImage() const { return false; }
     virtual bool isSVGForeignObject() const { return false; }
     virtual bool isSVGResourceContainer() const { return false; }
+    virtual bool isSVGResourceFilterPrimitive() const { return false; }
     virtual bool isSVGShadowTreeRootContainer() const { return false; }
 
     virtual RenderSVGResourceContainer* toRenderSVGResourceContainer();
@@ -352,7 +330,7 @@ public:
     // Unfortunately we don't have such a class yet, because it's not possible for all renderers
     // to inherit from RenderSVGObject -> RenderObject (some need RenderBlock inheritance for instance)
     virtual void setNeedsTransformUpdate() { }
-    virtual void setNeedsBoundariesUpdate() { }
+    virtual void setNeedsBoundariesUpdate();
 
     // Per SVG 1.1 objectBoundingBox ignores clipping, masking, filter effects, opacity and stroke-width.
     // This is used for all computation of objectBoundingBox relative units and by SVGLocateable::getBBox().
@@ -408,14 +386,7 @@ public:
     
     bool hasBoxDecorations() const { return m_paintBackground; }
     bool mustRepaintBackgroundOrBorder() const;
-    bool hasBackground() const
-    {
-        Color color = style()->visitedDependentColor(CSSPropertyBackgroundColor);
-        if (color.isValid() && color.alpha() > 0)
-            return true;
-        return style()->hasBackgroundImage();
-    }
-
+    bool hasBackground() const { return style()->hasBackground(); }
     bool needsLayout() const { return m_needsLayout || m_normalChildNeedsLayout || m_posChildNeedsLayout || m_needsPositionedMovementLayout; }
     bool selfNeedsLayout() const { return m_needsLayout; }
     bool needsPositionedMovementLayout() const { return m_needsPositionedMovementLayout; }
@@ -435,8 +406,19 @@ public:
 
     void drawLineForBoxSide(GraphicsContext*, int x1, int y1, int x2, int y2, BoxSide,
                             Color, EBorderStyle, int adjbw1, int adjbw2);
+#if HAVE(PATH_BASED_BORDER_RADIUS_DRAWING)
+    void drawBoxSideFromPath(GraphicsContext*, IntRect, Path, 
+                            float thickness, float drawThickness, BoxSide, const RenderStyle*, 
+                            Color, EBorderStyle);
+#else
+    // FIXME: This function should be removed when all ports implement GraphicsContext::clipConvexPolygon()!!
+    // At that time, everyone can use RenderObject::drawBoxSideFromPath() instead. This should happen soon.
     void drawArcForBoxSide(GraphicsContext*, int x, int y, float thickness, IntSize radius, int angleStart,
                            int angleSpan, BoxSide, Color, EBorderStyle, bool firstCorner);
+#endif
+
+    IntRect borderInnerRect(const IntRect&, unsigned short topWidth, unsigned short bottomWidth,
+                            unsigned short leftWidth, unsigned short rightWidth) const;
 
     // The pseudo element style can be cached or uncached.  Use the cached method if the pseudo element doesn't respect
     // any pseudo classes (and therefore has no concept of changing state).
@@ -451,8 +433,10 @@ public:
     bool isRooted(RenderView** = 0);
 
     Node* node() const { return m_isAnonymous ? 0 : m_node; }
-    Document* document() const { return m_node->document(); }
     void setNode(Node* node) { m_node = node; }
+
+    Document* document() const { return m_node->document(); }
+    Frame* frame() const { return document()->frame(); }
 
     bool hasOutlineAnnotation() const;
     bool hasOutline() const { return style()->hasOutline() || hasOutlineAnnotation(); }
@@ -503,36 +487,6 @@ public:
     // for the vertical-align property of inline elements
     // the offset of baseline from the top of the object.
     virtual int baselinePosition(bool firstLine, bool isRootLineBox = false) const;
-
-    typedef HashMap<OverlapTestRequestClient*, IntRect> OverlapTestRequestMap;
-
-    /*
-     * Paint the object and its children, clipped by (x|y|w|h).
-     * (tx|ty) is the calculated position of the parent
-     */
-    struct PaintInfo {
-        PaintInfo(GraphicsContext* newContext, const IntRect& newRect, PaintPhase newPhase, bool newForceBlackText,
-                  RenderObject* newPaintingRoot, ListHashSet<RenderInline*>* newOutlineObjects,
-                  OverlapTestRequestMap* overlapTestRequests = 0)
-            : context(newContext)
-            , rect(newRect)
-            , phase(newPhase)
-            , forceBlackText(newForceBlackText)
-            , paintingRoot(newPaintingRoot)
-            , outlineObjects(newOutlineObjects)
-            , overlapTestRequests(overlapTestRequests)
-        {
-        }
-
-        GraphicsContext* context;
-        IntRect rect;
-        PaintPhase phase;
-        bool forceBlackText;
-        RenderObject* paintingRoot; // used to draw just one element and its visual kids
-        ListHashSet<RenderInline*>* outlineObjects; // used to list outlines that should be painted by a block with inline children
-        OverlapTestRequestMap* overlapTestRequests;
-    };
-
     virtual void paint(PaintInfo&, int tx, int ty);
 
     // Recursive function that computes the size and position of this object and all its descendants.
@@ -765,17 +719,6 @@ public:
 
     void selectionStartEnd(int& spos, int& epos) const;
 
-    RenderObject* paintingRootForChildren(PaintInfo& paintInfo) const
-    {
-        // if we're the painting root, kids draw normally, and see root of 0
-        return (!paintInfo.paintingRoot || paintInfo.paintingRoot == this) ? 0 : paintInfo.paintingRoot;
-    }
-
-    bool shouldPaintWithinRoot(PaintInfo& paintInfo) const
-    {
-        return !paintInfo.paintingRoot || paintInfo.paintingRoot == this;
-    }
-
     bool hasOverrideSize() const { return m_hasOverrideSize; }
     void setHasOverrideSize(bool b) { m_hasOverrideSize = b; }
     
@@ -806,6 +749,7 @@ protected:
     // Overrides should call the superclass at the start
     virtual void styleDidChange(StyleDifference, const RenderStyle* oldStyle);
 
+    void paintFocusRing(GraphicsContext*, int tx, int ty, RenderStyle*);
     void paintOutline(GraphicsContext*, int tx, int ty, int w, int h);
     void addPDFURLRect(GraphicsContext*, const IntRect&);
 
@@ -1046,13 +990,14 @@ inline void makeMatrixRenderable(TransformationMatrix& matrix, bool has3DRenderi
 
 inline int adjustForAbsoluteZoom(int value, RenderObject* renderer)
 {
-    float zoomFactor = renderer->style()->effectiveZoom();
+    double zoomFactor = renderer->style()->effectiveZoom();
     if (zoomFactor == 1)
         return value;
     // Needed because computeLengthInt truncates (rather than rounds) when scaling up.
     if (zoomFactor > 1)
         value++;
-    return static_cast<int>(value / zoomFactor);
+
+    return roundForImpreciseConversion<int, INT_MAX, INT_MIN>(value / zoomFactor);
 }
 
 inline void adjustIntRectForAbsoluteZoom(IntRect& rect, RenderObject* renderer)

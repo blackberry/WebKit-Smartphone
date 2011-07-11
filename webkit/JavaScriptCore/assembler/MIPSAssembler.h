@@ -287,6 +287,11 @@ public:
         emitInst(0x00000018 | (rs << OP_SH_RS) | (rt << OP_SH_RT));
     }
 
+    void div(RegisterID rs, RegisterID rt)
+    {
+        emitInst(0x0000001a | (rs << OP_SH_RS) | (rt << OP_SH_RT));
+    }
+
     void mfhi(RegisterID rd)
     {
         emitInst(0x00000010 | (rd << OP_SH_RD));
@@ -524,6 +529,12 @@ public:
                  | (ft << OP_SH_FT));
     }
 
+    void divd(FPRegisterID fd, FPRegisterID fs, FPRegisterID ft)
+    {
+        emitInst(0x46200003 | (fd << OP_SH_FD) | (fs << OP_SH_FS)
+                 | (ft << OP_SH_FT));
+    }
+
     void lwc1(FPRegisterID ft, RegisterID rs, int offset)
     {
         emitInst(0xc4000000 | (ft << OP_SH_FT) | (rs << OP_SH_RS)
@@ -555,6 +566,12 @@ public:
         copDelayNop();
     }
 
+    void mthc1(RegisterID rt, FPRegisterID fs)
+    {
+        emitInst(0x44e00000 | (fs << OP_SH_FS) | (rt << OP_SH_RT));
+        copDelayNop();
+    }
+
     void mfc1(RegisterID rt, FPRegisterID fs)
     {
         emitInst(0x44000000 | (fs << OP_SH_FS) | (rt << OP_SH_RT));
@@ -574,6 +591,11 @@ public:
     void cvtdw(FPRegisterID fd, FPRegisterID fs)
     {
         emitInst(0x46800021 | (fd << OP_SH_FD) | (fs << OP_SH_FS));
+    }
+
+    void cvtwd(FPRegisterID fd, FPRegisterID fs)
+    {
+        emitInst(0x46200024 | (fd << OP_SH_FD) | (fs << OP_SH_FS));
     }
 
     void ceqd(FPRegisterID fs, FPRegisterID ft)

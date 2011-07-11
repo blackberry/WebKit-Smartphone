@@ -1,22 +1,22 @@
 /*
-    Copyright (C) 2004, 2005 Nikolas Zimmermann <wildfox@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 #if ENABLE(SVG)
@@ -50,16 +50,6 @@ SVGColor::SVGColor(const Color& c)
 {
 }
 
-
-SVGColor::~SVGColor()
-{
-}
-
-unsigned short SVGColor::colorType() const
-{
-    return m_colorType;
-}
-
 PassRefPtr<RGBColor> SVGColor::rgbColor() const
 {
     return RGBColor::create(m_color.rgb());
@@ -77,10 +67,7 @@ void SVGColor::setRGBColor(const String& rgbColor, ExceptionCode& ec)
 Color SVGColor::colorFromRGBColorString(const String& colorString)
 {
     String s = colorString.stripWhiteSpace();
-    // hsl, hsla and rgba are not in the SVG spec.
     // FIXME: rework css parser so it is more svg aware
-    if (s.startsWith("hsl") || s.startsWith("rgba"))
-        return Color();
     RGBA32 color;
     if (CSSParser::parseColor(color, s))
         return color;
@@ -104,11 +91,6 @@ String SVGColor::cssText() const
         return m_color.name();
 
     return String();
-}
-
-const Color& SVGColor::color() const
-{
-    return m_color;
 }
 
 }

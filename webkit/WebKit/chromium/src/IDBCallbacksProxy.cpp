@@ -32,8 +32,12 @@
 #include "IDBDatabaseError.h"
 #include "IDBDatabaseProxy.h"
 #include "WebIDBCallbacks.h"
+#include "WebIDBCursorImpl.h"
 #include "WebIDBDatabaseImpl.h"
 #include "WebIDBDatabaseError.h"
+#include "WebIDBIndexImpl.h"
+#include "WebIDBKey.h"
+#include "WebIDBObjectStoreImpl.h"
 #include "WebSerializedScriptValue.h"
 
 #if ENABLE(INDEXED_DATABASE)
@@ -42,7 +46,7 @@ namespace WebCore {
 
 PassRefPtr<IDBCallbacksProxy> IDBCallbacksProxy::create(PassOwnPtr<WebKit::WebIDBCallbacks> callbacks)
 {
-    return new IDBCallbacksProxy(callbacks);
+    return adoptRef(new IDBCallbacksProxy(callbacks));
 }
 
 IDBCallbacksProxy::IDBCallbacksProxy(PassOwnPtr<WebKit::WebIDBCallbacks> callbacks)
@@ -60,9 +64,39 @@ void IDBCallbacksProxy::onError(PassRefPtr<IDBDatabaseError> idbDatabaseError)
     m_callbacks.clear();
 }
 
-void IDBCallbacksProxy::onSuccess(PassRefPtr<IDBDatabase> idbDatabase)
+void IDBCallbacksProxy::onSuccess()
 {
-    m_callbacks->onSuccess(new WebKit::WebIDBDatabaseImpl(idbDatabase));
+    m_callbacks->onSuccess();
+    m_callbacks.clear();
+}
+
+void IDBCallbacksProxy::onSuccess(PassRefPtr<IDBCursorBackendInterface> idbCursorBackend)
+{
+    m_callbacks->onSuccess(new WebKit::WebIDBCursorImpl(idbCursorBackend));
+    m_callbacks.clear();
+}
+
+void IDBCallbacksProxy::onSuccess(PassRefPtr<IDBDatabaseBackendInterface> backend)
+{
+    m_callbacks->onSuccess(new WebKit::WebIDBDatabaseImpl(backend));
+    m_callbacks.clear();
+}
+
+void IDBCallbacksProxy::onSuccess(PassRefPtr<IDBIndexBackendInterface> backend)
+{
+    m_callbacks->onSuccess(new WebKit::WebIDBIndexImpl(backend));
+    m_callbacks.clear();
+}
+
+void IDBCallbacksProxy::onSuccess(PassRefPtr<IDBKey> idbKey)
+{
+    m_callbacks->onSuccess(WebKit::WebIDBKey(idbKey));
+    m_callbacks.clear();
+}
+
+void IDBCallbacksProxy::onSuccess(PassRefPtr<IDBObjectStoreBackendInterface> backend)
+{
+    m_callbacks->onSuccess(new WebKit::WebIDBObjectStoreImpl(backend));
     m_callbacks.clear();
 }
 
@@ -75,4 +109,3 @@ void IDBCallbacksProxy::onSuccess(PassRefPtr<SerializedScriptValue> serializedSc
 } // namespace WebCore
 
 #endif // ENABLE(INDEXED_DATABASE)
-

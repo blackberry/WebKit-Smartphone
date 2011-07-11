@@ -24,6 +24,7 @@
 
 #include "CSSValue.h"
 #include "Color.h"
+#include <wtf/Forward.h>
 #include <wtf/PassRefPtr.h>
 
 namespace WebCore {
@@ -34,9 +35,17 @@ class Pair;
 class RGBColor;
 class Rect;
 class RenderStyle;
-class StringImpl;
 
 struct Length;
+
+template<typename T, T max, T min> inline T roundForImpreciseConversion(double value)
+{
+    // Dimension calculations are imprecise, often resulting in values of e.g.
+    // 44.99998.  We need to go ahead and round if we're really close to the
+    // next integer value.
+    value += (value < 0) ? -0.01 : +0.01;
+    return ((value > max) || (value < min)) ? 0 : static_cast<T>(value);
+}
 
 class CSSPrimitiveValue : public CSSValue {
 public:
@@ -190,6 +199,10 @@ private:
     static void create(int); // compile-time guard
     static void create(unsigned); // compile-time guard
     template<typename T> operator T*(); // compile-time guard
+
+    static PassRefPtr<CSSPrimitiveValue> createUncachedIdentifier(int identifier);
+    static PassRefPtr<CSSPrimitiveValue> createUncachedColor(unsigned rgbValue);
+    static PassRefPtr<CSSPrimitiveValue> createUncached(double value, UnitTypes type);
 
     void init(PassRefPtr<Counter>);
     void init(PassRefPtr<Rect>);

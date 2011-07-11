@@ -32,6 +32,8 @@ import logging
 import os
 import signal
 
+import webkit
+
 from webkitpy.layout_tests.port.webkit import WebKitPort
 
 _log = logging.getLogger("webkitpy.layout_tests.port.qt")
@@ -90,3 +92,14 @@ class QtPort(WebKitPort):
 
     def _path_to_driver(self):
         return self._build_path('bin/DumpRenderTree')
+
+    def _path_to_webcore_library(self):
+        return self._build_path('lib/libQtWebKit.so')
+
+    def _runtime_feature_list(self):
+        return None
+
+    def setup_environ_for_server(self):
+        env = webkit.WebKitPort.setup_environ_for_server(self)
+        env['QTWEBKIT_PLUGIN_PATH'] = self._build_path('lib/plugins')
+        return env

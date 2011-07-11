@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2006, 2007 Apple Inc. All rights reserved.
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -139,13 +138,7 @@ static void openNewWindow(const KURL& urlToLoad, Frame* frame)
 {
     if (Page* oldPage = frame->page()) {
         WindowFeatures features;
-#if OS(OLYMPIA)
-        ResourceRequest request(urlToLoad, frame->loader()->outgoingReferrer());
-        request.setTargetType(ResourceRequest::TargetIsMainFrame);
-        if (Page* newPage = oldPage->chrome()->createWindow(frame, FrameLoadRequest(request), features))
-#else
         if (Page* newPage = oldPage->chrome()->createWindow(frame, FrameLoadRequest(ResourceRequest(urlToLoad, frame->loader()->outgoingReferrer())), features))
-#endif
             newPage->chrome()->show();
     }
 }
@@ -233,12 +226,12 @@ void ContextMenuController::contextMenuItemSelected(ContextMenuItem* item)
         break;
 #endif
     case ContextMenuItemTagSpellingGuess:
-        ASSERT(frame->selectedText().length());
+        ASSERT(frame->editor()->selectedText().length());
         if (frame->editor()->shouldInsertText(item->title(), frame->selection()->toNormalizedRange().get(), EditorInsertActionPasted)) {
             Document* document = frame->document();
             RefPtr<ReplaceSelectionCommand> command = ReplaceSelectionCommand::create(document, createFragmentFromMarkup(document, item->title(), ""), true, false, true);
             applyCommand(command);
-            frame->revealSelection(ScrollAlignment::alignToEdgeIfNeeded);
+            frame->selection()->revealSelection(ScrollAlignment::alignToEdgeIfNeeded);
         }
         break;
     case ContextMenuItemTagIgnoreSpelling:
@@ -255,19 +248,9 @@ void ContextMenuController::contextMenuItemSelected(ContextMenuItem* item)
         m_client->lookUpInDictionary(frame);
         break;
     case ContextMenuItemTagOpenLink:
-        if (Frame* targetFrame = result.targetFrame()) {
-#if OS(OLYMPIA)
-            ResourceRequest request(result.absoluteLinkURL(), frame->loader()->outgoingReferrer());
-            Page* page = targetFrame->page();
-            if (page && targetFrame == page->mainFrame())
-                request.setTargetType(ResourceRequest::TargetIsMainFrame);
-            else
-                request.setTargetType(ResourceRequest::TargetIsSubframe);
-            targetFrame->loader()->loadFrameRequest(FrameLoadRequest(request), false, false, 0, 0, SendReferrer);
-#else
+        if (Frame* targetFrame = result.targetFrame())
             targetFrame->loader()->loadFrameRequest(FrameLoadRequest(ResourceRequest(result.absoluteLinkURL(), frame->loader()->outgoingReferrer())), false, false, 0, 0, SendReferrer);
-#endif
-        } else
+        else
             openNewWindow(result.absoluteLinkURL(), frame);
         break;
     case ContextMenuItemTagBold:

@@ -28,22 +28,37 @@
 #define EditorClient_h
 
 #include "EditorInsertAction.h"
+#include "FloatRect.h"
 #include "PlatformString.h"
 #include "TextAffinity.h"
 #include <wtf/Forward.h>
 #include <wtf/Vector.h>
 
 #if PLATFORM(MAC)
+#ifdef __OBJC__
+@class NSArray;
+@class NSAttributedString;
+@class NSData;
+@class NSPasteboard;
+@class NSString;
+@class NSURL;
+#else
 class NSArray;
+class NSAttributedString;
 class NSData;
+class NSPasteboard;
 class NSString;
 class NSURL;
+#endif
 #endif
 
 namespace WebCore {
 
+class ArchiveResource;
 class CSSStyleDeclaration;
+class DocumentFragment;
 class EditCommand;
+class Editor;
 class Element;
 class Frame;
 class HTMLElement;
@@ -51,7 +66,6 @@ class KeyboardEvent;
 class Node;
 class Range;
 class VisibleSelection;
-class String;
 class VisiblePosition;
 
 struct GrammarDetail {
@@ -137,11 +151,10 @@ public:
     virtual void textWillBeDeletedInTextField(Element*) = 0;
     virtual void textDidChangeInTextArea(Element*) = 0;
 
-    // Note: This code is under review for upstreaming.
-    virtual bool focusedElementsAreRichlyEditable()= 0;
-
 #if PLATFORM(MAC)
     virtual NSString* userVisibleString(NSURL*) = 0;
+    virtual DocumentFragment* documentFragmentFromAttributedString(NSAttributedString*, Vector<ArchiveResource*>&) = 0;
+    virtual void setInsertionPasteboard(NSPasteboard*) = 0;
 #ifdef BUILDING_ON_TIGER
     virtual NSArray* pasteboardTypesForSelection(Frame*) = 0;
 #endif
@@ -174,15 +187,21 @@ public:
 #if PLATFORM(MAC) && !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
     virtual void checkTextOfParagraph(const UChar* text, int length, uint64_t checkingTypes, Vector<TextCheckingResult>& results) = 0;
 #endif
+
+#if PLATFORM(MAC) && !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+    virtual void showCorrectionPanel(const FloatRect& boundingBoxOfReplacedString, const String& replacedString, const String& replacmentString, Editor*) = 0;
+    virtual void dismissCorrectionPanel(bool correctionAccepted) = 0;
+#endif
+
     virtual void updateSpellingUIWithGrammarString(const String&, const GrammarDetail& detail) = 0;
     virtual void updateSpellingUIWithMisspelledWord(const String&) = 0;
     virtual void showSpellingUI(bool show) = 0;
     virtual bool spellingUIIsShowing() = 0;
     virtual void getGuessesForWord(const String&, Vector<String>& guesses) = 0;
+    virtual void willSetInputMethodState() = 0;
     virtual void setInputMethodState(bool enabled) = 0;
 };
 
 }
 
 #endif // EditorClient_h
-

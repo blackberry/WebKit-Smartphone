@@ -41,11 +41,10 @@ public:
 
     virtual const char* renderName() const { return "RenderSVGResourceMarker"; }
 
-    void addClient(const RenderObject*);
-    virtual void invalidateClients();
-    virtual void invalidateClient(RenderObject*);
+    virtual void removeAllClientsFromCache(bool markForInvalidation = true);
+    virtual void removeClientFromCache(RenderObject*, bool markForInvalidation = true);
 
-    void draw(RenderObject::PaintInfo&, const AffineTransform&);
+    void draw(PaintInfo&, const AffineTransform&);
 
     // Calculates marker boundaries, mapped to the target element's coordinate space
     FloatRect markerBoundaries(const AffineTransform& markerTransformation) const;
@@ -58,7 +57,7 @@ public:
     AffineTransform markerTransformation(const FloatPoint& origin, float angle, float strokeWidth) const;
 
     virtual bool applyResource(RenderObject*, RenderStyle*, GraphicsContext*&, unsigned short) { return false; }
-    virtual FloatRect resourceBoundingBox(const FloatRect&) { return FloatRect(); }
+    virtual FloatRect resourceBoundingBox(RenderObject*) { return FloatRect(); }
 
     FloatPoint referencePoint() const;
     float angle() const;
@@ -73,9 +72,6 @@ private:
     AffineTransform markerContentTransformation(const AffineTransform& contentTransformation, const FloatPoint& origin, float strokeWidth = -1) const;
 
     AffineTransform viewportTransform() const;
-
-    // Save objects using this marker for invalidation.
-    HashSet<const RenderObject*> m_marker;
 
     mutable AffineTransform m_localToParentTransform;
     FloatRect m_viewport;

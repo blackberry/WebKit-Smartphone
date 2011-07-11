@@ -1,3 +1,4 @@
+
 ##
 ## Copyright 2009, The Android Open Source Project
 ##
@@ -104,6 +105,7 @@ GEN := \
     $(intermediates)/dom/JSDOMCoreException.h \
     $(intermediates)/dom/JSDOMImplementation.h \
     $(intermediates)/dom/JSDOMStringList.h \
+    $(intermediates)/dom/JSDeviceMotionEvent.h \
     $(intermediates)/dom/JSDeviceOrientationEvent.h \
     $(intermediates)/dom/JSDocument.h \
     $(intermediates)/dom/JSDocumentFragment.h \
@@ -155,6 +157,7 @@ $(patsubst %.h,%.cpp,$(GEN)): $(intermediates)/dom/%.cpp : $(intermediates)/dom/
 # HTML
 GEN := \
     $(intermediates)/html/JSBlob.h \
+    $(intermediates)/html/JSBlobBuilder.h \
     $(intermediates)/html/JSDOMFormData.h \
     $(intermediates)/html/JSDataGridColumn.h \
     $(intermediates)/html/JSDataGridColumnList.h \
@@ -251,7 +254,6 @@ $(patsubst %.h,%.cpp,$(GEN)): $(intermediates)/html/%.cpp : $(intermediates)/htm
 # Canvas
 GEN := \
     $(intermediates)/html/canvas/JSCanvasGradient.h \
-    $(intermediates)/html/canvas/JSCanvasNumberArray.h \
     $(intermediates)/html/canvas/JSCanvasPattern.h \
     $(intermediates)/html/canvas/JSCanvasRenderingContext.h \
     $(intermediates)/html/canvas/JSCanvasRenderingContext2D.h
@@ -327,6 +329,7 @@ $(patsubst %.h,%.cpp,$(GEN)): $(intermediates)/plugins/%.cpp : $(intermediates)/
 GEN := \
     $(intermediates)/storage/JSDatabase.h \
     $(intermediates)/storage/JSSQLError.h \
+    $(intermediates)/storage/JSSQLException.h \
     $(intermediates)/storage/JSSQLResultSet.h \
     $(intermediates)/storage/JSSQLResultSetRowList.h \
     $(intermediates)/storage/JSSQLTransaction.h
@@ -359,14 +362,20 @@ $(patsubst %.h,%.cpp,$(GEN)): $(intermediates)/storage/%.cpp : $(intermediates)/
 # Indexed Database
 GEN := \
     $(intermediates)/storage/JSIDBAny.h \
+    $(intermediates)/storage/JSIDBCursor.h \
     $(intermediates)/storage/JSIDBDatabaseError.h \
     $(intermediates)/storage/JSIDBDatabaseException.h \
-    $(intermediates)/storage/JSIDBDatabaseRequest.h \
+    $(intermediates)/storage/JSIDBDatabase.h \
     $(intermediates)/storage/JSIDBErrorEvent.h \
     $(intermediates)/storage/JSIDBEvent.h \
+    $(intermediates)/storage/JSIDBFactory.h \
+    $(intermediates)/storage/JSIDBIndex.h \
+    $(intermediates)/storage/JSIDBKey.h \
+    $(intermediates)/storage/JSIDBKeyRange.h \
+    $(intermediates)/storage/JSIDBObjectStore.h \
     $(intermediates)/storage/JSIDBRequest.h \
     $(intermediates)/storage/JSIDBSuccessEvent.h \
-    $(intermediates)/storage/JSIndexedDatabaseRequest.h
+    $(intermediates)/storage/JSIDBTransaction.h
 
 $(GEN): PRIVATE_PATH := $(LOCAL_PATH)
 $(GEN): PRIVATE_CUSTOM_TOOL = perl -I$(PRIVATE_PATH)/bindings/scripts $(PRIVATE_PATH)/bindings/scripts/generate-bindings.pl --defines "$(FEATURE_DEFINES) LANGUAGE_JAVASCRIPT" --generator JS --include dom --include html --include storage --outputdir $(dir $@) $<
@@ -417,6 +426,7 @@ GEN := \
     $(intermediates)/svg/JSSVGFEColorMatrixElement.h \
     $(intermediates)/svg/JSSVGFEComponentTransferElement.h \
     $(intermediates)/svg/JSSVGFECompositeElement.h \
+    $(intermediates)/svg/JSSVGFEConvolveMatrixElement.h \
     $(intermediates)/svg/JSSVGFEDiffuseLightingElement.h \
     $(intermediates)/svg/JSSVGFEDisplacementMapElement.h \
     $(intermediates)/svg/JSSVGFEDistantLightElement.h \

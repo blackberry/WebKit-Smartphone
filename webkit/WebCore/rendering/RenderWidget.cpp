@@ -28,8 +28,13 @@
 #include "GraphicsContext.h"
 #include "HitTestResult.h"
 #include "RenderCounter.h"
+#include "RenderLayer.h"
 #include "RenderView.h"
 #include "RenderWidgetProtector.h"
+
+#if USE(ACCELERATED_COMPOSITING)
+#include "RenderLayerBacking.h"
+#endif
 
 using namespace std;
 
@@ -170,6 +175,12 @@ bool RenderWidget::setWidgetGeometry(const IntRect& frame)
     RenderWidgetProtector protector(this);
     RefPtr<Node> protectedNode(node());
     m_widget->setFrameRect(frame);
+    
+#if USE(ACCELERATED_COMPOSITING)
+    if (hasLayer() && layer()->isComposited())
+        layer()->backing()->updateAfterWidgetResize();
+#endif
+    
     return boundsChanged;
 }
 
@@ -336,7 +347,7 @@ void RenderWidget::updateWidgetPosition()
 
     // if the frame bounds got changed, or if view needs layout (possibly indicating
     // content size is wrong) we have to do a layout to set the right widget size
-    if (m_widget->isFrameView()) {
+    if (m_widget && m_widget->isFrameView()) {
         FrameView* frameView = static_cast<FrameView*>(m_widget.get());
         if (boundsChanged || frameView->needsLayout())
             frameView->layout();
@@ -383,7 +394,7 @@ bool RenderWidget::nodeAtPoint(const HitTestRequest& request, HitTestResult& res
     bool inside = RenderReplaced::nodeAtPoint(request, result, x, y, tx, ty, action);
     
     // Check to see if we are really over the widget itself (and not just in the border/padding area).
-    if (inside && !hadResult && result.innerNode() == node())
+    if ((inside || result.isRectBasedTest()) && !hadResult && result.innerNode() == node())
         result.setIsOverWidget(contentBoxRect().contains(result.localPoint()));
     return inside;
 }

@@ -26,8 +26,10 @@
 #include "config.h"
 #include "V8Geolocation.h"
 
-#include "Geolocation.h"
+#if ENABLE(GEOLOCATION)
 
+#include "Frame.h"
+#include "Geolocation.h"
 #include "V8Binding.h"
 #include "V8CustomPositionCallback.h"
 #include "V8CustomPositionErrorCallback.h"
@@ -56,8 +58,7 @@ static PassRefPtr<PositionCallback> createPositionCallback(v8::Local<v8::Value> 
         return 0;
     }
 
-    Frame* frame = V8Proxy::retrieveFrameForCurrentContext();
-    return V8CustomPositionCallback::create(value, frame);
+    return V8CustomPositionCallback::create(value, getScriptExecutionContext());
 }
 
 static PassRefPtr<PositionErrorCallback> createPositionErrorCallback(v8::Local<v8::Value> value, bool& succeeded)
@@ -75,8 +76,7 @@ static PassRefPtr<PositionErrorCallback> createPositionErrorCallback(v8::Local<v
         return 0;
     }
 
-    Frame* frame = V8Proxy::retrieveFrameForCurrentContext();
-    return V8CustomPositionErrorCallback::create(value, frame);
+    return V8CustomPositionErrorCallback::create(value, getScriptExecutionContext());
 }
 
 static PassRefPtr<PositionOptions> createPositionOptions(v8::Local<v8::Value> value, bool& succeeded)
@@ -217,3 +217,5 @@ v8::Handle<v8::Value> V8Geolocation::watchPositionCallback(const v8::Arguments& 
 }
 
 } // namespace WebCore
+
+#endif // ENABLE(GEOLOCATION)

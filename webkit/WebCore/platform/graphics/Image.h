@@ -55,10 +55,6 @@ typedef SIZE* LPSIZE;
 typedef struct HBITMAP__ *HBITMAP;
 #endif
 
-#if PLATFORM(SKIA)
-class NativeImageSkia;
-#endif
-
 #if PLATFORM(QT)
 #include <QPixmap>
 #endif
@@ -109,6 +105,7 @@ public:
     IntRect rect() const { return IntRect(IntPoint(), size()); }
     int width() const { return size().width(); }
     int height() const { return size().height(); }
+    virtual bool getHotSpot(IntPoint&) const { return false; }
 
     bool setData(PassRefPtr<SharedBuffer> data, bool allDataReceived);
     virtual bool dataChanged(bool /*allDataReceived*/) { return false; }
@@ -153,6 +150,9 @@ public:
     static PassRefPtr<Image> loadPlatformThemeIcon(const char* name, int size);
 #endif
 
+    virtual void drawPattern(GraphicsContext*, const FloatRect& srcRect, const AffineTransform& patternTransform,
+                             const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator, const FloatRect& destRect);
+
 protected:
     Image(ImageObserver* = 0);
 
@@ -170,9 +170,6 @@ protected:
     virtual bool mayFillWithSolidColor() { return false; }
     virtual Color solidColor() const { return Color(); }
     
-    virtual void drawPattern(GraphicsContext*, const FloatRect& srcRect, const AffineTransform& patternTransform,
-                             const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator, const FloatRect& destRect);
-
 private:
     RefPtr<SharedBuffer> m_data; // The encoded raw data for the image. 
     ImageObserver* m_imageObserver;

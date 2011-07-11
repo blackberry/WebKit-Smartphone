@@ -77,7 +77,8 @@ bool IsHTTPFormSubmit(const HTMLFormElement* form)
 HTMLFormControlElement* GetButtonToActivate(HTMLFormElement* form)
 {
     HTMLFormControlElement* firstSubmitButton = 0;
-    for (Vector<HTMLFormControlElement*>::const_iterator i(form->formElements.begin()); i != form->formElements.end(); ++i) {
+    // FIXME: Consider refactoring this code so that we don't call form->associatedElements() twice.
+    for (Vector<HTMLFormControlElement*>::const_iterator i(form->associatedElements().begin()); i != form->associatedElements().end(); ++i) {
       HTMLFormControlElement* formElement = *i;
       if (formElement->isActivatedSubmit())
           // There's a button that is already activated for submit, return 0.
@@ -154,7 +155,8 @@ bool HasSuitableTextElement(const HTMLFormElement* form, Vector<char>* encodedSt
     *encodingName = encoding.name();
 
     HTMLInputElement* textElement = 0;
-    for (Vector<HTMLFormControlElement*>::const_iterator i(form->formElements.begin()); i != form->formElements.end(); ++i) {
+    // FIXME: Consider refactoring this code so that we don't call form->associatedElements() twice.
+    for (Vector<HTMLFormControlElement*>::const_iterator i(form->associatedElements().begin()); i != form->associatedElements().end(); ++i) {
         HTMLFormControlElement* formElement = *i;
         if (formElement->disabled() || formElement->name().isNull())
             continue;
@@ -185,8 +187,8 @@ bool HasSuitableTextElement(const HTMLFormElement* form, Vector<char>* encodedSt
       if (!formElement->appendFormData(dataList, false))
           continue;
 
-      const Vector<FormDataList::Item>& itemList = dataList.list();
-      if (isTextElement && !itemList.isEmpty()) {
+      const Vector<FormDataList::Item>& items = dataList.items();
+      if (isTextElement && !items.isEmpty()) {
           if (textElement) {
               // The auto-complete bar only knows how to fill in one value.
               // This form has multiple fields; don't treat it as searchable.
@@ -194,7 +196,7 @@ bool HasSuitableTextElement(const HTMLFormElement* form, Vector<char>* encodedSt
           }
           textElement = static_cast<HTMLInputElement*>(formElement);
       }
-      for (Vector<FormDataList::Item>::const_iterator j(itemList.begin()); j != itemList.end(); ++j) {
+      for (Vector<FormDataList::Item>::const_iterator j(items.begin()); j != items.end(); ++j) {
           // Handle ISINDEX / <input name=isindex> specially, but only if it's
           // the first entry.
           if (!encodedString->isEmpty() || j->data() != "isindex") {

@@ -1,0 +1,120 @@
+<html>
+<head><title>Mandelbrot</title>
+<script LANGUAGE="JavaScript">
+<!--
+
+function HSBtoRGB(hue1,sat1,v) { //from Michael Bostock's Color Picker II
+  var red1;
+  var green1;
+  var blue1;
+  var i;
+  var f, p, q, t;
+  if(sat1 == 0)
+  {
+    red1 = green1 = blue1 = Math.floor(v*255);
+  }
+  else
+  {
+    hue1 /= 60;
+    i = Math.floor(hue1);
+    f = hue1-i;
+    p = v*(1-sat1);
+    q = v*(1-sat1*f);
+    t = v*(1-sat1*(1-f));
+    switch(i) {
+    case 0:
+      red1 = v;
+      green1 = t;
+      blue1 = p;
+      break;
+    case 1:
+      red1 = q;
+      green1 = v;
+      blue1 = p;
+      break;
+    case 2:
+      red1 = p;
+      green1 = v;
+      blue1 = t;
+      break;
+    case 3:
+      red1 = p;
+      green1 = q;
+      blue1 = v;
+      break;
+    case 4:
+      red1 = t;
+      green1 = p;
+      blue1 = v;
+      break;
+    default:
+      red1 = v;
+      green1 = p;
+      blue1 = q;
+      break;
+    }
+  }
+  return (Math.floor(red1*255) << 24) +
+         (Math.floor(green1*255) << 16) +
+         (Math.floor(blue1*255) << 8);
+}
+
+function Mandelbrot()
+{
+    var Width = 300;
+    var Height = 300;
+    var Iters = document.getElementById("iter").value;
+    var Zoom = "4";
+
+    var el = document.getElementById("m");
+    el.width = Width;
+    el.height = Height;
+    var ctx = el.getContext("2d");
+    var id = ctx.createImageData(Width, Height);
+    var data = id.data;
+
+    var d = new Date; 
+    for (y = 0; y <= Height; ++y) {
+        var Im = -1.5+3*y/Height;
+        for (x = 0; x <= Width; ++x) {
+            var Re = -2+3*x/Width;
+            var Zr = Re;
+            var Zi = Im;
+            var n = 0;
+            for(; n <= Iters; n++) {
+                var Zr2 = Zr*Zr;
+                var Zi2 = Zi*Zi;
+                if (Zr2+Zi2 > 4)
+                    break;
+                Zi = 2 * Zr * Zi + Im;
+                Zr = Zr2 - Zi2 + Re;
+            }
+            if (n > Iters)
+                n = 0;
+            var c = HSBtoRGB(n % 360, .8, 1 - (n / 360) * (n/360));
+            var off = (x + y * Width) * 4;
+	    data[off] = c >> 24;
+	    data[off + 1] = (c >> 16) & 0xff;
+	    data[off + 2] = (c >> 8) & 0xff;
+	    data[off + 3] = 0xff;
+        }
+    }
+    document.getElementById("t").innerText = "Generated in " + ((new Date) - d) / 1000 + "s";
+    ctx.putImageData(id, 0, 0);
+}
+// -->
+</SCRIPT>
+</head>
+
+<body> 
+
+<b><i>Mandelbrot</i></b><br>
+Iterations: <input id="iter" type="number" value="1000">
+<button onclick="Mandelbrot()" value="Go!">Go!</button>
+<br>
+<canvas id="m" width="200" height="200"></canvas>
+<br>
+<span id="t"></span>
+</body>
+</html>
+

@@ -26,14 +26,24 @@
 #ifndef WebPage_h
 #define WebPage_h
 
+#include "APIObject.h"
 #include "DrawingArea.h"
+#include "InjectedBundlePageEditorClient.h"
+#include "InjectedBundlePageFormClient.h"
+#include "InjectedBundlePageLoaderClient.h"
+#include "InjectedBundlePageUIClient.h"
+#include "WebEditCommand.h"
 #include <WebCore/FrameLoaderTypes.h>
 #include <WebCore/IntRect.h>
 #include <wtf/HashMap.h>
 #include <wtf/OwnPtr.h>
 #include <wtf/PassRefPtr.h>
-#include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
+#include <wtf/text/WTFString.h>
+
+#if ENABLE(TOUCH_EVENTS)
+#include <WebCore/PlatformTouchEvent.h>
+#endif
 
 namespace CoreIPC {
     class ArgumentDecoder;
@@ -45,36 +55,38 @@ namespace WebCore {
     class GraphicsContext;
     class KeyboardEvent;
     class Page;
-    class PlatformKeyboardEvent;
-    class PlatformMouseEvent;
-    class PlatformWheelEvent;
-    class String;
+    class ResourceRequest;
 }
 
 namespace WebKit {
 
 class DrawingArea;
+class WebEvent;
 class WebFrame;
-class WebPreferencesStore;
+class WebKeyboardEvent;
+class WebMouseEvent;
+class WebWheelEvent;
+#if ENABLE(TOUCH_EVENTS)
+class WebTouchEvent;
+#endif
+struct WebPreferencesStore;
 
-class WebPage : public RefCounted<WebPage> {
+class WebPage : public APIObject {
 public:
-    static PassRefPtr<WebPage> create(uint64_t pageID, const WebCore::IntSize& viewSize, const WebPreferencesStore&, DrawingArea::Type);
+    static const Type APIType = TypeBundlePage;
+
+    static PassRefPtr<WebPage> create(uint64_t pageID, const WebCore::IntSize& viewSize, const WebPreferencesStore&, const DrawingAreaBase::DrawingAreaInfo&);
     ~WebPage();
 
     void close();
 
-    WebCore::Page* corePage() const { return m_page; }
+    WebCore::Page* corePage() const { return m_page.get(); }
     uint64_t pageID() const { return m_pageID; }
-
-    WebFrame* webFrame(uint64_t) const;
-    void addWebFrame(uint64_t, WebFrame*);
-    void removeWebFrame(uint64_t);
 
     void setSize(const WebCore::IntSize&);
     const WebCore::IntSize& size() const { return m_viewSize; }
 
-    DrawingArea* drawingArea() const { return m_drawingArea; }
+    DrawingArea* drawingArea() const { return m_drawingArea.get(); }
 
     // -- Called by the DrawingArea.
     // FIXME: We could genericize these into a DrawingArea client interface. Would that be beneficial?
@@ -82,46 +94,108 @@ public:
     void layoutIfNeeded();
 
     // -- Called from WebCore clients.
-    void backForwardListDidChange();
     bool handleEditingKeyboardEvent(WebCore::KeyboardEvent*);
     void show();
+    String userAgent() const;
+
+    WebEditCommand* webEditCommand(uint64_t);
+    void addWebEditCommand(uint64_t, WebEditCommand*);
+    void removeWebEditCommand(uint64_t);
+    bool isInRedo() const { return m_isInRedo; }
 
     // -- Called from WebProcess.
-    void didReceiveMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder&);
+    void didReceiveMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
+
+    // -- InjectedBundle methods
+    void initializeInjectedBundleEditorClient(WKBundlePageEditorClient*);
+    void initializeInjectedBundleFormClient(WKBundlePageFormClient*);
+    void initializeInjectedBundleLoaderClient(WKBundlePageLoaderClient*);
+    void initializeInjectedBundleUIClient(WKBundlePageUIClient*);
+
+    InjectedBundlePageEditorClient& injectedBundleEditorClient() { return m_editorClient; }
+    InjectedBundlePageFormClient& injectedBundleFormClient() { return m_formClient; }
+    InjectedBundlePageLoaderClient& injectedBundleLoaderClient() { return m_loaderClient; }
+    InjectedBundlePageUIClient& injectedBundleUIClient() { return m_uiClient; }
+
+    WebFrame* mainFrame() const { return m_mainFrame.get(); }
+
+    String renderTreeExternalRepresentation() const;
+    void executeEditingCommand(const WTF::String& commandName, const WTF::String& argument);
+    bool isEditingCommandEnabled(const WTF::String& commandName);
+    void clearMainFrameName();
+    void sendClose();
+
+    double textZoomFactor() const;
+    void setTextZoomFactor(double);
+    double pageZoomFactor() const;
+    void setPageZoomFactor(double);
+    void setPageAndTextZoomFactors(double pageZoomFactor, double textZoomFactor);
+
+    void stopLoading();
+
+#if USE(ACCELERATED_COMPOSITING)
+    void changeAcceleratedCompositingMode(WebCore::GraphicsLayer*);
+    void enterAcceleratedCompositingMode(WebCore::GraphicsLayer*);
+    void exitAcceleratedCompositingMode();
+#endif
+
+    static const WebEvent* currentEvent();
 
 private:
-    WebPage(uint64_t pageID, const WebCore::IntSize& viewSize, const WebPreferencesStore&, DrawingArea::Type);
+    WebPage(uint64_t pageID, const WebCore::IntSize& viewSize, const WebPreferencesStore&, const DrawingAreaBase::DrawingAreaInfo&);
+
+    virtual Type type() const { return APIType; }
 
     void platformInitialize();
     static const char* interpretKeyEvent(const WebCore::KeyboardEvent*);
+    bool performDefaultBehaviorForKeyEvent(const WebKeyboardEvent&);
+
+    String sourceForFrame(WebFrame*);
 
     // Actions
     void tryClose();
-    void loadURL(const WebCore::String&);
-    void stopLoading();
-    void reload();
-    void goForward();
-    void goBack();
+    void loadURL(const String&);
+    void loadURLRequest(const WebCore::ResourceRequest&);
+    void reload(bool reloadFromOrigin);
+    void goForward(uint64_t);
+    void goBack(uint64_t);
+    void goToBackForwardItem(uint64_t);
     void setActive(bool);
     void setFocused(bool);
-    void mouseEvent(const WebCore::PlatformMouseEvent&);
-    void wheelEvent(WebCore::PlatformWheelEvent&);
-    void keyEvent(const WebCore::PlatformKeyboardEvent&);
-    void runJavaScriptInMainFrame(const WebCore::String&, uint64_t callbackID);
+    void setIsInWindow(bool);
+    void mouseEvent(const WebMouseEvent&);
+    void wheelEvent(const WebWheelEvent&);
+    void keyEvent(const WebKeyboardEvent&);
+#if ENABLE(TOUCH_EVENTS)
+    void touchEvent(const WebTouchEvent&);
+#endif
+    void runJavaScriptInMainFrame(const WTF::String&, uint64_t callbackID);
     void getRenderTreeExternalRepresentation(uint64_t callbackID);
+    void getSourceForFrame(WebFrame*, uint64_t callbackID);
     void preferencesDidChange(const WebPreferencesStore&);
-
+    void platformPreferencesDidChange(const WebPreferencesStore&);
     void didReceivePolicyDecision(WebFrame*, uint64_t listenerID, WebCore::PolicyAction policyAction);
-    
-    WebCore::Page* m_page;
+    void setCustomUserAgent(const WTF::String&);
+
+    void unapplyEditCommand(uint64_t commandID);
+    void reapplyEditCommand(uint64_t commandID);
+    void didRemoveEditCommand(uint64_t commandID);
+
+    OwnPtr<WebCore::Page> m_page;
     RefPtr<WebFrame> m_mainFrame;
-    HashMap<uint64_t, WebFrame*> m_frameMap;
+
+    String m_customUserAgent;
 
     WebCore::IntSize m_viewSize;
-    DrawingArea* m_drawingArea;
+    RefPtr<DrawingArea> m_drawingArea;
 
-    bool m_canGoBack;
-    bool m_canGoForward;
+    bool m_isInRedo;
+    HashMap<uint64_t, RefPtr<WebEditCommand> > m_editCommandMap;
+
+    InjectedBundlePageEditorClient m_editorClient;
+    InjectedBundlePageFormClient m_formClient;
+    InjectedBundlePageLoaderClient m_loaderClient;
+    InjectedBundlePageUIClient m_uiClient;
 
     uint64_t m_pageID;
 };

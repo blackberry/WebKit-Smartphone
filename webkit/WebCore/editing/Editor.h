@@ -29,9 +29,16 @@
 #include "ClipboardAccessPolicy.h"
 #include "Color.h"
 #include "EditAction.h"
+#include "EditingBehavior.h"
 #include "EditorDeleteAction.h"
 #include "EditorInsertAction.h"
+#include "GraphicsContext.h"
 #include "SelectionController.h"
+
+#if PLATFORM(MAC) && !defined(__OBJC__)
+class NSDictionary;
+typedef int NSWritingDirection;
+#endif
 
 namespace WebCore {
 
@@ -41,21 +48,33 @@ class DeleteButtonController;
 class EditCommand;
 class EditorClient;
 class EditorInternalCommand;
+class Frame;
 class HTMLElement;
 class HitTestResult;
+class KillRing;
 class Pasteboard;
 class SimpleFontData;
 class Text;
+class TextEvent;
 
 struct CompositionUnderline {
     CompositionUnderline() 
-        : startOffset(0), endOffset(0), thick(false) { }
-    CompositionUnderline(unsigned s, unsigned e, const Color& c, bool t) 
-        : startOffset(s), endOffset(e), color(c), thick(t) { }
+        : startOffset(0), endOffset(0), thick(false), style(SolidStroke) { }
+    CompositionUnderline(unsigned s, unsigned e, const Color& c, bool t, StrokeStyle ss = SolidStroke)
+        : startOffset(s), endOffset(e), color(c), thick(t), style(ss) { }
     unsigned startOffset;
     unsigned endOffset;
     Color color;
     bool thick;
+    StrokeStyle style;
+};
+
+struct CompositionLineThrough {
+    CompositionLineThrough() : startOffset(0), endOffset(0) { }
+    CompositionLineThrough(unsigned s, unsigned e, const Color& c) : startOffset(s), endOffset(e), color(c) { }
+    unsigned startOffset;
+    unsigned endOffset;
+    Color color;
 };
 
 enum TriState { FalseTriState, TrueTriState, MixedTriState };
@@ -74,6 +93,7 @@ public:
 
     void handleKeyboardEvent(KeyboardEvent*);
     void handleInputMethodKeydown(KeyboardEvent*);
+    bool handleTextEvent(TextEvent*);
 
     bool canEdit() const;
     bool canEditRichly() const;
@@ -114,6 +134,7 @@ public:
     void respondToChangedContents(const VisibleSelection& endingSelection);
 
     TriState selectionHasStyle(CSSStyleDeclaration*) const;
+    String selectionStartCSSPropertyValue(int propertyID);
     const SimpleFontData* fontForSelection(bool&) const;
     WritingDirection textDirectionForSelection(bool&) const;
     
@@ -218,7 +239,15 @@ public:
     void toggleAutomaticTextReplacement();
     bool isAutomaticSpellingCorrectionEnabled();
     void toggleAutomaticSpellingCorrection();
-    void markAllMisspellingsAndBadGrammarInRanges(bool markSpelling, Range* spellingRange, bool markGrammar, Range* grammarRange, bool performTextCheckingReplacements);
+    enum TextCheckingOptionFlags {
+        MarkSpelling = 1 << 0,
+        MarkGrammar = 1 << 1,
+        PerformReplacement = 1 << 2,
+        ShowCorrectionPanel = 1 << 3,
+    };
+    typedef unsigned TextCheckingOptions;
+
+    void markAllMisspellingsAndBadGrammarInRanges(TextCheckingOptions, Range* spellingRange, Range* grammarRange);
     void changeBackToReplacedString(const String& replacedString);
 #endif
     void advanceToNextMisspelling(bool startBeforeSelection = false);
@@ -278,11 +307,9 @@ public:
 
     VisibleSelection selectionForCommand(Event*);
 
-    void appendToKillRing(const String&);
-    void prependToKillRing(const String&);
-    String yankFromKillRing();
-    void startNewKillRingSequence();
-    void setKillRingToYankedState();
+    KillRing* killRing() const { return m_killRing.get(); }
+
+    EditingBehavior behavior() const;
 
     PassRefPtr<Range> selectedRange();
     
@@ -290,18 +317,66 @@ public:
     bool insideVisibleArea(const IntPoint&) const;
     bool insideVisibleArea(Range*) const;
     PassRefPtr<Range> nextVisibleRange(Range*, const String&, bool forward, bool caseFlag, bool wrapFlag);
-    
+
     void addToKillRing(Range*, bool prepend);
 
-    // Note: This code is under review for upstreaming.
-    bool focusedElementsAreRichlyEditable();
+    void handleCancelOperation();
+    void startCorrectionPanelTimer();
+    void handleRejectedCorrection();
+
+    void pasteAsFragment(PassRefPtr<DocumentFragment>, bool smartReplace, bool matchStyle);
+    void pasteAsPlainText(const String&, bool smartReplace);
+
+    // This is only called on the mac where paste is implemented primarily at the WebKit level.
+    void pasteAsPlainTextBypassingDHTML();
+ 
+    void clearMisspellingsAndBadGrammar(const VisibleSelection&);
+    void markMisspellingsAndBadGrammar(const VisibleSelection&);
+
+    Node* findEventTargetFrom(const VisibleSelection& selection) const;
+
+    String selectedText() const;
+    bool findString(const String&, bool forward, bool caseFlag, bool wrapFlag, bool startInSelection);
+
+    const VisibleSelection& mark() const; // Mark, to be used as emacs uses it.
+    void setMark(const VisibleSelection&);
+
+    void computeAndSetTypingStyle(CSSStyleDeclaration* , EditAction = EditActionUnspecified);
+    void applyEditingStyleToBodyElement() const;
+    void applyEditingStyleToElement(Element*) const;
+
+    IntRect firstRectForRange(Range*) const;
+
+    void respondToChangedSelection(const VisibleSelection& oldSelection, bool closeTyping);
+    bool shouldChangeSelection(const VisibleSelection& oldSelection, const VisibleSelection& newSelection, EAffinity, bool stillSelecting) const;
+
+    RenderStyle* styleForSelectionStart(Node*& nodeToRemove) const;
+
+    unsigned countMatchesForText(const String&, bool caseFlag, unsigned limit, bool markMatches);
+    bool markedTextMatchesAreHighlighted() const;
+    void setMarkedTextMatchesAreHighlighted(bool);
+
+    PassRefPtr<CSSComputedStyleDeclaration> selectionComputedStyle(Node*& nodeToRemove) const;
+
+    void textFieldDidBeginEditing(Element*);
+    void textFieldDidEndEditing(Element*);
+    void textDidChangeInTextField(Element*);
+    bool doTextFieldCommandFromEvent(Element*, KeyboardEvent*);
+    void textWillBeDeletedInTextField(Element* input);
+    void textDidChangeInTextArea(Element*);
+
+#if PLATFORM(MAC)
+    NSDictionary* fontAttributesForSelectionStart() const;
+    NSWritingDirection baseWritingDirectionForSelectionStart() const;
+#endif
+
+    bool selectionStartHasSpellingMarkerFor(int from, int length) const;
 
 private:
     Frame* m_frame;
     OwnPtr<DeleteButtonController> m_deleteButtonController;
     RefPtr<EditCommand> m_lastEditCommand;
     RefPtr<Node> m_removedAnchor;
-
     RefPtr<Text> m_compositionNode;
     unsigned m_compositionStart;
     unsigned m_compositionEnd;
@@ -309,10 +384,16 @@ private:
     bool m_ignoreCompositionSelectionChange;
     bool m_shouldStartNewKillRingSequence;
     bool m_shouldStyleWithCSS;
+    OwnPtr<KillRing> m_killRing;
+    RefPtr<Range> m_rangeToBeReplacedByCorrection;
+    String m_stringToBeReplacedByCorrection;
+    Timer<Editor> m_correctionPanelTimer;
+    VisibleSelection m_mark;
+    bool m_areMarkedTextMatchesHighlighted;
 
     bool canDeleteRange(Range*) const;
     bool canSmartReplaceWithPasteboard(Pasteboard*);
-    PassRefPtr<Clipboard> newGeneralClipboard(ClipboardAccessPolicy);
+    PassRefPtr<Clipboard> newGeneralClipboard(ClipboardAccessPolicy, Frame*);
     void pasteAsPlainTextWithPasteboard(Pasteboard*);
     void pasteWithPasteboard(Pasteboard*, bool allowPlainText);
     void replaceSelectionWithFragment(PassRefPtr<DocumentFragment>, bool selectReplacement, bool smartReplace, bool matchStyle);
@@ -326,14 +407,32 @@ private:
 
     PassRefPtr<Range> firstVisibleRange(const String&, bool caseFlag);
     PassRefPtr<Range> lastVisibleRange(const String&, bool caseFlag);
-    
-    void changeSelectionAfterCommand(const VisibleSelection& newSelection, bool closeTyping, bool clearTypingStyle, EditCommand*);
+
+    void changeSelectionAfterCommand(const VisibleSelection& newSelection, bool closeTyping, bool clearTypingStyle);
+    void correctionPanelTimerFired(Timer<Editor>*);
+    Node* findEventTargetFromSelection() const;
 };
 
 inline void Editor::setStartNewKillRingSequence(bool flag)
 {
     m_shouldStartNewKillRingSequence = flag;
 }
+
+inline const VisibleSelection& Editor::mark() const
+{
+    return m_mark;
+}
+
+inline void Editor::setMark(const VisibleSelection& selection)
+{
+    m_mark = selection;
+}
+
+inline bool Editor::markedTextMatchesAreHighlighted() const
+{
+    return m_areMarkedTextMatchesHighlighted;
+}
+
 
 } // namespace WebCore
 

@@ -1,23 +1,23 @@
 /*
-    Copyright (C) 2004, 2005 Nikolas Zimmermann <wildfox@kde.org>
-                  2004, 2005, 2006 Rob Buis <buis@kde.org>
-    Copyright (C) 2008 Apple Inc. All rights reserved.
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006 Rob Buis <buis@kde.org>
+ * Copyright (C) 2008 Apple Inc. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 #if ENABLE(SVG) && ENABLE(SVG_ANIMATION)
@@ -27,6 +27,7 @@
 #include "FloatConversion.h"
 #include "SVGColor.h"
 #include "SVGParserUtilities.h"
+#include "SVGPathParserFactory.h"
 #include "SVGPathSegList.h"
 #include "SVGPointList.h"
 #include <math.h>
@@ -35,13 +36,19 @@ using namespace std;
 
 namespace WebCore {
 
-SVGAnimateElement::SVGAnimateElement(const QualifiedName& tagName, Document* doc)
-    : SVGAnimationElement(tagName, doc)
+SVGAnimateElement::SVGAnimateElement(const QualifiedName& tagName, Document* document)
+    : SVGAnimationElement(tagName, document)
     , m_propertyType(StringProperty)
     , m_fromNumber(0)
     , m_toNumber(0)
     , m_animatedNumber(numeric_limits<double>::infinity())
+    , m_animatedPathPointer(0)
 {
+}
+
+PassRefPtr<SVGAnimateElement> SVGAnimateElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new SVGAnimateElement(tagName, document));
 }
 
 SVGAnimateElement::~SVGAnimateElement()
@@ -130,19 +137,31 @@ void SVGAnimateElement::calculateAnimatedValue(float percentage, unsigned repeat
     }
     AnimationMode animationMode = this->animationMode();
     if (m_propertyType == PathProperty) {
-        if (percentage == 0)
-            results->m_animatedPath = m_fromPath;
-        else if (percentage == 1.f)
-            results->m_animatedPath = m_toPath;
-        else {
-            if (m_fromPath && m_toPath)
-                results->m_animatedPath = SVGPathSegList::createAnimated(m_fromPath.get(), m_toPath.get(), percentage);
-            else
-                results->m_animatedPath.clear();
+        if (!percentage) {
+            ASSERT(m_fromPath);
+            ASSERT(percentage >= 0);
+            results->m_animatedPathPointer = m_fromPath.get();
+        } else if (percentage == 1.f) {
+            ASSERT(m_toPath);
+            results->m_animatedPathPointer = m_toPath.get();
+        } else {
+            if (m_fromPath && m_toPath) {
+                SVGPathParserFactory* factory = SVGPathParserFactory::self();
+                if (!factory->buildAnimatedSVGPathByteStream(m_fromPath.get(), m_toPath.get(), results->m_animatedPath, percentage)) {
+                    results->m_animatedPath.clear();
+                    results->m_animatedPathPointer = 0;
+                } else
+                    results->m_animatedPathPointer = results->m_animatedPath.get();
+            } else
+                results->m_animatedPathPointer = 0;
             // Fall back to discrete animation if the paths are not compatible
-            if (!results->m_animatedPath)
-                results->m_animatedPath = ((animationMode == FromToAnimation && percentage > 0.5f) || animationMode == ToAnimation || percentage == 1.0f) 
-                    ? m_toPath : m_fromPath;
+            if (!results->m_animatedPathPointer) {
+                ASSERT(m_fromPath);
+                ASSERT(m_toPath);
+                ASSERT(!results->m_animatedPath);
+                results->m_animatedPathPointer = ((animationMode == FromToAnimation && percentage > 0.5f) || animationMode == ToAnimation || percentage == 1.0f) 
+                    ? m_toPath.get() : m_fromPath.get();
+            }
         }
         return;
     } else if (m_propertyType == PointsProperty) {
@@ -188,10 +207,9 @@ bool SVGAnimateElement::calculateFromAndToValues(const String& fromString, const
                 return true;
         }
     } else if (m_propertyType == PathProperty) {
-        m_fromPath = SVGPathSegList::create(SVGNames::dAttr);
-        if (pathSegListFromSVGData(m_fromPath.get(), fromString)) {
-            m_toPath = SVGPathSegList::create(SVGNames::dAttr);
-            if (pathSegListFromSVGData(m_toPath.get(), toString))
+        SVGPathParserFactory* factory = SVGPathParserFactory::self();
+        if (factory->buildSVGPathByteStreamFromString(fromString, m_fromPath, UnalteredParsing)) {
+            if (factory->buildSVGPathByteStreamFromString(toString, m_toPath, UnalteredParsing))
                 return true;
         }
         m_fromPath.clear();
@@ -254,6 +272,7 @@ void SVGAnimateElement::resetToBaseValue(const String& baseString)
             return;
     } else if (m_propertyType == PathProperty) {
         m_animatedPath.clear();
+        m_animatedPathPointer = 0;
         return;
     } else if (m_propertyType == PointsProperty) {
         m_animatedPoints.clear();
@@ -270,19 +289,15 @@ void SVGAnimateElement::applyResultsToTarget()
     else if (m_propertyType == NumberProperty)
         valueToApply = String::number(m_animatedNumber) + m_numberUnit;
     else if (m_propertyType == PathProperty) {
-        if (!m_animatedPath || !m_animatedPath->numberOfItems())
+        if (!m_animatedPathPointer || m_animatedPathPointer->isEmpty())
             valueToApply = m_animatedString;
         else {
             // We need to keep going to string and back because we are currently only able to paint
             // "processed" paths where complex shapes are replaced with simpler ones. Path 
             // morphing needs to be done with unprocessed paths.
             // FIXME: This could be optimized if paths were not processed at parse time.
-            unsigned itemCount = m_animatedPath->numberOfItems();
-            ExceptionCode ec;
-            for (unsigned n = 0; n < itemCount; ++n) {
-                RefPtr<SVGPathSeg> segment = m_animatedPath->getItem(n, ec);
-                valueToApply.append(segment->toString() + " ");
-            }
+            SVGPathParserFactory* factory = SVGPathParserFactory::self();
+            factory->buildStringFromByteStream(m_animatedPathPointer, valueToApply, UnalteredParsing);
         }
     } else if (m_propertyType == PointsProperty) {
         if (!m_animatedPoints || !m_animatedPoints->numberOfItems())

@@ -34,8 +34,8 @@
 #include "DocumentLoader.h"
 #include "DOMWindow.h"
 #include "Frame.h"
+#include "HTMLEntityParser.h"
 #include "KURL.h"
-#include "PreloadScanner.h"
 #include "ResourceResponseBase.h"
 #include "ScriptSourceCode.h"
 #include "Settings.h"
@@ -170,7 +170,7 @@ bool XSSAuditor::canCreateInlineEventListener(const String&, const String& code)
     return true;
 }
 
-bool XSSAuditor::canLoadExternalScriptFromSrc(const String& context, const String& url) const
+bool XSSAuditor::canLoadExternalScriptFromSrc(const String& url) const
 {
     if (!isEnabled())
         return true;
@@ -179,8 +179,8 @@ bool XSSAuditor::canLoadExternalScriptFromSrc(const String& context, const Strin
         return true;
 
     FindTask task;
-    task.context = context;
     task.string = url;
+    task.allowRequestIfNoIllegalURICharacters = true;
 
     if (findInRequest(task)) {
         DEFINE_STATIC_LOCAL(String, consoleMessage, ("Refused to execute a JavaScript script. Source code of script found within request.\n"));
@@ -277,19 +277,18 @@ String XSSAuditor::decodeHTMLEntities(const String& string, bool leaveUndecodabl
         if (leaveUndecodableEntitiesUntouched)
             sourceShadow = source;
         bool notEnoughCharacters = false;
-        unsigned entity = PreloadScanner::consumeEntity(source, notEnoughCharacters);
+        Vector<UChar, 16> decodedEntity;
+        bool success = consumeHTMLEntity(source, decodedEntity, notEnoughCharacters);
         // We ignore notEnoughCharacters because we might as well use this loop
         // to copy the remaining characters into |result|.
-
-        if (entity > 0xFFFF) {
-            result.append(U16_LEAD(entity));
-            result.append(U16_TRAIL(entity));
-        } else if (entity && (!leaveUndecodableEntitiesUntouched || entity != 0xFFFD)){
-            result.append(entity);
-        } else {
+        if (!success || (!leaveUndecodableEntitiesUntouched && decodedEntity.size() == 1 && decodedEntity[0] == 0xFFFD)) {
             result.append('&');
             if (leaveUndecodableEntitiesUntouched)
                 source = sourceShadow;
+        } else {
+            Vector<UChar>::const_iterator iter = decodedEntity.begin();
+            for (; iter != decodedEntity.end(); ++iter)
+                result.append(*iter);
         }
     }
     
@@ -362,7 +361,11 @@ bool XSSAuditor::findInRequest(Frame* frame, const FindTask& task) const
     if (task.string.isEmpty())
         return false;
 
-    FormData* formDataObj = frame->loader()->documentLoader()->originalRequest().httpBody();
+    DocumentLoader *documentLoader = frame->loader()->documentLoader();
+    if (!documentLoader)
+        return false;
+
+    FormData* formDataObj = documentLoader->originalRequest().httpBody();
     const bool hasFormData = formDataObj && !formDataObj->isEmpty();
     String pageURL = frame->document()->url().string();
 
@@ -401,10 +404,10 @@ bool XSSAuditor::findInRequest(Frame* frame, const FindTask& task) const
 
     String decodedPageURL = m_pageURLCache.canonicalizeURL(pageURL, frame->document()->decoder()->encoding(), task.decodeEntities, task.decodeURLEscapeSequencesTwice);
 
-    if (task.allowRequestIfNoIllegalURICharacters && !hasFormData && decodedPageURL.find(&isIllegalURICharacter, 0) == -1)
+    if (task.allowRequestIfNoIllegalURICharacters && !hasFormData && decodedPageURL.find(&isIllegalURICharacter, 0) == notFound)
         return false; // Injection is impossible because the request does not contain any illegal URI characters.
 
-    if (decodedPageURL.find(canonicalizedString, 0, false) != -1)
+    if (decodedPageURL.find(canonicalizedString, 0, false) != notFound)
         return true; // We've found the string in the GET data.
 
     if (hasFormData) {
@@ -419,7 +422,7 @@ bool XSSAuditor::findInRequest(Frame* frame, const FindTask& task) const
         if (m_formDataSuffixTree && !m_formDataSuffixTree->mightContain(canonicalizedString))
             return false;
 
-        if (decodedFormData.find(canonicalizedString, 0, false) != -1)
+        if (decodedFormData.find(canonicalizedString, 0, false) != notFound)
             return true; // We found the string in the POST data.
     }
 

@@ -81,7 +81,7 @@ void WebScrollbarImpl::setLocation(const WebRect& rect)
       m_scrollbar->invalidate();
 
     int length = m_scrollbar->orientation() == HorizontalScrollbar ? m_scrollbar->width() : m_scrollbar->height();
-    int pageStep = max(max<int>(length * Scrollbar::minFractionToStepWhenPaging(), length - Scrollbar::maxOverlapBetweenPages()), 1);
+    int pageStep = max(max(static_cast<int>(static_cast<float>(length) * Scrollbar::minFractionToStepWhenPaging()), length - Scrollbar::maxOverlapBetweenPages()), 1);
     m_scrollbar->setSteps(Scrollbar::pixelsPerLineStep(), pageStep);
     m_scrollbar->setEnabled(m_scrollbar->totalSize() > length);
     m_scrollbar->setProportion(length, m_scrollbar->totalSize());
@@ -94,7 +94,7 @@ int WebScrollbarImpl::value() const
 
 void WebScrollbarImpl::setValue(int position)
 {
-    m_scrollbar->setValue(position);
+    m_scrollbar->setValue(position, Scrollbar::NotFromScrollAnimator);
 }
 
 void WebScrollbarImpl::setDocumentSize(int size)
@@ -214,11 +214,11 @@ bool WebScrollbarImpl::onMouseWheel(const WebInputEvent& event)
             if (mousewheel.scrollByPage) {
                 ASSERT(m_scrollbar->orientation() == VerticalScrollbar);
                 bool negative = delta < 0;
-                delta = max(max<int>(m_scrollbar->visibleSize() * Scrollbar::minFractionToStepWhenPaging(), m_scrollbar->visibleSize() - Scrollbar::maxOverlapBetweenPages()), 1);
+                delta = max(max(static_cast<float>(m_scrollbar->visibleSize()) * Scrollbar::minFractionToStepWhenPaging(), static_cast<float>(m_scrollbar->visibleSize() - Scrollbar::maxOverlapBetweenPages())), 1.0f);
                 if (negative)
                     delta *= -1;
             }
-            m_scrollbar->setValue(m_scrollbar->value() - delta);
+            m_scrollbar->scroll((m_scrollbar->orientation() == HorizontalScrollbar) ? WebCore::ScrollLeft : WebCore::ScrollUp, WebCore::ScrollByPixel, delta);
             return true;
         }
 
@@ -260,6 +260,16 @@ bool WebScrollbarImpl::onKeyDown(const WebInputEvent& event)
             return m_scrollbar->scroll(scrollDirection, scrollGranularity);
         }
     return false;
+}
+
+int WebScrollbarImpl::scrollSize(WebCore::ScrollbarOrientation orientation) const
+{
+    return (orientation == m_scrollbar->orientation()) ? (m_scrollbar->totalSize() - m_scrollbar->visibleSize()) : 0;
+}
+
+void WebScrollbarImpl::setScrollOffsetFromAnimation(const WebCore::IntPoint& offset)
+{
+    m_scrollbar->setValue((m_scrollbar->orientation() == HorizontalScrollbar) ? offset.x() : offset.y(), Scrollbar::FromScrollAnimator);
 }
 
 void WebScrollbarImpl::valueChanged(WebCore::Scrollbar*)

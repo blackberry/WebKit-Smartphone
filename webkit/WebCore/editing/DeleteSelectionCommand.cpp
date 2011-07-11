@@ -630,7 +630,8 @@ void DeleteSelectionCommand::mergeParagraphs()
     // moveParagraphs will insert placeholders if it removes blocks that would require their use, don't let block
     // removals that it does cause the insertion of *another* placeholder.
     bool needPlaceholder = m_needPlaceholder;
-    moveParagraph(startOfParagraphToMove, endOfParagraphToMove, mergeDestination);
+    bool paragraphToMergeIsEmpty = (startOfParagraphToMove == endOfParagraphToMove);
+    moveParagraph(startOfParagraphToMove, endOfParagraphToMove, mergeDestination, false, !paragraphToMergeIsEmpty);
     m_needPlaceholder = needPlaceholder;
     // The endingPosition was likely clobbered by the move, so recompute it (moveParagraph selects the moved paragraph).
     m_endingPosition = endingSelection().start();
@@ -713,7 +714,7 @@ void DeleteSelectionCommand::calculateTypingStyleAfterDelete()
     // In this case if we start typing, the new characters should have the same style as the just deleted ones,
     // but, if we change the selection, come back and start typing that style should be lost.  Also see 
     // preserveTypingStyle() below.
-    document()->frame()->setTypingStyle(m_typingStyle.get());
+    document()->frame()->selection()->setTypingStyle(m_typingStyle);
 }
 
 void DeleteSelectionCommand::clearTransientState()
@@ -734,8 +735,8 @@ void DeleteSelectionCommand::doApply()
     // use the current ending selection.
     if (!m_hasSelectionToDelete)
         m_selectionToDelete = endingSelection();
-    
-    if (!m_selectionToDelete.isRange())
+
+    if (!m_selectionToDelete.isNonOrphanedRange())
         return;
 
     // If the deletion is occurring in a text field, and we're not deleting to replace the selection, then let the frame call across the bridge to notify the form delegate. 
@@ -745,7 +746,7 @@ void DeleteSelectionCommand::doApply()
         if (ancestorNode && ancestorNode->hasTagName(inputTag)
                 && static_cast<HTMLInputElement*>(ancestorNode)->isTextField()
                 && ancestorNode->focused())
-            document()->frame()->textWillBeDeletedInTextField(static_cast<Element*>(ancestorNode));
+            document()->frame()->editor()->textWillBeDeletedInTextField(static_cast<Element*>(ancestorNode));
     }
 
     // save this to later make the selection with

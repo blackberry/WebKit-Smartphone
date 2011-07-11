@@ -37,6 +37,8 @@
 #include "FormState.h"
 #include "FrameLoader.h"
 #include "FrameLoadRequest.h"
+#include "FrameNetworkingContextImpl.h"
+#include "FrameView.h"
 #include "HTTPParsers.h"
 #include "HistoryItem.h"
 #include "HitTestResult.h"
@@ -49,6 +51,7 @@
 #include "PlatformString.h"
 #include "PluginData.h"
 #include "PluginDataChromium.h"
+#include "Settings.h"
 #include "StringExtras.h"
 #include "WebDataSourceImpl.h"
 #include "WebDevToolsAgentPrivate.h"
@@ -246,7 +249,12 @@ void FrameLoaderClientImpl::detachedFromParent3()
     // go to a page and then navigate to a new page without getting any asserts
     // or crashes.
     m_webFrame->frame()->script()->proxy()->clearForClose();
-    
+
+    // Alert the client that the frame is being detached. This is the last
+    // chance we have to communicate with the client.
+    if (m_webFrame->client())
+        m_webFrame->client()->frameDetached(m_webFrame);
+
     // Stop communicating with the WebFrameClient at this point since we are no
     // longer associated with the Page.
     m_webFrame->setClient(0);
@@ -735,9 +743,6 @@ void FrameLoaderClientImpl::dispatchDidCommitLoad()
 
     if (m_webFrame->client())
         m_webFrame->client()->didCommitProvisionalLoad(m_webFrame, isNewNavigation);
-
-    if (webview->devToolsAgentPrivate())
-        webview->devToolsAgentPrivate()->didCommitProvisionalLoad(m_webFrame, isNewNavigation);
 }
 
 void FrameLoaderClientImpl::dispatchDidFailProvisionalLoad(
@@ -1048,8 +1053,7 @@ void FrameLoaderClientImpl::committedLoad(DocumentLoader* loader, const char* da
 
     // If we are sending data to MediaDocument, we should stop here
     // and cancel the request.
-    if (m_webFrame->frame()->document()
-        && m_webFrame->frame()->document()->isMediaDocument())
+    if (m_webFrame->frame()->document()->isMediaDocument())
         loader->cancelMainResourceLoad(pluginWillHandleLoadError(loader->response()));
 
     // The plugin widget could have been created in the m_webFrame->DidReceiveData
@@ -1200,6 +1204,12 @@ bool FrameLoaderClientImpl::canHandleRequest(const ResourceRequest& request) con
 {
     return m_webFrame->client()->canHandleRequest(
         m_webFrame, WrappedResourceRequest(request));
+}
+
+bool FrameLoaderClientImpl::canShowMIMETypeAsHTML(const String& MIMEType) const
+{
+    notImplemented();
+    return false;
 }
 
 bool FrameLoaderClientImpl::canShowMIMEType(const String& mimeType) const
@@ -1393,6 +1403,14 @@ PassRefPtr<Widget> FrameLoaderClientImpl::createPlugin(
     if (!webPlugin->initialize(container.get()))
         return 0;
 
+    bool zoomTextOnly = m_webFrame->viewImpl()->zoomTextOnly();
+    float zoomFactor = zoomTextOnly ? m_webFrame->frame()->view()->textZoomFactor() : m_webFrame->frame()->view()->pageZoomFactor();
+    if (zoomFactor != 1) {
+        // There's a saved zoom level, so tell the plugin about it since
+        // WebViewImpl::setZoomLevel was called before the plugin was created.
+        webPlugin->setZoomFactor(zoomFactor, zoomTextOnly);
+    }
+
     // The element might have been removed during plugin initialization!
     if (!element->renderer())
         return 0;
@@ -1491,7 +1509,18 @@ PassOwnPtr<WebPluginLoadObserver> FrameLoaderClientImpl::pluginLoadObserver()
 {
     WebDataSourceImpl* ds = WebDataSourceImpl::fromDocumentLoader(
         m_webFrame->frame()->loader()->activeDocumentLoader());
+    if (!ds) {
+        // We can arrive here if a popstate event handler detaches this frame.
+        // FIXME: Remove this code once http://webkit.org/b/36202 is fixed.
+        ASSERT(!m_webFrame->frame()->page());
+        return 0;
+    }
     return ds->releasePluginLoadObserver();
+}
+
+PassRefPtr<FrameNetworkingContext> FrameLoaderClientImpl::createNetworkingContext()
+{
+    return FrameNetworkingContextImpl::create(m_webFrame->frame());
 }
 
 } // namespace WebKit

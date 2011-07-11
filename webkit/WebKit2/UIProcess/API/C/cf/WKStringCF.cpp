@@ -26,20 +26,22 @@
 #include "WKStringCF.h"
 
 #include "WKAPICast.h"
-#include <WebCore/PlatformString.h>
+#include <wtf/text/WTFString.h>
 
 using namespace WebCore;
+using namespace WebKit;
 
 WKStringRef WKStringCreateWithCFString(CFStringRef cfString)
 {
     String string(cfString);
-    RefPtr<StringImpl> stringImpl = string.impl();
-    return toRef(stringImpl.release().releaseRef());
+    return toCopiedRef(string);
 }
 
 CFStringRef WKStringCopyCFString(CFAllocatorRef allocatorRef, WKStringRef stringRef)
 {
+    ASSERT(!toWK(stringRef)->string().isNull());
+
     // NOTE: This does not use StringImpl::createCFString() since that function
     // expects to be called on the thread running WebCore.
-    return CFStringCreateWithCharacters(allocatorRef, reinterpret_cast<const UniChar*>(toWK(stringRef)->characters()), toWK(stringRef)->length());
+    return CFStringCreateWithCharacters(allocatorRef, reinterpret_cast<const UniChar*>(toWK(stringRef)->string().characters()), toWK(stringRef)->string().length());
 }

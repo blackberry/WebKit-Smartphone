@@ -28,7 +28,7 @@
 #include "ArgumentDecoder.h"
 #include "ArgumentEncoder.h"
 #include "Attachment.h"
-#include "WebCoreTypeArgumentMarshalling.h"
+#include "WebCoreArgumentCoders.h"
 #include <WebCore/FloatRect.h>
 #include <mach/vm_map.h>
 #include <wtf/RetainPtr.h>
@@ -60,28 +60,28 @@ RetainPtr<CGImageRef> UpdateChunk::createImage()
 {
     RetainPtr<CGDataProviderRef> provider(AdoptCF, CGDataProviderCreateWithData(0, m_data, size(), 0));
     RetainPtr<CGColorSpaceRef> colorSpace(AdoptCF, CGColorSpaceCreateDeviceRGB());
-    RetainPtr<CGImageRef> image(AdoptCF, CGImageCreate(m_rect.width(), m_rect.height(), 8, 32, m_rect.width() * 4, colorSpace.get(), kCGImageAlphaPremultipliedLast, provider.get(), 0, false, kCGRenderingIntentDefault));
+    RetainPtr<CGImageRef> image(AdoptCF, CGImageCreate(m_rect.width(), m_rect.height(), 8, 32, m_rect.width() * 4, colorSpace.get(), kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host, provider.get(), 0, false, kCGRenderingIntentDefault));
     
     return image;
 }
 
-void UpdateChunk::encode(CoreIPC::ArgumentEncoder& encoder) const
+void UpdateChunk::encode(CoreIPC::ArgumentEncoder* encoder) const
 {
-    encoder.encode(m_rect);
-    encoder.encode(CoreIPC::Attachment(m_data, size(), MACH_MSG_VIRTUAL_COPY, true));
+    encoder->encode(m_rect);
+    encoder->encode(CoreIPC::Attachment(m_data, size(), MACH_MSG_VIRTUAL_COPY, true));
     
     m_data = 0;
 }
 
-bool UpdateChunk::decode(CoreIPC::ArgumentDecoder& decoder, UpdateChunk& chunk)
+bool UpdateChunk::decode(CoreIPC::ArgumentDecoder* decoder, UpdateChunk& chunk)
 {
     IntRect rect;
-    if (!decoder.decode(rect))
+    if (!decoder->decode(rect))
         return false;
     chunk.m_rect = rect;
     
     CoreIPC::Attachment attachment;
-    if (!decoder.decode(attachment))
+    if (!decoder->decode(attachment))
         return false;
 
     chunk.m_size = attachment.size();

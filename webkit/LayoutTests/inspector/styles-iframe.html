@@ -9,18 +9,6 @@
 <script src="elements-tests.js"></script>
 <script>
 
-function runAfterIframeIsLoaded(continuation)
-{
-    function step()
-    {
-        if (!window.iframeLoaded)
-            setTimeout(step, 100);
-        else
-            continuation();
-    }
-    setTimeout(step, 100);
-}
-
 function doit()
 {
     runAfterIframeIsLoaded(function() {
@@ -58,7 +46,7 @@ function frontend_dumpStylesContinuation(testController)
         mainStyles = styles;
     }
 
-    InspectorBackend.getStyles(WebInspector.Callback.wrap(mainFrameCallback), body.id, false);
+    InspectorBackend.getStyles(body.id, false, mainFrameCallback);
 
     // 2. Find iframe node
     var innerMapping = WebInspector.domAgent._idToDOMNode;
@@ -79,7 +67,7 @@ function frontend_dumpStylesContinuation(testController)
         testController.notifyDone([mainStyles, styles]);
     }
 
-    InspectorBackend.getStyles(WebInspector.Callback.wrap(iframeCallback), iframeBody.id, false);
+    InspectorBackend.getStyles(iframeBody.id, false, iframeCallback);
 }
 
 </script>

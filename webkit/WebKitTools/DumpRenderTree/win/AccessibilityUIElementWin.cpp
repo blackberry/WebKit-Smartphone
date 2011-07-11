@@ -100,6 +100,12 @@ AccessibilityUIElement AccessibilityUIElement::elementAtPoint(int x, int y)
     return 0;
 }
 
+AccessibilityUIElement AccessibilityUIElement::linkedUIElementAtIndex(unsigned index)
+{
+    // FIXME: implement
+    return 0;
+}
+
 AccessibilityUIElement AccessibilityUIElement::getChildAtIndex(unsigned index)
 {
     COMPtr<IDispatch> child;
@@ -444,6 +450,16 @@ JSStringRef AccessibilityUIElement::stringForRange(unsigned, unsigned)
     return JSStringCreateWithCharacters(0, 0);
 }
 
+JSStringRef AccessibilityUIElement::attributedStringForRange(unsigned, unsigned)
+{
+    return JSStringCreateWithCharacters(0, 0);
+}
+
+bool AccessibilityUIElement::attributedStringRangeIsMisspelled(unsigned, unsigned)
+{
+    return false;
+}
+
 AccessibilityUIElement AccessibilityUIElement::cellForColumnAndRow(unsigned column, unsigned row)
 {
     return 0;
@@ -596,6 +612,12 @@ bool AccessibilityUIElement::isCollapsed() const
 {
     DWORD state = accessibilityState(m_element);
     return (state & STATE_SYSTEM_COLLAPSED) == STATE_SYSTEM_COLLAPSED;
+}
+
+bool AccessibilityUIElement::isIgnored() const
+{
+    // FIXME: implement
+    return false;
 }
 
 bool AccessibilityUIElement::hasPopup() const

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003, 2006, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2003, 2006, 2008, 2009, 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2008 Holger Hans Peter Freyther
  *
  * This library is free software; you can redistribute it and/or
@@ -60,15 +60,16 @@ WidthIterator::WidthIterator(const Font* font, const TextRun& run, HashSet<const
     if (!m_padding)
         m_padPerSpace = 0;
     else {
-        float numSpaces = 0;
-        for (int i = 0; i < run.length(); i++)
+        int numSpaces = 0;
+        for (int i = 0; i < run.length(); i++) {
             if (Font::treatAsSpace(m_run[i]))
                 numSpaces++;
+        }
 
-        if (numSpaces == 0)
+        if (!numSpaces)
             m_padPerSpace = 0;
         else
-            m_padPerSpace = ceilf(m_run.padding() / numSpaces);
+            m_padPerSpace = m_padding / numSpaces;
     }
 }
 
@@ -83,7 +84,10 @@ void WidthIterator::advance(int offset, GlyphBuffer* glyphBuffer)
     bool rtl = m_run.rtl();
     bool hasExtraSpacing = (m_font->letterSpacing() || m_font->wordSpacing() || m_padding) && !m_run.spacingDisabled();
 
-    float runWidthSoFar = m_runWidthSoFar;
+    float widthSinceLastRounding = m_runWidthSoFar;
+    m_runWidthSoFar = floorf(m_runWidthSoFar);
+    widthSinceLastRounding -= m_runWidthSoFar;
+
     float lastRoundingWidth = m_finalRoundingWidth;
     FloatRect bounds;
 
@@ -129,10 +133,16 @@ void WidthIterator::advance(int offset, GlyphBuffer* glyphBuffer)
         // Now that we have a glyph and font data, get its width.
         float width;
         if (c == '\t' && m_run.allowTabs()) {
-            float tabWidth = m_font->tabWidth();
-            width = tabWidth - fmodf(m_run.xPos() + runWidthSoFar, tabWidth);
+            float tabWidth = m_font->tabWidth(*fontData);
+            width = tabWidth - fmodf(m_run.xPos() + m_runWidthSoFar + widthSinceLastRounding, tabWidth);
         } else {
             width = fontData->widthForGlyph(glyph);
+
+#if ENABLE(SVG)
+            // SVG uses horizontalGlyphStretch(), when textLength is used to stretch/squeeze text.
+            width *= m_run.horizontalGlyphStretch();
+#endif
+
             // We special case spaces in two ways when applying word rounding.
             // First, we round spaces to an adjusted width in all fonts.
             // Second, in fixed-pitch fonts we ensure that all characters that
@@ -170,8 +180,9 @@ void WidthIterator::advance(int offset, GlyphBuffer* glyphBuffer)
                         width += m_padding;
                         m_padding = 0;
                     } else {
-                        width += m_padPerSpace;
+                        float previousPadding = m_padding;
                         m_padding -= m_padPerSpace;
+                        width += roundf(previousPadding) - roundf(m_padding);
                     }
                 }
 
@@ -208,11 +219,13 @@ void WidthIterator::advance(int offset, GlyphBuffer* glyphBuffer)
         // width so that the total run width will be on an integer boundary.
         if ((m_run.applyWordRounding() && currentCharacter < m_run.length() && Font::isRoundingHackCharacter(*cp))
                 || (m_run.applyRunRounding() && currentCharacter >= m_end)) {
-            float totalWidth = runWidthSoFar + width;
-            width += ceilf(totalWidth) - totalWidth;
-        }
-
-        runWidthSoFar += width;
+            float totalWidth = widthSinceLastRounding + width;
+            widthSinceLastRounding = ceilf(totalWidth);
+            width += widthSinceLastRounding - totalWidth;
+            m_runWidthSoFar += widthSinceLastRounding;
+            widthSinceLastRounding = 0;
+        } else
+            widthSinceLastRounding += width;
 
         if (glyphBuffer)
             glyphBuffer->add(glyph, fontData, (rtl ? oldWidth + lastRoundingWidth : width));
@@ -227,7 +240,7 @@ void WidthIterator::advance(int offset, GlyphBuffer* glyphBuffer)
     }
 
     m_currentCharacter = currentCharacter;
-    m_runWidthSoFar = runWidthSoFar;
+    m_runWidthSoFar += widthSinceLastRounding;
     m_finalRoundingWidth = lastRoundingWidth;
 }
 

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
- * Copyright (C) 2003, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2003, 2008, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -40,74 +40,70 @@ public:
         bool m_isIcon;
         bool m_isAlternate;
         bool m_isDNSPrefetch;
+#if ENABLE(LINK_PREFETCH)
+        bool m_isLinkPrefetch;
+#endif
 
-        RelAttribute() : m_isStyleSheet(false), m_isIcon(false), m_isAlternate(false), m_isDNSPrefetch(false) { }
+        RelAttribute()
+            : m_isStyleSheet(false)
+            , m_isIcon(false)
+            , m_isAlternate(false)
+            , m_isDNSPrefetch(false)
+#if ENABLE(LINK_PREFETCH)
+            , m_isLinkPrefetch(false)
+#endif
+            { 
+            }
     };
 
-    HTMLLinkElement(const QualifiedName&, Document*, bool createdByParser);
-    ~HTMLLinkElement();
-
-    virtual HTMLTagStatus endTagRequirement() const { return TagStatusForbidden; }
-    virtual int tagPriority() const { return 0; }
-
-    bool disabled() const;
-    void setDisabled(bool);
-
-    String charset() const;
-    void setCharset(const String&);
+    static PassRefPtr<HTMLLinkElement> create(const QualifiedName&, Document*, bool createdByParser);
+    virtual ~HTMLLinkElement();
 
     KURL href() const;
-    void setHref(const String&);
-
-    String hreflang() const;
-    void setHreflang(const String&);
-
-    String media() const;
-    void setMedia(const String&);
-
     String rel() const;
-    void setRel(const String&);
-
-    String rev() const;
-    void setRev(const String&);
 
     virtual String target() const;
-    void setTarget(const String&);
 
     String type() const;
-    void setType(const String&);
 
     StyleSheet* sheet() const;
 
-    // overload from HTMLElement
+    bool isLoading() const;
+
+    bool isDisabled() const { return m_disabledState == Disabled; }
+    bool isEnabledViaScript() const { return m_disabledState == EnabledViaScript; }
+    bool isIcon() const { return m_relAttribute.m_isIcon; }
+
+private:
     virtual void parseMappedAttribute(Attribute*);
 
     void process();
+    static void processCallback(Node*);
 
     virtual void insertedIntoDocument();
     virtual void removedFromDocument();
 
     // from CachedResourceClient
     virtual void setCSSStyleSheet(const String& href, const KURL& baseURL, const String& charset, const CachedCSSStyleSheet* sheet);
-    bool isLoading() const;
     virtual bool sheetLoaded();
 
     bool isAlternate() const { return m_disabledState == Unset && m_relAttribute.m_isAlternate; }
-    bool isDisabled() const { return m_disabledState == Disabled; }
-    bool isEnabledViaScript() const { return m_disabledState == EnabledViaScript; }
-    bool isIcon() const { return m_relAttribute.m_isIcon; }
     
     void setDisabledState(bool _disabled);
 
     virtual bool isURLAttribute(Attribute*) const;
-    
+
+public:
     static void tokenizeRelAttribute(const AtomicString& value, RelAttribute&);
 
+private:
     virtual void addSubresourceAttributeURLs(ListHashSet<KURL>&) const;
 
     virtual void finishParsingChildren();
 
-protected:
+private:
+    HTMLLinkElement(const QualifiedName&, Document*, bool createdByParser);
+
     enum DisabledState {
         Unset,
         EnabledViaScript,

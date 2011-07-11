@@ -29,10 +29,6 @@
 
 #include "FloatPoint.h"
 
-#if PLATFORM(EFL)
-#include <Evas.h>
-#endif
-
 #if PLATFORM(CG)
 typedef struct CGRect CGRect;
 #endif
@@ -100,7 +96,9 @@ public:
 
     bool isEmpty() const { return m_size.isEmpty(); }
 
+    float left() const { return x(); }
     float right() const { return x() + width(); }
+    float top() const { return y(); }
     float bottom() const { return y() + height(); }
 
     FloatPoint center() const { return FloatPoint(x() + width() / 2, y() + height() / 2); }
@@ -133,6 +131,11 @@ public:
     void scale(float s) { scale(s, s); }
     void scale(float sx, float sy);
 
+    // Re-initializes this rectangle to fit the sets of passed points.
+    void fitToPoints(const FloatPoint& p0, const FloatPoint& p1);
+    void fitToPoints(const FloatPoint& p0, const FloatPoint& p1, const FloatPoint& p2);
+    void fitToPoints(const FloatPoint& p0, const FloatPoint& p1, const FloatPoint& p2, const FloatPoint& p3);
+
 #if PLATFORM(OLYMPIA)
     String toString() const
     {
@@ -154,11 +157,7 @@ public:
 #if PLATFORM(QT)
     FloatRect(const QRectF&);
     operator QRectF() const;
-#endif
-
-#if PLATFORM(EFL)
-    explicit FloatRect(const Eina_Rectangle&);
-    operator Eina_Rectangle() const;
+    FloatRect normalized() const;
 #endif
 
 #if PLATFORM(WX) && USE(WXGC)
@@ -183,6 +182,13 @@ public:
 private:
     FloatPoint m_location;
     FloatSize m_size;
+
+    void setLocationAndSizeFromEdges(float left, float top, float right, float bottom)
+    {
+        m_location.set(left, top);
+        m_size.setWidth(right - left);
+        m_size.setHeight(bottom - top);
+    }
 };
 
 inline FloatRect intersection(const FloatRect& a, const FloatRect& b)

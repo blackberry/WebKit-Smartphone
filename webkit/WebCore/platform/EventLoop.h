@@ -32,19 +32,17 @@ namespace WebCore {
 
     class EventLoop : public Noncopyable {
     public:
-#if OS(OLYMPIA)
-        EventLoop();
-#else
         EventLoop()
             : m_ended(false)
         {
+            platformInit();
         }
-#endif
 
         void cycle();
         bool ended() const { return m_ended; }
 
     private:
+        void platformInit();
         bool m_ended;
     };
 

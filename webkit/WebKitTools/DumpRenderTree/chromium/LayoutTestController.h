@@ -42,10 +42,19 @@
 #define LayoutTestController_h
 
 #include "CppBoundClass.h"
-#include "base/timer.h" // FIXME: Remove this.
+#include "Task.h"
 #include "public/WebString.h"
 #include "public/WebURL.h"
 #include <wtf/Deque.h>
+#include <wtf/OwnPtr.h>
+
+namespace WebKit {
+class WebDeviceOrientationClient;
+class WebDeviceOrientationClientMock;
+class WebSpeechInputController;
+class WebSpeechInputControllerMock;
+class WebSpeechInputListener;
+}
 
 class TestShell;
 
@@ -55,9 +64,11 @@ public:
     // object.
     LayoutTestController(TestShell*);
 
+    ~LayoutTestController();
+
     // This function sets a flag that tells the test_shell to dump pages as
     // plain text, rather than as a text representation of the renderer's state.
-    // It takes no arguments, and ignores any that may be present.
+    // It takes an optional argument, whether to dump pixels results or not.
     void dumpAsText(const CppArgumentList&, CppVariant*);
 
     // This function should set a flag that tells the test_shell to print a line
@@ -89,6 +100,16 @@ public:
     // dump all frames as plain text if the dumpAsText flag is set.
     // It takes no arguments, and ignores any that may be present.
     void dumpChildFramesAsText(const CppArgumentList&, CppVariant*);
+    
+    // This function sets a flag that tells the test_shell to dump a descriptive
+    // line for each resource load callback. It takes no arguments, and ignores
+    // any that may be present.
+    void dumpResourceLoadCallbacks(const CppArgumentList&, CppVariant*);    
+    
+    // This function sets a flag that tells the test_shell to dump the MIME type
+    // for each resource that was loaded. It takes no arguments, and ignores any
+    // that may be present.
+    void dumpResourceResponseMIMETypes(const CppArgumentList&, CppVariant*);
 
     // This function sets a flag that tells the test_shell to dump all calls
     // to window.status().
@@ -109,7 +130,6 @@ public:
     // to delay the completion of the test until notifyDone is called.
     void waitUntilDone(const CppArgumentList&, CppVariant*);
     void notifyDone(const CppArgumentList&, CppVariant*);
-    void notifyDoneTimedOut();
 
     // Methods for adding actions to the work queue.  Used in conjunction with
     // waitUntilDone/notifyDone above.
@@ -129,6 +149,7 @@ public:
 
     // Shows DevTools window.
     void showWebInspector(const CppArgumentList&, CppVariant*);
+    void closeWebInspector(const CppArgumentList&, CppVariant*);
 
     // Gives focus to the window.
     void setWindowIsKey(const CppArgumentList&, CppVariant*);
@@ -199,23 +220,24 @@ public:
     void pauseTransitionAtTimeOnElementWithId(const CppArgumentList&, CppVariant*);
     void elementDoesAutoCompleteForElementWithId(const CppArgumentList&, CppVariant*);
     void numberOfActiveAnimations(const CppArgumentList&, CppVariant*);
-
+    void suspendAnimations(const CppArgumentList&, CppVariant*);
+    void resumeAnimations(const CppArgumentList&, CppVariant*);
     void disableImageLoading(const CppArgumentList&, CppVariant*);
-
     void setIconDatabaseEnabled(const CppArgumentList&, CppVariant*);
-
     void dumpSelectionRect(const CppArgumentList&, CppVariant*);
 
     // Grants permission for desktop notifications to an origin
     void grantDesktopNotificationPermission(const CppArgumentList&, CppVariant*);
+    // Simulates a click on a desktop notification.
+    void simulateDesktopNotificationClick(const CppArgumentList&, CppVariant*);
 
+    void setDomainRelaxationForbiddenForURLScheme(const CppArgumentList&, CppVariant*);
     void setEditingBehavior(const CppArgumentList&, CppVariant*);
 
     // The following are only stubs.  TODO(pamg): Implement any of these that
     // are needed to pass the layout tests.
     void dumpAsWebArchive(const CppArgumentList&, CppVariant*);
     void dumpTitleChanges(const CppArgumentList&, CppVariant*);
-    void dumpResourceLoadCallbacks(const CppArgumentList&, CppVariant*);
     void setMainFrameIsFirstResponder(const CppArgumentList&, CppVariant*);
     void display(const CppArgumentList&, CppVariant*);
     void testRepaint(const CppArgumentList&, CppVariant*);
@@ -249,6 +271,11 @@ public:
     void addOriginAccessWhitelistEntry(const CppArgumentList&, CppVariant*);
     void removeOriginAccessWhitelistEntry(const CppArgumentList&, CppVariant*);
 
+    // Clears all Application Caches.
+    void clearAllApplicationCaches(const CppArgumentList&, CppVariant*);
+    // Sets the Application Quota for the localhost origin.
+    void setApplicationCacheOriginQuota(const CppArgumentList&, CppVariant*);
+
     // Clears all databases.
     void clearAllDatabases(const CppArgumentList&, CppVariant*);
     // Sets the default quota for all origins
@@ -281,26 +308,42 @@ public:
     void addUserScript(const CppArgumentList&, CppVariant*);
     void addUserStyleSheet(const CppArgumentList&, CppVariant*);
 
+    // DeviceOrientation related functions
+    void setMockDeviceOrientation(const CppArgumentList&, CppVariant*);
+
     // Geolocation related functions.
     void setGeolocationPermission(const CppArgumentList&, CppVariant*);
     void setMockGeolocationPosition(const CppArgumentList&, CppVariant*);
     void setMockGeolocationError(const CppArgumentList&, CppVariant*);
 
+    // Empty stub method to keep parity with object model exposed by global LayoutTestController.
+    void abortModal(const CppArgumentList&, CppVariant*);
+
+    // Speech input related functions.
+    void setMockSpeechInputResult(const CppArgumentList&, CppVariant*);
+
+    void markerTextForListItem(const CppArgumentList&, CppVariant*);
+
 public:
     // The following methods are not exposed to JavaScript.
     void setWorkQueueFrozen(bool frozen) { m_workQueue.setFrozen(frozen); }
 
+    WebKit::WebSpeechInputController* speechInputController(WebKit::WebSpeechInputListener*);
+    WebKit::WebDeviceOrientationClient* deviceOrientationClient();
     bool shouldDumpAsText() { return m_dumpAsText; }
     bool shouldDumpEditingCallbacks() { return m_dumpEditingCallbacks; }
     bool shouldDumpFrameLoadCallbacks() { return m_dumpFrameLoadCallbacks; }
     void setShouldDumpFrameLoadCallbacks(bool value) { m_dumpFrameLoadCallbacks = value; }
     bool shouldDumpResourceLoadCallbacks() {return m_dumpResourceLoadCallbacks; }
+    void setShouldDumpResourceResponseMIMETypes(bool value) { m_dumpResourceResponseMIMETypes = value; }
+    bool shouldDumpResourceResponseMIMETypes() {return m_dumpResourceResponseMIMETypes; }
     bool shouldDumpStatusCallbacks() { return m_dumpWindowStatusChanges; }
     bool shouldDumpSelectionRect() { return m_dumpSelectionRect; }
     bool shouldDumpBackForwardList() { return m_dumpBackForwardList; }
     bool shouldDumpTitleChanges() { return m_dumpTitleChanges; }
     bool shouldDumpChildFrameScrollPositions() { return m_dumpChildFrameScrollPositions; }
     bool shouldDumpChildFramesAsText() { return m_dumpChildFramesAsText; }
+    bool shouldGeneratePixelResults() { return m_generatePixelResults; }
     bool acceptsEditing() { return m_acceptsEditing; }
     bool canOpenWindows() { return m_canOpenWindows; }
     bool shouldAddFileToPasteboard() { return m_shouldAddFileToPasteboard; }
@@ -330,6 +373,8 @@ public:
         virtual bool run(TestShell* shell) = 0;
     };
 
+    TaskList* taskList() { return &m_taskList; }
+
 private:
     friend class WorkItem;
     friend class WorkQueue;
@@ -349,11 +394,17 @@ private:
 
         void setFrozen(bool frozen) { m_frozen = frozen; }
         bool isEmpty() { return m_queue.isEmpty(); }
+        TaskList* taskList() { return &m_taskList; }
 
     private:
         void processWork();
+        class WorkQueueTask: public MethodTask<WorkQueue> {
+        public:
+            WorkQueueTask(WorkQueue* object): MethodTask<WorkQueue>(object) {}
+            virtual void runIfValid() { m_object->processWork(); }
+        };
 
-        base::OneShotTimer<WorkQueue> m_timer;
+        TaskList m_taskList;
         Deque<WorkItem*> m_queue;
         bool m_frozen;
         LayoutTestController* m_controller;
@@ -366,14 +417,22 @@ private:
 
     void logErrorToConsole(const std::string&);
     void completeNotifyDone(bool isTimeout);
+    class NotifyDoneTimedOutTask: public MethodTask<LayoutTestController> {
+    public:
+        NotifyDoneTimedOutTask(LayoutTestController* object): MethodTask<LayoutTestController>(object) {}
+        virtual void runIfValid() { m_object->completeNotifyDone(true); }
+    };
+
 
     bool pauseAnimationAtTimeOnElementWithId(const WebKit::WebString& animationName, double time, const WebKit::WebString& elementId);
     bool pauseTransitionAtTimeOnElementWithId(const WebKit::WebString& propertyName, double time, const WebKit::WebString& elementId);
     bool elementDoesAutoCompleteForElementWithId(const WebKit::WebString&);
     int numberOfActiveAnimations();
+    void suspendAnimations();
+    void resumeAnimations();
 
     // Used for test timeouts.
-    ScopedRunnableMethodFactory<LayoutTestController> m_timeoutFactory;
+    TaskList m_taskList;
 
     // Non-owning pointer.  The LayoutTestController is owned by the host.
     TestShell* m_shell;
@@ -397,6 +456,10 @@ private:
     // If true, the test_shell will output a descriptive line for each resource
     // load callback.
     bool m_dumpResourceLoadCallbacks;
+    
+    // If true, the test_shell will output the MIME type for each resource that 
+    // was loaded.
+    bool m_dumpResourceResponseMIMETypes;
 
     // If true, the test_shell will produce a dump of the back forward list as
     // well.
@@ -415,6 +478,9 @@ private:
 
     // If true, output a message when the page title is changed.
     bool m_dumpTitleChanges;
+
+    // If true, the test_shell will generate pixel results in dumpAsText mode
+    bool m_generatePixelResults;
 
     // If true, the element will be treated as editable.  This value is returned
     // from various editing callbacks that are called just before edit operations
@@ -456,6 +522,10 @@ private:
     CppVariant m_webHistoryItemCount;
 
     WebKit::WebURL m_userStyleSheetLocation;
+
+    OwnPtr<WebKit::WebSpeechInputControllerMock> m_speechInputControllerMock;
+
+    OwnPtr<WebKit::WebDeviceOrientationClientMock> m_deviceOrientationClientMock;
 };
 
 #endif // LayoutTestController_h

@@ -2,7 +2,7 @@
 
 /*
  *  Copyright (C) 2002-2003 Lars Knoll (knoll@kde.org)
- *  Copyright (C) 2004, 2005, 2006, 2007, 2008 Apple Inc. All rights reserved.
+ *  Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  *  Copyright (C) 2006 Alexey Proskuryakov (ap@nypop.com)
  *  Copyright (C) 2008 Eric Seidel <eric@webkit.org>
  *
@@ -34,6 +34,7 @@
 #include "Document.h"
 #include "HTMLNames.h"
 #include "MediaList.h"
+#include "MediaQueryExp.h"
 #include "WebKitCSSKeyframeRule.h"
 #include "WebKitCSSKeyframesRule.h"
 #include <wtf/FastMalloc.h>
@@ -78,7 +79,7 @@ using namespace HTMLNames;
     MediaQueryExp* mediaQueryExp;
     CSSParserValue value;
     CSSParserValueList* valueList;
-    Vector<MediaQueryExp*>* mediaQueryExpList;
+    Vector<OwnPtr<MediaQueryExp> >* mediaQueryExpList;
     WebKitCSSKeyframeRule* keyframeRule;
     WebKitCSSKeyframesRule* keyframesRule;
     float val;
@@ -98,7 +99,7 @@ static int cssyylex(YYSTYPE* yylval, void* parser)
 
 %}
 
-%expect 55
+%expect 56
 
 %nonassoc LOWEST_PREC
 
@@ -201,6 +202,7 @@ static int cssyylex(YYSTYPE* yylval, void* parser)
 %type <relation> combinator
 
 %type <rule> charset
+%type <rule> ignored_charset
 %type <rule> ruleset
 %type <rule> media
 %type <rule> import
@@ -389,6 +391,13 @@ charset:
   }
 ;
 
+ignored_charset:
+    CHARSET_SYM maybe_space STRING maybe_space ';' {
+        // Ignore any @charset rule not at the beginning of the style sheet.
+        $$ = 0;
+    }
+;
+
 rule_list:
    /* empty */
  | rule_list rule maybe_sgml {
@@ -413,6 +422,7 @@ rule:
     valid_rule {
         static_cast<CSSParser*>(parser)->m_hadSyntacticallyValidCSSRule = true;
     }
+  | ignored_charset
   | invalid_rule
   | invalid_at
   ;
@@ -778,19 +788,25 @@ page_selector:
         CSSParser* p = static_cast<CSSParser*>(parser);
         $$ = p->createFloatingSelector();
         $$->m_tag = QualifiedName(nullAtom, $1, p->m_defaultNamespace);
+        $$->setForPage();
     }
     | IDENT pseudo_page {
         CSSParser* p = static_cast<CSSParser*>(parser);
         $$ = $2;
-        if ($$)
+        if ($$) {
             $$->m_tag = QualifiedName(nullAtom, $1, p->m_defaultNamespace);
+            $$->setForPage();
+        }
     }
     | pseudo_page {
         $$ = $1;
+        if ($$)
+            $$->setForPage();
     }
     | /* empty */ {
         CSSParser* p = static_cast<CSSParser*>(parser);
         $$ = p->createFloatingSelector();
+        $$->setForPage();
     }
     ;
 

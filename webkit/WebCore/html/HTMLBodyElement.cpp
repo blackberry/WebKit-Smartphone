@@ -3,7 +3,7 @@
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Simon Hausmann (hausmann@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -45,6 +45,16 @@ HTMLBodyElement::HTMLBodyElement(const QualifiedName& tagName, Document* documen
     ASSERT(hasTagName(bodyTag));
 }
 
+PassRefPtr<HTMLBodyElement> HTMLBodyElement::create(Document* document)
+{
+    return adoptRef(new HTMLBodyElement(bodyTag, document));
+}
+
+PassRefPtr<HTMLBodyElement> HTMLBodyElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new HTMLBodyElement(tagName, document));
+}
+
 HTMLBodyElement::~HTMLBodyElement()
 {
     if (m_linkDecl) {
@@ -58,7 +68,7 @@ void HTMLBodyElement::createLinkDecl()
     m_linkDecl = CSSMutableStyleDeclaration::create();
     m_linkDecl->setParent(document()->elementSheet());
     m_linkDecl->setNode(this);
-    m_linkDecl->setStrictParsing(!document()->inCompatMode());
+    m_linkDecl->setStrictParsing(!document()->inQuirksMode());
 }
 
 bool HTMLBodyElement::mapToEntry(const QualifiedName& attrName, MappedAttributeEntry& result) const
@@ -244,7 +254,7 @@ void HTMLBodyElement::setVLink(const String& value)
 
 static int adjustForZoom(int value, FrameView* frameView)
 {
-    float zoomFactor = frameView->zoomFactor();
+    float zoomFactor = frameView->pageZoomFactor();
     if (zoomFactor == 1)
         return value;
     // Needed because of truncation (rather than rounding) when scaling up.
@@ -269,7 +279,7 @@ void HTMLBodyElement::setScrollLeft(int scrollLeft)
     FrameView* view = document->view();
     if (!view)
         return;
-    view->setScrollPosition(IntPoint(static_cast<int>(scrollLeft * view->zoomFactor()), view->scrollY()));
+    view->setScrollPosition(IntPoint(static_cast<int>(scrollLeft * view->pageZoomFactor()), view->scrollY()));
 }
 
 int HTMLBodyElement::scrollTop() const
@@ -288,7 +298,7 @@ void HTMLBodyElement::setScrollTop(int scrollTop)
     FrameView* view = document->view();
     if (!view)
         return;
-    view->setScrollPosition(IntPoint(view->scrollX(), static_cast<int>(scrollTop * view->zoomFactor())));
+    view->setScrollPosition(IntPoint(view->scrollX(), static_cast<int>(scrollTop * view->pageZoomFactor())));
 }
 
 int HTMLBodyElement::scrollHeight() const

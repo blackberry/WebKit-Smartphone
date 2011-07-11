@@ -47,7 +47,9 @@ struct FilterData {
     }
 
     RefPtr<SVGFilter> filter;
-    OwnPtr<SVGFilterBuilder> builder;
+    RefPtr<SVGFilterBuilder> builder;
+    OwnPtr<ImageBuffer> sourceGraphicBuffer;
+    GraphicsContext* savedContext;
     FloatRect boundaries;
     FloatSize scale;
     bool builded;
@@ -62,15 +64,15 @@ public:
 
     virtual const char* renderName() const { return "RenderSVGResourceFilter"; }
 
-    virtual void invalidateClients();
-    virtual void invalidateClient(RenderObject*);
+    virtual void removeAllClientsFromCache(bool markForInvalidation = true);
+    virtual void removeClientFromCache(RenderObject*, bool markForInvalidation = true);
 
     virtual bool applyResource(RenderObject*, RenderStyle*, GraphicsContext*&, unsigned short resourceMode);
     virtual void postApplyResource(RenderObject*, GraphicsContext*&, unsigned short resourceMode);
 
-    virtual FloatRect resourceBoundingBox(const FloatRect&);
+    virtual FloatRect resourceBoundingBox(RenderObject*);
 
-    PassOwnPtr<SVGFilterBuilder> buildPrimitives();
+    PassRefPtr<SVGFilterBuilder> buildPrimitives();
 
     SVGUnitTypes::SVGUnitType filterUnits() const { return toUnitType(static_cast<SVGFilterElement*>(node())->filterUnits()); }
     SVGUnitTypes::SVGUnitType primitiveUnits() const { return toUnitType(static_cast<SVGFilterElement*>(node())->primitiveUnits()); }
@@ -80,10 +82,6 @@ public:
 
 private:
     bool fitsInMaximumImageSize(const FloatSize&, FloatSize&);
-
-    // Intermediate storage during 
-    GraphicsContext* m_savedContext;
-    OwnPtr<ImageBuffer> m_sourceGraphicBuffer;
 
     HashMap<RenderObject*, FilterData*> m_filter;
 };

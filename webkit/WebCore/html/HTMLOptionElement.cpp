@@ -44,15 +44,24 @@ using namespace HTMLNames;
 
 HTMLOptionElement::HTMLOptionElement(const QualifiedName& tagName, Document* document, HTMLFormElement* form)
     : HTMLFormControlElement(tagName, document, form)
-    , m_style(0)
 {
     ASSERT(hasTagName(optionTag));
+}
+
+PassRefPtr<HTMLOptionElement> HTMLOptionElement::create(Document* document, HTMLFormElement* form)
+{
+    return adoptRef(new HTMLOptionElement(optionTag, document, form));
+}
+
+PassRefPtr<HTMLOptionElement> HTMLOptionElement::create(const QualifiedName& tagName, Document* document, HTMLFormElement* form)
+{
+    return adoptRef(new HTMLOptionElement(tagName, document, form));
 }
 
 PassRefPtr<HTMLOptionElement> HTMLOptionElement::createForJSConstructor(Document* document, const String& data, const String& value,
         bool defaultSelected, bool selected, ExceptionCode& ec)
 {
-    RefPtr<HTMLOptionElement> element = new HTMLOptionElement(optionTag, document);
+    RefPtr<HTMLOptionElement> element = adoptRef(new HTMLOptionElement(optionTag, document));
 
     RefPtr<Text> text = Text::create(document, data.isNull() ? "" : data);
 
@@ -67,11 +76,6 @@ PassRefPtr<HTMLOptionElement> HTMLOptionElement::createForJSConstructor(Document
     element->setSelected(selected);
 
     return element.release();
-}
-
-bool HTMLOptionElement::checkDTD(const Node* newChild)
-{
-    return newChild->isTextNode() || newChild->hasTagName(scriptTag);
 }
 
 void HTMLOptionElement::attach()
@@ -212,11 +216,6 @@ void HTMLOptionElement::setDefaultSelected(bool b)
 String HTMLOptionElement::label() const
 {
     return m_data.label();
-}
-
-void HTMLOptionElement::setLabel(const String& value)
-{
-    setAttribute(labelAttr, value);
 }
 
 void HTMLOptionElement::setRenderStyle(PassRefPtr<RenderStyle> newStyle)

@@ -28,10 +28,25 @@
 
 #if WEBKIT_VERSION_MAX_ALLOWED >= WEBKIT_VERSION_LATEST
 
+@class DOMIDBKey;
 @class DOMTestObj;
 @class DOMlog;
 @class NSString;
 @protocol DOMEventListener;
+
+enum {
+    DOM_CONST_VALUE_0 = 0,
+    DOM_CONST_VALUE_1 = 1,
+    DOM_CONST_VALUE_2 = 2,
+    DOM_CONST_VALUE_4 = 4,
+    DOM_CONST_VALUE_8 = 8,
+    DOM_CONST_VALUE_9 = -1,
+    DOM_CONST_VALUE_10 = "my constant string",
+    DOM_CONST_VALUE_11 = 0xffffffff,
+    DOM_CONST_VALUE_12 = 0x01,
+    DOM_CONST_VALUE_13 = 0X20,
+    DOM_CONST_VALUE_14 = 0x1abc
+};
 
 @interface DOMTestObj : DOMObject
 - (int)readOnlyIntAttr;
@@ -47,15 +62,57 @@
 - (void)setStringAttr:(NSString *)newStringAttr;
 - (DOMTestObj *)testObjAttr;
 - (void)setTestObjAttr:(DOMTestObj *)newTestObjAttr;
-- (int)attrWithException;
-- (void)setAttrWithException:(int)newAttrWithException;
-- (int)attrWithSetterException;
-- (void)setAttrWithSetterException:(int)newAttrWithSetterException;
+- (DOMTestObj *)XMLObjAttr;
+- (void)setXMLObjAttr:(DOMTestObj *)newXMLObjAttr;
+- (BOOL)create;
+- (void)setCreate:(BOOL)newCreate;
+- (NSString *)reflectedStringAttr;
+- (void)setReflectedStringAttr:(NSString *)newReflectedStringAttr;
+- (int)reflectedIntegralAttr;
+- (void)setReflectedIntegralAttr:(int)newReflectedIntegralAttr;
+- (BOOL)reflectedBooleanAttr;
+- (void)setReflectedBooleanAttr:(BOOL)newReflectedBooleanAttr;
+- (NSString *)reflectedURLAttr;
+- (void)setReflectedURLAttr:(NSString *)newReflectedURLAttr;
+- (NSString *)reflectedNonEmptyURLAttr;
+- (void)setReflectedNonEmptyURLAttr:(NSString *)newReflectedNonEmptyURLAttr;
+- (NSString *)reflectedStringAttr;
+- (void)setReflectedStringAttr:(NSString *)newReflectedStringAttr;
+- (int)reflectedCustomIntegralAttr;
+- (void)setReflectedCustomIntegralAttr:(int)newReflectedCustomIntegralAttr;
+- (BOOL)reflectedCustomBooleanAttr;
+- (void)setReflectedCustomBooleanAttr:(BOOL)newReflectedCustomBooleanAttr;
+- (NSString *)reflectedCustomURLAttr;
+- (void)setReflectedCustomURLAttr:(NSString *)newReflectedCustomURLAttr;
+- (NSString *)reflectedCustomNonEmptyURLAttr;
+- (void)setReflectedCustomNonEmptyURLAttr:(NSString *)newReflectedCustomNonEmptyURLAttr;
 - (int)attrWithGetterException;
 - (void)setAttrWithGetterException:(int)newAttrWithGetterException;
+- (int)attrWithSetterException;
+- (void)setAttrWithSetterException:(int)newAttrWithSetterException;
+- (NSString *)stringAttrWithGetterException;
+- (void)setStringAttrWithGetterException:(NSString *)newStringAttrWithGetterException;
+- (NSString *)stringAttrWithSetterException;
+- (void)setStringAttrWithSetterException:(NSString *)newStringAttrWithSetterException;
 - (int)customAttr;
 - (void)setCustomAttr:(int)newCustomAttr;
 - (NSString *)scriptStringAttr;
+#if ENABLE(Condition1)
+- (int)conditionalAttr1;
+- (void)setConditionalAttr1:(int)newConditionalAttr1;
+#endif
+#if ENABLE(Condition1) && ENABLE(Condition2)
+- (int)conditionalAttr2;
+- (void)setConditionalAttr2:(int)newConditionalAttr2;
+#endif
+#if ENABLE(Condition1) || ENABLE(Condition2)
+- (int)conditionalAttr3;
+- (void)setConditionalAttr3:(int)newConditionalAttr3;
+#endif
+- (int)descriptionName;
+- (int)idName;
+- (void)setIdName:(int)newIdName;
+- (NSString *)hashName;
 - (void)voidMethod;
 - (void)voidMethodWithArgs:(int)intArg strArg:(NSString *)strArg objArg:(DOMTestObj *)objArg;
 - (int)intMethod;
@@ -65,6 +122,7 @@
 - (DOMTestObj *)methodThatRequiresAllArgs:(NSString *)strArg objArg:(DOMTestObj *)objArg;
 - (DOMTestObj *)methodThatRequiresAllArgsAndThrows:(NSString *)strArg objArg:(DOMTestObj *)objArg;
 - (void)serializedValue:(NSString *)serializedArg;
+- (void)idbKey:(DOMIDBKey *)key;
 - (void)methodWithException;
 - (void)customMethod;
 - (void)customMethodWithArgs:(int)intArg strArg:(NSString *)strArg objArg:(DOMTestObj *)objArg;
@@ -80,9 +138,12 @@
 - (DOMTestObj *)withScriptStateObj;
 - (void)withScriptStateVoidException;
 - (DOMTestObj *)withScriptStateObjException;
+- (void)withScriptExecutionContext;
 - (void)methodWithOptionalArg:(int)opt;
 - (void)methodWithNonOptionalArgAndOptionalArg:(int)nonOpt opt:(int)opt;
 - (void)methodWithNonOptionalArgAndTwoOptionalArgs:(int)nonOpt opt1:(int)opt1 opt2:(int)opt2;
+- (void)classMethod;
+- (int)classMethodWithOptional:(int)arg;
 @end
 
 #endif

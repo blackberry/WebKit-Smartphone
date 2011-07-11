@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,6 +46,10 @@ typedef struct objc_object* id;
 
 #if PLATFORM(ANDROID)
 #include "AndroidWebHistoryBridge.h"
+#endif
+
+#if OS(OLYMPIA)
+#include "HistoryItemViewState.h"
 #endif
 
 namespace WebCore {
@@ -138,6 +143,9 @@ public:
     void setStateObject(PassRefPtr<SerializedScriptValue> object);
     SerializedScriptValue* stateObject() const { return m_stateObject.get(); }
 
+    void setItemSequenceNumber(long long number) { m_itemSequenceNumber = number; }
+    long long itemSequenceNumber() const { return m_itemSequenceNumber; }
+
     void setDocumentSequenceNumber(long long number) { m_documentSequenceNumber = number; }
     long long documentSequenceNumber() const { return m_documentSequenceNumber; }
     
@@ -154,10 +162,14 @@ public:
     void addChildItem(PassRefPtr<HistoryItem>);
     void setChildItem(PassRefPtr<HistoryItem>);
     HistoryItem* childItemWithTarget(const String&) const;
+    HistoryItem* childItemWithDocumentSequenceNumber(long long number) const;
     HistoryItem* targetItem();
     const HistoryItemVector& children() const;
     bool hasChildren() const;
     void clearChildren();
+    
+    bool hasSameDocuments(HistoryItem* otherItem);
+    bool hasSameFrames(HistoryItem* otherItem);
 
     // This should not be called directly for HistoryItems that are already included
     // in GlobalHistory. The WebKit api for this is to use -[WebHistory setLastVisitedTimeInterval:forItem:] instead.
@@ -193,12 +205,8 @@ public:
     AndroidWebHistoryBridge* bridge() const;
 #endif
 
-#if PLATFORM(OLYMPIA)
-    void setNetworkToken(const String& token) { m_networkToken = token; }
-    String networkToken() const { return m_networkToken; }
-
-    void setScale(double scale) { m_scale = scale; }
-    double scale() const { return m_scale; }
+#if OS(OLYMPIA)
+    HistoryItemViewState& viewState() const { return m_viewState; }
 #endif
 
 #ifndef NDEBUG
@@ -253,6 +261,8 @@ private:
 
     OwnPtr<Vector<String> > m_redirectURLs;
 
+    long long m_itemSequenceNumber;
+
     // Support for HTML5 History
     RefPtr<SerializedScriptValue> m_stateObject;
     long long m_documentSequenceNumber;
@@ -280,8 +290,7 @@ private:
 #endif
 
 #if PLATFORM(OLYMPIA)
-    String m_networkToken;
-    double m_scale;
+    mutable HistoryItemViewState m_viewState;
 #endif
 }; //class HistoryItem
 

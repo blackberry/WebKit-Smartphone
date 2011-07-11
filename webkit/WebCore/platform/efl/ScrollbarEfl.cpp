@@ -35,6 +35,7 @@
 
 #include <Ecore.h>
 #include <Edje.h>
+#include <Evas.h>
 #include <string>
 #include <wtf/text/CString.h>
 
@@ -83,7 +84,7 @@ static void scrollbarEflEdjeMessage(void* data, Evas_Object* o, Edje_Message_Typ
 
     m = static_cast<Edje_Message_Float*>(msg);
     v = m->val * (that->totalSize() - that->visibleSize());
-    that->setValue(v);
+    that->setValue(v, Scrollbar::NotFromScrollAnimator);
 }
 
 void ScrollbarEfl::setParent(ScrollView* view)
@@ -124,7 +125,7 @@ void ScrollbarEfl::setParent(ScrollView* view)
         int err = edje_object_load_error_get(o);
         const char* errmsg = edje_load_error_str(err);
         EINA_LOG_ERR("Could not load theme '%s' from file '%s': #%d '%s'",
-                     theme.utf8().data(), group, err, errmsg);
+                     group, theme.utf8().data(), err, errmsg);
         return;
     }
 

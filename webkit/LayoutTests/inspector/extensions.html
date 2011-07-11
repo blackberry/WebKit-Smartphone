@@ -1,0 +1,33 @@
+<html>
+<head>
+<script src="../http/tests/inspector/inspector-test2.js"></script>
+<script src="extensions-test.js"></script>
+<script type="text/javascript">
+
+function extension_testCreatePanel(nextTest)
+{
+    function onPanelCreated(panel)
+    {
+        output("Panel created");
+        dumpObject(panel);
+    }
+    webInspector.panels.create("Test Panel", "extension-panel.html", "extension-panel.png", callbackAndNextTest(onPanelCreated, nextTest));
+    output("done createPanel");
+}
+
+function extension_testCreateSidebar(nextTest)
+{
+    function onSidebarCreated(sidebar)
+    {
+        output("Sidebar created");
+        dumpObject(sidebar);
+    }
+    webInspector.panels.scripts.createSidebarPane("Test Sidebar", "extension-sidebar.html", callbackAndNextTest(onSidebarCreated, nextTest));
+}
+
+</script>
+</head>
+<body onload="runTest()">
+<p>Tests WebInspector extension API</p>
+</body>
+</html>

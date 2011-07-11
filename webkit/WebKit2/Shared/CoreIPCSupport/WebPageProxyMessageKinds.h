@@ -36,27 +36,27 @@ enum Kind {
     CreateNewPage,
     ShowPage,
     RunJavaScriptAlert,
-    
+    RunJavaScriptConfirm,
+    RunJavaScriptPrompt,
+
     ClosePage,
+    ContentsSizeChanged,
     DecidePolicyForMIMEType,
     DecidePolicyForNavigationAction,
     DecidePolicyForNewWindowAction,
-    DidChangeCanGoBack,
-    DidChangeCanGoForward,
     DidChangeProgress,
     DidCommitLoadForFrame,
     DidCreateMainFrame,
     DidCreateSubFrame,
     DidFailLoadForFrame,
     DidFailProvisionalLoadForFrame,
+    DidFinishDocumentLoadForFrame,
     DidFinishLoadForFrame,
     DidFinishProgress,
     DidFirstLayoutForFrame,
     DidFirstVisuallyNonEmptyLayoutForFrame,
     DidGetRenderTreeExternalRepresentation,
-    DidNavigateWithNavigationData,
-    DidPerformClientRedirect,
-    DidPerformServerRedirect,
+    DidGetSourceForFrame,
     DidReceiveEvent,
     DidReceiveServerRedirectForProvisionalLoadForFrame,
     DidReceiveTitleForFrame,
@@ -64,9 +64,27 @@ enum Kind {
     DidSetFrame,
     DidStartProgress,
     DidStartProvisionalLoadForFrame,
-    DidUpdateHistoryTitle,
+    SetCursor,
+    SetStatusText,
     SetToolTip,
     TakeFocus,
+    WillSubmitForm,
+
+    BackForwardAddItem,
+    BackForwardGoToItem,
+    BackForwardBackItem,
+    BackForwardCurrentItem,
+    BackForwardForwardItem,
+    BackForwardItemAtIndex,
+    BackForwardBackListCount,
+    BackForwardForwardListCount,
+
+    RegisterEditCommandForUndo,
+    ClearAllEditCommands,
+
+#if USE(ACCELERATED_COMPOSITING)
+    DidChangeAcceleratedCompositing,
+#endif
 };
 
 }

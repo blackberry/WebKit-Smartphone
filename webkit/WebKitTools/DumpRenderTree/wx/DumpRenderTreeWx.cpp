@@ -58,7 +58,7 @@ using namespace std;
 
 FILE* logOutput;
 
-LayoutTestController* gLayoutTestController = 0;
+RefPtr<LayoutTestController> gLayoutTestController;
 static wxWebView* webView;
 static wxTimer* idleTimer;
 
@@ -201,13 +201,11 @@ void dump()
         }
     }
 
-    if (dumpPixels) {
-        if (!gLayoutTestController->dumpAsText() && 
-                !gLayoutTestController->dumpDOMAsWebArchive() && 
-                !gLayoutTestController->dumpSourceAsWebArchive()) {
-            // FIXME: Add support for dumping pixels
-        }
-
+    if (dumpPixels
+        && gLayoutTestController->generatePixelResults()
+        && !gLayoutTestController->dumpDOMAsWebArchive()
+        && !gLayoutTestController->dumpSourceAsWebArchive()) {
+        // FIXME: Add support for dumping pixels
         fflush(stdout);
     }
 
@@ -215,8 +213,7 @@ void dump()
     fflush(stdout);
     fflush(stderr);
 
-    gLayoutTestController->deref();
-    gLayoutTestController = 0;
+    gLayoutTestController.clear();
 }
 
 static void runTest(const wxString testPathOrURL)
@@ -238,7 +235,7 @@ static void runTest(const wxString testPathOrURL)
     if (http == string::npos)
         pathOrURL.insert(0, "file://");
     
-    gLayoutTestController = new LayoutTestController(pathOrURL, expectedPixelHash);
+    gLayoutTestController = LayoutTestController::create(pathOrURL, expectedPixelHash);
     if (!gLayoutTestController) {
         wxTheApp->ExitMainLoop();
     }
@@ -337,9 +334,6 @@ bool MyApp::OnInit()
     delete logger;
     fclose(logOutput);
     
-    delete gLayoutTestController;
-    gLayoutTestController = 0;
-
     // returning false shuts the app down
     return false;
 }

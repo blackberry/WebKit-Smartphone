@@ -24,6 +24,10 @@
 
 namespace WebCore {
 
+void EventLoop::platformInit()
+{
+}
+
 void EventLoop::cycle()
 {
     QCoreApplication::processEvents();

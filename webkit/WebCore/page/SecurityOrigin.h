@@ -33,14 +33,12 @@
 #include <wtf/RefCounted.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/Threading.h>
+#include <wtf/text/StringHash.h>
 
 #include "FrameLoaderTypes.h"
 #include "PlatformString.h"
-#include "StringHash.h"
 
 namespace WebCore {
-
-typedef HashSet<String, CaseFoldingHash> URLSchemesMap;
 
 class Document;
 class KURL;
@@ -86,10 +84,13 @@ public:
     // drawing an image onto an HTML canvas element with the drawImage API.
     bool taintsCanvas(const KURL&) const;
 
-    // Returns true for any non-local URL. If document parameter is supplied,
-    // its local load policy dictates, otherwise if referrer is non-empty and
-    // represents a local file, then the local load is allowed.
-    static bool canLoad(const KURL&, const String& referrer, Document* document);
+    // Returns true if |document| can display content from the given URL (e.g.,
+    // in an iframe or as an image). For example, web sites generally cannot
+    // display content from the user's files system.
+    bool canDisplay(const KURL&) const;
+
+    // FIXME: Remove this function. This function exists only to service FrameLoader.
+    static bool deprecatedCanDisplay(const String& referrer, const KURL& targetURL);
 
     // Returns true if this SecurityOrigin can load local resources, such
     // as images, iframes, and style sheets, and can link to local URLs.
@@ -174,18 +175,6 @@ public:
     // (and whether it was set) but considering the host. It is used for postMessage.
     bool isSameSchemeHostPort(const SecurityOrigin*) const;
 
-    static void registerURLSchemeAsLocal(const String&);
-    static void removeURLSchemeRegisteredAsLocal(const String&);
-    static const URLSchemesMap& localURLSchemes();
-    static bool shouldTreatURLAsLocal(const String&);
-    static bool shouldTreatURLSchemeAsLocal(const String&);
-
-    // Secure schemes do not trigger mixed content warnings. For example,
-    // https and data are secure schemes because they cannot be corrupted by
-    // active network attackers.
-    static void registerURLSchemeAsSecure(const String&);
-    static bool shouldTreatURLSchemeAsSecure(const String&);
-
     static bool shouldHideReferrer(const KURL&, const String& referrer);
 
     enum LocalLoadPolicy {
@@ -196,9 +185,6 @@ public:
     static void setLocalLoadPolicy(LocalLoadPolicy);
     static bool restrictAccessToLocal();
     static bool allowSubstituteDataAccessToLocal();
-
-    static void registerURLSchemeAsNoAccess(const String&);
-    static bool shouldTreatURLSchemeAsNoAccess(const String&);
 
     static void addOriginAccessWhitelistEntry(const SecurityOrigin& sourceOrigin, const String& destinationProtocol, const String& destinationDomains, bool allowDestinationSubdomains);
     static void removeOriginAccessWhitelistEntry(const SecurityOrigin& sourceOrigin, const String& destinationProtocol, const String& destinationDomains, bool allowDestinationSubdomains);

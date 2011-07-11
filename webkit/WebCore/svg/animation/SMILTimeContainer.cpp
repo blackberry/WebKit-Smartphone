@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2008 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -236,7 +236,8 @@ void SMILTimeContainer::updateAnimations(SMILTime elapsed)
             ASSERT(animation->timeContainer() == this);
 
             SVGElement* targetElement = animation->targetElement();
-            if (!targetElement || targetElement->getIDAttribute() != m_nextSamplingTarget)
+            // FIXME: This should probably be using getIdAttribute instead of idForStyleResolution.
+            if (!targetElement || !targetElement->hasID() || targetElement->idForStyleResolution() != m_nextSamplingTarget)
                 continue;
 
             samplingDiff = animation->intervalBegin();
@@ -254,7 +255,7 @@ void SMILTimeContainer::updateAnimations(SMILTime elapsed)
     sortByPriority(toAnimate, elapsed);
     
     // Calculate animation contributions.
-    typedef HashMap<ElementAttributePair, SVGSMILElement*> ResultElementMap;
+    typedef HashMap<ElementAttributePair, RefPtr<SVGSMILElement> > ResultElementMap;
     ResultElementMap resultsElements;
     for (unsigned n = 0; n < toAnimate.size(); ++n) {
         SVGSMILElement* animation = toAnimate[n];
@@ -273,7 +274,7 @@ void SMILTimeContainer::updateAnimations(SMILTime elapsed)
         
         // Results are accumulated to the first animation that animates a particular element/attribute pair.
         ElementAttributePair key(targetElement, attributeName); 
-        SVGSMILElement* resultElement = resultsElements.get(key);
+        SVGSMILElement* resultElement = resultsElements.get(key).get();
         if (!resultElement) {
             resultElement = animation;
             resultElement->resetToBaseValue(baseValueFor(key));
@@ -296,7 +297,7 @@ void SMILTimeContainer::updateAnimations(SMILTime elapsed)
     Vector<SVGSMILElement*> animationsToApply;
     ResultElementMap::iterator end = resultsElements.end();
     for (ResultElementMap::iterator it = resultsElements.begin(); it != end; ++it)
-        animationsToApply.append(it->second);
+        animationsToApply.append(it->second.get());
 
     // Sort <animateTranform> to be the last one to be applied. <animate> may change transform attribute as
     // well (directly or indirectly by modifying <use> x/y) and this way transforms combine properly.

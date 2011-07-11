@@ -196,8 +196,29 @@ JSRetainPtr<JSStringRef> LayoutTestController::layerTreeAsText() const
 
 JSRetainPtr<JSStringRef> LayoutTestController::markerTextForListItem(JSContextRef context, JSValueRef nodeObject) const
 {
-    // FIXME: Implement me.
-    return JSRetainPtr<JSStringRef>();
+    COMPtr<IWebView> webView;
+    if (FAILED(frame->webView(&webView)))
+        return 0;
+
+    COMPtr<IWebViewPrivate> webViewPrivate(Query, webView);
+    if (!webViewPrivate)
+        return 0;
+
+    COMPtr<IDOMElement> element;
+    if (FAILED(webViewPrivate->elementFromJS(context, nodeObject, &element)))
+        return 0;
+
+    COMPtr<IDOMElementPrivate> elementPrivate(Query, element);
+    if (!elementPrivate)
+        return 0;
+
+    BSTR textBSTR = 0;
+    if (FAILED(elementPrivate->markerTextForListItem(&textBSTR)))
+        return 0;
+
+    JSRetainPtr<JSStringRef> markerText(Adopt, JSStringCreateWithBSTR(textBSTR));
+    SysFreeString(textBSTR);
+    return markerText;
 }
 
 void LayoutTestController::waitForPolicyDelegate()
@@ -354,6 +375,12 @@ void LayoutTestController::setCustomPolicyDelegate(bool setDelegate, bool permis
         webView->setPolicyDelegate(0);
 }
 
+void LayoutTestController::setMockDeviceOrientation(bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma)
+{
+    // FIXME: Implement for DeviceOrientation layout tests.
+    // See https://bugs.webkit.org/show_bug.cgi?id=30335.
+}
+
 void LayoutTestController::setMockGeolocationPosition(double latitude, double longitude, double accuracy)
 {
     // FIXME: Implement for Geolocation layout tests.
@@ -364,6 +391,18 @@ void LayoutTestController::setMockGeolocationError(int code, JSStringRef message
 {
     // FIXME: Implement for Geolocation layout tests.
     // See https://bugs.webkit.org/show_bug.cgi?id=28264.
+}
+
+void LayoutTestController::setGeolocationPermission(bool allow)
+{
+    // FIXME: Implement for Geolocation layout tests.
+    setGeolocationPermissionCommon(allow);
+}
+
+void LayoutTestController::setMockSpeechInputResult(JSStringRef result)
+{
+    // FIXME: Implement for speech input layout tests.
+    // See https://bugs.webkit.org/show_bug.cgi?id=39485.
 }
 
 void LayoutTestController::setIconDatabaseEnabled(bool iconDatabaseEnabled)
@@ -617,8 +656,14 @@ static bool resolveCygwinPath(const wstring& cygwinPath, wstring& windowsPath)
     DWORD keyType;
     DWORD result = ::SHGetValueW(HKEY_LOCAL_MACHINE, TEXT("SOFTWARE\\Cygnus Solutions\\Cygwin\\mounts v2\\/"), TEXT("native"), &keyType, &rootPath, &rootPathSize);
 
-    if (result != ERROR_SUCCESS || keyType != REG_SZ)
-        return false;
+    if (result != ERROR_SUCCESS || keyType != REG_SZ) {
+        // Cygwin 1.7 doesn't store Cygwin's root as a mount point anymore, because mount points are now stored in /etc/fstab.
+        // However, /etc/fstab doesn't contain any information about where / is located as a Windows path, so we need to use Cygwin's
+        // new registry key that has the root.
+        result = ::SHGetValueW(HKEY_LOCAL_MACHINE, TEXT("SOFTWARE\\Cygwin\\setup"), TEXT("rootdir"), &keyType, &rootPath, &rootPathSize);
+        if (result != ERROR_SUCCESS || keyType != REG_SZ)
+            return false;
+    }
 
     windowsPath = wstring(rootPath, rootPathSize);
 
@@ -704,6 +749,11 @@ void LayoutTestController::setUserStyleSheetLocation(JSStringRef jsURL)
     BSTR resultPathBSTR = SysAllocStringLen(resultPath.data(), resultPath.size());
     preferences->setUserStyleSheetLocation(resultPathBSTR);
     SysFreeString(resultPathBSTR);
+}
+
+void LayoutTestController::setViewModeMediaFeature(JSStringRef mode)
+{
+    // FIXME: implement
 }
 
 void LayoutTestController::setPersistentUserStyleSheetLocation(JSStringRef jsURL)
@@ -853,6 +903,16 @@ bool LayoutTestController::isCommandEnabled(JSStringRef /*name*/)
 {
     printf("ERROR: LayoutTestController::isCommandEnabled() not implemented\n");
     return false;
+}
+
+void LayoutTestController::clearAllApplicationCaches()
+{
+    // FIXME: implement to support Application Cache quotas.
+}
+
+void LayoutTestController::setApplicationCacheOriginQuota(unsigned long long quota)
+{
+    // FIXME: implement to support Application Cache quotas.
 }
 
 void LayoutTestController::clearAllDatabases()
@@ -1005,6 +1065,24 @@ unsigned LayoutTestController::numberOfActiveAnimations() const
     return number;
 }
 
+void LayoutTestController::suspendAnimations() const
+{
+    COMPtr<IWebFramePrivate> framePrivate(Query, frame);
+    if (!framePrivate)
+        return;
+
+    framePrivate->suspendAnimations();
+}
+
+void LayoutTestController::resumeAnimations() const
+{
+    COMPtr<IWebFramePrivate> framePrivate(Query, frame);
+    if (!framePrivate)
+        return;
+
+    framePrivate->resumeAnimations();
+}
+
 static _bstr_t bstrT(JSStringRef jsString)
 {
     // The false parameter tells the _bstr_t constructor to adopt the BSTR we pass it.
@@ -1034,7 +1112,7 @@ void LayoutTestController::setScrollbarPolicy(JSStringRef orientation, JSStringR
     // FIXME: implement
 }
 
-void LayoutTestController::addUserScript(JSStringRef source, bool runAtStart)
+void LayoutTestController::addUserScript(JSStringRef source, bool runAtStart, bool allFrames)
 {
     COMPtr<IWebViewPrivate> webView;
     if (FAILED(WebKitCreateInstance(__uuidof(WebView), 0, __uuidof(webView), reinterpret_cast<void**>(&webView))))
@@ -1048,7 +1126,7 @@ void LayoutTestController::addUserScript(JSStringRef source, bool runAtStart)
 }
 
 
-void LayoutTestController::addUserStyleSheet(JSStringRef source)
+void LayoutTestController::addUserStyleSheet(JSStringRef source, bool allFrames)
 {
     COMPtr<IWebViewPrivate> webView;
     if (FAILED(WebKitCreateInstance(__uuidof(WebView), 0, __uuidof(webView), reinterpret_cast<void**>(&webView))))
@@ -1237,9 +1315,27 @@ int LayoutTestController::numberOfPages(float pageWidthInPixels, float pageHeigh
     return pageNumber;
 }
 
+JSRetainPtr<JSStringRef> LayoutTestController::pageProperty(const char* propertyName, int pageNumber) const
+{
+    // FIXME: Implement this.
+    return JSRetainPtr<JSStringRef>();
+}
+
 void LayoutTestController::apiTestNewWindowDataLoadBaseURL(JSStringRef utf8Data, JSStringRef baseURL)
 {
 
+}
+
+bool LayoutTestController::isPageBoxVisible(int pageNumber) const
+{
+    // FIXME: implement
+    return false;
+}
+
+JSRetainPtr<JSStringRef> LayoutTestController::pageSizeAndMarginsInPixels(int pageNumber, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft) const
+{
+    // FIXME: implement
+    return JSRetainPtr<JSStringRef>();
 }
 
 void LayoutTestController::apiTestGoToCurrentBackForwardItem()
@@ -1283,4 +1379,8 @@ void LayoutTestController::setEditingBehavior(const char* editingBehavior)
         preferences->setEditingBehavior(WebKitEditingMacBehavior);
     if (behaviorString == "win")
         preferences->setEditingBehavior(WebKitEditingWinBehavior);
+}
+
+void LayoutTestController::abortModal()
+{
 }

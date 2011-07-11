@@ -25,6 +25,7 @@ WebKitWebSettingsClass
 <TITLE>WebKitWebBackForwardList</TITLE>
 WebKitWebBackForwardList
 webkit_web_back_forward_list_add_item
+webkit_web_back_forward_list_clear
 webkit_web_back_forward_list_contains_item
 webkit_web_back_forward_list_get_back_item
 webkit_web_back_forward_list_get_back_length
@@ -418,6 +419,7 @@ WebKitNetworkResponseClass
 <FILE>webkitwebview</FILE>
 WebKitNavigationResponse
 WebKitWebViewTargetInfo
+WebKitWebViewViewMode
 <TITLE>WebKitWebView</TITLE>
 WebKitWebView
 webkit_web_view_can_copy_clipboard
@@ -436,6 +438,7 @@ webkit_web_view_execute_script
 webkit_web_view_get_back_forward_list
 webkit_web_view_get_copy_target_list
 webkit_web_view_get_custom_encoding
+webkit_web_view_get_dom_document
 webkit_web_view_get_editable
 webkit_web_view_get_encoding
 webkit_web_view_get_focused_frame
@@ -451,6 +454,7 @@ webkit_web_view_get_settings
 webkit_web_view_get_title
 webkit_web_view_get_transparent
 webkit_web_view_get_uri
+webkit_web_view_get_view_mode
 webkit_web_view_get_view_source_mode
 webkit_web_view_get_zoom_level
 webkit_web_view_go_back
@@ -479,6 +483,7 @@ webkit_web_view_set_highlight_text_matches
 webkit_web_view_set_maintains_back_forward_list
 webkit_web_view_set_settings
 webkit_web_view_set_transparent
+webkit_web_view_set_view_mode
 webkit_web_view_set_view_source_mode
 webkit_web_view_set_zoom_level
 webkit_web_view_stop_loading
@@ -526,6 +531,7 @@ WebKitWebWindowFeaturesPrivate
 
 <SECTION>
 <FILE>webkit</FILE>
+<TITLE>Global functions</TITLE>
 webkit_init
 webkit_get_default_session
 webkit_get_default_web_database_quota
@@ -533,6 +539,11 @@ webkit_get_web_database_directory_path
 webkit_remove_all_web_databases
 webkit_set_default_web_database_quota
 webkit_set_web_database_directory_path
+<SUBSECTION CacheModel>
+WebKitCacheModel
+webkit_get_cache_model
+webkit_set_cache_model
+</SUBSECTION>
 </SECTION>
 
 <SECTION>
@@ -602,11 +613,4 @@ webkit_check_version
 webkit_major_version
 webkit_micro_version
 webkit_minor_version
-</SECTION>
-
-<SECTION>
-<FILE>webkitcachemodel</FILE>
-WebKitCacheModel
-webkit_get_cache_model
-webkit_set_cache_model
 </SECTION>

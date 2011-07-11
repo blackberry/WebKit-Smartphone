@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2009, 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,23 +38,21 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-HTMLDataGridElement::HTMLDataGridElement(const QualifiedName& tagName, Document* document)
+inline HTMLDataGridElement::HTMLDataGridElement(const QualifiedName& tagName, Document* document)
     : HTMLElement(tagName, document)
     , m_columns(DataGridColumnList::create(this))
 {
     setDataSource(DOMDataGridDataSource::create());
 }
 
+PassRefPtr<HTMLDataGridElement> HTMLDataGridElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new HTMLDataGridElement(tagName, document));
+}
+
 HTMLDataGridElement::~HTMLDataGridElement()
 {
     m_columns->clearDataGrid();
-}
-
-bool HTMLDataGridElement::checkDTD(const Node* newChild)
-{
-    if (newChild->isTextNode())
-        return static_cast<const Text*>(newChild)->containsOnlyWhitespace();
-    return newChild->hasTagName(dcolTag) || newChild->hasTagName(drowTag);
 }
 
 RenderObject* HTMLDataGridElement::createRenderer(RenderArena* arena, RenderStyle*)

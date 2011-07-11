@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
- * Copyright (C) 2003 Apple Computer, Inc.
+ * Copyright (C) 2003, 2010 Apple Inc. ALl rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -19,22 +19,28 @@
  * Boston, MA 02110-1301, USA.
  *
  */
+
 #ifndef HTMLStyleElement_h
 #define HTMLStyleElement_h
 
-#include "CSSStyleSheet.h"
 #include "HTMLElement.h"
 #include "StyleElement.h"
 
 namespace WebCore {
 
-class HTMLStyleElement : public HTMLElement, public StyleElement {
-public:
-    HTMLStyleElement(const QualifiedName&, Document*, bool createdByParser);
+class StyleSheet;
 
-    virtual HTMLTagStatus endTagRequirement() const { return TagStatusRequired; }
-    virtual int tagPriority() const { return 1; }
-    virtual bool checkDTD(const Node* newChild) { return newChild->isTextNode(); }
+class HTMLStyleElement : public HTMLElement, private StyleElement {
+public:
+    static PassRefPtr<HTMLStyleElement> create(const QualifiedName&, Document*, bool createdByParser);
+    virtual ~HTMLStyleElement();
+
+    void setType(const AtomicString&);
+
+    using StyleElement::sheet;
+
+private:
+    HTMLStyleElement(const QualifiedName&, Document*, bool createdByParser);
 
     // overload from HTMLElement
     virtual void parseMappedAttribute(Attribute*);
@@ -44,28 +50,13 @@ public:
 
     virtual void finishParsingChildren();
 
-    virtual bool isLoading() const;
-    virtual bool sheetLoaded();
-
-    bool disabled() const;
-    void setDisabled(bool);
-
-    virtual const AtomicString& media() const;
-    void setMedia(const AtomicString&);
-
-    virtual const AtomicString& type() const;
-    void setType(const AtomicString&);
-
-    StyleSheet* sheet();
-
-    virtual void setLoading(bool loading) { m_loading = loading; }
+    virtual bool isLoading() const { return StyleElement::isLoading(); }
+    virtual bool sheetLoaded() { return StyleElement::sheetLoaded(document()); }
 
     virtual void addSubresourceAttributeURLs(ListHashSet<KURL>&) const;
 
-protected:
-    String m_media;
-    bool m_loading;
-    bool m_createdByParser;
+    virtual const AtomicString& media() const;
+    virtual const AtomicString& type() const;
 };
 
 } //namespace

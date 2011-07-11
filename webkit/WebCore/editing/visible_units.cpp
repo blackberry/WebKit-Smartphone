@@ -75,20 +75,11 @@ typedef unsigned (*BoundarySearchFunction)(const UChar*, unsigned length, unsign
 static VisiblePosition previousBoundary(const VisiblePosition& c, BoundarySearchFunction searchFunction)
 {
     Position pos = c.deepEquivalent();
-    Node *n = pos.node();
-    if (!n)
-        return VisiblePosition();
-    Document *d = n->document();
-    Node *de = d->documentElement();
-    if (!de)
-        return VisiblePosition();
-    Node *boundary = n->enclosingBlockFlowElement();
+    Node* boundary = pos.parentEditingBoundary();
     if (!boundary)
         return VisiblePosition();
-    bool isContentEditable = boundary->isContentEditable();
-    while (boundary && boundary != de && boundary->parentNode() && isContentEditable == boundary->parentNode()->isContentEditable())
-        boundary = boundary->parentNode();
 
+    Document* d = boundary->document();
     Position start = rangeCompliantEquivalent(Position(boundary, 0));
     Position end = rangeCompliantEquivalent(pos);
     RefPtr<Range> searchRange = Range::create(d);
@@ -121,7 +112,7 @@ static VisiblePosition previousBoundary(const VisiblePosition& c, BoundarySearch
     if (ec)
         return VisiblePosition();
 
-    SimplifiedBackwardsTextIterator it(searchRange.get());
+    SimplifiedBackwardsTextIterator it(searchRange.get(), TextIteratorEndsAtEditingBoundary);
     unsigned next = 0;
     bool inTextSecurityMode = start.node() && start.node()->renderer() && start.node()->renderer()->style()->textSecurity() != TSNONE;
     bool needMoreContext = false;
@@ -156,7 +147,7 @@ static VisiblePosition previousBoundary(const VisiblePosition& c, BoundarySearch
             pos = Position(node, next);
         else {
             // Use the character iterator to translate the next value into a DOM position.
-            BackwardsCharacterIterator charIt(searchRange.get());
+            BackwardsCharacterIterator charIt(searchRange.get(), TextIteratorEndsAtEditingBoundary);
             charIt.advance(string.size() - suffixLength - next);
             pos = charIt.range()->endPosition();
         }
@@ -168,20 +159,11 @@ static VisiblePosition previousBoundary(const VisiblePosition& c, BoundarySearch
 static VisiblePosition nextBoundary(const VisiblePosition& c, BoundarySearchFunction searchFunction)
 {
     Position pos = c.deepEquivalent();
-    Node *n = pos.node();
-    if (!n)
-        return VisiblePosition();
-    Document *d = n->document();
-    Node *de = d->documentElement();
-    if (!de)
-        return VisiblePosition();
-    Node *boundary = n->enclosingBlockFlowElement();
+    Node* boundary = pos.parentEditingBoundary();
     if (!boundary)
         return VisiblePosition();
-    bool isContentEditable = boundary->isContentEditable();
-    while (boundary && boundary != de && boundary->parentNode() && isContentEditable == boundary->parentNode()->isContentEditable())
-        boundary = boundary->parentNode();
 
+    Document* d = boundary->document();
     RefPtr<Range> searchRange(d->createRange());
     Position start(rangeCompliantEquivalent(pos));
 
@@ -379,9 +361,9 @@ static VisiblePosition positionAvoidingFirstPositionInTable(const VisiblePositio
 {
     // return table offset 0 instead of the first VisiblePosition inside the table
     VisiblePosition previous = c.previous();
-    if (isLastPositionBeforeTable(previous))
+    if (isLastPositionBeforeTable(previous) && isEditablePosition(previous.deepEquivalent()))
         return previous;
-    
+
     return c;
 }
 
@@ -1021,7 +1003,7 @@ VisiblePosition startOfDocument(const VisiblePosition &c)
 
 VisiblePosition endOfDocument(const Node* node)
 {
-    if (!node || !node->document())
+    if (!node || !node->document() || !node->document()->documentElement())
         return VisiblePosition();
     
     Element* doc = node->document()->documentElement();

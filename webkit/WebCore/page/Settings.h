@@ -28,10 +28,10 @@
 #ifndef Settings_h
 #define Settings_h
 
-#include "AtomicString.h"
+#include "EditingBehaviorTypes.h"
 #include "FontRenderingMode.h"
 #include "KURL.h"
-#include "ZoomMode.h"
+#include <wtf/text/AtomicString.h>
 
 namespace WebCore {
 
@@ -50,21 +50,6 @@ namespace WebCore {
         TextDirectionSubmenuAutomaticallyIncluded,
         TextDirectionSubmenuAlwaysIncluded
     };
-
-    // There are multiple editing details that are different on Windows than Macintosh.
-    // We use a single switch for all of them. Some examples:
-    //
-    //    1) Clicking below the last line of an editable area puts the caret at the end
-    //       of the last line on Mac, but in the middle of the last line on Windows.
-    //    2) Pushing the down arrow key on the last line puts the caret at the end of the
-    //       last line on Mac, but does nothing on Windows. A similar case exists on the
-    //       top line.
-    //
-    // This setting is intended to control these sorts of behaviors. There are some other
-    // behaviors with individual function calls on EditorClient (smart copy and paste and
-    // selecting the space after a double click) that could be combined with this if
-    // if possible in the future.
-    enum EditingBehavior { EditingMacBehavior, EditingWindowsBehavior };
 
     class Settings : public Noncopyable {
     public:
@@ -147,10 +132,7 @@ namespace WebCore {
         void setLocalStorageEnabled(bool);
         bool localStorageEnabled() const { return m_localStorageEnabled; }
 
-#if ENABLE(DOM_STORAGE)        
-        void setLocalStorageQuota(unsigned);
-        unsigned localStorageQuota() const { return m_localStorageQuota; }
-
+#if ENABLE(DOM_STORAGE)
         // Allow clients concerned with memory consumption to set a quota on session storage
         // since the memory used won't be released until the Page is destroyed.
         // Default is noQuota.
@@ -158,6 +140,17 @@ namespace WebCore {
         unsigned sessionStorageQuota() const { return m_sessionStorageQuota; }
 #endif
 
+        // When this option is set, WebCore will avoid storing any record of browsing activity
+        // that may persist on disk or remain displayed when the option is reset.
+        // This option does not affect the storage of such information in RAM.
+        // The following functions respect this setting:
+        //  - HTML5/DOM Storage
+        //  - Icon Database
+        //  - Console Messages
+        //  - Cache
+        //  - Application Cache
+        //  - Back/Forward Page History
+        //  - Page Search Results
         void setPrivateBrowsingEnabled(bool);
         bool privateBrowsingEnabled() const { return m_privateBrowsingEnabled; }
 
@@ -169,6 +162,9 @@ namespace WebCore {
         
         void setUsesEncodingDetector(bool);
         bool usesEncodingDetector() const { return m_usesEncodingDetector; }
+
+        void setDNSPrefetchingEnabled(bool);
+        bool dnsPrefetchingEnabled() const { return m_dnsPrefetchingEnabled; }
 
         void setUserStyleSheetLocation(const KURL&);
         const KURL& userStyleSheetLocation() const { return m_userStyleSheetLocation; }
@@ -246,7 +242,10 @@ namespace WebCore {
 
         void setLocalStorageDatabasePath(const String&);
         const String& localStorageDatabasePath() const { return m_localStorageDatabasePath; }
-        
+
+        void setFileSystemRootPath(const String&);
+        const String& fileSystemRootPath() const { return m_fileSystemRootPath; }
+
         void setApplicationChromeMode(bool);
         bool inApplicationChromeMode() const { return m_inApplicationChromeMode; }
 
@@ -255,12 +254,9 @@ namespace WebCore {
 
         void setShouldPaintCustomScrollbars(bool);
         bool shouldPaintCustomScrollbars() const { return m_shouldPaintCustomScrollbars; }
-
-        void setZoomMode(ZoomMode);
-        ZoomMode zoomMode() const { return m_zoomMode; }
         
-        void setEnforceCSSMIMETypeInStrictMode(bool);
-        bool enforceCSSMIMETypeInStrictMode() { return m_enforceCSSMIMETypeInStrictMode; }
+        void setEnforceCSSMIMETypeInNoQuirksMode(bool);
+        bool enforceCSSMIMETypeInNoQuirksMode() { return m_enforceCSSMIMETypeInNoQuirksMode; }
 
         void setMaximumDecodedImageSize(size_t size) { m_maximumDecodedImageSize = size; }
         size_t maximumDecodedImageSize() const { return m_maximumDecodedImageSize; }
@@ -274,9 +270,9 @@ namespace WebCore {
         void setAllowScriptsToCloseWindows(bool);
         bool allowScriptsToCloseWindows() const { return m_allowScriptsToCloseWindows; }
 
-        void setEditingBehavior(EditingBehavior behavior) { m_editingBehavior = behavior; }
-        EditingBehavior editingBehavior() const { return static_cast<EditingBehavior>(m_editingBehavior); }
-        
+        void setEditingBehaviorType(EditingBehaviorType behavior) { m_editingBehaviorType = behavior; }
+        EditingBehaviorType editingBehaviorType() const { return static_cast<EditingBehaviorType>(m_editingBehaviorType); }
+
         void setDownloadableBinaryFontsEnabled(bool);
         bool downloadableBinaryFontsEnabled() const { return m_downloadableBinaryFontsEnabled; }
 
@@ -306,23 +302,37 @@ namespace WebCore {
         void setWebGLEnabled(bool);
         bool webGLEnabled() const { return m_webGLEnabled; }
 
+        void setAccelerated2dCanvasEnabled(bool);
+        bool accelerated2dCanvasEnabled() const { return m_acceleratedCanvas2dEnabled; }
+
         void setLoadDeferringEnabled(bool);
         bool loadDeferringEnabled() const { return m_loadDeferringEnabled; }
         
         void setTiledBackingStoreEnabled(bool);
         bool tiledBackingStoreEnabled() const { return m_tiledBackingStoreEnabled; }
 
-        void setHTML5ParserEnabled(bool flag) { m_html5ParserEnabled = flag; }
-        bool html5ParserEnabled() const { return m_html5ParserEnabled; }
+        void setPaginateDuringLayoutEnabled(bool flag) { m_paginateDuringLayoutEnabled = flag; }
+        bool paginateDuringLayoutEnabled() const { return m_paginateDuringLayoutEnabled; }
 
+#if ENABLE(FULLSCREEN_API)
+        void setFullScreenEnabled(bool flag) { m_fullScreenAPIEnabled = flag; }
+        bool fullScreenEnabled() const  { return m_fullScreenAPIEnabled; }
+#endif
+
+        void setMemoryInfoEnabled(bool flag) { m_memoryInfoEnabled = flag; }
+        bool memoryInfoEnabled() const { return m_memoryInfoEnabled; }
 #if ENABLE(VIEWPORT_REFLOW)
         void setTextReflowEnabled(bool);
         bool isTextReflowEnabled() const { return m_isTextReflowEnabled; }
 #endif
 
+        // This setting will be removed when an HTML5 compatibility issue is
+        // resolved and WebKit implementation of interactive validation is
+        // completed. See http://webkit.org/b/40520, http://webkit.org/b/40747,
+        // and http://webkit.org/b/40908
+        void setInteractiveFormValidationEnabled(bool flag) { m_interactiveFormValidation = flag; }
+        bool interactiveFormValidationEnabled() const { return m_interactiveFormValidation; }
 #if PLATFORM(OLYMPIA)
-        void setDetectedFormats(Vector<String>&);
-        Vector<String> detectedFormats() const { return m_detectedFormats; }
 
         void setFirstScheduledLayoutDelay(int);
         int firstScheduledLayoutDelay() const { return m_firstScheduledLayoutDelay; }
@@ -336,10 +346,11 @@ namespace WebCore {
 
     private:
         Page* m_page;
-        
+
         String m_defaultTextEncodingName;
         String m_ftpDirectoryTemplatePath;
         String m_localStorageDatabasePath;
+        String m_fileSystemRootPath;
         KURL m_userStyleSheetLocation;
         AtomicString m_standardFontFamily;
         AtomicString m_fixedFontFamily;
@@ -354,12 +365,10 @@ namespace WebCore {
         int m_defaultFontSize;
         int m_defaultFixedFontSize;
         size_t m_maximumDecodedImageSize;
-#if ENABLE(DOM_STORAGE)        
-        unsigned m_localStorageQuota;
+#if ENABLE(DOM_STORAGE)
         unsigned m_sessionStorageQuota;
 #endif
         unsigned m_pluginAllowedRunTime;
-        ZoomMode m_zoomMode;
         bool m_isSpatialNavigationEnabled : 1;
         bool m_isJavaEnabled : 1;
         bool m_loadsImagesAutomatically : 1;
@@ -401,10 +410,10 @@ namespace WebCore {
         bool m_inApplicationChromeMode : 1;
         bool m_offlineWebApplicationCacheEnabled : 1;
         bool m_shouldPaintCustomScrollbars : 1;
-        bool m_enforceCSSMIMETypeInStrictMode : 1;
+        bool m_enforceCSSMIMETypeInNoQuirksMode : 1;
         bool m_usesEncodingDetector : 1;
         bool m_allowScriptsToCloseWindows : 1;
-        unsigned m_editingBehavior : 1;
+        unsigned m_editingBehaviorType : 1;
         bool m_downloadableBinaryFontsEnabled : 1;
         bool m_xssAuditorEnabled : 1;
         bool m_acceleratedCompositingEnabled : 1;
@@ -412,9 +421,17 @@ namespace WebCore {
         bool m_showRepaintCounter : 1;
         bool m_experimentalNotificationsEnabled : 1;
         bool m_webGLEnabled : 1;
+        bool m_acceleratedCanvas2dEnabled : 1;
         bool m_loadDeferringEnabled : 1;
         bool m_tiledBackingStoreEnabled : 1;
-        bool m_html5ParserEnabled: 1;
+        bool m_paginateDuringLayoutEnabled : 1;
+        bool m_dnsPrefetchingEnabled : 1;
+#if ENABLE(FULLSCREEN_API)
+        bool m_fullScreenAPIEnabled : 1;
+#endif
+        bool m_memoryInfoEnabled: 1;
+        bool m_interactiveFormValidation: 1;
+    
 #if ENABLE(VIEWPORT_REFLOW)
         bool m_isTextReflowEnabled : 1;
 #endif
@@ -427,7 +444,6 @@ namespace WebCore {
 #endif
 
 #if PLATFORM(OLYMPIA)
-        Vector<String> m_detectedFormats;
         int m_firstScheduledLayoutDelay;
         bool m_shouldUseFirstScheduleLayoutDelay;
         bool m_processHTTPEquiv;

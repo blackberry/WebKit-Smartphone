@@ -40,6 +40,8 @@ class MacroAssemblerARM : public AbstractMacroAssembler<ARMAssembler> {
     static const int DoubleConditionBitSpecial = 0x10;
     COMPILE_ASSERT(!(DoubleConditionBitSpecial & DoubleConditionMask), DoubleConditionBitSpecial_should_not_interfere_with_ARMAssembler_Condition_codes);
 public:
+    typedef ARMRegisters::FPRegisterID FPRegisterID;
+
     enum Condition {
         Equal = ARMAssembler::EQ,
         NotEqual = ARMAssembler::NE,
@@ -635,7 +637,7 @@ public:
     void set8(Condition cond, Address left, RegisterID right, RegisterID dest)
     {
         // ARM doesn't have byte registers
-        load32(left, ARMRegisters::S1);
+        load8(left, ARMRegisters::S1);
         set32(cond, ARMRegisters::S1, right, dest);
     }
 
@@ -645,21 +647,26 @@ public:
         set32(cond, left, right, dest);
     }
 
-    void setTest32(Condition cond, Address address, Imm32 mask, RegisterID dest)
+    void setTest32(Condition cond, RegisterID reg, Imm32 mask, RegisterID dest)
     {
-        load32(address, ARMRegisters::S1);
         if (mask.m_value == -1)
-            m_assembler.cmp_r(0, ARMRegisters::S1);
+            m_assembler.cmp_r(0, reg);
         else
-            m_assembler.tst_r(ARMRegisters::S1, m_assembler.getImm(mask.m_value, ARMRegisters::S0));
+            m_assembler.tst_r(reg, m_assembler.getImm(mask.m_value, ARMRegisters::S0));
         m_assembler.mov_r(dest, ARMAssembler::getOp2(0));
         m_assembler.mov_r(dest, ARMAssembler::getOp2(1), ARMCondition(cond));
     }
 
+    void setTest32(Condition cond, Address address, Imm32 mask, RegisterID dest)
+    {
+        load32(address, ARMRegisters::S1);
+        setTest32(cond, ARMRegisters::S1, mask, dest);
+    }
+
     void setTest8(Condition cond, Address address, Imm32 mask, RegisterID dest)
     {
-        // ARM doesn't have byte registers
-        setTest32(cond, address, mask, dest);
+        load8(address, ARMRegisters::S1);
+        setTest32(cond, ARMRegisters::S1, mask, dest);
     }
 
     void add32(Imm32 imm, RegisterID src, RegisterID dest)
@@ -767,7 +774,7 @@ public:
 
     bool supportsFloatingPointTruncate() const
     {
-        return false;
+        return s_isVFPPresent;
     }
 
     bool supportsFloatingPointSqrt() const
@@ -793,7 +800,7 @@ public:
 
     void addDouble(FPRegisterID src, FPRegisterID dest)
     {
-        m_assembler.faddd_r(dest, dest, src);
+        m_assembler.vadd_f64_r(dest, dest, src);
     }
 
     void addDouble(Address src, FPRegisterID dest)
@@ -804,7 +811,7 @@ public:
 
     void divDouble(FPRegisterID src, FPRegisterID dest)
     {
-        m_assembler.fdivd_r(dest, dest, src);
+        m_assembler.vdiv_f64_r(dest, dest, src);
     }
 
     void divDouble(Address src, FPRegisterID dest)
@@ -816,7 +823,7 @@ public:
 
     void subDouble(FPRegisterID src, FPRegisterID dest)
     {
-        m_assembler.fsubd_r(dest, dest, src);
+        m_assembler.vsub_f64_r(dest, dest, src);
     }
 
     void subDouble(Address src, FPRegisterID dest)
@@ -827,7 +834,7 @@ public:
 
     void mulDouble(FPRegisterID src, FPRegisterID dest)
     {
-        m_assembler.fmuld_r(dest, dest, src);
+        m_assembler.vmul_f64_r(dest, dest, src);
     }
 
     void mulDouble(Address src, FPRegisterID dest)
@@ -838,13 +845,13 @@ public:
 
     void sqrtDouble(FPRegisterID src, FPRegisterID dest)
     {
-        m_assembler.fsqrtd_r(dest, src);
+        m_assembler.vsqrt_f64_r(dest, src);
     }
 
     void convertInt32ToDouble(RegisterID src, FPRegisterID dest)
     {
-        m_assembler.fmsr_r(dest, src);
-        m_assembler.fsitod_r(dest, dest);
+        m_assembler.vmov_vfp_r(dest << 1, src);
+        m_assembler.vcvt_f64_s32_r(dest, dest << 1);
     }
 
     void convertInt32ToDouble(Address src, FPRegisterID dest)
@@ -866,8 +873,8 @@ public:
 
     Jump branchDouble(DoubleCondition cond, FPRegisterID left, FPRegisterID right)
     {
-        m_assembler.fcmpd_r(left, right);
-        m_assembler.fmstat();
+        m_assembler.vcmp_f64_r(left, right);
+        m_assembler.vmrs_apsr();
         if (cond & DoubleConditionBitSpecial)
             m_assembler.cmp_r(ARMRegisters::S0, ARMRegisters::S0, ARMAssembler::VS);
         return Jump(m_assembler.jmp(static_cast<ARMAssembler::Condition>(cond & ~DoubleConditionMask)));
@@ -876,13 +883,17 @@ public:
     // Truncates 'src' to an integer, and places the resulting 'dest'.
     // If the result is not representable as a 32 bit value, branch.
     // May also branch for some values that are representable in 32 bits
-    // (specifically, in this case, INT_MIN).
+    // (specifically, in this case, INT_MIN and INT_MAX).
     Jump branchTruncateDoubleToInt32(FPRegisterID src, RegisterID dest)
     {
-        UNUSED_PARAM(src);
-        UNUSED_PARAM(dest);
-        ASSERT_NOT_REACHED();
-        return jump();
+        m_assembler.vcvtr_s32_f64_r(ARMRegisters::SD0 << 1, src);
+        // If VCVTR.S32.F64 can't fit the result into a 32-bit
+        // integer, it saturates at INT_MAX or INT_MIN. Testing this is
+        // probably quicker than testing FPSCR for exception.
+        m_assembler.vmov_arm_r(dest, ARMRegisters::SD0 << 1);
+        m_assembler.sub_r(ARMRegisters::S0, dest, ARMAssembler::getOp2(0x80000000));
+        m_assembler.cmn_r(ARMRegisters::S0, ARMAssembler::getOp2(1), ARMCondition(NotEqual));
+        return Jump(m_assembler.jmp(ARMCondition(Equal)));
     }
 
     // Convert 'src' to an integer, and places the resulting 'dest'.
@@ -891,11 +902,11 @@ public:
     // (specifically, in this case, 0).
     void branchConvertDoubleToInt32(FPRegisterID src, RegisterID dest, JumpList& failureCases, FPRegisterID fpTemp)
     {
-        m_assembler.ftosid_r(ARMRegisters::SD0, src);
-        m_assembler.fmrs_r(dest, ARMRegisters::SD0);
+        m_assembler.vcvt_s32_f64_r(ARMRegisters::SD0 << 1, src);
+        m_assembler.vmov_arm_r(dest, ARMRegisters::SD0 << 1);
 
         // Convert the integer result back to float & compare to the original value - if not equal or unordered (NaN) then jump.
-        m_assembler.fsitod_r(ARMRegisters::SD0, ARMRegisters::SD0);
+        m_assembler.vcvt_f64_s32_r(ARMRegisters::SD0, ARMRegisters::SD0 << 1);
         failureCases.append(branchDouble(DoubleNotEqualOrUnordered, src, ARMRegisters::SD0));
 
         // If the result is zero, it might have been -0.0, and 0.0 equals to -0.0
@@ -954,9 +965,9 @@ protected:
                 prepareCall();
                 m_assembler.dtr_u(true, targetReg, tmpReg, offset & 0xfff);
             } else {
-                ARMWord reg = m_assembler.getImm(offset, tmpReg);
+                m_assembler.moveImm(offset, tmpReg);
                 prepareCall();
-                m_assembler.dtr_ur(true, targetReg, base, reg);
+                m_assembler.dtr_ur(true, targetReg, base, tmpReg);
             }
         } else  {
             offset = -offset;
@@ -968,9 +979,9 @@ protected:
                 prepareCall();
                 m_assembler.dtr_d(true, targetReg, tmpReg, offset & 0xfff);
             } else {
-                ARMWord reg = m_assembler.getImm(offset, tmpReg);
+                m_assembler.moveImm(offset, tmpReg);
                 prepareCall();
-                m_assembler.dtr_dr(true, targetReg, base, reg);
+                m_assembler.dtr_dr(true, targetReg, base, tmpReg);
             }
         }
 #if WTF_ARM_ARCH_AT_LEAST(5)

@@ -121,8 +121,11 @@ NativeImagePtr RGBA32Buffer::asNewNativeImage() const
 {
     if (!m_image) {
         static const VGImageFormat bufferFormat = VG_sARGB_8888_PRE;
+
         // Save memory by using 16-bit images for fully opaque images.
-        const VGImageFormat imageFormat = hasAlpha() ? bufferFormat : VG_sRGB_565;
+        const VGImageFormat imageFormat = hasAlpha()
+            ? WEBKIT_OPENVG_NATIVE_IMAGE_FORMAT_s_8888
+            : VG_sRGB_565;
 
 #if PLATFORM(EGL)
         EGLDisplayOpenVG::current()->sharedPlatformSurface()->makeCurrent();

@@ -37,10 +37,15 @@
 #include "DocumentLoader.h"
 #include "DOMApplicationCache.h"
 #include "Frame.h"
+#include "InspectorApplicationCacheAgent.h"
+#include "InspectorController.h"
+#include "Page.h"
+#include "ProgressEvent.h"
 #include "Settings.h"
 #include "WebURL.h"
 #include "WebURLError.h"
 #include "WebURLResponse.h"
+#include "WebVector.h"
 #include "WrappedResourceRequest.h"
 #include "WrappedResourceResponse.h"
 
@@ -195,32 +200,75 @@ void ApplicationCacheHost::setDOMApplicationCache(DOMApplicationCache* domApplic
     m_domApplicationCache = domApplicationCache;
 }
 
-void ApplicationCacheHost::notifyDOMApplicationCache(EventID id)
+void ApplicationCacheHost::notifyDOMApplicationCache(EventID id, int total, int done)
 {
+#if ENABLE(INSPECTOR)
+    // If host's frame is main frame and inspector frontend is connected, update appcache status.
+    if (id != PROGRESS_EVENT && m_documentLoader->frame()) {
+        Page* page = m_documentLoader->frame()->page();
+        if (page && page->inspectorController()->applicationCacheAgent() && page->mainFrame() == m_documentLoader->frame())
+            page->inspectorController()->applicationCacheAgent()->updateApplicationCacheStatus(status());
+    }
+#endif
+
     if (m_defersEvents) {
-        m_deferredEvents.append(id);
+        // Event dispatching is deferred until document.onload has fired.
+        m_deferredEvents.append(DeferredEvent(id, total, done));
         return;
     }
-    if (m_domApplicationCache) {
-        ExceptionCode ec = 0;
-        m_domApplicationCache->dispatchEvent(Event::create(DOMApplicationCache::toEventType(id), false, false), ec);
-        ASSERT(!ec);
+    dispatchDOMEvent(id, total, done);
+}
+
+#if ENABLE(INSPECTOR)
+ApplicationCacheHost::CacheInfo ApplicationCacheHost::applicationCacheInfo()
+{
+    if (!m_internal)
+        return CacheInfo(KURL(), 0, 0, 0);
+
+    WebKit::WebApplicationCacheHost::CacheInfo webInfo;
+    m_internal->m_outerHost->getAssociatedCacheInfo(&webInfo);
+    return CacheInfo(webInfo.manifestURL, webInfo.creationTime, webInfo.updateTime, webInfo.totalSize);
+}
+
+void ApplicationCacheHost::fillResourceList(ResourceInfoList* resources)
+{
+    if (!m_internal)
+        return;
+
+    WebKit::WebVector<WebKit::WebApplicationCacheHost::ResourceInfo> webResources;
+    m_internal->m_outerHost->getResourceList(&webResources);
+    for (size_t i = 0; i < webResources.size(); ++i) {
+        resources->append(ResourceInfo(
+            webResources[i].url, webResources[i].isMaster, webResources[i].isManifest, webResources[i].isFallback,
+            webResources[i].isForeign, webResources[i].isExplicit, webResources[i].size));
     }
 }
+#endif
 
 void ApplicationCacheHost::stopDeferringEvents()
 {
     RefPtr<DocumentLoader> protect(documentLoader());
     for (unsigned i = 0; i < m_deferredEvents.size(); ++i) {
-        EventID id = m_deferredEvents[i];
-        if (m_domApplicationCache) {
-            ExceptionCode ec = 0;
-            m_domApplicationCache->dispatchEvent(Event::create(DOMApplicationCache::toEventType(id), false, false), ec);
-            ASSERT(!ec);
-        }
+        const DeferredEvent& deferred = m_deferredEvents[i];
+        dispatchDOMEvent(deferred.eventID, deferred.progressTotal, deferred.progressDone);
     }
     m_deferredEvents.clear();
     m_defersEvents = false;
+}
+
+void ApplicationCacheHost::dispatchDOMEvent(EventID id, int total, int done)
+{
+    if (m_domApplicationCache) {
+        const AtomicString& eventType = DOMApplicationCache::toEventType(id);
+        ExceptionCode ec = 0;
+        RefPtr<Event> event;
+        if (id == PROGRESS_EVENT)
+            event = ProgressEvent::create(eventType, true, done, total);
+        else
+            event = Event::create(eventType, false, false);
+        m_domApplicationCache->dispatchEvent(event, ec);
+        ASSERT(!ec);
+    }
 }
 
 ApplicationCacheHost::Status ApplicationCacheHost::status() const

@@ -51,8 +51,11 @@
 #include "markup.h"
 #include "visible_units.h"
 #include <wtf/StdLibExtras.h>
+#include <wtf/Vector.h>
 
 namespace WebCore {
+
+typedef Vector<RefPtr<Node> > NodeVector;
 
 using namespace HTMLNames;
 
@@ -707,7 +710,12 @@ void ReplaceSelectionCommand::handleStyleSpans()
 void ReplaceSelectionCommand::copyStyleToChildren(Node* parentNode, const CSSMutableStyleDeclaration* parentStyle)
 {
     ASSERT(parentNode->hasTagName(spanTag));
-    for (Node* childNode = parentNode->firstChild(); childNode; childNode = childNode->nextSibling()) {
+    NodeVector childNodes;
+    for (RefPtr<Node> childNode = parentNode->firstChild(); childNode; childNode = childNode->nextSibling())
+        childNodes.append(childNode);
+        
+    for (NodeVector::const_iterator it = childNodes.begin(); it != childNodes.end(); it++) {
+        Node* childNode = it->get();
         if (childNode->isTextNode() || !isBlock(childNode) || childNode->hasTagName(preTag)) {
             // In this case, put a span tag around the child node.
             RefPtr<Node> newSpan = parentNode->cloneNode(false);
@@ -782,7 +790,7 @@ void ReplaceSelectionCommand::doApply()
     VisibleSelection selection = endingSelection();
     ASSERT(selection.isCaretOrRange());
     ASSERT(selection.start().node());
-    if (selection.isNone() || !selection.start().node())
+    if (!selection.isNonOrphanedCaretOrRange() || !selection.start().node())
         return;
     
     bool selectionIsPlainText = !selection.isContentRichlyEditable();
@@ -867,6 +875,10 @@ void ReplaceSelectionCommand::doApply()
     
     // Inserting content could cause whitespace to collapse, e.g. inserting <div>foo</div> into hello^ world.
     prepareWhitespaceAtPositionForSplit(insertionPos);
+
+    // If the downstream node has been removed there's no point in continuing.
+    if (!insertionPos.downstream().node())
+      return;
     
     // NOTE: This would be an incorrect usage of downstream() if downstream() were changed to mean the last position after 
     // p that maps to the same visible position as p (since in the case where a br is at the end of a block and collapsed 
@@ -898,7 +910,7 @@ void ReplaceSelectionCommand::doApply()
     // FIXME: Can this wait until after the operation has been performed?  There doesn't seem to be
     // any work performed after this that queries or uses the typing style.
     if (Frame* frame = document()->frame())
-        frame->clearTypingStyle();
+        frame->selection()->clearTypingStyle();
     
     bool handledStyleSpans = handleStyleSpansBeforeInsertion(fragment, insertionPos);
 
@@ -945,8 +957,8 @@ void ReplaceSelectionCommand::doApply()
     bool plainTextFragment = isPlainTextMarkup(refNode.get());
 
     while (node) {
-        Node* next = node->nextSibling();
-        fragment.removeNode(node);
+        RefPtr<Node> next = node->nextSibling();
+        fragment.removeNode(node.get());
         insertNodeAfterAndUpdateNodesInserted(node, refNode.get());
 
         // Mutation events (bug 22634) may have already removed the inserted content
@@ -992,6 +1004,12 @@ void ReplaceSelectionCommand::doApply()
     if (shouldMergeStart(selectionStartWasStartOfParagraph, fragment.hasInterchangeNewlineAtStart(), startIsInsideMailBlockquote)) {
         VisiblePosition destination = startOfInsertedContent.previous();
         VisiblePosition startOfParagraphToMove = startOfInsertedContent;
+        // We need to handle the case where we need to merge the end
+        // but our destination node is inside an inline that is the last in the block.
+        // We insert a placeholder before the newly inserted content to avoid being merged into the inline.
+        Node* destinationNode = destination.deepEquivalent().node();
+        if (m_shouldMergeEnd && destinationNode != destinationNode->enclosingInlineElement() && destinationNode->enclosingInlineElement()->nextSibling())
+            insertNodeBefore(createBreakElement(document()), refNode.get());
         
         // Merging the the first paragraph of inserted content with the content that came
         // before the selection that was pasted into would also move content after 
@@ -1115,7 +1133,7 @@ bool ReplaceSelectionCommand::shouldRemoveEndBR(Node* endBR, const VisiblePositi
         return false;
     
     // Remove the br if it is collapsed away and so is unnecessary.
-    if (!document()->inStrictMode() && isEndOfBlock(visiblePos) && !isStartOfParagraph(visiblePos))
+    if (!document()->inNoQuirksMode() && isEndOfBlock(visiblePos) && !isStartOfParagraph(visiblePos))
         return true;
         
     // A br that was originally holding a line open should be displaced by inserted content or turned into a line break.

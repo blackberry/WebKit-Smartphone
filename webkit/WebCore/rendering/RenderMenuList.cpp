@@ -26,7 +26,7 @@
 #include "RenderMenuList.h"
 
 #include "AXObjectCache.h"
-#include "AccessibilityObject.h"
+#include "Chrome.h"
 #include "CSSStyleSelector.h"
 #include "Frame.h"
 #include "FrameView.h"
@@ -89,8 +89,8 @@ void RenderMenuList::adjustInnerStyle()
     m_innerBlock->style()->setPaddingRight(Length(theme()->popupInternalPaddingRight(style()), Fixed));
     m_innerBlock->style()->setPaddingTop(Length(theme()->popupInternalPaddingTop(style()), Fixed));
     m_innerBlock->style()->setPaddingBottom(Length(theme()->popupInternalPaddingBottom(style()), Fixed));
-        
-    if (PopupMenu::itemWritingDirectionIsNatural()) {
+
+    if (document()->page()->chrome()->selectItemWritingDirectionIsNatural()) {
         // Items in the popup will not respect the CSS text-align and direction properties,
         // so we must adjust our own style to match.
         m_innerBlock->style()->setTextAlign(LEFT);
@@ -279,7 +279,7 @@ void RenderMenuList::showPopup()
     // inside the showPopup call and it would fail.
     createInnerBlock();
     if (!m_popup)
-        m_popup = PopupMenu::create(this);
+        m_popup = document()->page()->chrome()->createPopupMenu(this);
     SelectElement* select = toSelectElement(static_cast<Element*>(node()));
     m_popupIsVisible = true;
 
@@ -314,7 +314,7 @@ void RenderMenuList::valueChanged(unsigned listIndex, bool fireOnChange)
 void RenderMenuList::listBoxSelectItem(int listIndex, bool allowMultiplySelections, bool shift, bool fireOnChangeNow)
 {
     SelectElement* select = toSelectElement(static_cast<Element*>(node()));
-    select->listBoxSelectItem(select->listToOptionIndex(listIndex), allowMultiplySelections, shift, fireOnChangeNow);
+    select->listBoxSelectItem(listIndex, allowMultiplySelections, shift, fireOnChangeNow);
 }
 
 bool RenderMenuList::multiple()
@@ -350,6 +350,16 @@ String RenderMenuList::itemText(unsigned listIndex) const
     return String();
 }
 
+String RenderMenuList::itemLabel(unsigned) const
+{
+    return String();
+}
+
+String RenderMenuList::itemIcon(unsigned) const
+{
+    return String();
+}
+
 String RenderMenuList::itemAccessibilityText(unsigned listIndex) const
 {
     // Allow the accessible name be changed if necessary.
@@ -358,7 +368,7 @@ String RenderMenuList::itemAccessibilityText(unsigned listIndex) const
     if (listIndex >= listItems.size())
         return String();
 
-    return AccessibilityObject::getAttribute(listItems[listIndex], aria_labelAttr); 
+    return listItems[listIndex]->getAttribute(aria_labelAttr);
 }
     
 String RenderMenuList::itemToolTip(unsigned listIndex) const

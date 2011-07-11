@@ -44,6 +44,8 @@ public:
     virtual String languageAttributeValue() const = 0;
     virtual String forAttributeValue() const = 0;
     virtual String eventAttributeValue() const = 0;
+    virtual bool asyncAttributeValue() const = 0;
+    virtual bool deferAttributeValue() const = 0;
 
     virtual void dispatchLoadEvent() = 0;
     virtual void dispatchErrorEvent() = 0;
@@ -52,6 +54,7 @@ public:
     virtual String scriptCharset() const = 0;
 
     virtual bool shouldExecuteAsJavaScript() const = 0;
+    virtual void executeScript(const ScriptSourceCode&) = 0;
 
 protected:
     // Helper functions used by our parent classes.
@@ -66,7 +69,7 @@ protected:
 // and pass it to the static helper functions in ScriptElement
 class ScriptElementData : private CachedResourceClient {
 public:
-    ScriptElementData(ScriptElement*, Element*);
+    ScriptElementData(ScriptElement*, Element*, bool isEvaluated);
     virtual ~ScriptElementData();
 
     bool ignoresLoadRequest() const;
@@ -74,15 +77,21 @@ public:
 
     String scriptContent() const;
     String scriptCharset() const;
+    bool isAsynchronous() const;
+    bool isDeferred() const;
+    bool isEvaluated() const { return m_isEvaluated; }
 
     Element* element() const { return m_element; }
     bool createdByParser() const { return m_createdByParser; }
     void setCreatedByParser(bool value) { m_createdByParser = value; }
+    bool writeDisabled() const { return m_writeDisabled; }
+    void setWriteDisabled(bool value) { m_writeDisabled = value; }
     bool haveFiredLoadEvent() const { return m_firedLoad; }
     void setHaveFiredLoadEvent(bool firedLoad) { m_firedLoad = firedLoad; }
 
     void requestScript(const String& sourceUrl);
     void evaluateScript(const ScriptSourceCode&);
+    void executeScript(const ScriptSourceCode&);
     void stopLoadRequest();
 
     void execute(CachedScript*);
@@ -94,9 +103,10 @@ private:
     ScriptElement* m_scriptElement;
     Element* m_element;
     CachedResourceHandle<CachedScript> m_cachedScript;
-    bool m_createdByParser;
+    bool m_createdByParser; // HTML5: "parser-inserted"
+    bool m_writeDisabled; // http://www.whatwg.org/specs/web-apps/current-work/#write-neutralised
     bool m_requested;
-    bool m_evaluated;
+    bool m_isEvaluated; // HTML5: "already started"
     bool m_firedLoad;
 };
 

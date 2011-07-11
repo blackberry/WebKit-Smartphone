@@ -39,8 +39,6 @@
 #include <wtf/gobject/GRefPtr.h>
 
 typedef struct _WebKitWebView WebKitWebView;
-typedef struct _GtkWidget GtkWidget;
-typedef char gchar;
 
 namespace WebCore {
 class Frame;
@@ -61,6 +59,7 @@ namespace WebKit {
         ~EditorClient();
         WebKitWebView* webView() { return m_webView; }
         bool treatContextCommitAsKeyEvent() { return m_treatContextCommitAsKeyEvent; }
+        bool preventNextCompositionCommit() { return m_preventNextCompositionCommit; }
         void clearPendingComposition() { m_pendingComposition.set(0); }
         bool hasPendingComposition() { return m_pendingComposition; }
         void addPendingEditorCommand(const char* command) { m_pendingEditorCommands.append(command); }
@@ -86,7 +85,7 @@ namespace WebKit {
         virtual bool shouldBeginEditing(WebCore::Range*);
         virtual bool shouldEndEditing(WebCore::Range*);
         virtual bool shouldInsertNode(WebCore::Node*, WebCore::Range*, WebCore::EditorInsertAction);
-        virtual bool shouldInsertText(const WebCore::String&, WebCore::Range*, WebCore::EditorInsertAction);
+        virtual bool shouldInsertText(const WTF::String&, WebCore::Range*, WebCore::EditorInsertAction);
         virtual bool shouldChangeSelectedRange(WebCore::Range* fromRange, WebCore::Range* toRange, WebCore::EAffinity, bool stillSelecting);
 
         virtual bool shouldApplyStyle(WebCore::CSSStyleDeclaration*, WebCore::Range*);
@@ -112,6 +111,7 @@ namespace WebKit {
 
         virtual void handleKeyboardEvent(WebCore::KeyboardEvent*);
         virtual void handleInputMethodKeydown(WebCore::KeyboardEvent*);
+        virtual void handleInputMethodMousePress();
 
         virtual void textFieldDidBeginEditing(WebCore::Element*);
         virtual void textFieldDidEndEditing(WebCore::Element*);
@@ -119,27 +119,27 @@ namespace WebKit {
         virtual bool doTextFieldCommandFromEvent(WebCore::Element*, WebCore::KeyboardEvent*);
         virtual void textWillBeDeletedInTextField(WebCore::Element*);
         virtual void textDidChangeInTextArea(WebCore::Element*);
-        // Note: This code is under review for upstreaming.
-        virtual bool focusedElementsAreRichlyEditable();
 
-        virtual void ignoreWordInSpellDocument(const WebCore::String&);
-        virtual void learnWord(const WebCore::String&);
+        virtual void ignoreWordInSpellDocument(const WTF::String&);
+        virtual void learnWord(const WTF::String&);
         virtual void checkSpellingOfString(const UChar*, int length, int* misspellingLocation, int* misspellingLength);
-        virtual WebCore::String getAutoCorrectSuggestionForMisspelledWord(const WebCore::String&);
+        virtual WTF::String getAutoCorrectSuggestionForMisspelledWord(const WTF::String&);
         virtual void checkGrammarOfString(const UChar*, int length, WTF::Vector<WebCore::GrammarDetail>&, int* badGrammarLocation, int* badGrammarLength);
-        virtual void updateSpellingUIWithGrammarString(const WebCore::String&, const WebCore::GrammarDetail&);
-        virtual void updateSpellingUIWithMisspelledWord(const WebCore::String&);
+        virtual void updateSpellingUIWithGrammarString(const WTF::String&, const WebCore::GrammarDetail&);
+        virtual void updateSpellingUIWithMisspelledWord(const WTF::String&);
         virtual void showSpellingUI(bool show);
         virtual bool spellingUIIsShowing();
-        virtual void getGuessesForWord(const WebCore::String&, WTF::Vector<WebCore::String>& guesses);
+        virtual void getGuessesForWord(const WTF::String&, WTF::Vector<WTF::String>& guesses);
+        virtual void willSetInputMethodState();
         virtual void setInputMethodState(bool enabled);
 
     private:
         WebKitWebView* m_webView;
+        bool m_preventNextCompositionCommit;
         bool m_treatContextCommitAsKeyEvent;
         GOwnPtr<gchar> m_pendingComposition;
         Vector<const char*> m_pendingEditorCommands;
-        GRefPtr<GtkWidget> m_nativeWidget;
+        PlatformRefPtr<GtkWidget> m_nativeWidget;
     };
 }
 

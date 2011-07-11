@@ -39,7 +39,6 @@
 #include "ScrollView.h"
 #include "SoftLinking.h"
 #include "StringBuilder.h"
-#include "StringHash.h"
 #include "TimeRanges.h"
 #include "Timer.h"
 #include <Wininet.h>
@@ -47,6 +46,7 @@
 #include <wtf/HashSet.h>
 #include <wtf/MathExtras.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/text/StringHash.h>
 
 #if USE(ACCELERATED_COMPOSITING)
 #include "GraphicsLayerCACF.h"
@@ -600,6 +600,7 @@ void MediaPlayerPrivate::paint(GraphicsContext* p, const IntRect& r)
 
     bool usingTempBitmap = false;
     OwnPtr<GraphicsContext::WindowsBitmap> bitmap;
+    // FIXME: use LocalWindowsContext.
     HDC hdc = p->getWindowsContext(r);
     if (!hdc) {
         // The graphics context doesn't have an associated HDC so create a temporary

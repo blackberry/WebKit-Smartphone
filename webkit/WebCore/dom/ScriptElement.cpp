@@ -24,9 +24,11 @@
 #include "config.h"
 #include "ScriptElement.h"
 
+#include "AsyncScriptRunner.h"
 #include "CachedScript.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "Document.h"
+#include "DocumentParser.h"
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "HTMLNames.h"
@@ -37,9 +39,9 @@
 #include "ScriptSourceCode.h"
 #include "ScriptValue.h"
 #include "Settings.h"
-#include "StringHash.h"
 #include "Text.h"
 #include <wtf/StdLibExtras.h>
+#include <wtf/text/StringHash.h>
 
 #if ENABLE(SVG)
 #include "SVGNames.h"
@@ -50,8 +52,18 @@ namespace WebCore {
 
 void ScriptElement::insertedIntoDocument(ScriptElementData& data, const String& sourceUrl)
 {
-    if (data.createdByParser())
+    if (data.createdByParser() && !data.isAsynchronous())
         return;
+
+    // http://www.whatwg.org/specs/web-apps/current-work/#script
+
+    // If the element's Document has an active parser, and the parser's script
+    // nesting level is non-zero, but this script element does not have the
+    // "parser-inserted" flag set, the user agent must set the element's
+    // "write-neutralised" flag.
+    DocumentParser* parser = data.element()->document()->parser();
+    if (parser && parser->hasInsertionPoint())
+        data.setWriteDisabled(true);
 
     if (!sourceUrl.isEmpty()) {
         data.requestScript(sourceUrl);
@@ -84,28 +96,12 @@ void ScriptElement::childrenChanged(ScriptElementData& data)
         data.evaluateScript(ScriptSourceCode(data.scriptContent(), element->document()->url())); // FIXME: Provide a real starting line number here
 }
 
-static inline bool useHTML5Parser(Document* document)
-{
-    ASSERT(document);
-    Settings* settings = document->page() ? document->page()->settings() : 0;
-    return settings && settings->html5ParserEnabled();
-}
-
 void ScriptElement::finishParsingChildren(ScriptElementData& data, const String& sourceUrl)
 {
     // The parser just reached </script>. If we have no src and no text,
     // allow dynamic loading later.
     if (sourceUrl.isEmpty() && data.scriptContent().isEmpty())
         data.setCreatedByParser(false);
-    // HTML5 Requires that we execute scripts from the parser, not from
-    // HTMLTokenizer like we currently do.
-    // FIXME: It may not be safe to execute scripts from here if
-    // HTMLParser::popOneBlockCommon is not reentrant.
-    else if (useHTML5Parser(data.element()->document())) {
-        // This is currently an incomplete implementation, see:
-        // http://www.whatwg.org/specs/web-apps/current-work/multipage/tokenization.html#parsing-main-incdata
-        data.evaluateScript(ScriptSourceCode(data.scriptContent(), data.element()->document()->url())); // FIXME: Provide a real starting line number here
-    }
 }
 
 void ScriptElement::handleSourceAttribute(ScriptElementData& data, const String& sourceUrl)
@@ -141,13 +137,14 @@ static bool isSupportedJavaScriptLanguage(const String& language)
 }
 
 // ScriptElementData
-ScriptElementData::ScriptElementData(ScriptElement* scriptElement, Element* element)
+ScriptElementData::ScriptElementData(ScriptElement* scriptElement, Element* element, bool isEvaluated)
     : m_scriptElement(scriptElement)
     , m_element(element)
     , m_cachedScript(0)
     , m_createdByParser(false)
+    , m_writeDisabled(false)
     , m_requested(false)
-    , m_evaluated(false)
+    , m_isEvaluated(isEvaluated)
     , m_firedLoad(false)
 {
     ASSERT(m_scriptElement);
@@ -173,7 +170,7 @@ void ScriptElementData::requestScript(const String& sourceUrl)
         return;
 
     ASSERT(!m_cachedScript);
-    m_cachedScript = document->docLoader()->requestScript(sourceUrl, scriptCharset());
+    m_cachedScript = document->cachedResourceLoader()->requestScript(sourceUrl, scriptCharset());
     m_requested = true;
 
     // m_createdByParser is never reset - always resied at the initial value set while parsing.
@@ -191,18 +188,55 @@ void ScriptElementData::requestScript(const String& sourceUrl)
 
 void ScriptElementData::evaluateScript(const ScriptSourceCode& sourceCode)
 {
-    if (m_evaluated || sourceCode.isEmpty() || !shouldExecuteAsJavaScript())
+    if (m_isEvaluated || sourceCode.isEmpty() || !shouldExecuteAsJavaScript())
         return;
 
     if (Frame* frame = m_element->document()->frame()) {
         if (!frame->script()->canExecuteScripts(AboutToExecuteScript))
             return;
 
-        m_evaluated = true;
+        m_isEvaluated = true;
 
+        // http://www.whatwg.org/specs/web-apps/current-work/#script
+
+        // If the script element's "write-neutralised" flag is set, then flag
+        // the Document the script element was in when the "write-neutralised"
+        // flag was set as being itself "write-neutralised". Let neutralised doc
+        // be that Document.
+        if (m_writeDisabled) {
+            ASSERT(!m_element->document()->writeDisabled());
+            m_element->document()->setWriteDisabled(true);
+        }
+
+        // Create a script from the script element node, using the script
+        // block's source and the script block's type.
+        // Note: This is where the script is compiled and actually executed.
         frame->script()->evaluate(sourceCode);
+
+        // Remove the "write-neutralised" flag from neutralised doc, if it was
+        // set in the earlier step.
+        if (m_writeDisabled) {
+            ASSERT(m_element->document()->writeDisabled());
+            m_element->document()->setWriteDisabled(false);
+        }
+
         Document::updateStyleForAllDocuments();
     }
+}
+
+void ScriptElementData::executeScript(const ScriptSourceCode& sourceCode)
+{
+    if (m_isEvaluated || sourceCode.isEmpty())
+        return;
+    RefPtr<Document> document = m_element->document();
+    ASSERT(document);
+    Frame* frame = document->frame();
+    if (!frame)
+        return;
+
+    m_isEvaluated = true;
+
+    frame->script()->executeScript(sourceCode);
 }
 
 void ScriptElementData::stopLoadRequest()
@@ -228,13 +262,13 @@ void ScriptElementData::execute(CachedScript* cachedScript)
 void ScriptElementData::notifyFinished(CachedResource* o)
 {
     ASSERT_UNUSED(o, o == m_cachedScript);
-    m_element->document()->executeScriptSoon(this, m_cachedScript);
+    m_element->document()->asyncScriptRunner()->executeScriptSoon(this, m_cachedScript);
     m_cachedScript = 0;
 }
 
 bool ScriptElementData::ignoresLoadRequest() const
 {
-    return m_evaluated || m_requested || m_createdByParser || !m_element->inDocument();
+    return m_isEvaluated || m_requested || m_createdByParser || !m_element->inDocument();
 }
 
 bool ScriptElementData::shouldExecuteAsJavaScript() const
@@ -245,6 +279,8 @@ bool ScriptElementData::shouldExecuteAsJavaScript() const
          WinIE 7 accepts ecmascript and jscript, but Mozilla 1.8 doesn't.
          Neither Mozilla 1.8 nor WinIE 7 accept leading or trailing whitespace.
          We want to accept all the values that either of these browsers accept, but not other values.
+     
+         FIXME: Is this HTML5 compliant?
      */
     String type = m_scriptElement->typeAttributeValue();
     if (!type.isEmpty()) {
@@ -257,20 +293,20 @@ bool ScriptElementData::shouldExecuteAsJavaScript() const
     }    
 
     // No type or language is specified, so we assume the script to be JavaScript.
-    // We don't yet support setting event listeners via the 'for' attribute for scripts.
-    // If there is such an attribute it's likely better to not execute the script than to do so
-    // immediately and unconditionally.
-    // FIXME: After <rdar://problem/4471751> / https://bugs.webkit.org/show_bug.cgi?id=16915 are resolved 
-    // and we support the for syntax in script tags, this check can be removed and we should just
-    // return 'true' here.
+
     String forAttribute = m_scriptElement->forAttributeValue();
     String eventAttribute = m_scriptElement->eventAttributeValue();
-    if (forAttribute.isEmpty() || eventAttribute.isEmpty())
-        return true;
+    if (!forAttribute.isEmpty() && !eventAttribute.isEmpty()) {
+        forAttribute = forAttribute.stripWhiteSpace();
+        if (!equalIgnoringCase(forAttribute, "window"))
+            return false;
+            
+        eventAttribute = eventAttribute.stripWhiteSpace();
+        if (!equalIgnoringCase(eventAttribute, "onload") && !equalIgnoringCase(eventAttribute, "onload()"))
+            return false;
+    }
     
-    forAttribute = forAttribute.stripWhiteSpace();
-    eventAttribute = eventAttribute.stripWhiteSpace();
-    return equalIgnoringCase(forAttribute, "window") && (equalIgnoringCase(eventAttribute, "onload") || equalIgnoringCase(eventAttribute, "onload()"));
+    return true;
 }
 
 String ScriptElementData::scriptCharset() const
@@ -312,6 +348,20 @@ String ScriptElementData::scriptContent() const
         return firstTextNode->data();
 
     return String::adopt(val);
+}
+
+bool ScriptElementData::isAsynchronous() const
+{
+    // Only external scripts may be asynchronous.
+    // See: http://dev.w3.org/html5/spec/Overview.html#attr-script-async
+    return !m_scriptElement->sourceAttributeValue().isEmpty() && m_scriptElement->asyncAttributeValue();
+}
+
+bool ScriptElementData::isDeferred() const
+{
+    // Only external scripts may be deferred and async trumps defer to allow for backward compatibility.
+    // See: http://dev.w3.org/html5/spec/Overview.html#attr-script-defer
+    return !m_scriptElement->sourceAttributeValue().isEmpty() && !m_scriptElement->asyncAttributeValue() && m_scriptElement->deferAttributeValue();
 }
 
 ScriptElement* toScriptElement(Element* element)

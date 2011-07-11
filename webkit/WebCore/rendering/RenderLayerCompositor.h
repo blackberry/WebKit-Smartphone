@@ -34,6 +34,7 @@ namespace WebCore {
 #define PROFILE_LAYER_REBUILD 0
 
 class GraphicsLayer;
+class RenderEmbeddedObject;
 class RenderIFrame;
 #if ENABLE(VIDEO)
 class RenderVideo;
@@ -87,7 +88,11 @@ public:
     
     // Rebuild the tree of compositing layers
     void updateCompositingLayers(CompositingUpdateType = CompositingUpdateAfterLayoutOrStyleChange, RenderLayer* updateRoot = 0);
-
+    // This is only used when state changes and we do not exepect a style update or layout to happen soon (e.g. when
+    // we discover that an iframe is overlapped during painting).
+    void scheduleCompositingLayerUpdate();
+    bool compositingLayerUpdatePending() const;
+    
     // Update the compositing state of the given layer. Returns true if that state changed.
     enum CompositingChangeRepaint { CompositingChangeRepaintNow, CompositingChangeWillRepaintLater };
     bool updateLayerCompositingState(RenderLayer*, CompositingChangeRepaint = CompositingChangeRepaintNow);
@@ -150,15 +155,16 @@ public:
     // their parent document.
     bool shouldPropagateCompositingToEnclosingIFrame() const;
 
-    Element* enclosingIFrameElement() const;
+    // FIXME: This should be a RenderIFrame*
+    HTMLFrameOwnerElement* enclosingIFrameElement() const;
 
     static RenderLayerCompositor* iframeContentsCompositor(RenderIFrame*);
     // Return true if the layers changed.
     static bool parentIFrameContentLayers(RenderIFrame*);
 
     // Update the geometry of the layers used for clipping and scrolling in frames.
-    void updateContentLayerOffset(const IntPoint& contentsOffset);
-    void updateContentLayerScrollPosition(const IntPoint&);
+    void frameViewDidChangeSize(const IntPoint& contentsOffset = IntPoint());
+    void frameViewDidScroll(const IntPoint& = IntPoint());
 
 private:
     // Whether the given RL needs a compositing layer.
@@ -177,6 +183,8 @@ private:
     typedef HashMap<RenderLayer*, IntRect> OverlapMap;
     static void addToOverlapMap(OverlapMap&, RenderLayer*, IntRect& layerBounds, bool& boundsComputed);
     static bool overlapsCompositedLayers(OverlapMap&, const IntRect& layerBounds);
+
+    void updateCompositingLayersTimerFired(Timer<RenderLayerCompositor>*);
 
     // Returns true if any layer's compositing changed
     void computeCompositingRequirements(RenderLayer*, OverlapMap*, struct CompositingState&, bool& layersChanged);
@@ -201,6 +209,7 @@ private:
     
     void rootLayerAttachmentChanged();
     
+    void scheduleNeedsStyleRecalc(Element*);
     void notifyIFramesOfCompositingChange();
 
     // Whether a running transition or animation enforces the need for a compositing layer.
@@ -212,16 +221,26 @@ private:
     bool requiresCompositingForIFrame(RenderObject*) const;
     bool requiresCompositingWhenDescendantsAreCompositing(RenderObject*) const;
 
+    bool requiresScrollLayer(RootLayerAttachment) const;
+    
 private:
     RenderView* m_renderView;
     OwnPtr<GraphicsLayer> m_rootPlatformLayer;
+    Timer<RenderLayerCompositor> m_updateCompositingLayersTimer;
+
     bool m_hasAcceleratedCompositing;
     bool m_showDebugBorders;
     bool m_showRepaintCounter;
     bool m_compositingConsultsOverlap;
+
+    // When true, we have to wait until layout has happened before we can decide whether to enter compositing mode,
+    // because only then do we know the final size of plugins and iframes.
+    // FIXME: once set, this is never cleared.
+    mutable bool m_compositingDependsOnGeometry;
+
     bool m_compositing;
     bool m_compositingLayersNeedRebuild;
-    
+
     RootLayerAttachment m_rootLayerAttachment;
 
     // Enclosing clipping layer for iframe content

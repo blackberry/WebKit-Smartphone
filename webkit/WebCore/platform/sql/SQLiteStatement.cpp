@@ -30,6 +30,7 @@
 #include "SQLValue.h"
 #include <sqlite3.h>
 #include <wtf/Assertions.h>
+#include <wtf/text/CString.h>
 
 namespace WebCore {
 
@@ -61,7 +62,12 @@ SQLiteStatement::~SQLiteStatement()
 int SQLiteStatement::prepare()
 {
     ASSERT(!m_isPrepared);
-    const void* tail;
+
+    MutexLocker databaseLock(m_database.databaseMutex());
+    if (m_database.isInterrupted())
+        return SQLITE_INTERRUPT;
+
+    const void* tail = 0;
     LOG(SQLDatabase, "SQL - prepare - %s", m_query.ascii().data());
     String strippedQuery = m_query.stripWhiteSpace();
     int error = sqlite3_prepare16_v2(m_database.sqlite3Handle(), strippedQuery.charactersWithNullTermination(), -1, &m_statement, &tail);
@@ -77,7 +83,7 @@ int SQLiteStatement::prepare()
     if (error != SQLITE_OK)
         LOG(SQLDatabase, "sqlite3_prepare16 failed (%i)\n%s\n%s", error, m_query.ascii().data(), sqlite3_errmsg(m_database.sqlite3Handle()));
     const UChar* ch = static_cast<const UChar*>(tail);
-    if (*ch)
+    if (ch && *ch)
         error = SQLITE_ERROR;
 #ifndef NDEBUG
     m_isPrepared = error == SQLITE_OK;
@@ -88,6 +94,11 @@ int SQLiteStatement::prepare()
 int SQLiteStatement::step()
 {
     ASSERT(m_isPrepared);
+
+    MutexLocker databaseLock(m_database.databaseMutex());
+    if (m_database.isInterrupted())
+        return SQLITE_INTERRUPT;
+
     if (!m_statement)
         return SQLITE_OK;
     LOG(SQLDatabase, "SQL - step - %s", m_query.ascii().data());
@@ -181,6 +192,14 @@ int SQLiteStatement::bindText(int index, const String& text)
     return sqlite3_bind_text16(m_statement, index, characters, sizeof(UChar) * text.length(), SQLITE_TRANSIENT);
 }
 
+int SQLiteStatement::bindInt(int index, int integer)
+{
+    ASSERT(m_isPrepared);
+    ASSERT(index > 0);
+    ASSERT(static_cast<unsigned>(index) <= bindParameterCount());
+
+    return sqlite3_bind_int(m_statement, index, integer);
+}
 
 int SQLiteStatement::bindInt64(int index, int64_t integer)
 {
@@ -238,6 +257,18 @@ int SQLiteStatement::columnCount()
     if (!m_statement)
         return 0;
     return sqlite3_data_count(m_statement);
+}
+
+bool SQLiteStatement::isColumnNull(int col)
+{
+    ASSERT(col >= 0);
+    if (!m_statement)
+        if (prepareAndStep() != SQLITE_ROW)
+            return false;
+    if (columnCount() <= col)
+        return false;
+
+    return sqlite3_column_type(m_statement, col) == SQLITE_NULL;
 }
 
 String SQLiteStatement::getColumnName(int col)

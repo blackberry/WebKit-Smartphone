@@ -22,6 +22,7 @@
 #ifndef WebNativeEventListener_h
 #define WebNativeEventListener_h
 
+#include "PassRefPtr.h"
 #include "EventListener.h"
 #include "WebDOMEventListener.h"
 
@@ -44,7 +45,7 @@ public:
 
 private:
     virtual void handleEvent(WebCore::ScriptExecutionContext*, WebCore::Event*);
-    virtual bool reportError(WebCore::ScriptExecutionContext*, const WebCore::String& message, const WebCore::String& url, int lineNumber);
+    virtual bool reportError(WebCore::ScriptExecutionContext*, const WTF::String& message, const WTF::String& url, int lineNumber);
 
 protected:
     WebNativeEventListener(WebUserEventListener*);

@@ -1,21 +1,32 @@
 Tests that elements panel shows proper styles in the sidebar panel.
 
-[expanded] ()
+[expanded]  ()
 color: blue;
+    .foo, .foo::before - blue resources/elements-panel-styles.css:15
+    /-- overloaded --/ .foo - black resources/elements-panel-styles.css:10
 display: none;
+    element.style - none 
+    /-- overloaded --/ div - block user agent stylesheet
 font-family: serif;
+    #container - serif resources/elements-panel-styles.css:5
 font-size: 14px;
-height: auto;
+    #container - 14px resources/elements-panel-styles.css:5
+    /-- overloaded --/ body - 12px resources/elements-panel-styles.css:1
 margin-bottom: 2px;
+    .foo - 2px resources/elements-panel-styles.css:10
 margin-left: 0px;
+    .foo - 0px resources/elements-panel-styles.css:10
 margin-right: 0px;
+    .foo - 0px resources/elements-panel-styles.css:10
 margin-top: 10px;
-width: auto;
+    .foo - 10px resources/elements-panel-styles.css:10
 
-[expanded] element.style { (element’s “style” attribute)
+[expanded] element.style { ()
 display: none;
 
 ======== Matched CSS Rules ========
+[expanded] .foo { (resources/elements-panel-styles.css:33)
+
 [expanded] .foo, .foo::before { (resources/elements-panel-styles.css:15)
 color: blue;
 content: '[before Foo]';
@@ -23,10 +34,10 @@ content: '[before Foo]';
 [expanded] .foo { (resources/elements-panel-styles.css:10)
 /-- overloaded --/ color: black;
 margin: 10px 0px 2px;
-> margin-top: 10px;
-> margin-right: 0px;
-> margin-bottom: 2px;
-> margin-left: 0px;
+    margin-top: 10px;
+    margin-right: 0px;
+    margin-bottom: 2px;
+    margin-left: 0px;
 
 [expanded] div { (user agent stylesheet)
 /-- overloaded --/ display: block;
@@ -42,6 +53,8 @@ font-size: 14px;
 
 
 ======== Pseudo ::before element ========
+[expanded] .foo::before { (resources/elements-panel-styles.css:37)
+
 [expanded] .foo::before { (resources/elements-panel-styles.css:20)
 color: red;
 

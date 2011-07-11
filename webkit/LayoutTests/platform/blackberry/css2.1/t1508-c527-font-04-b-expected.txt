@@ -1,0 +1,26 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x279
+  RenderBlock {HTML} at (0,0) size 800x279
+    RenderBody {BODY} at (8,18) size 784x243 [color=#000080]
+      RenderBlock {P} at (0,0) size 784x243
+        RenderText {#text} at (0,0) size 759x53
+          text run at (0,0) width 759: "This text should be 18px sans-serif, in small-caps, italicized, and very bold. There"
+          text run at (0,27) width 363: "should be a 9px gap between each line. "
+        RenderInline {SPAN} at (0,0) size 761x215 [color=#C0C0C0]
+          RenderText {#text} at (363,27) size 761x215
+            text run at (363,27) width 386: "dummy text dummy text dummy text dummy"
+            text run at (0,54) width 219: "text dummy text dummy "
+            text run at (219,54) width 542: "text dummy text dummy text dummy text dummy text dummy"
+            text run at (0,81) width 110: "text dummy "
+            text run at (110,81) width 651: "text dummy text dummy text dummy text dummy text dummy text dummy"
+            text run at (0,108) width 657: "text dummy text dummy text dummy text dummy text dummy text dummy "
+            text run at (657,108) width 104: "text dummy"
+            text run at (0,135) width 548: "text dummy text dummy text dummy text dummy text dummy "
+            text run at (548,135) width 213: "text dummy text dummy"
+            text run at (0,162) width 438: "text dummy text dummy text dummy text dummy "
+            text run at (438,162) width 323: "text dummy text dummy text dummy"
+            text run at (0,189) width 329: "text dummy text dummy text dummy "
+            text run at (329,189) width 432: "text dummy text dummy text dummy text dummy"
+            text run at (0,216) width 149: "text dummy text"
+        RenderText {#text} at (0,0) size 0x0

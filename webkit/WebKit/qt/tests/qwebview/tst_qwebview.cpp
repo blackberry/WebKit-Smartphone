@@ -28,9 +28,8 @@
 #include <qnetworkrequest.h>
 #include <qdiriterator.h>
 #include <qwebkitversion.h>
+#include <qwebelement.h>
 #include <qwebframe.h>
-
-#include <QDebug>
 
 class tst_QWebView : public QObject
 {
@@ -49,6 +48,7 @@ private slots:
     void reusePage_data();
     void reusePage();
     void microFocusCoordinates();
+    void focusInputTypes();
 
     void crashTests();
 };
@@ -228,6 +228,90 @@ void tst_QWebView::microFocusCoordinates()
     QVERIFY(currentMicroFocus.isValid());
 
     QCOMPARE(initialMicroFocus.toRect().translated(QPoint(0,-50)), currentMicroFocus.toRect());
+}
+
+void tst_QWebView::focusInputTypes()
+{
+    QWebView webView;
+    webView.show();
+    QTest::qWaitForWindowShown(&webView);
+
+    QUrl url("qrc:///resources/input_types.html");
+    QWebFrame* const mainFrame = webView.page()->mainFrame();
+    mainFrame->load(url);
+    mainFrame->setFocus();
+
+    QVERIFY(waitForSignal(&webView, SIGNAL(loadFinished(bool))));
+
+    // 'text' type
+    QWebElement inputElement = mainFrame->documentElement().findFirst(QLatin1String("input[type=text]"));
+    QTest::mouseClick(&webView, Qt::LeftButton, 0, inputElement.geometry().center());
+#if defined(Q_WS_MAEMO_5) || defined(Q_WS_MAEMO_6) || defined(Q_OS_SYMBIAN)
+    QVERIFY(webView.inputMethodHints() & Qt::ImhNoAutoUppercase);
+    QVERIFY(webView.inputMethodHints() & Qt::ImhNoPredictiveText);
+#else
+    QVERIFY(webView.inputMethodHints() == Qt::ImhNone);
+#endif
+    QVERIFY(webView.testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'password' field
+    inputElement = mainFrame->documentElement().findFirst(QLatin1String("input[type=password]"));
+    QTest::mouseClick(&webView, Qt::LeftButton, 0, inputElement.geometry().center());
+    QVERIFY(webView.inputMethodHints() == Qt::ImhHiddenText);
+    QVERIFY(webView.testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'tel' field
+    inputElement = mainFrame->documentElement().findFirst(QLatin1String("input[type=tel]"));
+    QTest::mouseClick(&webView, Qt::LeftButton, 0, inputElement.geometry().center());
+    QVERIFY(webView.inputMethodHints() == Qt::ImhDialableCharactersOnly);
+    QVERIFY(webView.testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'number' field
+    inputElement = mainFrame->documentElement().findFirst(QLatin1String("input[type=number]"));
+    QTest::mouseClick(&webView, Qt::LeftButton, 0, inputElement.geometry().center());
+    QVERIFY(webView.inputMethodHints() == Qt::ImhDigitsOnly);
+    QVERIFY(webView.testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'email' field
+    inputElement = mainFrame->documentElement().findFirst(QLatin1String("input[type=email]"));
+    QTest::mouseClick(&webView, Qt::LeftButton, 0, inputElement.geometry().center());
+    QVERIFY(webView.inputMethodHints() == Qt::ImhEmailCharactersOnly);
+    QVERIFY(webView.testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'url' field
+    inputElement = mainFrame->documentElement().findFirst(QLatin1String("input[type=url]"));
+    QTest::mouseClick(&webView, Qt::LeftButton, 0, inputElement.geometry().center());
+    QVERIFY(webView.inputMethodHints() == Qt::ImhUrlCharactersOnly);
+    QVERIFY(webView.testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'password' field
+    inputElement = mainFrame->documentElement().findFirst(QLatin1String("input[type=password]"));
+    QTest::mouseClick(&webView, Qt::LeftButton, 0, inputElement.geometry().center());
+    QVERIFY(webView.inputMethodHints() == Qt::ImhHiddenText);
+    QVERIFY(webView.testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'text' type
+    inputElement = mainFrame->documentElement().findFirst(QLatin1String("input[type=text]"));
+    QTest::mouseClick(&webView, Qt::LeftButton, 0, inputElement.geometry().center());
+#if defined(Q_WS_MAEMO_5) || defined(Q_WS_MAEMO_6) || defined(Q_OS_SYMBIAN)
+    QVERIFY(webView.inputMethodHints() & Qt::ImhNoAutoUppercase);
+    QVERIFY(webView.inputMethodHints() & Qt::ImhNoPredictiveText);
+#else
+    QVERIFY(webView.inputMethodHints() == Qt::ImhNone);
+#endif
+    QVERIFY(webView.testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'password' field
+    inputElement = mainFrame->documentElement().findFirst(QLatin1String("input[type=password]"));
+    QTest::mouseClick(&webView, Qt::LeftButton, 0, inputElement.geometry().center());
+    QVERIFY(webView.inputMethodHints() == Qt::ImhHiddenText);
+    QVERIFY(webView.testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'text area' field
+    inputElement = mainFrame->documentElement().findFirst(QLatin1String("textarea"));
+    QTest::mouseClick(&webView, Qt::LeftButton, 0, inputElement.geometry().center());
+    QVERIFY(webView.inputMethodHints() == Qt::ImhNone);
+    QVERIFY(webView.testAttribute(Qt::WA_InputMethodEnabled));
 }
 
 QTEST_MAIN(tst_QWebView)

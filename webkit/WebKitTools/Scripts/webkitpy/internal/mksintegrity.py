@@ -15,15 +15,29 @@ from xml.dom.minidom import Document, parseString
 class MKSBug(object):
 
     # Maps rim_bug.platform() to MKS handheld
-    _map_rim_to_mks_handhelds = {"Bold R020" : "R020", "Essex" : "Essex", "Onyx" : "Onyx", "Oxford" : "Oxford", "Storm R027" : "R027", "Talladega" : "Talladega"}
+    _map_rim_to_mks_handhelds = {"Atlas" : "Atlas",
+                                 "Bold R020" : "R020",
+                                 "Essex" : "Essex",
+                                 "Kepler" : "Kepler",
+                                 "Onyx" : "Onyx",
+                                 "Oxford" : "Oxford",
+                                 "Stratus" : "Stratus",
+                                 "Stratus ITUT" : "Stratus-ITUT",
+                                 "Storm R027" : "R027",
+                                 "Talladega" : "Talladega"
+                                }
     _default_mks_handheld = "Talladega"
 
-    # Maps rim_bug.os() to MKS targeted release
-    _map_rim_to_mks_release = {"5.2" : "5.2.0", "6.0" : "6.0.0", "6.0 MR1" : "6.0.0 Talladega MR1", "6.1" : "6.1.0"}
-    _default_mks_releasee = "6.0.0"
+    # Maps rim_bug.os() to MKS component targeted release
+    _map_rim_to_mks_release = {"5.2" : "5.2.0", "6.0" : "6.0.0", "6MR1" : "6.0.0", "6.1" : "6.1.0"}
+    _default_mks_releasee = "6.1.0"
 
     # Maps rim_bug.component() to MKS sub component
-    _map_rim_to_mks_sub_component = {"Chrome" : "Browser UI", "Core UI" : "Browser UI", "Java Client" : "BrowserField API"}
+    _map_rim_to_mks_sub_component = {"Chrome" : "Browser UI",
+                                     "Core UI" : "Browser UI",
+                                     "Page Loading" : "Networking",
+                                     "Java Client" : "BrowserField API"
+                                    }
     _default_mks_sub_component = "WebKit"
 
     def __init__(self, rim_bug):
@@ -47,7 +61,7 @@ class MKSBug(object):
         else:
             return self._default_mks_sub_component
 
-    def targeted_release(self):
+    def component_targeted_release(self):
         os = self.bug.os();
         if (self._map_rim_to_mks_release.has_key(os)):
             return self._map_rim_to_mks_release[os]
@@ -130,7 +144,7 @@ class MKSIntegrity(object):
                                                 sub_component=mks_bug.sub_component(),
                                                 build_type=mks_bug.build_type(),
                                                 build_version=mks_bug.build_version(),
-                                                targeted_release=mks_bug.targeted_release(),
+                                                component_targeted_release=mks_bug.component_targeted_release(),
                                                 has_ui_impact=mks_bug.has_ui_impact(),
                                                 reproducible=mks_bug.reproducible(),
                                                 frequency_of_occurrence=mks_bug.frequency_of_occurrence(),
@@ -152,7 +166,7 @@ class MKSIntegrity(object):
                             bug_title,
                             bug_description,
                             handheld_discovered_on,
-                            targeted_release,
+                            component_targeted_release,
                             component,
                             sub_component,
                             build_type,
@@ -176,7 +190,6 @@ class MKSIntegrity(object):
         node.appendChild(self._create_mks_field_value_node("Development/Test Build", "n/a"))
         node.appendChild(self._create_mks_field_value_node("Customer Importance", "2 - Medium"))
         node.appendChild(self._create_mks_field_value_node("UI Impact", has_ui_impact))
-        node.appendChild(self._create_mks_field_value_node("Targeted Release(s)", targeted_release))
         node.appendChild(self._create_mks_field_value_node("Description", bug_description, value_is_html=True))
         node.appendChild(self._create_mks_field_value_node("Issue Type", issue_type))
 
@@ -193,7 +206,7 @@ class MKSIntegrity(object):
         node.appendChild(self._create_mks_field_value_node("Finder Company", "**RIM"))
         node.appendChild(self._create_mks_field_value_node("Reproducible", reproducible))
         node.appendChild(self._create_mks_field_value_node("Frequency of Occurrence", frequency_of_occurrence))
-        node.appendChild(self._create_mks_field_value_node("Component Target Releases", "6.0.0"))
+        node.appendChild(self._create_mks_field_value_node("Component Target Releases", component_targeted_release))
         node.appendChild(self._create_mks_field_value_node("Technical Risk", "3 - Average"))
         node.appendChild(self._create_mks_field_value_node("Include in RN/KIL", "Yes"))
         node.appendChild(self._create_mks_field_value_node("What deliverable caused the problem?", ""))

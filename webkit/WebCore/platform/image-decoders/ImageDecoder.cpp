@@ -61,7 +61,7 @@ static unsigned copyFromSharedBuffer(char* buffer, unsigned bufferLength, const 
     return bytesExtracted;
 }
 
-ImageDecoder* ImageDecoder::create(const SharedBuffer& data)
+ImageDecoder* ImageDecoder::create(const SharedBuffer& data, bool premultiplyAlpha)
 {
     // We need at least 4 bytes to figure out what kind of image we're dealing
     // with.
@@ -73,19 +73,19 @@ ImageDecoder* ImageDecoder::create(const SharedBuffer& data)
 
     // GIFs begin with GIF8(7 or 9).
     if (strncmp(contents, "GIF8", 4) == 0)
-        return new GIFImageDecoder();
+        return new GIFImageDecoder(premultiplyAlpha);
 
     // Test for PNG.
     if (!memcmp(contents, "\x89\x50\x4E\x47", 4))
-        return new PNGImageDecoder();
+        return new PNGImageDecoder(premultiplyAlpha);
 
     // JPEG
     if (!memcmp(contents, "\xFF\xD8\xFF", 3))
-        return new JPEGImageDecoder();
+        return new JPEGImageDecoder(premultiplyAlpha);
 
     // BMP
     if (strncmp(contents, "BM", 2) == 0)
-        return new BMPImageDecoder();
+        return new BMPImageDecoder(premultiplyAlpha);
 
 #if PLATFORM(OLYMPIA)
     // Tests for RDI.
@@ -110,7 +110,7 @@ ImageDecoder* ImageDecoder::create(const SharedBuffer& data)
     // ICOs always begin with a 2-byte 0 followed by a 2-byte 1.
     // CURs begin with 2-byte 0 followed by 2-byte 2.
     if (!memcmp(contents, "\x00\x00\x01\x00", 4) || !memcmp(contents, "\x00\x00\x02\x00", 4))
-        return new ICOImageDecoder();
+        return new ICOImageDecoder(premultiplyAlpha);
 
     // XBMs require 8 bytes of info.
     if (length >= 8 && strncmp(contents, "#define ", 8) == 0)
@@ -128,6 +128,7 @@ RGBA32Buffer::RGBA32Buffer()
     , m_status(FrameEmpty)
     , m_duration(0)
     , m_disposalMethod(DisposeNotSpecified)
+    , m_premultiplyAlpha(true)
 {
 } 
 
@@ -141,6 +142,7 @@ RGBA32Buffer& RGBA32Buffer::operator=(const RGBA32Buffer& other)
     setStatus(other.status());
     setDuration(other.duration());
     setDisposalMethod(other.disposalMethod());
+    setPremultiplyAlpha(other.premultiplyAlpha());
     return *this;
 }
 

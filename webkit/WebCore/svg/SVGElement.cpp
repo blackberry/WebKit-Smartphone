@@ -1,25 +1,25 @@
 /*
-    Copyright (C) 2004, 2005, 2006, 2007, 2008 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2008 Rob Buis <buis@kde.org>
-    Copyright (C) 2008 Apple Inc. All rights reserved.
-    Copyright (C) 2008 Alp Toker <alp@atoker.com>
-    Copyright (C) 2009 Cameron McCormack <cam@mcc.id.au>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006, 2007, 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2008 Rob Buis <buis@kde.org>
+ * Copyright (C) 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2008 Alp Toker <alp@atoker.com>
+ * Copyright (C) 2009 Cameron McCormack <cam@mcc.id.au>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -52,13 +52,13 @@ namespace WebCore {
 using namespace HTMLNames;
 
 SVGElement::SVGElement(const QualifiedName& tagName, Document* document)
-    : StyledElement(tagName, document, CreateSVGElementZeroRefCount)
+    : StyledElement(tagName, document, CreateSVGElement)
 {
 }
 
 PassRefPtr<SVGElement> SVGElement::create(const QualifiedName& tagName, Document* document)
 {
-    return new SVGElement(tagName, document);
+    return adoptRef(new SVGElement(tagName, document));
 }
 
 SVGElement::~SVGElement()
@@ -181,12 +181,36 @@ const HashSet<SVGElementInstance*>& SVGElement::instancesForElement() const
 
 void SVGElement::setCursorElement(SVGCursorElement* cursorElement)
 {
-    ensureRareSVGData()->setCursorElement(cursorElement);
+    SVGElementRareData* rareData = ensureRareSVGData();
+    if (SVGCursorElement* oldCursorElement = rareData->cursorElement()) {
+        if (cursorElement == oldCursorElement)
+            return;
+        oldCursorElement->removeReferencedElement(this);
+    }
+    rareData->setCursorElement(cursorElement);
+}
+
+void SVGElement::cursorElementRemoved() 
+{
+    ASSERT(hasRareSVGData());
+    rareSVGData()->setCursorElement(0);
 }
 
 void SVGElement::setCursorImageValue(CSSCursorImageValue* cursorImageValue)
 {
-    ensureRareSVGData()->setCursorImageValue(cursorImageValue);
+    SVGElementRareData* rareData = ensureRareSVGData();
+    if (CSSCursorImageValue* oldCursorImageValue = rareData->cursorImageValue()) {
+        if (cursorImageValue == oldCursorImageValue)
+            return;
+        oldCursorImageValue->removeReferencedElement(this);
+    }
+    rareData->setCursorImageValue(cursorImageValue);
+}
+
+void SVGElement::cursorImageValueRemoved()
+{
+    ASSERT(hasRareSVGData());
+    rareSVGData()->setCursorImageValue(0);
 }
 
 void SVGElement::parseMappedAttribute(Attribute* attr)
@@ -278,20 +302,22 @@ bool SVGElement::childShouldCreateRenderer(Node* child) const
 void SVGElement::insertedIntoDocument()
 {
     StyledElement::insertedIntoDocument();
+
+    if (!needsPendingResourceHandling())
+        return;
+
     SVGDocumentExtensions* extensions = document()->accessSVGExtensions();
+    String resourceId = getIdAttribute();
+    if (!extensions->isPendingResource(resourceId))
+        return;
+    
+    OwnPtr<SVGDocumentExtensions::SVGPendingElements> clients(extensions->removePendingResource(resourceId));
+    if (clients->isEmpty())
+        return;
 
-    String resourceId = getAttribute(idAttributeName());
-    if (extensions->isPendingResource(resourceId)) {
-        OwnPtr<HashSet<SVGStyledElement*> > clients(extensions->removePendingResource(resourceId));
-        if (clients->isEmpty())
-            return;
-
-        HashSet<SVGStyledElement*>::const_iterator it = clients->begin();
-        const HashSet<SVGStyledElement*>::const_iterator end = clients->end();
-
-        for (; it != end; ++it)
-            (*it)->buildPendingResource();
-    }
+    const SVGDocumentExtensions::SVGPendingElements::const_iterator end = clients->end();
+    for (SVGDocumentExtensions::SVGPendingElements::const_iterator it = clients->begin(); it != end; ++it)
+        (*it)->buildPendingResource();
 }
 
 void SVGElement::attributeChanged(Attribute* attr, bool preserveDecls)
@@ -301,7 +327,19 @@ void SVGElement::attributeChanged(Attribute* attr, bool preserveDecls)
         return;
 
     StyledElement::attributeChanged(attr, preserveDecls);
-    svgAttributeChanged(attr->name());
+
+    // When an animated SVG property changes through SVG DOM, svgAttributeChanged() is called, not attributeChanged().
+    // Next time someone tries to access the XML attributes, the synchronization code starts. During that synchronization
+    // SVGAnimatedPropertySynchronizer may call NamedNodeMap::removeAttribute(), which in turn calls attributeChanged().
+    // At this point we're not allowed to call svgAttributeChanged() again - it may lead to extra work being done, or crashes
+    // see bug https://bugs.webkit.org/show_bug.cgi?id=40994.
+    if (isSynchronizingSVGAttributes())
+        return;
+
+    // Changes to the style attribute are processed lazily (see Element::getAttribute() and related methods),
+    // so we don't want changes to the style attribute to result in extra work here.
+    if (attr->name() != HTMLNames::styleAttr)
+        svgAttributeChanged(attr->name());
 }
 
 void SVGElement::updateAnimatedSVGAttribute(const QualifiedName& name) const
@@ -320,10 +358,8 @@ void SVGElement::updateAnimatedSVGAttribute(const QualifiedName& name) const
 
 ContainerNode* SVGElement::eventParentNode()
 {
-    if (Node* shadowParent = shadowParentNode()) {
-        ASSERT(shadowParent->isContainerNode());
-        return static_cast<ContainerNode*>(shadowParent);
-    }
+    if (ContainerNode* shadowParent = shadowParentNode())
+        return shadowParent;
     return StyledElement::eventParentNode();
 }
 

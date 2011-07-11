@@ -27,8 +27,6 @@
 #import "DragData.h"
 
 #if ENABLE(DRAG_SUPPORT)
-#import "ClipboardMac.h"
-#import "ClipboardAccessPolicy.h"
 #import "Document.h"
 #import "DocumentFragment.h"
 #import "DOMDocumentFragment.h"
@@ -100,11 +98,6 @@ Color DragData::asColor() const
                     (int)([color blueComponent] * 255.0 + 0.5), (int)([color alphaComponent] * 255.0 + 0.5));
 }
 
-PassRefPtr<Clipboard> DragData::createClipboard(ClipboardAccessPolicy policy) const
-{
-    return ClipboardMac::create(true, [m_platformDragData draggingPasteboard], policy, 0);
-}
-
 bool DragData::containsCompatibleContent() const
 {
     NSPasteboard *pasteboard = [m_platformDragData draggingPasteboard];
@@ -113,13 +106,15 @@ bool DragData::containsCompatibleContent() const
     return [types count] != 0;
 }
     
-bool DragData::containsURL() const
+bool DragData::containsURL(FilenameConversionPolicy filenamePolicy) const
 {
-    return !asURL().isEmpty();
+    return !asURL(filenamePolicy).isEmpty();
 }
     
-String DragData::asURL(String* title) const
+String DragData::asURL(FilenameConversionPolicy filenamePolicy, String* title) const
 {
+    // FIXME: Use filenamePolicy.
+    (void)filenamePolicy;
     return m_pasteboardHelper->urlFromPasteboard([m_platformDragData draggingPasteboard], title);
 }
 

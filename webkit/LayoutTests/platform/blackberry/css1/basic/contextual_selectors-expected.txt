@@ -1,0 +1,82 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584 [bgcolor=#CCCCCC]
+      RenderBlock {P} at (0,0) size 784x21 [color=#000080]
+        RenderText {#text} at (0,1) size 356x19
+          text run at (0,1) width 356: "The style declarations which apply to the text below are:"
+      RenderBlock {PRE} at (0,37) size 784x60
+        RenderText {#text} at (0,0) size 472x60
+          text run at (0,0) width 288: "P {color: navy; font-family: serif;}"
+          text run at (288,0) width 0: " "
+          text run at (0,15) width 472: "HTML BODY TABLE P {color: purple; font-family: sans-serif;}"
+          text run at (472,15) width 0: " "
+          text run at (0,30) width 224: "EM, UL LI LI {color: green;}"
+          text run at (224,30) width 0: " "
+          text run at (0,45) width 0: " "
+      RenderBlock {HR} at (0,110) size 784x2 [border: (1px inset #000000)]
+      RenderBlock {P} at (0,128) size 784x21 [color=#000080]
+        RenderText {#text} at (0,1) size 625x19
+          text run at (0,1) width 625: "This sentence should be navy serif in the first half of the page, but purple and sans-serif in the table."
+      RenderBlock {P} at (0,165) size 784x21 [color=#000080]
+        RenderText {#text} at (0,1) size 559x19
+          text run at (0,1) width 559: "This sentence should be normal for its section, except for the last word, which should be "
+        RenderInline {EM} at (0,0) size 37x19 [color=#008000]
+          RenderText {#text} at (559,1) size 37x19
+            text run at (559,1) width 37: "green"
+        RenderText {#text} at (596,1) size 4x19
+          text run at (596,1) width 4: "."
+      RenderBlock {UL} at (0,202) size 784x42
+        RenderListItem {LI} at (40,0) size 744x42
+          RenderBlock (anonymous) at (0,0) size 744x21
+            RenderListMarker at (-18,1) size 7x19: bullet
+            RenderInline {EM} at (0,0) size 40x19 [color=#008000]
+              RenderText {#text} at (0,1) size 40x19
+                text run at (0,1) width 40: "Hello."
+            RenderText {#text} at (40,1) size 399x19
+              text run at (40,1) width 4: " "
+              text run at (44,1) width 395: "The first \"hello\" should be green, but this part should be black."
+          RenderBlock {UL} at (0,21) size 744x21
+            RenderListItem {LI} at (40,0) size 704x21 [color=#008000]
+              RenderListMarker at (-18,1) size 7x19: white bullet
+              RenderText {#text} at (0,1) size 136x19
+                text run at (0,1) width 136: "This should be green."
+      RenderTable {TABLE} at (0,260) size 722x171 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 720x169
+          RenderTableRow {TR} at (0,0) size 720x29
+            RenderTableCell {TD} at (0,0) size 720x29 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderInline {STRONG} at (0,0) size 161x19
+                RenderText {#text} at (4,5) size 161x19
+                  text run at (4,5) width 161: "TABLE Testing Section"
+          RenderTableRow {TR} at (0,29) size 720x140
+            RenderTableCell {TD} at (0,84) size 12x29 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,5) size 4x19
+                text run at (4,5) width 4: " "
+            RenderTableCell {TD} at (12,29) size 708x140 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderBlock {P} at (4,4) size 700x21 [color=#800080]
+                RenderText {#text} at (0,1) size 700x19
+                  text run at (0,1) width 700: "This sentence should be navy serif in the first half of the page, but purple and sans-serif in the table."
+              RenderBlock {P} at (4,41) size 700x21 [color=#800080]
+                RenderText {#text} at (0,1) size 623x19
+                  text run at (0,1) width 623: "This sentence should be normal for its section, except for the last word, which should be "
+                RenderInline {EM} at (0,0) size 44x19 [color=#008000]
+                  RenderText {#text} at (623,1) size 44x19
+                    text run at (623,1) width 44: "green"
+                RenderText {#text} at (667,1) size 4x19
+                  text run at (667,1) width 4: "."
+              RenderBlock {UL} at (4,78) size 700x42
+                RenderListItem {LI} at (40,0) size 660x42
+                  RenderBlock (anonymous) at (0,0) size 660x21
+                    RenderListMarker at (-18,1) size 7x19: bullet
+                    RenderInline {EM} at (0,0) size 40x19 [color=#008000]
+                      RenderText {#text} at (0,1) size 40x19
+                        text run at (0,1) width 40: "Hello."
+                    RenderText {#text} at (40,1) size 399x19
+                      text run at (40,1) width 4: " "
+                      text run at (44,1) width 395: "The first \"hello\" should be green, but this part should be black."
+                  RenderBlock {UL} at (0,21) size 660x21
+                    RenderListItem {LI} at (40,0) size 620x21 [color=#008000]
+                      RenderListMarker at (-18,1) size 7x19: white bullet
+                      RenderText {#text} at (0,1) size 136x19
+                        text run at (0,1) width 136: "This should be green."

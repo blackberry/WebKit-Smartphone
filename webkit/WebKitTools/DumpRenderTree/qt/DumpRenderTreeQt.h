@@ -40,6 +40,9 @@
 #include <QSslError>
 #endif
 
+#include "../../../WebKit/qt/WebCoreSupport/DumpRenderTreeSupportQt.h"
+#include <qgraphicsview.h>
+#include <qgraphicswebview.h>
 #include <qwebframe.h>
 #include <qwebinspector.h>
 #include <qwebpage.h>
@@ -76,8 +79,8 @@ public:
     void setTextOutputEnabled(bool enable) { m_enableTextOutput = enable; }
     bool isTextOutputEnabled() { return m_enableTextOutput; }
 
-    void setSingleFileMode(bool flag) { m_singleFileMode = flag; }
-    bool isSingleFileMode() { return m_singleFileMode; }
+    void setGraphicsBased(bool flag) { m_graphicsBased = flag; }
+    bool isGraphicsBased() { return m_graphicsBased; }
 
     void setDumpPixels(bool);
 
@@ -100,6 +103,7 @@ public:
 #if defined(Q_WS_X11)
     static void initializeFonts();
 #endif
+    void processArgsLine(const QStringList&);
 
 public Q_SLOTS:
     void initJSObjects();
@@ -122,17 +126,24 @@ private Q_SLOTS:
     void showPage();
     void hidePage();
     void dryRunPrint(QWebFrame*);
+    void loadNextTestInStandAloneMode();
+    void geolocationPermissionSet();
 
 private:
+    void setStandAloneMode(bool flag) { m_standAloneMode = flag; }
+    bool isStandAloneMode() { return m_standAloneMode; }
+
     QString dumpFramesAsText(QWebFrame* frame);
-    QString dumpBackForwardList();
+    QString dumpBackForwardList(QWebPage* page);
+    QString dumpFrameScrollPosition(QWebFrame* frame);
     LayoutTestController *m_controller;
 
     bool m_dumpPixels;
     QString m_expectedHash;
+    QStringList m_standAloneModeTestList;
 
     WebPage *m_page;
-    QWebView* m_mainView;
+    QWidget* m_mainView;
 
     EventSender *m_eventSender;
     TextInputController *m_textInputController;
@@ -143,7 +154,8 @@ private:
 
     QList<QObject*> windows;
     bool m_enableTextOutput;
-    bool m_singleFileMode;
+    bool m_standAloneMode;
+    bool m_graphicsBased;
     QString m_persistentStoragePath;
 };
 
@@ -180,23 +192,37 @@ public:
 
     QObject* createPlugin(const QString&, const QUrl&, const QStringList&, const QStringList&);
 
+    void permissionSet(QWebPage::PermissionDomain domain);
+
 public slots:
     bool shouldInterruptJavaScript() { return false; }
+    void requestPermission(QWebFrame* frame, QWebPage::PermissionDomain domain);
+    void checkPermission(QWebFrame* frame, QWebPage::PermissionDomain domain, QWebPage::PermissionPolicy& policy);
+    void cancelPermission(QWebFrame* frame, QWebPage::PermissionDomain domain);
 
 protected:
     bool acceptNavigationRequest(QWebFrame* frame, const QNetworkRequest& request, NavigationType type);
     bool isTextOutputEnabled() { return m_drt->isTextOutputEnabled(); }
 
 private slots:
-    void setViewGeometry(const QRect &r)
-    {
-        QWidget *v = view();
-        if (v)
-            v->setGeometry(r);
-    }
+    void setViewGeometry(const QRect&);
+
 private:
     QWebInspector* m_webInspector;
+    QList<QWebFrame*> m_pendingGeolocationRequests;
     DumpRenderTree *m_drt;
+};
+
+class WebViewGraphicsBased : public QGraphicsView {
+    Q_OBJECT
+
+public:
+    WebViewGraphicsBased(QWidget* parent);
+    QGraphicsWebView* graphicsView() const { return m_item; }
+    void setPage(QWebPage* page) { m_item->setPage(page); }
+
+private:
+    QGraphicsWebView* m_item;
 };
 
 }

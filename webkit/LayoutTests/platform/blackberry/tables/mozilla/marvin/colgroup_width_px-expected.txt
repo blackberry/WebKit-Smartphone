@@ -1,0 +1,119 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {P} at (0,0) size 784x42
+        RenderText {#text} at (0,1) size 766x40
+          text run at (0,1) width 766: "Colgroups are used to identify column groups. This table has two distinct column groups titled 'Airport Location' and 'Car"
+          text run at (0,22) width 586: "Rental Information'. The first has a width of 200 pixels; the second has a width of 400 pixels."
+      RenderTable {TABLE} at (0,58) size 784x214 [border: (1px outset #808080)]
+        RenderTableCol {COLGROUP} at (0,0) size 0x0
+        RenderTableCol {COLGROUP} at (0,0) size 0x0
+        RenderTableSection {TBODY} at (1,1) size 782x212
+          RenderTableRow {TR} at (0,2) size 782x25
+            RenderTableCell {TH} at (2,2) size 559x25 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderText {#text} at (221,3) size 116x19
+                text run at (221,3) width 116: "Airport Location"
+            RenderTableCell {TH} at (563,2) size 217x25 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=3]
+              RenderText {#text} at (27,3) size 162x19
+                text run at (27,3) width 162: "Car Rental Information"
+          RenderTableRow {TR} at (0,29) size 782x46
+            RenderTableCell {TH} at (2,39) size 188x25 [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (65,3) size 58x19
+                text run at (65,3) width 58: "Country"
+            RenderTableCell {TH} at (192,39) size 369x25 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (170,3) size 29x19
+                text run at (170,3) width 29: "City"
+            RenderTableCell {TH} at (563,29) size 71x46 [border: (1px inset #808080)] [r=1 c=2 rs=1 cs=1]
+              RenderText {#text} at (18,3) size 67x40
+                text run at (18,3) width 35: "ABC"
+                text run at (2,24) width 67: "Company"
+            RenderTableCell {TH} at (636,29) size 71x46 [border: (1px inset #808080)] [r=1 c=3 rs=1 cs=1]
+              RenderText {#text} at (19,3) size 67x40
+                text run at (19,3) width 33: "EFG"
+                text run at (2,24) width 67: "Company"
+            RenderTableCell {TH} at (709,29) size 71x46 [border: (1px inset #808080)] [r=1 c=4 rs=1 cs=1]
+              RenderText {#text} at (18,3) size 67x40
+                text run at (18,3) width 35: "XYZ"
+                text run at (2,24) width 67: "Company"
+          RenderTableRow {TR} at (0,77) size 782x25
+            RenderTableCell {TD} at (2,77) size 188x25 [border: (1px inset #808080)] [r=2 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 43x19
+                text run at (2,3) width 43: "France"
+            RenderTableCell {TD} at (192,77) size 369x25 [border: (1px inset #808080)] [r=2 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 31x19
+                text run at (2,3) width 31: "Paris"
+            RenderTableCell {TD} at (563,77) size 71x25 [border: (1px inset #808080)] [r=2 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (636,77) size 71x25 [border: (1px inset #808080)] [r=2 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (709,77) size 71x25 [border: (1px inset #808080)] [r=2 c=4 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+          RenderTableRow {TR} at (0,104) size 782x25
+            RenderTableCell {TD} at (2,104) size 188x25 [border: (1px inset #808080)] [r=3 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 59x19
+                text run at (2,3) width 59: "Germany"
+            RenderTableCell {TD} at (192,104) size 369x25 [border: (1px inset #808080)] [r=3 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 59x19
+                text run at (2,3) width 59: "Frankfurt"
+            RenderTableCell {TD} at (563,104) size 71x25 [border: (1px inset #808080)] [r=3 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (636,104) size 71x25 [border: (1px inset #808080)] [r=3 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (709,104) size 71x25 [border: (1px inset #808080)] [r=3 c=4 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+          RenderTableRow {TR} at (0,131) size 782x25
+            RenderTableCell {TD} at (2,131) size 188x25 [border: (1px inset #808080)] [r=4 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 53x19
+                text run at (2,3) width 53: "England"
+            RenderTableCell {TD} at (192,131) size 369x25 [border: (1px inset #808080)] [r=4 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 50x19
+                text run at (2,3) width 50: "London"
+            RenderTableCell {TD} at (563,131) size 71x25 [border: (1px inset #808080)] [r=4 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (636,131) size 71x25 [border: (1px inset #808080)] [r=4 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (709,131) size 71x25 [border: (1px inset #808080)] [r=4 c=4 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+          RenderTableRow {TR} at (0,158) size 782x25
+            RenderTableCell {TD} at (2,158) size 188x25 [border: (1px inset #808080)] [r=5 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 77x19
+                text run at (2,3) width 77: "Netherlands"
+            RenderTableCell {TD} at (192,158) size 369x25 [border: (1px inset #808080)] [r=5 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 73x19
+                text run at (2,3) width 73: "Amsterdam"
+            RenderTableCell {TD} at (563,158) size 71x25 [border: (1px inset #808080)] [r=5 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (636,158) size 71x25 [border: (1px inset #808080)] [r=5 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (709,158) size 71x25 [border: (1px inset #808080)] [r=5 c=4 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+          RenderTableRow {TR} at (0,185) size 782x25
+            RenderTableCell {TD} at (2,185) size 188x25 [border: (1px inset #808080)] [r=6 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 33x19
+                text run at (2,3) width 33: "USA"
+            RenderTableCell {TD} at (192,185) size 369x25 [border: (1px inset #808080)] [r=6 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 68x19
+                text run at (2,3) width 68: "New York"
+            RenderTableCell {TD} at (563,185) size 71x25 [border: (1px inset #808080)] [r=6 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (636,185) size 71x25 [border: (1px inset #808080)] [r=6 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"
+            RenderTableCell {TD} at (709,185) size 71x25 [border: (1px inset #808080)] [r=6 c=4 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "yes"

@@ -64,12 +64,11 @@ void AutoTableLayout::recalcColumn(int effCol)
         else if (child->isTableSection()) {
             RenderTableSection* section = toRenderTableSection(child);
             int numRows = section->numRows();
-            RenderTableCell* last = 0;
             for (int i = 0; i < numRows; i++) {
                 RenderTableSection::CellStruct current = section->cellAt(i, effCol);
-                RenderTableCell* cell = current.cell;
+                RenderTableCell* cell = current.primaryCell();
                 
-                bool cellHasContent = cell && (cell->firstChild() || cell->style()->hasBorder() || cell->style()->hasPadding());
+                bool cellHasContent = cell && !current.inColSpan && (cell->firstChild() || cell->style()->hasBorder() || cell->style()->hasPadding());
                 if (cellHasContent)
                     l.emptyCellsOnly = false;
                     
@@ -126,14 +125,13 @@ void AutoTableLayout::recalcColumn(int effCol)
                         break;
                     }
                 } else {
-                    if (cell && (!effCol || section->cellAt(i, effCol-1).cell != cell)) {
+                    if (cell && (!effCol || section->primaryCellAt(i, effCol-1) != cell)) {
                         // This spanning cell originates in this column.  Ensure we have
                         // a min/max width of at least 1px for this column now.
                         l.minWidth = max(l.minWidth, cellHasContent ? 1 : 0);
                         l.maxWidth = max(l.maxWidth, 1);
                         insertSpanCell(cell);
                     }
-                    last = cell;
                 }
             }
         }
@@ -142,7 +140,7 @@ void AutoTableLayout::recalcColumn(int effCol)
 
     // Nav/IE weirdness
     if (l.width.isFixed()) {
-        if (m_table->style()->htmlHacks() && l.maxWidth > l.width.value() && fixedContributor != maxContributor) {
+        if (m_table->document()->inQuirksMode() && l.maxWidth > l.width.value() && fixedContributor != maxContributor) {
             l.width = Length();
             fixedContributor = 0;
         }
@@ -509,7 +507,6 @@ void AutoTableLayout::layout()
         calcEffectiveWidth();
 
     bool havePercent = false;
-    bool haveRelative = false;
     int totalRelative = 0;
     int numAuto = 0;
     int numFixed = 0;
@@ -531,7 +528,6 @@ void AutoTableLayout::layout()
             totalPercent += width.rawValue();
             break;
         case Relative:
-            haveRelative = true;
             totalRelative += width.value();
             break;
         case Fixed:

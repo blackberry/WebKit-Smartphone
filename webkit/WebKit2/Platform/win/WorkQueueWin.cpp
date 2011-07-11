@@ -25,105 +25,204 @@
 
 #include "WorkQueue.h"
 
-#include <process.h>
 #include <wtf/Threading.h>
 
-void WorkQueue::registerHandle(HANDLE handle, std::auto_ptr<WorkItem> item)
+inline WorkQueue::WorkItemWin::WorkItemWin(PassOwnPtr<WorkItem> item, WorkQueue* queue)
+    : m_item(item)
+    , m_queue(queue)
 {
-    // Add the item.
-    {
-        MutexLocker locker(m_handlesLock);
-        m_handles.set(handle, item.release());
-    }
-
-    // Set the work event.
-    ::SetEvent(m_performWorkEvent);
 }
 
-void* WorkQueue::workQueueThreadBody(void *context)
+PassRefPtr<WorkQueue::WorkItemWin> WorkQueue::WorkItemWin::create(PassOwnPtr<WorkItem> item, WorkQueue* queue)
 {
-    static_cast<WorkQueue*>(context)->workQueueThreadBody();
+    return adoptRef(new WorkItemWin(item, queue));
+}
+
+WorkQueue::WorkItemWin::~WorkItemWin()
+{
+}
+
+inline WorkQueue::HandleWorkItem::HandleWorkItem(HANDLE handle, PassOwnPtr<WorkItem> item, WorkQueue* queue)
+    : WorkItemWin(item, queue)
+    , m_handle(handle)
+    , m_waitHandle(0)
+{
+    ASSERT_ARG(handle, handle);
+}
+
+PassRefPtr<WorkQueue::HandleWorkItem> WorkQueue::HandleWorkItem::createByAdoptingHandle(HANDLE handle, PassOwnPtr<WorkItem> item, WorkQueue* queue)
+{
+    return adoptRef(new HandleWorkItem(handle, item, queue));
+}
+
+WorkQueue::HandleWorkItem::~HandleWorkItem()
+{
+    ::CloseHandle(m_handle);
+}
+
+void WorkQueue::handleCallback(void* context, BOOLEAN timerOrWaitFired)
+{
+    ASSERT_ARG(context, context);
+    ASSERT_ARG(timerOrWaitFired, !timerOrWaitFired);
+
+    WorkItemWin* item = static_cast<WorkItemWin*>(context);
+    WorkQueue* queue = item->queue();
+
+    {
+        MutexLocker lock(queue->m_workItemQueueLock);
+        queue->m_workItemQueue.append(item);
+
+        // If no other thread is performing work, we can do it on this thread.
+        if (!queue->tryRegisterAsWorkThread()) {
+            // Some other thread is performing work. Since we hold the queue lock, we can be sure
+            // that the work thread is not exiting due to an empty queue and will process the work
+            // item we just added to it. If we weren't holding the lock we'd have to signal
+            // m_performWorkEvent to make sure the work item got picked up.
+            return;
+        }
+    }
+
+    queue->performWorkOnRegisteredWorkThread();
+}
+
+void WorkQueue::registerHandle(HANDLE handle, PassOwnPtr<WorkItem> item)
+{
+    RefPtr<HandleWorkItem> handleItem = HandleWorkItem::createByAdoptingHandle(handle, item, this);
+
+    {
+        MutexLocker lock(m_handlesLock);
+        ASSERT_ARG(handle, !m_handles.contains(handle));
+        m_handles.set(handle, handleItem);
+    }
+
+    HANDLE waitHandle;
+    if (!::RegisterWaitForSingleObject(&waitHandle, handle, handleCallback, handleItem.get(), INFINITE, WT_EXECUTEDEFAULT)) {
+        DWORD error = ::GetLastError();
+        ASSERT_NOT_REACHED();
+    }
+    handleItem->setWaitHandle(waitHandle);
+}
+
+void WorkQueue::unregisterAndCloseHandle(HANDLE handle)
+{
+    RefPtr<HandleWorkItem> item;
+    {
+        MutexLocker locker(m_handlesLock);
+        ASSERT_ARG(handle, m_handles.contains(handle));
+        item = m_handles.take(handle);
+    }
+
+    unregisterWaitAndDestroyItemSoon(item.release());
+}
+
+DWORD WorkQueue::workThreadCallback(void* context)
+{
+    ASSERT_ARG(context, context);
+
+    WorkQueue* queue = static_cast<WorkQueue*>(context);
+
+    if (!queue->tryRegisterAsWorkThread())
+        return 0;
+
+    queue->performWorkOnRegisteredWorkThread();
     return 0;
 }
 
-void WorkQueue::workQueueThreadBody()
+void WorkQueue::performWorkOnRegisteredWorkThread()
 {
-    while (true) {
-        Vector<HANDLE> handles;
-        {
-            // Copy the handles to our handles vector.
-            MutexLocker locker(m_handlesLock);
-            copyKeysToVector(m_handles, handles);
-        }
+    ASSERT(m_isWorkThreadRegistered);
 
-        // Add the "perform work" event handle.
-        handles.append(m_performWorkEvent);
+    bool isValid = true;
 
-        // Now we wait.
-        DWORD result = ::WaitForMultipleObjects(handles.size(), handles.data(), FALSE, INFINITE);
+    m_workItemQueueLock.lock();
 
-        if (result == handles.size() - 1)
-            performWork();
-        else {
-            // FIXME: If we ever decide to support unregistering handles we would need to copy the hash map.
-            WorkItem* workItem;
-            HANDLE handle = handles[result];
+    while (isValid && !m_workItemQueue.isEmpty()) {
+        Vector<RefPtr<WorkItemWin> > workItemQueue;
+        m_workItemQueue.swap(workItemQueue);
 
-            {
-                MutexLocker locker(m_handlesLock);
-                workItem = m_handles.get(handle);
-            }
-
-            // Execute the work item.
-            workItem->execute();
-        }
-
-        // Check if this queue is invalid.
-        {
+        // Allow more work to be scheduled while we're not using the queue directly.
+        m_workItemQueueLock.unlock();
+        for (size_t i = 0; i < workItemQueue.size(); ++i) {
             MutexLocker locker(m_isValidMutex);
-            if (!m_isValid)
+            isValid = m_isValid;
+            if (!isValid)
                 break;
+            workItemQueue[i]->item()->execute();
         }
+        m_workItemQueueLock.lock();
     }
+
+    // One invariant we maintain is that any work scheduled while a work thread is registered will
+    // be handled by that work thread. Unregister as the work thread while the queue lock is still
+    // held so that no work can be scheduled while we're still registered.
+    unregisterAsWorkThread();
+
+    m_workItemQueueLock.unlock();
 }
 
 void WorkQueue::platformInitialize(const char* name)
 {
-    // Create our event.
-    m_performWorkEvent = ::CreateEvent(0, false, false, 0);
+    m_isWorkThreadRegistered = 0;
+}
 
-    m_workQueueThread = createThread(&WorkQueue::workQueueThreadBody, this, name);
+bool WorkQueue::tryRegisterAsWorkThread()
+{
+    LONG result = ::InterlockedCompareExchange(&m_isWorkThreadRegistered, 1, 0);
+    ASSERT(!result || result == 1);
+    return !result;
+}
+
+void WorkQueue::unregisterAsWorkThread()
+{
+    LONG result = ::InterlockedCompareExchange(&m_isWorkThreadRegistered, 0, 1);
+    ASSERT_UNUSED(result, result == 1);
 }
 
 void WorkQueue::platformInvalidate()
 {
-    ::CloseHandle(m_performWorkEvent);
-
-    // FIXME: Stop the thread and do other cleanup.
+#if !ASSERT_DISABLED
+    MutexLocker lock(m_handlesLock);
+    ASSERT(m_handles.isEmpty());
+#endif
 }
 
-void WorkQueue::scheduleWork(std::auto_ptr<WorkItem> item)
+void WorkQueue::scheduleWork(PassOwnPtr<WorkItem> item)
 {
     MutexLocker locker(m_workItemQueueLock);
-    m_workItemQueue.append(item.release());
 
-    // Set the work event.
-    ::SetEvent(m_performWorkEvent);
+    m_workItemQueue.append(WorkItemWin::create(item, this));
+
+    // Spawn a work thread to perform the work we just added. As an optimization, we avoid
+    // spawning the thread if a work thread is already registered. This prevents multiple work
+    // threads from being spawned in most cases. (Note that when a work thread has been spawned but
+    // hasn't registered itself yet, m_isWorkThreadRegistered will be false and we'll end up
+    // spawning a second work thread here. But work thread registration process will ensure that
+    // only one thread actually ends up performing work.)
+    if (!m_isWorkThreadRegistered)
+        ::QueueUserWorkItem(workThreadCallback, this, WT_EXECUTEDEFAULT);
 }
 
-void WorkQueue::performWork()
+void WorkQueue::unregisterWaitAndDestroyItemSoon(PassRefPtr<HandleWorkItem> item)
 {
-    Vector<WorkItem*> workItemQueue;
-    {
-        MutexLocker locker(m_workItemQueueLock);
-        m_workItemQueue.swap(workItemQueue);
+    // We're going to make a blocking call to ::UnregisterWaitEx before closing the handle. (The
+    // blocking version of ::UnregisterWaitEx is much simpler than the non-blocking version.) If we
+    // do this on the current thread, we'll deadlock if we're currently in a callback function for
+    // the wait we're unregistering. So instead we do it asynchronously on some other worker thread.
+
+    ::QueueUserWorkItem(unregisterWaitAndDestroyItemCallback, item.leakRef(), WT_EXECUTEDEFAULT);
+}
+
+DWORD WINAPI WorkQueue::unregisterWaitAndDestroyItemCallback(void* context)
+{
+    ASSERT_ARG(context, context);
+    RefPtr<HandleWorkItem> item = adoptRef(static_cast<HandleWorkItem*>(context));
+
+    // Now that we know we're not in a callback function for the wait we're unregistering, we can
+    // make a blocking call to ::UnregisterWaitEx.
+    if (!::UnregisterWaitEx(item->waitHandle(), INVALID_HANDLE_VALUE)) {
+        DWORD error = ::GetLastError();
+        ASSERT_NOT_REACHED();
     }
 
-    for (size_t i = 0; i < workItemQueue.size(); ++i) {
-        std::auto_ptr<WorkItem> item(workItemQueue[i]);
-
-        MutexLocker locker(m_isValidMutex);
-        if (m_isValid)
-            item->execute();
-    }
+    return 0;
 }

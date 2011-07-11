@@ -1,7 +1,9 @@
 /*
  * Copyright (C) 2007 Alexey Proskuryakov <ap@nypop.com>.
- * Copyright (C) 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2008, 2009, 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2009 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
+ * Copyright (C) 2009 Jeff Schiller <codedread@gmail.com>
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -251,11 +253,17 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(ControlPart e)
         case MediaVolumeSliderPart:
             m_value.ident = CSSValueMediaVolumeSlider;
             break;
+        case MediaVolumeSliderMuteButtonPart:
+            m_value.ident = CSSValueMediaVolumeSliderMuteButton;
+            break;
         case MediaVolumeSliderThumbPart:
             m_value.ident = CSSValueMediaVolumeSliderthumb;
             break;
         case MediaControlsBackgroundPart:
             m_value.ident = CSSValueMediaControlsBackground;
+            break;
+        case MediaControlsFullscreenBackgroundPart:
+            m_value.ident = CSSValueMediaControlsFullscreenBackground;
             break;
         case MediaCurrentTimePart:
             m_value.ident = CSSValueMediaCurrentTimeDisplay;
@@ -277,6 +285,18 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(ControlPart e)
             break;
         case MeterPart:
             m_value.ident = CSSValueMeter;
+            break;
+        case RelevancyLevelIndicatorPart:
+            m_value.ident = CSSValueRelevancyLevelIndicator;
+            break;
+        case ContinuousCapacityLevelIndicatorPart:
+            m_value.ident = CSSValueContinuousCapacityLevelIndicator;
+            break;
+        case DiscreteCapacityLevelIndicatorPart:
+            m_value.ident = CSSValueDiscreteCapacityLevelIndicator;
+            break;
+        case RatingLevelIndicatorPart:
+            m_value.ident = CSSValueRatingLevelIndicator;
             break;
         case OuterSpinButtonPart:
             m_value.ident = CSSValueOuterSpinButton;
@@ -329,6 +349,11 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(ControlPart e)
             break;
         case CapsLockIndicatorPart:
             m_value.ident = CSSValueCapsLockIndicator;
+            break;
+        case InputSpeechButtonPart:
+#if ENABLE(INPUT_SPEECH)
+            m_value.ident = CSSValueInputSpeechButton;
+#endif
             break;
     }
 }
@@ -983,6 +1008,9 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(EListStyleType e)
     case Armenian:
         m_value.ident = CSSValueArmenian;
         break;
+    case Asterisks:
+        m_value.ident = CSSValueAsterisks;
+        break;
     case BinaryListStyle:
         m_value.ident = CSSValueBinary;
         break;
@@ -1063,6 +1091,9 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(EListStyleType e)
         break;
     case EthiopicHalehameTig:
         m_value.ident = CSSValueEthiopicHalehameTig;
+        break;
+    case Footnotes:
+        m_value.ident = CSSValueFootnotes;
         break;
     case Georgian:
         m_value.ident = CSSValueGeorgian;
@@ -1580,7 +1611,7 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(ETextAlign e)
 {
     switch (e) {
         case TAAUTO:
-            m_value.ident = CSSValueAuto;
+            m_value.ident = CSSValueWebkitAuto;
             break;
         case LEFT:
             m_value.ident = CSSValueLeft;
@@ -2143,6 +2174,38 @@ template<> inline CSSPrimitiveValue::operator ColorSpace() const
     }
 }
 
+template<> inline CSSPrimitiveValue::CSSPrimitiveValue(Hyphens hyphens)
+    : m_type(CSS_IDENT)
+    , m_hasCachedCSSText(false)
+{
+    switch (hyphens) {
+    case HyphensNone:
+        m_value.ident = CSSValueNone;
+        break;
+    case HyphensManual:
+        m_value.ident = CSSValueManual;
+        break;
+    case HyphensAuto:
+        m_value.ident = CSSValueAuto;
+        break;
+    }
+}
+
+template<> inline CSSPrimitiveValue::operator Hyphens() const
+{
+    switch (m_value.ident) {
+    case CSSValueNone:
+        return HyphensNone;
+    case CSSValueManual:
+        return HyphensManual;
+    case CSSValueAuto:
+        return HyphensAuto;
+    default:
+        ASSERT_NOT_REACHED();
+        return HyphensAuto;
+    }
+}
+
 #if ENABLE(SVG)
 
 template<> inline CSSPrimitiveValue::CSSPrimitiveValue(LineCap e)
@@ -2585,6 +2648,33 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(EWritingMode e)
 template<> inline CSSPrimitiveValue::operator EWritingMode() const
 {
     return static_cast<EWritingMode>(m_value.ident - CSSValueLrTb);
+}
+
+template<> inline CSSPrimitiveValue::CSSPrimitiveValue(EVectorEffect e)
+    : m_type(CSS_IDENT)
+    , m_hasCachedCSSText(false)
+{
+    switch (e) {
+    case VE_NONE:
+        m_value.ident = CSSValueNone;
+        break;
+    case VE_NON_SCALING_STROKE:
+        m_value.ident = CSSValueNonScalingStroke;
+        break;
+    }
+}
+
+template<> inline CSSPrimitiveValue::operator EVectorEffect() const
+{
+    switch (m_value.ident) {
+    case CSSValueNone:
+        return VE_NONE;
+    case CSSValueNonScalingStroke:
+        return VE_NON_SCALING_STROKE;
+    default:
+        ASSERT_NOT_REACHED();
+        return VE_NONE;
+    }
 }
 
 #endif

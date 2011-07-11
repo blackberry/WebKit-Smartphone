@@ -7,99 +7,18 @@
 
 INCLUDE (WebKitFS)
 
-FIND_PACKAGE(Perl REQUIRED)
-
-# - Create hash table *.lut.h
-# GENERATE_HASH_LUT(input_file output_file)
-MACRO(GENERATE_HASH_LUT _input _output)
-    SET(HASH_LUT_GENERATOR "${JAVASCRIPTCORE_DIR}/create_hash_table")
-
-    FOREACH (_tmp ${ARGN})
-        IF (${_tmp} STREQUAL "MAIN_DEPENDENCY")
-            SET(_main_dependency ${_input})
-        ENDIF ()
-    ENDFOREACH ()
-
-    ADD_CUSTOM_COMMAND(
-        OUTPUT ${_output}
-        MAIN_DEPENDENCY ${_main_dependency}
-        DEPENDS ${_input} ${HASH_LUT_GENERATOR}
-        COMMAND ${PERL_EXECUTABLE} ${HASH_LUT_GENERATOR} ${_input} > ${_output}
-        VERBATIM)
-ENDMACRO()
-
-# - Create hash table *.lut.h using at JavaScriptCore/runtime
-# GENERATE_HASH_LUT_RUNTIME(source)
-#
-# The generated files lives in ${CMAKE_BINARY_DIR}/JavaScriptCore/runtime/
-# and will have suffix ".lut.h"
-#
-# Input file is assumed to be in JavaScriptCore/runtime/${source}.cpp
-MACRO(GENERATE_HASH_LUT_RUNTIME _file)
-  ADD_CUSTOM_COMMAND(
-    OUTPUT  ${CMAKE_BINARY_DIR}/JavaScriptCore/runtime/${_file}.lut.h
-    DEPENDS ${JAVASCRIPTCORE_DIR}/runtime/${_file}.cpp  ${HASH_LUT_GENERATOR}
-    COMMAND ${PERL_EXECUTABLE} ${HASH_LUT_GENERATOR} ${JAVASCRIPTCORE_DIR}/runtime/${_file}.cpp -i > ${CMAKE_BINARY_DIR}/JavaScriptCore/runtime/${_file}.lut.h
-    VERBATIM)
-  LIST(APPEND GENERATED_HASH_LUT_RUNTIME_FILES "${CMAKE_BINARY_DIR}/JavaScriptCore/runtime/${_file}.lut.h")
-ENDMACRO()
-
-
-FIND_PROGRAM (BISON_EXECUTABLE bison)
-IF (NOT BISON_EXECUTABLE)
-  MESSAGE(FATAL_ERROR "Missing bison")
-ENDIF (NOT BISON_EXECUTABLE)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(Bison DEFAULT_MSG BISON_EXECUTABLE)
-
-# - Create a grammar using bison.
-# GENERATE_GRAMMAR(prefix source_file)
-#
-# Reads a source_file (*.y) Generates the .cpp and .h files in
-# ${DERIVED_SOURCES_DIR}
-MACRO(GENERATE_GRAMMAR _prefix _source)
-  GET_FILENAME_COMPONENT(_name ${_source} NAME_WE)
-  SET(_out_base ${DERIVED_SOURCES_DIR}/${_name})
-  ADD_CUSTOM_COMMAND(
-    OUTPUT  ${_out_base}.cpp ${_out_base}.h
-    DEPENDS ${_source}
-    COMMAND ${BISON_EXECUTABLE} -p ${_prefix} ${_source} -o ${_out_base}.cpp --defines=${_out_base}.h
-    VERBATIM)
-  UNSET(_out_base)
-  UNSET(_name)
-ENDMACRO ()
-
-
-FIND_PROGRAM(GPERF_EXECUTABLE gperf)
-IF (NOT GPERF_EXECUTABLE)
-  MESSAGE(FATAL_ERROR "Missing gperf")
-ENDIF ()
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(GPerf DEFAULT_MSG GPERF_EXECUTABLE)
-
-# - Create perfect hash tables using gperf
-# GENERATE_GPERF(extension source_file find_function gperf_options)
-#
-# The generated files lives in ${DERIVED_SOURCES_DIR} and ends in the
-# given extension.
-MACRO(GENERATE_GPERF _ext _source _func _opts)
-  GET_FILENAME_COMPONENT(_name ${_source} NAME_WE)
-  ADD_CUSTOM_COMMAND(
-    OUTPUT ${DERIVED_SOURCES_DIR}/${_name}.${_ext}
-    DEPENDS ${_source}
-    COMMAND ${GPERF_EXECUTABLE} -CDEGIot -L ANSI-C -k * -s 2 -N ${_func} ${_opts} --output-file=${DERIVED_SOURCES_DIR}/${_name}.${_ext} ${_source}
-    VERBATIM)
-ENDMACRO ()
-
-
 # Modules that the bindings generator scripts may use
 SET(SCRIPTS_BINDINGS
   ${WEBCORE_DIR}/bindings/scripts/CodeGenerator.pm
   ${WEBCORE_DIR}/bindings/scripts/IDLParser.pm
   ${WEBCORE_DIR}/bindings/scripts/IDLStructure.pm
   ${WEBCORE_DIR}/bindings/scripts/InFilesParser.pm)
-SET(JS_CODE_GENERATOR ${WEBCORE_DIR}/bindings/scripts/generate-bindings.pl)
+SET(BINDING_CODE_GENERATOR ${WEBCORE_DIR}/bindings/scripts/generate-bindings.pl)
 SET(JS_IDL_FILES "")
-# - Create JavaScript C++ code given an IDL input
-# GENERATE_JS_FROM_IDL(idl_source)
+SET(Inspector_IDL_FILES "")
+
+# - Create JS C++ code given an IDL input
+# GENERATE_FROM_IDL(generator idl_source)
 #
 # The generated files (.cpp, .h) lives in ${DERIVED_SOURCES_DIR}.
 #
@@ -113,21 +32,47 @@ MACRO(GENERATE_JS_FROM_IDL _source)
   GET_FILENAME_COMPONENT(_name ${_source} NAME_WE)
   ADD_CUSTOM_COMMAND(
     OUTPUT  ${DERIVED_SOURCES_DIR}/JS${_name}.cpp ${DERIVED_SOURCES_DIR}/JS${_name}.h
-    DEPENDS ${JS_CODE_GENERATOR} ${SCRIPTS_BINDINGS} ${WEBCORE_DIR}/${_source}
-    COMMAND ${PERL_EXECUTABLE} -I${WEBCORE_DIR}/bindings/scripts ${JS_CODE_GENERATOR} ${IDL_INCLUDES} --outputDir "${DERIVED_SOURCES_DIR}" --defines "LANGUAGE_JAVASCRIPT=1 ${FEATURE_DEFINES_STR}" --generator JS ${WEBCORE_DIR}/${_source}
+    DEPENDS ${BINDING_CODE_GENERATOR} ${SCRIPTS_BINDINGS} ${WEBCORE_DIR}/${_source}
+    COMMAND ${PERL_EXECUTABLE} -I${WEBCORE_DIR}/bindings/scripts ${BINDING_CODE_GENERATOR} ${IDL_INCLUDES} --outputDir "${DERIVED_SOURCES_DIR}" --defines "LANGUAGE_JAVASCRIPT=1 ${FEATURE_DEFINES_STR}" --generator JS ${WEBCORE_DIR}/${_source}
     VERBATIM)
   LIST(APPEND JS_IDL_FILES ${DERIVED_SOURCES_DIR}/JS${_name}.cpp)
   UNSET(_name)
   UNSET(_defines)
 ENDMACRO()
 
+
+# - Create Inspector C++ code given an IDL input
+# GENERATE_FROM_IDL(generator idl_source)
+#
+# The generated files (.cpp, .h) lives in ${DERIVED_SOURCES_DIR}.
+#
+# This function also appends the generated cpp file to Inspector_IDL_FILES list.
+MACRO(GENERATE_INSPECTOR_FROM_IDL _source)
+  SET(FEATURE_DEFINES_STR "")
+  FOREACH (f ${FEATURE_DEFINES})
+    SET(FEATURE_DEFINES_STR "${FEATURE_DEFINES_STR} ${f}")
+  ENDFOREACH ()
+
+  GET_FILENAME_COMPONENT(_name ${_source} NAME_WE)
+  ADD_CUSTOM_COMMAND(
+    OUTPUT  ${DERIVED_SOURCES_DIR}/${_name}Frontend.cpp ${DERIVED_SOURCES_DIR}/${_name}Frontend.h ${DERIVED_SOURCES_DIR}/${_name}BackendDispatcher.cpp ${DERIVED_SOURCES_DIR}/${_name}BackendDispatcher.h
+    DEPENDS ${BINDING_CODE_GENERATOR} ${SCRIPTS_BINDINGS} ${WEBCORE_DIR}/${_source}
+    COMMAND ${PERL_EXECUTABLE} -I${WEBCORE_DIR}/bindings/scripts -I${WEBCORE_DIR}/inspector ${BINDING_CODE_GENERATOR} ${IDL_INCLUDES} --outputDir "${DERIVED_SOURCES_DIR}" --defines "LANGUAGE_JAVASCRIPT=1 ${FEATURE_DEFINES_STR}" --generator Inspector ${WEBCORE_DIR}/${_source}
+    VERBATIM)
+  LIST(APPEND Inspector_IDL_FILES ${DERIVED_SOURCES_DIR}/${_name}Frontend.cpp)
+  UNSET(_name)
+  UNSET(_defines)
+ENDMACRO()
+
+
+
 # - Create pure JavaScript functions (does nothing so far)
 MACRO(GENERATE_JS_FROM_IDL_PURE _source)
    GET_FILENAME_COMPONENT(_name ${_source} NAME_WE)
    ADD_CUSTOM_COMMAND(
      OUTPUT  ${DERIVED_SOURCES_DIR}/JS${_name}.cpp ${DERIVED_SOURCES_DIR}/JS${_name}.h
-     DEPENDS ${JS_CODE_GENERATOR} ${SCRIPTS_BINDINGS} ${WEBCORE_DIR}/${_source}
-     COMMAND ${PERL_EXECUTABLE} -I${WEBCORE_DIR}/bindings/scripts ${JS_CODE_GENERATOR} ${IDL_INCLUDES} --outputDir "${DERIVED_SOURCES_DIR}" --defines "LANGUAGE_JAVASCRIPT=1 ${FEATURE_DEFINES_STR}" --generator JS ${WEBCORE_DIR}/${_source}
+     DEPENDS ${BINDING_CODE_GENERATOR} ${SCRIPTS_BINDINGS} ${WEBCORE_DIR}/${_source}
+     COMMAND ${PERL_EXECUTABLE} -I${WEBCORE_DIR}/bindings/scripts ${BINDING_CODE_GENERATOR} ${IDL_INCLUDES} --outputDir "${DERIVED_SOURCES_DIR}" --defines "LANGUAGE_JAVASCRIPT=1 ${FEATURE_DEFINES_STR}" --generator JS ${WEBCORE_DIR}/${_source}
      VERBATIM)
    UNSET(_name)
 ENDMACRO()
@@ -185,12 +130,6 @@ MACRO(GENERATE_DFTABLES)
 ENDMACRO()
 
 
-FIND_PROGRAM(FLEX_EXECUTABLE flex)
-IF (NOT FLEX_EXECUTABLE)
-  MESSAGE(FATAL_ERROR "Missing flex")
-ENDIF ()
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(Flex DEFAULT_MSG FLEX_EXECUTABLE)
-
 SET(MAKE_TOKENIZER ${WEBCORE_DIR}/css/maketokenizer)
 # - Create ${DERIVED_SOURCES_DIR}/tokenizer.cpp
 # GENERATE_TOKENIZER()
@@ -210,8 +149,7 @@ SET(USER_AGENT_STYLE_SHEETS
   ${WEBCORE_DIR}/css/view-source.css
   ${WEBCORE_DIR}/css/svg.css
   ${WEBCORE_DIR}/css/wml.css
-  ${WEBCORE_DIR}/css/mediaControls.css
-  ${WEBCORE_DIR}/css/mediaControlsGtk.css)
+  ${WEBCORE_DIR}/css/mediaControls.css)
 SET(USER_AGENT_STYLE_SHEETS_GENERATOR ${WEBCORE_DIR}/css/make-css-file-arrays.pl)
 # - Create ${DERIVED_SOURCES_DIR}/UserAgentStyleSheetsData.cpp and
 #   ${DERIVED_SOURCES_DIR}/UserAgentStyleSheets.h
@@ -233,7 +171,7 @@ SET(CSS_VALUE_GENERATOR ${WEBCORE_DIR}/css/makevalues.pl)
 # GENERATE_CSS_VALUE_KEYWORDS()
 MACRO(GENERATE_CSS_VALUE_KEYWORDS)
   ADD_CUSTOM_COMMAND(
-    OUTPUT ${DERIVED_SOURCES_DIR}/CSSValueKeywords.h ${DERIVED_SOURCES_DIR}/CSSValueKeywords.c ${DERIVED_SOURCES_DIR}/CSSValueKeywords.in ${DERIVED_SOURCES_DIR}/CSSValueKeywords.gperf
+    OUTPUT ${DERIVED_SOURCES_DIR}/CSSValueKeywords.h ${DERIVED_SOURCES_DIR}/CSSValueKeywords.cpp ${DERIVED_SOURCES_DIR}/CSSValueKeywords.in ${DERIVED_SOURCES_DIR}/CSSValueKeywords.gperf
     DEPENDS ${CSS_VALUE_KEYWORDS} ${CSS_VALUE_GENERATOR}
     WORKING_DIRECTORY ${DERIVED_SOURCES_DIR}
     COMMAND ${PERL_EXECUTABLE} -ne "print lc" ${CSS_VALUE_KEYWORDS} > ${DERIVED_SOURCES_DIR}/CSSValueKeywords.in

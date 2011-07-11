@@ -1,3 +1,1458 @@
+2010-09-14  Andras Becsi  <abecsi@webkit.org>
+
+        Reviewed by Csaba Osztrogonác.
+
+        [Qt] qmake doesn't generate correct dependencies for rcc resource files
+        https://bugs.webkit.org/show_bug.cgi?id=45747
+
+        * WebKit.pri: add OUT_PWD to DEPENDPATH
+
+2010-09-11  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        Reviewed by Andreas Kling.
+
+        [Qt] V8 port: webkit project files changes
+        https://bugs.webkit.org/show_bug.cgi?id=45140
+
+        * WebKit.pro: Don't compile JavaScriptCore and jsc when
+        building with v8.
+
+2010-09-11  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Martin Robinson.
+
+        [GTK] Make introspection work with g-o-i 0.9.5
+        https://bugs.webkit.org/show_bug.cgi?id=45590
+
+        Bump required gobject-introspection version to 0.9.5.
+
+        * configure.ac:
+
+2010-09-09  Benjamin Poulain  <benjamin.poulain@nokia.com>
+
+        Unreviewed buildfix.
+
+        [Qt] Treat warnings as errors by default for gcc
+        https://bugs.webkit.org/show_bug.cgi?id=43191
+
+        The buildfix r66990 fixes the build for the Maemo
+        branch of Qt, but the symbols maemo5 and 6 are not defined
+        for regular branches on ARM.
+        This fixes the build by disabling -Werror for any ARM platform.
+
+        * WebKit.pri: Don't add -Werror for arm platforms.
+
+2010-09-08  Peter Kasting  <pkasting@google.com>
+
+        Reviewed by David Hyatt.
+
+        Add smooth scrolling framework, and a Windows implementation.
+        https://bugs.webkit.org/show_bug.cgi?id=32356
+
+        * wscript: Add Windows ScrollAnimator.
+
+2010-09-08  Csaba Osztrogonác  <ossy@webkit.org>
+
+        Unreviewed buildfix after r66972.
+
+        [Qt] Treat warnings as errors by default for gcc
+        https://bugs.webkit.org/show_bug.cgi?id=43191
+
+        * WebKit.pri: Don't add -Werror for maemo platforms.
+
+2010-09-08  Martin Robinson  <mrobinson@igalia.com>
+
+        Reviewed by Xan Lopez.
+
+        [GTK] Need a WebSocket implementation
+        https://bugs.webkit.org/show_bug.cgi?id=45197
+
+        * configure.ac: Enable WebSocket by default.
+
+2010-09-08  Gyuyoung Kim  <gyuyoung.kim@samsung.com>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        [EFL] Support to enable HTML5's Video based on gstreamer in WebKit-EFL
+        https://bugs.webkit.org/show_bug.cgi?id=44098
+
+        To support video of HTML5 based on gstreamer, add cmake files for gstreamer. 
+
+        * cmake/FindGStreamer-App.cmake: Added.
+        * cmake/FindGStreamer-Base.cmake: Added.
+        * cmake/FindGStreamer-Interfaces.cmake: Added.
+        * cmake/FindGStreamer-Pbutils.cmake: Added.
+        * cmake/FindGStreamer-Plugins-Base.cmake: Added.
+        * cmake/FindGStreamer-Video.cmake: Added.
+        * cmake/FindGStreamer.cmake: Added.
+        * cmake/OptionsEfl.cmake:
+
+2010-09-08  Csaba Osztrogonác  <ossy@webkit.org>
+
+        Reviewed by Andreas Kling.
+
+        [Qt] Treat warnings as errors by default for gcc
+        https://bugs.webkit.org/show_bug.cgi?id=43191
+
+        * WebKit.pri: -Werror added to QMAKE_CXXFLAGS for x86 Linux platforms
+
+2010-09-07  Arno Renevier  <arno@renevier.net>
+
+        Reviewed by Holger Freyther.
+
+        gitignore *~ files and gtk *.pot files
+        https://bugs.webkit.org/show_bug.cgi?id=45129
+
+        * .gitignore:
+
+2010-09-04  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        [EFL] Move test browser to WebKitTools directory
+        https://bugs.webkit.org/show_bug.cgi?id=45212
+
+        Follow other ports like QT and GTK which moved the test browser to
+        WebKitTools directory.
+
+        * CMakeLists.txt: Include test browser if port defines one.
+
+2010-09-02  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Name install directories according to library name
+        https://bugs.webkit.org/show_bug.cgi?id=45126
+
+        * cmake/OptionsEfl.cmake: Use library name in order to define the data
+        directory.
+
+2010-09-02  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Do not override custom compile flags
+        https://bugs.webkit.org/show_bug.cgi?id=45125
+
+        Set a default build type if and only if user did not define one as
+        command line options and he did not give custom CFLAGS or CXXFLAGS.
+        Otherwise, flags from default build type would override user-defined
+        ones.
+
+        * CMakeLists.txt:
+
+2010-09-02  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Fix double addition of -fPIC
+        https://bugs.webkit.org/show_bug.cgi?id=45122
+
+         When SHARED_CORE=ON, -fPIC is automatically added because all
+         libraries are dynamic. Only when static libraries are built that
+         -fPIC needs to be manually inserted (because the final library,
+         libewebkit.so, is dynamic).
+
+        * cmake/OptionsCommon.cmake: Remove -fPIC flag.
+        * cmake/WebKitHelpers.cmake: Add -fPIC flags iff SHARED_CORE=ON.
+
+2010-09-01  Ryuan Choi  <ryuan.choi@samsung.com>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Need to check LibSoup version
+        https://bugs.webkit.org/show_bug.cgi?id=44658
+
+        Add version check of LibSoup.
+
+        * cmake/FindLibSoup2.cmake:
+
+2010-08-31  Gustavo Noronha Silva  <gustavo.noronha@collabora.co.uk>
+
+        Reviewed by Martin Robinson.
+
+        Preparations for the 1.3.4 release. Bump webkit version to 543.7,
+        as well.
+
+        * configure.ac:
+
+2010-08-30  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        Reviewed by Adam Barth.
+
+        [EFL] Remove compiler optimization for gcc 4.5.1
+        https://bugs.webkit.org/show_bug.cgi?id=44520
+
+        GCC 4.5.1 generates wrong code because of -ftree-sra which is enabled
+        by default at any optimization level.
+
+        Newer and older versions are not affected, so check for compiler
+        version before disabling this.
+
+        * cmake/WebKitHelpers.cmake: add flag depending on compiler version.
+
+2010-08-30  Alejandro G. Castro  <alex@igalia.com>
+
+        Reviewed by Martin Robinson.
+
+        [Gtk] gdk_display_get_core_pointer and gdk_device_get_core_pointer
+        are deprecated
+        https://bugs.webkit.org/show_bug.cgi?id=44787
+
+        We have replaced GtkVersioning.cpp with GtkVersioning.c and
+        created a function (getDefaultGDKPointerDevice) to get the pointer
+        of the window with the new APIs. We added that function to DRT and
+        copyandpaste unit test.
+
+        * GNUmakefile.am:
+
+2010-08-30  Martin Robinson  <mrobinson@igalia.com>
+
+        Reviewed by Xan Lopez.
+
+        [GTK] WebKit DOM bindings build should not depend on output GNUMakefile
+        https://bugs.webkit.org/show_bug.cgi?id=44805
+
+        Move the DOM bindings source lists and generator rules to
+        WebCore/bindings/gobject/GNUmakefile.am. This will prevent a full WebKit API
+        rebuild whenever the automake files change, decreasing build times.
+
+        * GNUmakefile.am:
+
+2010-08-27  Mark Rowe  <mrowe@apple.com>
+
+        Reviewed by Adam Barth.
+
+        <http://webkit.org/b/44802> REGRESSION (r65351): WebCore build fails due to attempting to directly access WebKitTools/Scripts
+
+        Move create-html-entity-table in to WebCore so that the build is again self-contained.
+        The script is also updated to take input as a CSV file rather than JSON as the former
+        can be parsed without requiring a third-party Python module be installed.
+
+        * cmake/WebKitMacros.cmake:
+
+2010-08-27  Kwang Yul Seo  <skyul@company100.net>
+
+        Reviewed by Kevin Ollivier.
+
+        [BREWMP] Add build system
+        https://bugs.webkit.org/show_bug.cgi?id=44645
+
+        Check wxpython option only when build_port is wx.
+
+        * wscript:
+
+2010-08-27  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        Unreviewed. Fix compiling dependencies on EFL port due to r65891.
+
+        No new functionality so no new tests.
+
+        * cmake/WebKitGenerators.cmake:
+
+2010-08-26  Martin Robinson  <mrobinson@igalia.com>
+
+        Reviewed by Xan Lopez.
+
+        [GTK] The GNUmakefile.am files contain a myriad of confusing preprocessor and compiler flag definitions
+        https://bugs.webkit.org/show_bug.cgi?id=44624
+
+        Clean up GNUmakefile.am.
+
+        * GNUmakefile.am: Make the comments describing the global_* variables more readable and
+        correct. Move WebKit-specific include lines and definitions out of webkitgtk_cppflags,
+        corekit_cppflags and webcoregtk_cppflags and straight to the appropriate CPPFLAGS definition.
+        Use global_cppflags for compiler flags that apply to both C++ and C code. Move some JavaScriptCore
+        specific includes to the appropriate sub-directory GNUmakefile.am. Make sure the tests build
+        with the global CPP flags as well.
+
+2010-08-25  Kwang Yul Seo  <skyul@company100.net>
+
+        Reviewed by Kevin Ollivier.
+
+        [BREWMP] Add build system
+        https://bugs.webkit.org/show_bug.cgi?id=44645
+
+        Make waf script portable so that we can add more ports.
+
+        * wscript:
+
+2010-08-25  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Martin Robinson.
+
+        [GTK] CodeGeneratorGObject not picking up FEATURE_DEFINES
+        https://bugs.webkit.org/show_bug.cgi?id=44608
+
+        Move FEATURE_DEFINES declaration here, since it's used by the
+        bindings code generator. Also, fix typo in the variable holding
+        the defines.
+
+        * GNUmakefile.am:
+
+2010-08-25  Rafael Antognolli  <antognolli@profusion.mobi>
+
+        Unreviewed build fix.
+
+        [EFL] Build fix for revision 65332
+        https://bugs.webkit.org/show_bug.cgi?id=44543
+
+        Generated variables are now returned from FindPkgConfig, so no need
+        to document the custom ones.
+
+        * cmake/FindGthread.cmake:
+
+2010-08-24  Xan Lopez  <xlopez@igalia.com>
+
+        Build fix, strike 2.
+
+        The unit tests are C files, so put the flag in global_cflags.
+
+        * GNUmakefile.am:
+
+2010-08-24  Xan Lopez  <xlopez@igalia.com>
+
+        Try to fix GTK+ build.
+
+        Move GTK_API_VERSION_2 define to here, since we want to use it
+        outside of WebCore/WebKit.
+
+        * GNUmakefile.am:
+
+2010-08-24  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        [EFL] Unreviewed build fix after r65891.
+
+        r65891 renamed RemoteInspectorFrontend to InspectorFrontend. Rename
+        accordingly in CMake build system.
+
+        * cmake/WebKitGenerators.cmake:
+
+2010-08-20  Leandro Pereira  <leandro@profusion.mobi>
+
+        [EFL] Unreviewed. Fix build when using GNU gold.
+        When linking with GNU gold, some symbols are not found: explicitly
+        link with the required libraries.
+
+        * cmake/FindFontconfig.cmake: Added.
+        * cmake/OptionsEfl.cmake: Find Fontconfig, JPEG, and PNG libraries.
+
+2010-08-19  Philippe Normand  <pnormand@igalia.com>
+
+        Reviewed by Gustavo Noronha Silva.
+
+        [GStreamer] GTK XOverlay support in GStreamerGWorld
+        https://bugs.webkit.org/show_bug.cgi?id=39474
+
+        * configure.ac: gst-interfaces link support needed for use of
+        GstXOverlay interface.
+        * GNUmakefile.am: Added new FullscreenVideoController files in the
+        build.
+
+2010-08-18  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Bump library dependencies
+        https://bugs.webkit.org/show_bug.cgi?id=44182
+
+        Prepare for EFL release. All the EFL dependencies were bumped to
+        1.0.0. Eina and Ecore_X needed a bump because of API has changed and
+        the others were changed just to follow those two and because this is
+        a stable release.
+
+        * cmake/FindEFL.cmake: Bump dependencies.
+
+2010-08-17  Ilya Tikhonovsky  <loislo@chromium.org>
+
+        Reviewed by Yury Semikhatsky.
+
+        Web Inspector: replace hand written InspectorBackendStub.js with generated one.
+        https://bugs.webkit.org/show_bug.cgi?id=43791
+
+        * GNUmakefile.am:
+
+2010-08-18  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r65595.
+        http://trac.webkit.org/changeset/65595
+        https://bugs.webkit.org/show_bug.cgi?id=44161
+
+        qt build failed (Requested by loislo on #webkit).
+
+        * GNUmakefile.am:
+
+2010-08-17  Ilya Tikhonovsky  <loislo@chromium.org>
+
+        Reviewed by Yury Semikhatsky.
+
+        Web Inspector: replace hand written InspectorBackendStub.js by generated one.
+        https://bugs.webkit.org/show_bug.cgi?id=43791
+
+        * GNUmakefile.am:
+
+2010-08-17  Jesus Sanchez-Palencia  <jesus.palencia@openbossa.org>
+
+        Reviewed by Darin Adler.
+
+        Add NetworkingContext to avoid layer violations
+        https://bugs.webkit.org/show_bug.cgi?id=42292
+
+        Preparation: Just add the files to the build system.
+
+        * GNUmakefile.am: Added new files.
+
+2010-08-17  Gustavo Noronha Silva  <gustavo.noronha@collabora.couk>
+
+        Reviewed by Martin Robinson.
+
+        WebBackForwardList.get_{back|forward}_list_with_limit not introspectable
+        https://bugs.webkit.org/show_bug.cgi?id=43054
+
+        * GNUmakefile.am: Give also API implementation files to the GIR
+        scanner.
+
+2010-08-17  Martin Robinson  <mrobinson@igalia.com>
+
+        GTK+ Build fix for those having stable versions of GLib.
+
+        * configure.ac: Only invoke GLIB_GSETTINGS if we have the necessary gio version.
+
+2010-08-17  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r65500.
+        http://trac.webkit.org/changeset/65500
+        https://bugs.webkit.org/show_bug.cgi?id=44108
+
+        Qt bots failed to compile. (Requested by loislo on #webkit).
+
+        * GNUmakefile.am:
+
+2010-08-17  Ilya Tikhonovsky  <loislo@chromium.org>
+
+        Reviewed by Yury Semikhatsky.
+
+        Web Inspector: replace hand written InspectorBackendStub.js by generated one.
+        https://bugs.webkit.org/show_bug.cgi?id=43791
+
+        * GNUmakefile.am:
+
+2010-08-17  Gustavo Noronha Silva  <gustavo.noronha@collabora.co.uk>
+
+        Reviewed by Martin Robinson.
+
+        [GTK] GSettings support adds annoying warnings on systems with older glib versions
+        https://bugs.webkit.org/show_bug.cgi?id=44056
+
+        Add file containing GLIB_GSETTINGS macro so that
+        configure doesn't spit warnings in older systems.
+
+        * autotools/gsettings.m4: Added.
+        * .gitignore: Ignore files that are generated inside autotools
+        explicitely, because we have some that are kept in version
+        control.
+
+2010-08-16  Paul Sawaya  <psawaya@apple.com>
+
+        Reviewed by Chris Marrin.
+
+        Added shader validation via ANGLE
+        https://bugs.webkit.org/show_bug.cgi?id=42405
+
+        Added ANGLE build to Makefile
+
+        * Makefile:
+
+2010-08-16  Kevin Ollivier  <kevino@theolliviers.com>
+
+        [wx] Build fix, do not build WebCore as a convenience library as this leads to
+        errors in the Win build w/export symbols and causes problems with DOM bindings
+        debugging in gdb. 
+
+        * wscript: Copied from WebCore/wscript.
+
+2010-08-15  Ryuan Choi  <ryuan.choi@samsung.com>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Build error on r65378
+        https://bugs.webkit.org/show_bug.cgi?id=44019
+
+        Add GENERATE_JSON macro for HTMLEntityNames.json instead of HTMLEntityNames.gperf
+
+        * cmake/WebKitMacros.cmake:
+
+2010-08-14  Patrick Gansterer  <paroga@paroga.com>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        [CMake] Add preprocessor detection for generator scripts
+        https://bugs.webkit.org/show_bug.cgi?id=43984
+
+        * cmake/OptionsCommon.cmake:
+
+2010-08-14  Adrienne Walker  <enne@google.com>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        Update .gitignore file for more files
+        https://bugs.webkit.org/show_bug.cgi?id=43991
+
+        * .gitignore:
+
+2010-08-13  Leandro Pereira  <leandro@profusion.mobi>
+
+        [EFL] Unreviewed build fix.
+
+        * cmake/FindGthread.cmake: Fix warnings about obsolete PKGCONFIG macro.
+        * cmake/WebKitGenerators.cmake: FLEX_EXECUTABLE was defined already
+        by the root CMakeLists.txt file, so remove relevant lines that
+        depends on FIND_PACKAGE_HANDLE_STANDARD_ARGS macro, which isn't
+        available anymore.
+
+2010-08-13  Alejandro G. Castro  <alex@igalia.com>
+
+        Reviewed by Xan Lopez.
+
+        We have to add the ACLOCAL_FLAGS in the env to the autogen.sh
+        ACLOCAL_FLAGS variable in order to honor the value already
+        defined, jhbuild uses it to pass parameters.
+
+        * autogen.sh:
+
+2010-08-13  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        Reviewed by Ariya Hidayat.
+
+        [Qt] Introduce Maemo6 for mobile features
+        https://bugs.webkit.org/show_bug.cgi?id=43969
+
+        * WebKit.pri: Use maemo6 where we also use maemo5.
+
+2010-08-13  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        Reviewed by Ariya Hidayat.
+
+        [Qt] Clean up mobile feature useage
+        https://bugs.webkit.org/show_bug.cgi?id=43968
+
+        * WebKit.pri: Set feature defaults here for some Nokia specific mobile platforms
+
+2010-08-13  Patrick Gansterer  <paroga@paroga.com>
+
+        Reviewed by Nikolas Zimmermann.
+
+        [CMake] Cleanup generator code.
+        https://bugs.webkit.org/show_bug.cgi?id=39164
+
+        * cmake/WebKitGenerators.cmake:
+        * cmake/WebKitMacros.cmake:
+
+2010-08-13  Patrick Gansterer  <paroga@paroga.com>
+
+        Reviewed by Nikolas Zimmermann.
+
+        [CMake] Add missing FIND_PACKAGE(Gperf)
+        https://bugs.webkit.org/show_bug.cgi?id=43937
+
+        * CMakeLists.txt:
+
+2010-08-12  Dimitri Glazkov  <dglazkov@chromium.org>
+
+        Reviewed by David Levin.
+
+        Add more Chromium-related dependency directories to .gitignore.
+        https://bugs.webkit.org/show_bug.cgi?id=43940
+
+        * .gitignore: Added all existing that are created by update-webkit --chromium.
+
+2010-08-12  Gustavo Noronha Silva  <gustavo.noronha@collabora.co.uk>
+
+        Reviewed by Martin Robinson.
+
+        [GTK] Use GSettings to save/restore Web Inspector settings
+        https://bugs.webkit.org/show_bug.cgi?id=43512
+
+        * GNUmakefile.am: GSettings rules.
+        * configure.ac: GSettings infrastructure, and check if we should
+        use it by looking for an appropriate version of GIO.
+
+2010-08-12  Rafael Antognolli  <antognolli@profusion.mobi>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        [EFL] Making CMake keep track of theme dependencies.
+        https://bugs.webkit.org/show_bug.cgi?id=43862
+
+        Removing unused macro GENERATE_EDJ.
+
+        * cmake/WebKitEfl.cmake:
+
+2010-08-12  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r65225.
+        http://trac.webkit.org/changeset/65225
+        https://bugs.webkit.org/show_bug.cgi?id=43918
+
+        Broke EFL port build (Requested by acidx on #webkit).
+
+        * cmake/WebKitGenerators.cmake:
+        * cmake/WebKitMacros.cmake:
+
+2010-08-12  Patrick Gansterer  <paroga@paroga.com>
+
+        Reviewed by Nikolas Zimmermann.
+
+        [CMake] Cleanup generator code.
+        https://bugs.webkit.org/show_bug.cgi?id=39164
+
+        * cmake/WebKitGenerators.cmake:
+        * cmake/WebKitMacros.cmake:
+
+2010-08-10  Balazs Kelemen  <kb@inf.u-szeged.hu>
+
+        Reviewed by Antonio Gomes.
+
+        [Qt] Build WebKit2 into a static lib
+
+        https://bugs.webkit.org/show_bug.cgi?id=43621
+
+        * WebKit.pro: Moved WebKit2 into the subdirs before WebCore since WebCore links against the WebKit2 lib.
+
+2010-08-07  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r64904.
+        http://trac.webkit.org/changeset/64904
+        https://bugs.webkit.org/show_bug.cgi?id=43671
+
+        Broke the Qt Windows builders. (Requested by bbandix on
+        #webkit).
+
+        * WebKit.pro:
+
+2010-08-07  Balazs Kelemen  <kb@inf.u-szeged.hu>
+
+        Reviewed by Eric Seidel.
+
+        [Qt] Build WebKit2 into a static lib
+
+        https://bugs.webkit.org/show_bug.cgi?id=43621
+
+        * WebKit.pro: Moved WebKit2 into the subdirs before WebCore since WebCore links against the WebKit2 lib.
+
+2010-08-06  ryuan choi  <ryuan.choi@samsung.com>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Regression (64763) build fix for efl.
+        https://bugs.webkit.org/show_bug.cgi?id=43597
+
+        change ENABLE_BLOB_SLICE to ENABLE_BLOB for fixing build break
+
+        * cmake/OptionsEfl.cmake:
+
+2010-08-05  Jian Li  <jianli@chromium.org>
+
+        Reviewed by David Levin.
+
+        Unify blob related feature defines to ENABLE(BLOB).
+        https://bugs.webkit.org/show_bug.cgi?id=43081
+
+        * cmakeconfig.h.cmake:
+        * configure.ac:
+
+2010-08-05  Gustavo Noronha Silva  <gustavo.noronha@collabora.co.uk>
+
+        Reviewed by Xan Lopez.
+
+        Move files that are generated by the configure script to
+        DISTCLEANFILES, where they should be. This fixes building after a
+        make clean.
+
+        * GNUmakefile.am:
+
+2010-08-04  Siddharth Mathur  <siddharth.mathur@nokia.com>
+
+        Reviewed by Laszlo Gombos.
+
+        [Qt][Symbian] Variable max heap size between target/emulator
+        https://bugs.webkit.org/show_bug.cgi?id=41480
+
+        * WebKit.pri: Symbian-only code block for EPOCHEAPSIZE configuration
+
+2010-08-03  Eric Seidel  <eric@webkit.org>
+
+        Unreviewed.  Test commit for commit-queue@webkit.org.
+
+2010-08-03  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        [GTK] Fix DOM event dispatch
+        https://bugs.webkit.org/show_bug.cgi?id=40847
+
+        Add new files to the build.
+
+        * GNUmakefile.am:
+
+2010-08-03  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        Silence JSCore gir "creation".
+
+        * GNUmakefile.am:
+
+2010-08-02  Chris Fleizach  <cfleizach@apple.com>
+
+        Unreviewed, rolling out r64471.
+        http://trac.webkit.org/changeset/64471
+        https://bugs.webkit.org/show_bug.cgi?id=43005
+
+        Rolling out https://bugs.webkit.org/show_bug.cgi?id=43005
+        until further discussion
+
+        * GNUmakefile.am:
+
+2010-08-02  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        [GTK] Add support for the Audio element in the DOM bindings
+        https://bugs.webkit.org/show_bug.cgi?id=43313
+
+        Add new files to the build.
+
+        * GNUmakefile.am:
+
+2010-08-02  Chris Fleizach  <cfleizach@apple.com>
+
+        Reviewed by David Kilzer.
+
+        AX: Support methods for web apps to interact with the native accessibility APIs
+        https://bugs.webkit.org/show_bug.cgi?id=43005
+
+        * GNUmakefile.am:
+
+2010-08-02  Balazs Kelemen  <kb@inf.u-szeged.hu>
+
+        Reviewed by Simon Hausmann.
+
+        [Qt] Generate forwarding headers for WebKit2
+
+        https://bugs.webkit.org/show_bug.cgi?id=43336
+
+        * DerivedSources.pro: Added WebKit2/DerivedSources.pro to SUBDIRS if webkit2 is on.
+
+2010-07-30  Patrick Gansterer  <paroga@paroga.com>
+
+        Reviewed by Nikolas Zimmermann.
+
+        [CMake] Add FindGperf.cmake
+        https://bugs.webkit.org/show_bug.cgi?id=39163
+
+        Add a clean gperf dedection since we need it for building.
+
+        * CMakeLists.txt:
+        * cmake/FindGperf.cmake: Added.
+
+2010-07-30  Rafael Antognolli  <antognolli@profusion.mobi>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Add library version and soname to EFL generated libraries and binary.
+        https://bugs.webkit.org/show_bug.cgi?id=43212
+
+        Make WebKit-EFL follow libtool soname versioning scheme.
+
+        * cmake/OptionsEfl.cmake: Added PROJECT_VERSION_PATCH to PROJECT_VERSION.
+
+2010-07-29  Martin Robinson  <mrobinson@igalia.com>
+
+        Unreviewed build fix.
+
+        Fix installation of autogenerated header files.
+
+        * GNUmakefile.am: Fix autogenerated header file installation.
+
+2010-07-27  Martin Robinson  <mrobinson@igalia.com>
+
+        Unreviewed build fix.
+
+        Add missing webkitdomdefines.h header to the sources list.
+
+        * GNUmakefile.am: Add missing header to the sources list.
+
+2010-07-27  Kinuko Yasuda  <kinuko@chromium.org>
+
+        Reviewed by Ojan Vafai.
+
+        Add FILE_SYSTEM build flag for FileSystem API
+        https://bugs.webkit.org/show_bug.cgi?id=42915
+
+        * configure.ac:
+
+2010-07-26  ryuan choi  <ryuan.choi@samsung.com>
+
+        Unreviewed build fix.
+
+        [EFL]REGRESSION(r63952): build break because of InspectorBackendDispatcher.cpp
+        https://bugs.webkit.org/show_bug.cgi?id=43021
+
+        Modify cmake script to fix build break as adding InspectorBackendDispatcher.
+
+        * cmake/WebKitGenerators.cmake:
+
+2010-07-27  Rafael Antognolli  <antognolli@profusion.mobi>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Changing library names (appending suffix "_efl")
+        https://bugs.webkit.org/show_bug.cgi?id=42902
+
+        Instead of having libwebcore.so, we will have libwebcore_efl.so.
+        Same for javascriptcore and wtf when compiled as shared, and for jsc.
+
+        * cmake/OptionsEfl.cmake:
+
+2010-07-26  Martin Robinson  <mrobinson@igalia.com>
+
+        Reviewed by Xan Lopez.
+
+        [GTK] Get rid of libgdom
+        https://bugs.webkit.org/show_bug.cgi?id=42378
+
+        Remove the need to build the libgdom intermediate library.
+
+        * GNUmakefile.am: Move the source list for the GObject DOM bindings to
+        the top-level GNUmakefile.am, since they are logically part of WebKit, instead
+        of WebCore. List all auto-generated files statically and remove no-longer-
+        used variables. Fix an issue where some places expected webkitenumtypes.cpp
+        to be generated in different directories.
+
+2010-07-24  Riccardo Magliocchetti  <riccardo.magliocchetti@gmail.com>
+
+        Reviewed by Xan Lopez.
+
+        [GTK] Enable jit compilation on arm
+        https://bugs.webkit.org/show_bug.cgi?id=42856
+
+        Add missing bits to configure.ac to build the arm jit.
+        Compile and tested on debian sid armel on a qemu vm.
+
+        * configure.ac:
+
+2010-07-23  Rafael Antognolli  <antognolli@profusion.mobi>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Cleanup glib support (make it optional)
+        https://bugs.webkit.org/show_bug.cgi?id=42480
+
+        Fixing support for compiling EFL port without glib.
+
+        * cmake/FindGthread.cmake: Added.
+        * cmake/OptionsEfl.cmake:
+
+2010-07-23  Rafael Antognolli  <antognolli@profusion.mobi>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Add support for using libcurl network backend.
+        https://bugs.webkit.org/show_bug.cgi?id=42286
+
+        Instead of just libsoup, the EFL port now can use libcurl backend.
+        This is a step in the direction of removing dependency on glib. Just
+        need to pass the option -DNETWORK_BACKEND=curl to cmake in order to
+        enable it.
+
+        * cmake/OptionsEfl.cmake:
+
+2010-07-23  Andras Becsi  <abecsi@webkit.org>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        [Qt] Enable the build of MiniBrowser.
+
+        * WebKit.pro: add MiniBrowser.pro to SUBDIRS.
+
+2010-07-23  Balazs Kelemen  <kb@inf.u-szeged.hu>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        [Qt] Setup the QtWebProcess
+
+        https://bugs.webkit.org/show_bug.cgi?id=42623
+
+        * WebKit.pro: Add WebKit2.pro to the build guarded by webkit2 config variable.
+
+2010-07-20  Rafael Antognolli  <antognolli@profusion.mobi>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Enable Ecore-X on compile time
+        https://bugs.webkit.org/show_bug.cgi?id=42600
+
+        Check for a flag received from cmake configure and disable it
+        if necessary. Also disable it if Ecore-X wasn't found.
+
+        EFL port does not support automated tests yet.
+
+        * cmake/FindEFL.cmake:
+        * cmake/OptionsEfl.cmake:
+
+2010-07-20  Hans Wennborg  <hans@chromium.org>
+
+        Reviewed by Steve Block.
+
+        Add WebCore/bindings/generic/RuntimeEnabledFeatures.cpp to build files
+        https://bugs.webkit.org/show_bug.cgi?id=42380
+
+        RuntimeEnabledFeatures.cpp and .h were moved from bindings/v8 to
+        bindings/generic a while a go (in r54593), but need to
+        be added to the build in order to be used.
+
+        No new functionality so no new tests.
+
+        * Android.mk:
+
+2010-07-16  Leandro Pereira  <leandro@profusion.mobi>
+
+        [EFL] Unreviewed build system cleanup.
+
+        Remove reference to "mediaControlsGtk.css".
+
+        * cmake/WebKitGenerators.cmake:
+
+2010-07-16  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        Reviewed by Antonio Gomes.
+
+        [EFL] Build with MathML enabled. Fix build when MathML is enabled and
+        make it the default.
+        https://bugs.webkit.org/show_bug.cgi?id=42453
+
+        * cmake/OptionsEfl.cmake: build with MathML enabled as default.
+
+2010-07-15  Martin Robinson  <mrobinson@igalia.com>
+
+        Reviewed by Oliver Hunt.
+
+        [GTK] Simplify the distribution step
+        https://bugs.webkit.org/show_bug.cgi?id=42414
+
+        * GNUmakefile.am: Remove unused variables. Rely on WebCore/GNUmakefile.am
+        to handle distributing IDL files from WebCore and to modify EXTRA_DIST.
+
+2010-07-14  Martin Robinson  <mrobinson@igalia.com>
+
+        Reviewed by Xan Lopez.
+
+        [GTK] Get rid of libWebCoreJS
+        https://bugs.webkit.org/show_bug.cgi?id=42083
+
+        * GNUmakefile.am: Remove the libWebCoreJS library from the extra
+        link libraries. Add IDL files to the distribution manually, as they
+        are no longer included in the header list. This prevents a good deal
+        of repetition in the source listings by avoiding listing both the IDL
+        files and their final targets.
+
+2010-07-14  Vincent Scheib  <scheib@chromium.org>
+
+        Reviewed by Kent Tamura
+
+        Configure Git to ignore build files generated by Chromium .gyp on windows.
+
+        Bug 42205: Chromium build files on windows not ignored by git
+        https://bugs.webkit.org/show_bug.cgi?id=42205
+        
+        * .gitignore: Updated
+
+2010-07-13  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r63262.
+        http://trac.webkit.org/changeset/63262
+        https://bugs.webkit.org/show_bug.cgi?id=42229
+
+        broke Windows compile (Requested by bweinstein on #webkit).
+
+        * WebKit.pro:
+
+2010-07-13  Caio Marcelo de Oliveira Filho  <caio.oliveira@openbossa.org>
+
+        Reviewed by Oliver Hunt.
+
+        Separate CoreFoundation specific tests in JSC's testapi.c
+
+        testapi.c depends on the Core Foundation.
+        https://bugs.webkit.org/show_bug.cgi?id=40058
+
+        * WebKit.pro: enable compilation of JSC C API test.
+
+2010-07-13  Scott Violet  <sky@chromium.org>
+
+        Reviewed by David Levin.
+
+        [Chromium] Makes pressing tab accept the currently selected item in a popup.
+        https://bugs.webkit.org/show_bug.cgi?id=42172
+
+        * WebCore/platform/chromium/PopupMenuChromium.cpp:
+
+2010-07-12  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        Bump to 1.3.3
+
+        * configure.ac:
+
+2010-07-12  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        Suffix .mo files with the GTK+ API version so that they can be
+        parallel installable.
+
+        * configure.ac:
+
+2010-07-12  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        Add another include path to the scanner to avoid warnings related
+        to undefined types. It wasn't picking up <webkit/foo.h>-like
+        headers.
+
+        * GNUmakefile.am:
+
+2010-07-07  Rafael Antognolli  <antognolli@profusion.mobi>
+
+        Reviewed by Adam Barth.
+
+        [EFL] Fix cmake build and libsoup detection
+        Some changes should be done to cmake build system to fix the detection of libsoup and correct some link paths:
+        - LINK_FLAGS should be set using quotes, otherwise some wrong
+        substitution takes place;
+        - we should use LIBSOUP24_* instead of LIBSOUP_* since this is the
+        version we are using;
+        - need to set HAVE_LIBSOUP_2_29_90 if we find a version equal or newer
+        than that.
+        https://bugs.webkit.org/show_bug.cgi?id=41717
+
+        * cmake/OptionsEfl.cmake:
+
+2010-07-06  Leandro Pereira  <leandro@profusion.mobi>
+
+        Unreviewed build fix.
+
+        [EFL] Add macro to generate inspector code.
+
+        * cmake/WebKitGenerators.cmake:
+
+2010-07-06  Martin Robinson  <mrobinson@igalia.com>
+
+        Unreviewed.
+
+        Build fix after r62549.
+
+        * GNUmakefile.am: Remove new variable that is no longer used.
+
+2010-07-06  Ilya Tikhonovsky  <loislo@chromium.org>
+
+        Reviewed by Yury Semikhatsky.
+
+        WebInspector: generator part of the patch for bug 40675.
+        On the way to Remote Debugging we want to support JSON serialization
+        on both sides of WebInspector transport.
+        As far as InspectorFrontend class is a simple proxy to WebInspector
+        it would be better to generate it from an IDL file.
+        We have generator infrastructure for binding and will reuse it for
+        new generator.
+        https://bugs.webkit.org/show_bug.cgi?id=41692
+
+        * GNUmakefile.am:
+
+2010-07-05  Antti Koivisto  <koivisto@iki.fi>
+
+        Revert unplanned project file change.
+
+        * WebKit.pro:
+
+2010-06-23  Martin Robinson  <mrobinson@igalia.com>
+
+        Reviewed by Gustavo Noronha Silva.
+
+        [GTK] Separate DerivedSources per-project
+        https://bugs.webkit.org/show_bug.cgi?id=41109
+
+        Separate WebKitGTK+ DerivedSources into per-project subdirectories to prepare
+        for properly building WebKit2.
+
+        * GNUmakefile.am:
+
+2010-07-01  Jocelyn Turcotte  <jocelyn.turcotte@nokia.com>
+
+        Reviewed by Simon Hausmann.
+
+        [Qt] Fix a comment in WebKit.pri.
+
+        * WebKit.pri:
+
+2010-06-16  Jocelyn Turcotte  <jocelyn.turcotte@nokia.com>
+
+        Reviewed by Simon Hausmann.
+
+        [Qt] Fix qmake vcproj generation for QtWebKit.
+
+        qmake use TARGET=/LIBS+= -lTARGET to create dependencies
+        between projects in a subdir template.
+
+        Since when compiling outside of Qt we hijack the target name of
+        QtWebKit to add the configuration and version suffix to the binary
+        filename, qmake can't establish the WebCore project as a dependency
+        to QtTestBrowser.
+
+        This patch makes sure that the target is not hijacked on the
+        first of the three passes where the dependencies are determined.
+
+        * WebKit.pri:
+
+2010-07-01  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        Rubber-stamped by Laszlo Gombos.
+
+        [Qt][Symbian] Bumped up the maximum heap size to 96MB
+
+        * WebKit.pri:
+
+2010-06-30  Leandro Pereira  <leandro@profusion.mobi>
+
+        Unreviewed.
+
+        Generate CSSValueKeywords.cpp instead of CSSValueKeywords.c to avoid
+        recompilation and relinking of WebCore when no files were changed.
+
+        * cmake/WebKitGenerators.cmake:
+
+2010-06-29  Antoine Labour  <piman@chromium.org>
+
+        Reviewed by Dimitri Glazkov.
+
+        Only call Windows-specific PlatformSkiaContext functions on Windows.
+
+        * WebCore/platform/graphics/chromium/LayerChromium.cpp:
+        * WebCore/platform/graphics/chromium/LayerRendererChromium.cpp:
+
+2010-06-28  John Gregg  <johnnyg@google.com>
+
+        Reviewed by Kent Tamura.
+
+        add ENABLE_DIRECTORY_UPLOAD build support
+        https://bugs.webkit.org/show_bug.cgi?id=41100
+
+        * configure.ac:
+
+2010-06-28  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        Bump version to 1.3.2.
+
+        * configure.ac:
+
+2010-06-28  Xan Lopez  <xlopez@igalia.com>
+
+        Rubber-stamped by Gustavo Noronha.
+
+        Bump gobject-introspection required version to 0.6.15, since we
+        are now shipping version 1.1 gir files.
+
+        * configure.ac:
+
+2010-06-28  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        Unreviewed build fix.
+
+        [EFL] Build fix for latest version of Ecore library.
+        Ecore recently changed return type of callbacks from int to Eina_Bool.
+
+        * cmake/FindEFL.cmake: Bump version of Ecore dependency.
+
+2010-06-28  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        [GTK] Does not compile with -DGSEAL_ENABLE
+        https://bugs.webkit.org/show_bug.cgi?id=37851
+
+        Add automake flag to signal whether we are building with GTK+ 2.x
+        or 3.x.
+
+        * configure.ac:
+
+2010-06-28  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        [GTK] Add support for GTK+3
+        https://bugs.webkit.org/show_bug.cgi?id=41253
+
+        Add --with-gtk configure flag, defaulting to support for GTK+ 2.x.
+
+        * GNUmakefile.am:
+        * configure.ac:
+
+2010-06-26  Tony Gentilcore  <tonyg@chromium.org>
+
+        Reviewed by Dimitri Glazkov.
+
+        Add an --enable-web-timing flag which guards Web Timing support.
+        https://bugs.webkit.org/show_bug.cgi?id=38924
+
+        This flag is disabled by default.
+        See: http://dev.w3.org/2006/webapi/WebTiming/
+
+        * configure.ac:
+
+2010-06-25  Jedrzej Nowacki  <jedrzej.nowacki@nokia.com>
+
+        Reviewed by Simon Hausmann.
+
+        Introduce to QtScript benchmarks.
+
+        The QtScript performance should be tested regularly. The patch introduces
+        micro benchmarks for existing API.
+
+        [Qt] Performance of the QtScript API is not tested.
+        https://bugs.webkit.org/show_bug.cgi?id=40911
+
+        * WebKit.pro:
+
+2010-06-25  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        [CMake] Add option to enable JIT.
+        JIT is disabled by default, but now it's possible to enable it through
+        an option to CMake: -DENABLE_JIT will enable it.
+        https://bugs.webkit.org/show_bug.cgi?id=40936
+
+        * cmake/OptionsEfl.cmake: add new -DENABLE_JIT option.
+        * cmakeconfig.h.cmake: use new -DENABLE_JIT option.
+
+2010-06-23  Leandro Pereira  <leandro@profusion.mobi>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        [EFL] Add support to CPack (to generate source tarballs)
+        https://bugs.webkit.org/show_bug.cgi?id=41009
+        
+        * CMakeLists.txt:
+        * cmake/OptionsEfl.cmake: Define the default source generator for
+        the EFL port.
+        * cmake/WebKitPackaging.cmake: Added. This file filters the source
+        files so that only files relevant to the selected port are included
+        in the source tarball. See comments for details.
+
+2010-06-22  Eric Seidel  <eric@webkit.org>
+
+        Unreviewed.  Test commit for commit-queue@webkit.org.
+
+2010-06-21  Prasad Tammana  <prasadt@chromium.org>
+
+        Reviewed by Darin Adler.
+
+        DumpRenderTree should allow tests with modal dialogs
+        https://bugs.webkit.org/show_bug.cgi?id=35350
+
+        * DumpRenderTree/LayoutTestController.cpp:
+        (abortModalCallback):
+        (LayoutTestController::staticFunctions):
+        * DumpRenderTree/LayoutTestController.h:
+        * DumpRenderTree/mac/LayoutTestControllerMac.mm:
+        (LayoutTestController::abortModal):
+        Add abortModal method to LayoutTestController and make it available from script.
+
+        * DumpRenderTree/mac/UIDelegate.mm: Add support for showModalDialog.
+        (-[UIDelegate modalWindowWillClose:]): Observer for NSWindowWillCloseNotifications to call
+        abortModal from when modal window closes.
+        (-[UIDelegate webViewRunModal:]): Delegate method for showModalDialog to run the modal loop.
+
+2010-06-21  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        Unreviewed debug build fix.
+
+        [CMake] Do not force build type to Release
+        https://bugs.webkit.org/show_bug.cgi?id=40566
+
+        * CMakeLists.txt:
+
+2010-06-21  Satish Sampath  <satish@chromium.org>
+
+        Reviewed by Steve Block.
+
+        Speech Input Patch 0: Added compilation argument to conditionally compile pending patches.
+        https://bugs.webkit.org/show_bug.cgi?id=40878
+
+        * configure.ac:
+
+2010-06-17  Shu Chang  <chang.shu@nokia.com>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        [Qt] Fix the link error on symbian with ENABLE_JIT=0.
+        1. Add "#if ENABLE(JIT)" in the header file;
+        2. Put feature enable/disable logic to a common.pri so
+        that both JavaScriptCore.pri and WebCore.pri can share.
+
+        https://bugs.webkit.org/show_bug.cgi?id=40780
+
+        * common.pri: Added.
+
+2010-06-17  Alexis Menard  <alexis.menard@nokia.com>
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        [Qt] Upstream the WebKit QML integration plugin
+        https://bugs.webkit.org/show_bug.cgi?id=40050
+
+        Add to the build the QML WebKit integration plugin.
+
+        * WebKit.pro:
+
+2010-06-17  Lucas De Marchi  <lucas.demarchi@profusion.mobi>
+
+        Reviewed by Gustavo Noronha.
+
+        Update CMake build system to use new script for generating source files
+        with gperf (r61091).
+        https://bugs.webkit.org/show_bug.cgi?id=40628
+
+        * cmake/WebKitGenerators.cmake:
+
+2010-06-17  Mark Brand  <mabrand@mabrand.nl>
+
+        Reviewed by Simon Hausmann.
+
+        [Qt] use "win32-g++*" scope to match all MinGW makespecs
+
+        The scope "win32-g++" comes from the name of the makespec. However, it
+        is frequently used to check for MinGW. This works fine as long as
+        win32-g++ is the only makespec for MinGW. Now we need the wildcard
+        to cover "win32-g++-cross" as well.
+
+        * WebKit.pri:
+
+2010-06-15  Xan Lopez  <xlopez@igalia.com>
+
+        Unreviewed build fix.
+
+        Remove GSEAL from the debug config since the bots have a GTK+
+        version too old, duh.
+
+        * GNUmakefile.am:
+
+2010-06-15  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        [GTK] Does not compile with -DGSEAL_ENABLE
+        https://bugs.webkit.org/show_bug.cgi?id=37851
+
+        Add GSEAL_ENABLE flag when doing debug builds.
+
+        * GNUmakefile.am:
+
+2010-06-13  Tony Chang  <tony@chromium.org>
+
+        Reviewed by Darin Fisher.
+
+        Chromium shouldn't build inside the source directory
+        https://bugs.webkit.org/show_bug.cgi?id=40489
+
+        Ignore Chromium Linux build files.
+
+        * .: Added property svn:ignore. Modified property svn:ignore.
+
+2010-06-09  Leandro Pereira  <leandro@profusion.mobi>
+
+        Reviewed by Adam Treat.
+
+        [EFL] Allow building core libraries as shared objects to speed up
+        linking time on machines with small amounts of memory.
+        http://webkit.org/b/39899
+
+        * CMakeLists.txt: Add SHARED_CORE option.
+        * cmake/FindGlib.cmake: Add GObject to the list of GLib libraries to
+        search.
+        * cmake/OptionsEfl.cmake: Remove default library type definitions.
+        * cmake/WebKitHelpers.cmake: -fvisibility=hidden did not behave well
+        when SHARED_CORE is used.
+
+2010-06-08  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        [GTK] Unit testing for WebKitDOMNode hierarchy walk
+        https://bugs.webkit.org/show_bug.cgi?id=40171
+
+        Add DOM node test to the build system.
+
+        * GNUmakefile.am:
+
+2010-06-02  Sterling Swigart  <sswigart@google.com>
+
+        Reviewed by David Levin.
+
+        Image Resizer Patch 0: Added compilation argument to conditionally compile pending patches.
+        https://bugs.webkit.org/show_bug.cgi?id=39906
+
+        * configure.ac:
+
+2010-05-31  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        Copy the NEWS file to the toplevel when creating the release
+        tarballs, otherwise it's a bit hard to find.
+
+        * GNUmakefile.am:
+
+2010-05-27  Gustavo Noronha Silva  <gns@gnome.org>
+
+        Final make distcheck fix - clean up generated GDOM files on distclean.
+
+        * GNUmakefile.am:
+
+2010-05-27  Xan Lopez  <xlopez@igalia.com>
+
+        More GTK+ distcheck fixes.
+
+        * GNUmakefile.am:
+
+2010-05-27  Xan Lopez  <xlopez@igalia.com>
+
+        Reviewed by Gustavo Noronha.
+
+        Bump for 1.3.1 release.
+
+        * configure.ac:
+
+2010-05-27  Gustavo Noronha Silva  <gns@gnome.org>
+
+        Reviewed by Xan Lopez.
+
+        Build fix for introspection support - make sure DOM headers are
+        included by the GI scanner.
+
+        * GNUmakefile.am:
+
+2010-05-26  Gustavo Noronha Silva  <gns@gnome.org>
+
+        Build fixes for make distcheck.
+
+        * GNUmakefile.am:
+
 2010-05-26  Xan Lopez  <xlopez@igalia.com>
 
         Reviewed by Gustavo Noronha.

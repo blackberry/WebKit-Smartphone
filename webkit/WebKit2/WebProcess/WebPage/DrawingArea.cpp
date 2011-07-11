@@ -26,24 +26,34 @@
 #include "DrawingArea.h"
 
 // Subclasses
-#include "DrawingAreaUpdateChunk.h"
+#include "ChunkedUpdateDrawingArea.h"
+#if USE(ACCELERATED_COMPOSITING)
+#include "LayerBackedDrawingArea.h"
+#endif
 
 namespace WebKit {
 
-DrawingArea* DrawingArea::create(Type type, WebPage* webPage)
+PassRefPtr<DrawingArea> DrawingArea::create(Type type, DrawingAreaID identifier, WebPage* webPage)
 {
-    DrawingArea* drawingArea = 0;
     switch (type) {
-        case DrawingAreaUpdateChunkType:
-            drawingArea = new DrawingAreaUpdateChunk(webPage);
+        case None:
+            ASSERT_NOT_REACHED();
             break;
+
+        case ChunkedUpdateDrawingAreaType:
+            return adoptRef(new ChunkedUpdateDrawingArea(identifier, webPage));
+
+#if USE(ACCELERATED_COMPOSITING) && PLATFORM(MAC)
+        case LayerBackedDrawingAreaType:
+            return adoptRef(new LayerBackedDrawingArea(identifier, webPage));
+#endif
     }
 
-    return drawingArea;
+    return 0;
 }
 
-DrawingArea::DrawingArea(Type type, WebPage* webPage)
-    : m_type(type)
+DrawingArea::DrawingArea(Type type, DrawingAreaID identifier, WebPage* webPage)
+    : DrawingAreaBase(type, identifier)
     , m_webPage(webPage)
 {
 }

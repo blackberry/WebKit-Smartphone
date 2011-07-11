@@ -26,31 +26,40 @@
 #include "WKContext.h"
 #include "WKContextPrivate.h"
 
-#include "ProcessModel.h"
 #include "WKAPICast.h"
 #include "WebContext.h"
 #include "WebPreferences.h"
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
+#include <wtf/text/WTFString.h>
 
 using namespace WebKit;
 
-WKContextRef WKContextCreateWithProcessModel(WKProcessModel processModel)
+WKTypeID WKContextGetTypeID()
 {
-    ProcessModel model = (ProcessModel)0;
-    switch (processModel) {
-        case kWKProcessModelSecondaryProcess:
-            model = ProcessModelSecondaryProcess;
-            break;
-        case kWKProcessModelSecondaryThread:
-            model = ProcessModelSecondaryThread;
-            break;
-        default:
-            ASSERT_NOT_REACHED();
-    }
+    return toRef(WebContext::APIType);
+}
 
-    RefPtr<WebContext> context = WebContext::create(model);
+WKContextRef WKContextCreate()
+{
+    RefPtr<WebContext> context = WebContext::create(WTF::String());
     return toRef(context.release().releaseRef());
+}
+
+WKContextRef WKContextCreateWithInjectedBundlePath(WKStringRef pathRef)
+{
+    RefPtr<WebContext> context = WebContext::create(toWK(pathRef)->string());
+    return toRef(context.release().releaseRef());
+}
+
+WKContextRef WKContextGetSharedProcessContext()
+{
+    return toRef(WebContext::sharedProcessContext());
+}
+
+WKContextRef WKContextGetSharedThreadContext()
+{
+    return toRef(WebContext::sharedThreadContext());
 }
 
 void WKContextSetPreferences(WKContextRef contextRef, WKPreferencesRef preferencesRef)
@@ -63,18 +72,41 @@ WKPreferencesRef WKContextGetPreferences(WKContextRef contextRef)
     return toRef(toWK(contextRef)->preferences());
 }
 
+void WKContextSetInjectedBundleClient(WKContextRef contextRef, const WKContextInjectedBundleClient* wkClient)
+{
+    if (wkClient && wkClient->version)
+        return;
+    toWK(contextRef)->initializeInjectedBundleClient(wkClient);
+}
+
+void WKContextSetHistoryClient(WKContextRef contextRef, const WKContextHistoryClient* wkClient)
+{
+    if (wkClient && wkClient->version)
+        return;
+    toWK(contextRef)->initializeHistoryClient(wkClient);
+}
+
+void WKContextPostMessageToInjectedBundle(WKContextRef contextRef, WKStringRef messageNameRef, WKTypeRef messageBodyRef)
+{
+    toWK(contextRef)->postMessageToInjectedBundle(toWK(messageNameRef)->string(), toWK(messageBodyRef));
+}
+
 void WKContextGetStatistics(WKContextRef contextRef, WKContextStatistics* statistics)
 {
     toWK(contextRef)->getStatistics(statistics);
 }
 
-WKContextRef WKContextRetain(WKContextRef contextRef)
+void WKContextAddVisitedLink(WKContextRef contextRef, WKStringRef visitedURL)
 {
-    toWK(contextRef)->ref();
-    return contextRef;
+    toWK(contextRef)->addVisitedLink(toWK(visitedURL)->string());
 }
 
-void WKContextRelease(WKContextRef contextRef)
+void _WKContextSetAdditionalPluginsDirectory(WKContextRef contextRef, WKStringRef pluginsDirectory)
 {
-    toWK(contextRef)->deref();
+    toWK(contextRef)->setAdditionalPluginsDirectory(toWK(pluginsDirectory)->string());
+}
+
+void _WKContextRegisterURLSchemeAsEmptyDocument(WKContextRef contextRef, WKStringRef urlScheme)
+{
+    toWK(contextRef)->registerURLSchemeAsEmptyDocument(toWK(urlScheme)->string());
 }

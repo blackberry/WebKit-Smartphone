@@ -24,6 +24,7 @@
 
 #include "PopupMenuStyle.h"
 #include "ScrollTypes.h"
+#include <wtf/Forward.h>
 
 namespace WebCore {
 
@@ -32,14 +33,17 @@ class FontSelector;
 class HostWindow;
 class Scrollbar;
 class ScrollbarClient;
-class String;
 
 class PopupMenuClient {
 public:
     virtual ~PopupMenuClient() {}
     virtual void valueChanged(unsigned listIndex, bool fireEvents = true) = 0;
+    virtual void selectionChanged(unsigned listIndex, bool fireEvents = true) = 0;
+    virtual void selectionCleared() = 0;
 
     virtual String itemText(unsigned listIndex) const = 0;
+    virtual String itemLabel(unsigned listIndex) const = 0;
+    virtual String itemIcon(unsigned listIndex) const = 0;
     virtual String itemToolTip(unsigned listIndex) const = 0;
     virtual String itemAccessibilityText(unsigned listIndex) const = 0;
     virtual bool itemIsEnabled(unsigned listIndex) const = 0;

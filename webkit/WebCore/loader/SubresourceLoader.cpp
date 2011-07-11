@@ -51,7 +51,6 @@ SubresourceLoader::SubresourceLoader(Frame* frame, SubresourceLoaderClient* clie
 #ifndef NDEBUG
     subresourceLoaderCounter.increment();
 #endif
-    m_documentLoader->addSubresourceLoader(this);
 }
 
 SubresourceLoader::~SubresourceLoader()
@@ -67,14 +66,12 @@ PassRefPtr<SubresourceLoader> SubresourceLoader::create(Frame* frame, Subresourc
         return 0;
 
     FrameLoader* fl = frame->loader();
-    if (securityCheck == DoSecurityCheck && (fl->state() == FrameStateProvisional || fl->activeDocumentLoader()->isStopping()))
+    if (securityCheck == DoSecurityCheck && (fl->state() == FrameStateProvisional || !fl->activeDocumentLoader() || fl->activeDocumentLoader()->isStopping()))
         return 0;
 
     ResourceRequest newRequest = request;
 
-    if (securityCheck == DoSecurityCheck
-            && SecurityOrigin::restrictAccessToLocal()
-            && !SecurityOrigin::canLoad(request.url(), String(), frame->document())) {
+    if (securityCheck == DoSecurityCheck && !frame->document()->securityOrigin()->canDisplay(request.url())) {
         FrameLoader::reportLocalLoadFailed(frame, request.url().string());
         return 0;
     }
@@ -85,20 +82,10 @@ PassRefPtr<SubresourceLoader> SubresourceLoader::create(Frame* frame, Subresourc
         newRequest.setHTTPReferrer(fl->outgoingReferrer());
     FrameLoader::addHTTPOriginIfNeeded(newRequest, fl->outgoingOrigin());
 
-    // Use the original request's cache policy for two reasons:
-    // 1. For POST requests, we mutate the cache policy for the main resource,
-    //    but we do not want this to apply to subresources
-    // 2. Delegates that modify the cache policy using willSendRequest: should
-    //    not affect any other resources. Such changes need to be done
-    //    per request.
-    if (newRequest.isConditional())
-        newRequest.setCachePolicy(ReloadIgnoringCacheData);
-    else
-        newRequest.setCachePolicy(fl->originalRequest().cachePolicy());
-
     fl->addExtraFieldsToSubresourceRequest(newRequest);
 
     RefPtr<SubresourceLoader> subloader(adoptRef(new SubresourceLoader(frame, client, sendResourceLoadCallbacks, shouldContentSniff)));
+    subloader->documentLoader()->addSubresourceLoader(subloader.get());
     if (!subloader->load(newRequest))
         return 0;
 
@@ -259,14 +246,20 @@ void SubresourceLoader::didReceiveAuthenticationChallenge(const AuthenticationCh
 {
     RefPtr<SubresourceLoader> protect(this);
 
+    ASSERT(handle()->hasAuthenticationChallenge());
+
     if (m_client)
         m_client->didReceiveAuthenticationChallenge(this, challenge);
     
     // The SubResourceLoaderClient may have cancelled this ResourceLoader in response to the challenge.  
-    // If that's the case, don't call didReceiveAuthenticationChallenge
+    // If that's the case, don't call didReceiveAuthenticationChallenge.
     if (reachedTerminalState())
         return;
-        
+
+    // It may have also handled authentication on its own.
+    if (!handle()->hasAuthenticationChallenge())
+        return;
+
     ResourceLoader::didReceiveAuthenticationChallenge(challenge);
 }
 

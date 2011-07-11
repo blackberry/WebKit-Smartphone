@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2008, 2010 Apple Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,10 +28,11 @@
 
 #include "JSGlobalObject.h"
 #include "JSString.h"
-
 #include <wtf/Noncopyable.h>
+#include <wtf/PassOwnPtr.h>
 
 namespace JSC {
+
 static const unsigned numCharactersToStore = 0x100;
 
 static inline bool isMarked(JSString* string)
@@ -43,19 +44,19 @@ class SmallStringsStorage : public Noncopyable {
 public:
     SmallStringsStorage();
 
-    UString::Rep* rep(unsigned char character) { return m_reps[character].get(); }
+    StringImpl* rep(unsigned char character) { return m_reps[character].get(); }
 
 private:
-    RefPtr<UString::Rep> m_reps[numCharactersToStore];
+    RefPtr<StringImpl> m_reps[numCharactersToStore];
 };
 
 SmallStringsStorage::SmallStringsStorage()
 {
     UChar* characterBuffer = 0;
-    RefPtr<UStringImpl> baseString = UStringImpl::createUninitialized(numCharactersToStore, characterBuffer);
+    RefPtr<StringImpl> baseString = StringImpl::createUninitialized(numCharactersToStore, characterBuffer);
     for (unsigned i = 0; i < numCharactersToStore; ++i) {
         characterBuffer[i] = i;
-        m_reps[i] = UStringImpl::create(baseString, i, 1);
+        m_reps[i] = StringImpl::create(baseString, i, 1);
     }
 }
 
@@ -126,15 +127,15 @@ void SmallStrings::createEmptyString(JSGlobalData* globalData)
 void SmallStrings::createSingleCharacterString(JSGlobalData* globalData, unsigned char character)
 {
     if (!m_storage)
-        m_storage.set(new SmallStringsStorage);
+        m_storage = adoptPtr(new SmallStringsStorage);
     ASSERT(!m_singleCharacterStrings[character]);
-    m_singleCharacterStrings[character] = new (globalData) JSString(globalData, m_storage->rep(character), JSString::HasOtherOwner);
+    m_singleCharacterStrings[character] = new (globalData) JSString(globalData, PassRefPtr<StringImpl>(m_storage->rep(character)), JSString::HasOtherOwner);
 }
 
-UString::Rep* SmallStrings::singleCharacterStringRep(unsigned char character)
+StringImpl* SmallStrings::singleCharacterStringRep(unsigned char character)
 {
     if (!m_storage)
-        m_storage.set(new SmallStringsStorage);
+        m_storage = adoptPtr(new SmallStringsStorage);
     return m_storage->rep(character);
 }
 

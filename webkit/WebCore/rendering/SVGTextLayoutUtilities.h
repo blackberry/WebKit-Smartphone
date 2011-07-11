@@ -32,33 +32,13 @@ class Font;
 class InlineTextBox;
 class RenderObject;
 class RenderStyle;
-class RenderSVGResource;
+class SVGElement;
 class SVGRenderStyle;
 class TextRun;
 
 struct SVGChar;
 struct SVGCharacterLayoutInfo;
 struct SVGInlineBoxCharacterRange;
-
-enum SVGTextPaintSubphase {
-    SVGTextPaintSubphaseBackground,
-    SVGTextPaintSubphaseGlyphFill,
-    SVGTextPaintSubphaseGlyphFillSelection,
-    SVGTextPaintSubphaseGlyphStroke,
-    SVGTextPaintSubphaseGlyphStrokeSelection,
-    SVGTextPaintSubphaseForeground
-};
-
-struct SVGTextPaintInfo {
-    SVGTextPaintInfo()
-        : activePaintingResource(0)
-        , subphase(SVGTextPaintSubphaseBackground)
-    {
-    }
-
-    RenderSVGResource* activePaintingResource;
-    SVGTextPaintSubphase subphase;
-};
 
 struct SVGLastGlyphInfo {
     SVGLastGlyphInfo()
@@ -79,9 +59,9 @@ float applyGlyphAdvanceAndShiftRespectingOrientation(bool isVerticalText, float 
 FloatPoint topLeftPositionOfCharacterRange(Vector<SVGChar>::iterator start, Vector<SVGChar>::iterator end);
 float cummulatedWidthOfInlineBoxCharacterRange(SVGInlineBoxCharacterRange&);
 float cummulatedHeightOfInlineBoxCharacterRange(SVGInlineBoxCharacterRange&);
-TextRun svgTextRunForInlineTextBox(const UChar*, int length, const RenderStyle*, const InlineTextBox*, float xPos);
+TextRun svgTextRunForInlineTextBox(const UChar*, int length, const RenderStyle*, const InlineTextBox*);
 
-float calculateCSSKerning(const RenderStyle*);
+float calculateCSSKerning(SVGElement* context, const RenderStyle*);
 bool applySVGKerning(SVGCharacterLayoutInfo&, const RenderStyle*, SVGLastGlyphInfo&, const String& unicodeString, const String& glyphName, bool isVerticalText);
 
 }

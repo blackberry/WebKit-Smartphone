@@ -62,6 +62,7 @@
 #import <WebKit/WebDataSourcePrivate.h>
 #import <WebKit/WebDatabaseManagerPrivate.h>
 #import <WebKit/WebDocumentPrivate.h>
+#import <WebKit/WebDeviceOrientationProviderMock.h>
 #import <WebKit/WebEditingDelegate.h>
 #import <WebKit/WebFrameView.h>
 #import <WebKit/WebHTMLRepresentationInternal.h>
@@ -111,7 +112,7 @@ static void runTest(const string& testPathOrURL);
 volatile bool done;
 
 NavigationController* gNavigationController = 0;
-LayoutTestController* gLayoutTestController = 0;
+RefPtr<LayoutTestController> gLayoutTestController;
 
 WebFrame *mainFrame = 0;
 // This is the topmost frame that is loading, during a given load, or nil when no load is 
@@ -136,7 +137,6 @@ static int dumpPixels;
 static int threaded;
 static int dumpTree = YES;
 static int forceComplexText;
-static int useHTML5Parser;
 static BOOL printSeparators;
 static RetainPtr<CFStringRef> persistentUserStyleSheetLocation;
 
@@ -293,6 +293,7 @@ WebView *createWebViewAndOffscreenWindow()
     [webView setEditingDelegate:editingDelegate];
     [webView setResourceLoadDelegate:resourceLoadDelegate];
     [webView _setGeolocationProvider:[MockGeolocationProvider shared]];
+    [webView _setDeviceOrientationProvider:[[WebDeviceOrientationProviderMock alloc] init]];
 
     // Register the same schemes that Safari does
     [WebView registerURLSchemeAsLocal:@"feed"];
@@ -390,6 +391,7 @@ static void resetDefaultsToConsistentValues()
     [defaults setObject:@"0.500000 0.500000 0.500000" forKey:@"AppleOtherHighlightColor"];
     [defaults setObject:[NSArray arrayWithObject:@"en"] forKey:@"AppleLanguages"];
     [defaults setBool:YES forKey:WebKitEnableFullDocumentTeardownPreferenceKey];
+    [defaults setBool:YES forKey:WebKitFullScreenEnabledPreferenceKey];
 
     // Scrollbars are drawn either using AppKit (which uses NSUserDefaults) or using HIToolbox (which uses CFPreferences / kCFPreferencesAnyApplication / kCFPreferencesCurrentUser / kCFPreferencesAnyHost)
     [defaults setObject:@"DoubleMax" forKey:@"AppleScrollBarVariant"];
@@ -455,7 +457,6 @@ static void resetDefaultsToConsistentValues()
     [preferences setUsesPageCache:NO];
     [preferences setAcceleratedCompositingEnabled:YES];
     [preferences setWebGLEnabled:NO];
-    [preferences setHTML5ParserEnabled:useHTML5Parser];
 
     [[NSHTTPCookieStorage sharedHTTPCookieStorage] setCookieAcceptPolicy:NSHTTPCookieAcceptPolicyOnlyFromMainDocumentDomain];
 
@@ -562,7 +563,6 @@ static void initializeGlobalsFromCommandLineOptions(int argc, const char *argv[]
         {"tree", no_argument, &dumpTree, YES},
         {"threaded", no_argument, &threaded, YES},
         {"complex-text", no_argument, &forceComplexText, YES},
-        {"html5-parser", no_argument, &useHTML5Parser, YES},
         {NULL, 0, NULL, 0}
     };
     
@@ -1126,7 +1126,7 @@ void dump()
         }            
     }
 
-    if (dumpPixels && !dumpAsText)
+    if (dumpPixels && gLayoutTestController->generatePixelResults())
         // FIXME: when isPrinting is set, dump the image with page separators.
         dumpWebViewAsPixelsAndCompareWithExpected(gLayoutTestController->expectedPixelHash());
 
@@ -1185,6 +1185,9 @@ static void resetWebViewToConsistentStateBeforeTesting()
     [WebView _resetOriginAccessWhitelists];
 
     [[MockGeolocationProvider shared] stopTimer];
+    
+    // Clear the contents of the general pasteboard
+    [[NSPasteboard generalPasteboard] declareTypes:[NSArray arrayWithObject:NSStringPboardType] owner:nil];
 }
 
 static void runTest(const string& testPathOrURL)
@@ -1221,7 +1224,7 @@ static void runTest(const string& testPathOrURL)
     
     resetWebViewToConsistentStateBeforeTesting();
 
-    gLayoutTestController = new LayoutTestController(testURL, expectedPixelHash);
+    gLayoutTestController = LayoutTestController::create(testURL, expectedPixelHash);
     topLoadingFrame = nil;
     ASSERT(!draggingInfo); // the previous test should have called eventSender.mouseUp to drop!
     releaseAndZero(&draggingInfo);
@@ -1295,8 +1298,10 @@ static void runTest(const string& testPathOrURL)
     }
 
     // If developer extras enabled Web Inspector may have been open by the test.
-    if (shouldEnableDeveloperExtras(pathOrURL.c_str()))
+    if (shouldEnableDeveloperExtras(pathOrURL.c_str())) {
         gLayoutTestController->closeWebInspector();
+        gLayoutTestController->setDeveloperExtrasEnabled(false);
+    }
 
     resetWebViewToConsistentStateBeforeTesting();
 
@@ -1309,8 +1314,7 @@ static void runTest(const string& testPathOrURL)
     ASSERT(CFArrayGetCount(openWindowsRef) == 1);
     ASSERT(CFArrayGetValueAtIndex(openWindowsRef, 0) == [[mainFrame webView] window]);
 
-    gLayoutTestController->deref();
-    gLayoutTestController = 0;
+    gLayoutTestController.clear();
 
     if (ignoreWebCoreNodeLeaks)
         [WebCoreStatistics stopIgnoringWebCoreNodeLeaks];

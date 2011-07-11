@@ -92,7 +92,7 @@ namespace WTF {
     inline void MessageQueue<DataType>::append(PassOwnPtr<DataType> message)
     {
         MutexLocker lock(m_mutex);
-        m_queue.append(message.release());
+        m_queue.append(message.leakPtr());
         m_condition.signal();
     }
 
@@ -102,7 +102,7 @@ namespace WTF {
     {
         MutexLocker lock(m_mutex);
         bool wasEmpty = m_queue.isEmpty();
-        m_queue.append(message.release());
+        m_queue.append(message.leakPtr());
         m_condition.signal();
         return wasEmpty;
     }
@@ -111,7 +111,7 @@ namespace WTF {
     inline void MessageQueue<DataType>::prepend(PassOwnPtr<DataType> message)
     {
         MutexLocker lock(m_mutex);
-        m_queue.prepend(message.release());
+        m_queue.prepend(message.leakPtr());
         m_condition.signal();
     }
 
@@ -163,9 +163,7 @@ namespace WTF {
         if (m_queue.isEmpty())
             return 0;
 
-        DataType* message = m_queue.first();
-        m_queue.removeFirst();
-        return message;
+        return m_queue.takeFirst();
     }
 
     template<typename DataType>

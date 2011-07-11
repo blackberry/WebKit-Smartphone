@@ -1,6 +1,6 @@
 /*
  * (C) 1999-2003 Lars Knoll (knoll@kde.org)
- * Copyright (C) 2004, 2005, 2006, 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -82,13 +82,18 @@ CSSMutableStyleDeclaration::CSSMutableStyleDeclaration(CSSRule* parent, const CS
 #endif
 {
     m_properties.reserveInitialCapacity(numProperties);
+    HashSet<int> candidates;
     for (int i = 0; i < numProperties; ++i) {
-        ASSERT(properties[i]);
-        m_properties.append(*properties[i]);
-        if (properties[i]->value()->isVariableDependentValue())
+        const CSSProperty *property = properties[i];
+        ASSERT(property);
+        if (property->value()->isVariableDependentValue())
             m_variableDependentValueCount++;
+        else if (candidates.contains(property->id()))
+            removeProperty(properties[i]->id(), false);
+        m_properties.append(*property);
+        if (!getPropertyPriority(property->id()) && !property->isImportant())
+            candidates.add(property->id());
     }
-    // FIXME: This allows duplicate properties.
 }
 
 CSSMutableStyleDeclaration& CSSMutableStyleDeclaration::operator=(const CSSMutableStyleDeclaration& other)
@@ -480,13 +485,13 @@ void CSSMutableStyleDeclaration::setNeedsStyleRecalc()
         return;
     }
 
-    // FIXME: quick&dirty hack for KDE 3.0... make this MUCH better! (Dirk)
     StyleBase* root = this;
     while (StyleBase* parent = root->parent())
         root = parent;
-    if (root->isCSSStyleSheet())
-        if (Document* doc = static_cast<CSSStyleSheet*>(root)->doc())
-            doc->updateStyleSelector();
+    if (root->isCSSStyleSheet()) {
+        if (Document* document = static_cast<CSSStyleSheet*>(root)->document())
+            document->styleSelectorChanged(DeferRecalcStyle);
+    }
 }
 
 bool CSSMutableStyleDeclaration::getPropertyPriority(int propertyID) const

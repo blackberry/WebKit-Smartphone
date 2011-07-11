@@ -25,12 +25,12 @@
 #include "CachedCSSStyleSheet.h"
 #include "CachedXSLStyleSheet.h"
 #include "Document.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "ExceptionCode.h"
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "XSLStyleSheet.h"
-#include "XMLTokenizer.h" // for parseAttributes()
+#include "XMLDocumentParser.h" // for parseAttributes()
 #include "MediaList.h"
 
 namespace WebCore {
@@ -56,6 +56,9 @@ PassRefPtr<ProcessingInstruction> ProcessingInstruction::create(Document* docume
 
 ProcessingInstruction::~ProcessingInstruction()
 {
+    if (m_sheet)
+        m_sheet->clearOwnerNode();
+
     if (m_cachedSheet)
         m_cachedSheet->removeClient(this);
 }
@@ -159,7 +162,7 @@ void ProcessingInstruction::checkStyleSheet()
             
 #if ENABLE(XSLT)
             if (m_isXSL)
-                m_cachedSheet = document()->docLoader()->requestXSLStyleSheet(url);
+                m_cachedSheet = document()->cachedResourceLoader()->requestXSLStyleSheet(url);
             else
 #endif
             {
@@ -167,7 +170,7 @@ void ProcessingInstruction::checkStyleSheet()
                 if (charset.isEmpty())
                     charset = document()->frame()->loader()->writer()->encoding();
 
-                m_cachedSheet = document()->docLoader()->requestCSSStyleSheet(url, charset);
+                m_cachedSheet = document()->cachedResourceLoader()->requestCSSStyleSheet(url, charset);
             }
             if (m_cachedSheet)
                 m_cachedSheet->addClient(this);
@@ -200,6 +203,11 @@ bool ProcessingInstruction::sheetLoaded()
 
 void ProcessingInstruction::setCSSStyleSheet(const String& href, const KURL& baseURL, const String& charset, const CachedCSSStyleSheet* sheet)
 {
+    if (!inDocument()) {
+        ASSERT(!m_sheet);
+        return;
+    }
+
 #if ENABLE(XSLT)
     ASSERT(!m_isXSL);
 #endif
@@ -274,9 +282,14 @@ void ProcessingInstruction::removedFromDocument()
 
     document()->removeStyleSheetCandidateNode(this);
 
-    // FIXME: It's terrible to do a synchronous update of the style selector just because a <style> or <link> element got removed.
+    if (m_sheet) {
+        ASSERT(m_sheet->ownerNode() == this);
+        m_sheet->clearOwnerNode();
+        m_sheet = 0;
+    }
+
     if (m_cachedSheet)
-        document()->updateStyleSelector();
+        document()->styleSelectorChanged(DeferRecalcStyle);
 }
 
 void ProcessingInstruction::finishParsingChildren()

@@ -86,6 +86,7 @@ GEN := \
     $(intermediates)/bindings/V8DOMCoreException.h \
     $(intermediates)/bindings/V8DOMImplementation.h \
     $(intermediates)/bindings/V8DOMStringList.h \
+    $(intermediates)/bindings/V8DeviceMotionEvent.h \
     $(intermediates)/bindings/V8DeviceOrientationEvent.h \
     $(intermediates)/bindings/V8Document.h \
     $(intermediates)/bindings/V8DocumentFragment.h \
@@ -138,6 +139,7 @@ $(patsubst %.h,%.cpp,$(GEN)): $(intermediates)/bindings/%.cpp : $(intermediates)
 # HTML
 GEN := \
     $(intermediates)/bindings/V8Blob.h \
+    $(intermediates)/bindings/V8BlobBuilder.h \
     $(intermediates)/bindings/V8DataGridColumn.h \
     $(intermediates)/bindings/V8DataGridColumnList.h \
     $(intermediates)/bindings/V8File.h \
@@ -233,7 +235,6 @@ $(patsubst %.h,%.cpp,$(GEN)): $(intermediates)/bindings/%.cpp : $(intermediates)
 # Canvas
 GEN := \
     $(intermediates)/bindings/V8CanvasGradient.h \
-    $(intermediates)/bindings/V8CanvasNumberArray.h \
     $(intermediates)/bindings/V8CanvasPattern.h \
     $(intermediates)/bindings/V8CanvasRenderingContext.h \
     $(intermediates)/bindings/V8CanvasRenderingContext2D.h
@@ -308,6 +309,7 @@ $(patsubst %.h,%.cpp,$(GEN)): $(intermediates)/bindings/%.cpp : $(intermediates)
 GEN := \
     $(intermediates)/bindings/V8Database.h \
     $(intermediates)/bindings/V8SQLError.h \
+    $(intermediates)/bindings/V8SQLException.h \
     $(intermediates)/bindings/V8SQLResultSet.h \
     $(intermediates)/bindings/V8SQLResultSetRowList.h \
     $(intermediates)/bindings/V8SQLTransaction.h
@@ -339,20 +341,26 @@ $(patsubst %.h,%.cpp,$(GEN)): $(intermediates)/bindings/%.cpp : $(intermediates)
 
 # Indexed Database
 GEN := \
-    $(intermediates)/storage/V8IDBAny.h \
-    $(intermediates)/storage/V8IDBDatabaseError.h \
-    $(intermediates)/storage/V8IDBDatabaseException.h \
-    $(intermediates)/storage/V8IDBDatabaseRequest.h \
-    $(intermediates)/storage/V8IDBErrorEvent.h \
-    $(intermediates)/storage/V8IDBEvent.h \
-    $(intermediates)/storage/V8IDBRequest.h \
-    $(intermediates)/storage/V8IDBSuccessEvent.h \
-    $(intermediates)/storage/V8IndexedDatabaseRequest.h
+    $(intermediates)/bindings/V8IDBAny.h \
+    $(intermediates)/bindings/V8IDBCursor.h \
+    $(intermediates)/bindings/V8IDBDatabaseError.h \
+    $(intermediates)/bindings/V8IDBDatabaseException.h \
+    $(intermediates)/bindings/V8IDBDatabase.h \
+    $(intermediates)/bindings/V8IDBErrorEvent.h \
+    $(intermediates)/bindings/V8IDBEvent.h \
+    $(intermediates)/bindings/V8IDBFactory.h \
+    $(intermediates)/bindings/V8IDBIndex.h \
+    $(intermediates)/bindings/V8IDBKey.h \
+    $(intermediates)/bindings/V8IDBKeyRange.h \
+    $(intermediates)/bindings/V8IDBObjectStore.h \
+    $(intermediates)/bindings/V8IDBRequest.h \
+    $(intermediates)/bindings/V8IDBSuccessEvent.h \
+    $(intermediates)/bindings/V8IDBTransaction.h
 
 $(GEN): PRIVATE_PATH := $(LOCAL_PATH)
-$(GEN): PRIVATE_CUSTOM_TOOL = SOURCE_ROOT=$(PRIVATE_PATH) perl -I$(PRIVATE_PATH)/bindings/scripts $(PRIVATE_PATH)/bindings/scripts/generate-bindings.pl --defines "$(FEATURE_DEFINES) LANGUAGE_JAVASCRIPT" --generator V8 --include dom --include html --outputdir $(dir $@) $<
+$(GEN): PRIVATE_CUSTOM_TOOL = SOURCE_ROOT=$(PRIVATE_PATH) perl -I$(PRIVATE_PATH)/bindings/scripts $(PRIVATE_PATH)/bindings/scripts/generate-bindings.pl --defines "$(FEATURE_DEFINES) LANGUAGE_JAVASCRIPT" --generator V8 --include dom --include html --include storage --outputdir $(dir $@) $<
 $(GEN): $(intermediates)/bindings/V8%.h : $(LOCAL_PATH)/storage/%.idl $(js_binding_scripts)
-        $(transform-generated-source)
+	$(transform-generated-source)
 LOCAL_GENERATED_SOURCES += $(GEN)
 
 # We also need the .cpp files, which are generated as side effects of the
@@ -388,6 +396,7 @@ GEN += \
     $(intermediates)/bindings/V8SVGFEColorMatrixElement.h \
     $(intermediates)/bindings/V8SVGFEComponentTransferElement.h \
     $(intermediates)/bindings/V8SVGFECompositeElement.h \
+    $(intermediates)/bindings/V8SVGFEConvolveMatrixElement.h \
     $(intermediates)/bindings/V8SVGFEDiffuseLightingElement.h \
     $(intermediates)/bindings/V8SVGFEDisplacementMapElement.h \
     $(intermediates)/bindings/V8SVGFEDistantLightElement.h \
@@ -565,7 +574,6 @@ $(patsubst %.h,%.cpp,$(GEN)): $(intermediates)/bindings/%.cpp : $(intermediates)
 # These headers are required by the V8 bindings even when Inspector is disabled
 GEN := \
     $(intermediates)/bindings/V8InjectedScriptHost.h \
-    $(intermediates)/bindings/V8InspectorBackend.h \
     $(intermediates)/bindings/V8InspectorFrontendHost.h
 
 $(GEN): PRIVATE_PATH := $(LOCAL_PATH)

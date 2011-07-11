@@ -26,6 +26,7 @@
 #ifndef RenderImage_h
 #define RenderImage_h
 
+#include "RenderImageResource.h"
 #include "RenderReplaced.h"
 
 namespace WebCore {
@@ -37,26 +38,22 @@ public:
     RenderImage(Node*);
     virtual ~RenderImage();
 
-    virtual void styleDidChange(StyleDifference, const RenderStyle* oldStyle);
+    void setImageResource(PassOwnPtr<RenderImageResource>);
+
+    RenderImageResource* imageResource() { return m_imageResource.get(); }
+    const RenderImageResource* imageResource() const { return m_imageResource.get(); }
+    CachedImage* cachedImage() const { return m_imageResource ? m_imageResource->cachedImage() : 0; }
 
     bool setImageSizeForAltText(CachedImage* newImage = 0);
 
     void updateAltText();
 
-    void setCachedImage(CachedImage*);
-    CachedImage* cachedImage() const { return m_cachedImage.get(); }
-
     HTMLMapElement* imageMap() const;
-
-    void resetAnimation();
-
-    virtual bool hasImage() const { return m_cachedImage; }
 
     void highQualityRepaintTimerFired(Timer<RenderImage>*);
 
 protected:
-    virtual Image* image(int /* width */ = 0, int /* height */ = 0) { return m_cachedImage ? m_cachedImage->image() : nullImage(); }
-    virtual bool errorOccurred() const { return m_cachedImage && m_cachedImage->errorOccurred(); }
+    virtual void styleDidChange(StyleDifference, const RenderStyle*);
 
     virtual void imageChanged(WrappedImagePtr, const IntRect* = 0);
 
@@ -67,14 +64,14 @@ protected:
     bool isWidthSpecified() const;
     bool isHeightSpecified() const;
 
-    virtual void intrinsicSizeChanged() { imageChanged(imagePtr()); }
+    virtual void intrinsicSizeChanged() { imageChanged(m_imageResource->imagePtr()); }
 
 private:
     virtual const char* renderName() const { return "RenderImage"; }
 
     virtual bool isImage() const { return true; }
     virtual bool isRenderImage() const { return true; }
-    
+
     virtual void paintReplaced(PaintInfo&, int tx, int ty);
 
     virtual int minimumReplacedHeight() const;
@@ -87,39 +84,30 @@ private:
 
     virtual void calcPrefWidths();
 
-    virtual bool usesImageContainerSize() const { return m_cachedImage ? m_cachedImage->usesImageContainerSize() : false; }
-    virtual void setImageContainerSize(const IntSize& size) const { if (m_cachedImage) m_cachedImage->setImageContainerSize(size); }
-    virtual bool imageHasRelativeWidth() const { return m_cachedImage ? m_cachedImage->imageHasRelativeWidth() : false; }
-    virtual bool imageHasRelativeHeight() const { return m_cachedImage ? m_cachedImage->imageHasRelativeHeight() : false; }
-    virtual IntSize imageSize(float multiplier) const { return m_cachedImage ? m_cachedImage->imageSize(multiplier) : IntSize(); }
-    virtual WrappedImagePtr imagePtr() const { return m_cachedImage.get(); }
+    IntSize imageSizeForError(Image*) const;
+    void imageDimensionsChanged(bool imageSizeChanged, const IntRect* = 0);
 
     int calcAspectRatioWidth() const;
     int calcAspectRatioHeight() const;
 
     bool setImageSizeForAltText(Image* newImage, bool extraPadding);
 
-protected:
-    // The image we are rendering.
-    CachedResourceHandle<CachedImage> m_cachedImage;
-
-private:
     // Text to display as long as the image isn't available.
     String m_altText;
+    OwnPtr<RenderImageResource> m_imageResource;
+    bool m_needsToSetSizeForAltText;
 
-    static Image* nullImage();
-    
     friend class RenderImageScaleObserver;
 };
 
 inline RenderImage* toRenderImage(RenderObject* object)
-{ 
+{
     ASSERT(!object || object->isRenderImage());
     return static_cast<RenderImage*>(object);
 }
 
 inline const RenderImage* toRenderImage(const RenderObject* object)
-{ 
+{
     ASSERT(!object || object->isRenderImage());
     return static_cast<const RenderImage*>(object);
 }

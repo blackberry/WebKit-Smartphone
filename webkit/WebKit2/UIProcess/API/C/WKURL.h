@@ -32,8 +32,7 @@
 extern "C" {
 #endif
 
-WK_EXPORT WKURLRef WKURLRetain(WKURLRef URL);
-WK_EXPORT void WKURLRelease(WKURLRef URL);
+WK_EXPORT WKTypeID WKURLGetTypeID();
 
 #ifdef __cplusplus
 }

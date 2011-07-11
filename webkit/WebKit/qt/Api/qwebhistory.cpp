@@ -22,6 +22,7 @@
 #include "qwebhistory_p.h"
 #include "qwebframe_p.h"
 
+#include "BackForwardListImpl.h"
 #include "PlatformString.h"
 #include "Image.h"
 #include "KURL.h"
@@ -259,7 +260,7 @@ void QWebHistory::clear()
     WebCore::BackForwardList* lst = d->lst;
 
     //clear visited links
-    WebCore::Page* page = lst->page();
+    WebCore::Page* page = static_cast<WebCore::BackForwardListImpl*>(lst)->page();
     if (page && page->groupPtr())
         page->groupPtr()->removeVisitedLinks();
 
@@ -363,9 +364,8 @@ bool QWebHistory::canGoForward() const
 void QWebHistory::back()
 {
     if (canGoBack()) {
-        d->lst->goBack();
-        WebCore::Page* page = d->lst->page();
-        page->goToItem(currentItem().d->item, WebCore::FrameLoadTypeIndexedBackForward);
+        WebCore::Page* page = static_cast<WebCore::BackForwardListImpl*>(d->lst)->page();
+        page->goToItem(d->lst->backItem(), WebCore::FrameLoadTypeIndexedBackForward);
     }
 }
 
@@ -378,9 +378,8 @@ void QWebHistory::back()
 void QWebHistory::forward()
 {
     if (canGoForward()) {
-        d->lst->goForward();
-        WebCore::Page* page = d->lst->page();
-        page->goToItem(currentItem().d->item, WebCore::FrameLoadTypeIndexedBackForward);
+        WebCore::Page* page = static_cast<WebCore::BackForwardListImpl*>(d->lst)->page();
+        page->goToItem(d->lst->forwardItem(), WebCore::FrameLoadTypeIndexedBackForward);
     }
 }
 
@@ -391,9 +390,8 @@ void QWebHistory::forward()
 */
 void QWebHistory::goToItem(const QWebHistoryItem &item)
 {
-    d->lst->goToItem(item.d->item);
-    WebCore::Page* page = d->lst->page();
-    page->goToItem(currentItem().d->item, WebCore::FrameLoadTypeIndexedBackForward);
+    WebCore::Page* page = static_cast<WebCore::BackForwardListImpl*>(d->lst)->page();
+    page->goToItem(item.d->item, WebCore::FrameLoadTypeIndexedBackForward);
 }
 
 /*!
@@ -541,7 +539,7 @@ QDataStream& operator>>(QDataStream& source, QWebHistory& history)
             }
             d->lst->removeItem(nullItem);
             // Update the HistoryController.
-            history.d->lst->page()->mainFrame()->loader()->history()->setCurrentItem(history.d->lst->entries()[currentIndex].get());
+            static_cast<WebCore::BackForwardListImpl*>(history.d->lst)->page()->mainFrame()->loader()->history()->setCurrentItem(history.d->lst->entries()[currentIndex].get());
             history.goToItem(history.itemAt(currentIndex));
         }
     }
@@ -553,5 +551,10 @@ QDataStream& operator>>(QDataStream& source, QWebHistory& history)
 
 QWebPagePrivate* QWebHistoryPrivate::page()
 {
-    return QWebFramePrivate::kit(lst->page()->mainFrame())->page()->handle();
+    return QWebFramePrivate::kit(static_cast<WebCore::BackForwardListImpl*>(lst)->page()->mainFrame())->page()->handle();
+}
+
+WebCore::HistoryItem* QWebHistoryItemPrivate::core(const QWebHistoryItem* q)
+{
+    return q->d->item;
 }

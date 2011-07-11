@@ -31,59 +31,45 @@ class HTMLObjectElement : public HTMLPlugInImageElement {
 public:
     static PassRefPtr<HTMLObjectElement> create(const QualifiedName&, Document*, bool createdByParser);
 
-    void setNeedWidgetUpdate(bool needWidgetUpdate) { m_needWidgetUpdate = needWidgetUpdate; }
-
-    void renderFallbackContent();
-
-    bool declare() const;
-    void setDeclare(bool);
-
-    int hspace() const;
-    void setHspace(int);
-
-    int vspace() const;
-    void setVspace(int);
-
     bool isDocNamedItem() const { return m_docNamedItem; }
 
     const String& classId() const { return m_classId; }
 
     bool containsJavaApplet() const;
 
+    virtual bool useFallbackContent() const { return m_useFallbackContent; }
+    void renderFallbackContent();
+
 private:
     HTMLObjectElement(const QualifiedName&, Document*, bool createdByParser);
 
-    virtual int tagPriority() const { return 5; }
-
     virtual void parseMappedAttribute(Attribute*);
 
-    virtual void attach();
-    virtual bool canLazyAttach() { return false; }
     virtual bool rendererIsNeeded(RenderStyle*);
-    virtual RenderObject* createRenderer(RenderArena*, RenderStyle*);
-    virtual void finishParsingChildren();
-    virtual void detach();
     virtual void insertedIntoDocument();
     virtual void removedFromDocument();
     
-    virtual void recalcStyle(StyleChange);
     virtual void childrenChanged(bool changedByParser = false, Node* beforeChange = 0, Node* afterChange = 0, int childCountDelta = 0);
 
     virtual bool isURLAttribute(Attribute*) const;
     virtual const QualifiedName& imageSourceAttributeName() const;
 
-    virtual void updateWidget();
-
     virtual RenderWidget* renderWidgetForJSBindings() const;
 
     virtual void addSubresourceAttributeURLs(ListHashSet<KURL>&) const;
 
+    virtual void updateWidget(bool onlyCreateNonNetscapePlugins);
     void updateDocNamedItem();
+
+    bool hasFallbackContent() const;
+    
+    // FIXME: This function should not deal with url or serviceType
+    // so that we can better share code between <object> and <embed>.
+    void parametersForPlugin(Vector<String>& paramNames, Vector<String>& paramValues, String& url, String& serviceType);
 
     AtomicString m_id;
     String m_classId;
     bool m_docNamedItem : 1;
-    bool m_needWidgetUpdate : 1;
     bool m_useFallbackContent : 1;
 };
 

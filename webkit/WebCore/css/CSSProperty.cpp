@@ -38,4 +38,40 @@ bool operator==(const CSSProperty& a, const CSSProperty& b)
     return a.m_id == b.m_id && a.m_important == b.m_important && a.m_value == b.m_value;
 }
 
+int CSSProperty::resolveDirectionAwareProperty(int propertyID, TextDirection direction)
+{
+    switch (static_cast<CSSPropertyID>(propertyID)) {
+    case CSSPropertyWebkitMarginEnd:
+        return direction == LTR ? CSSPropertyMarginRight : CSSPropertyMarginLeft;
+    case CSSPropertyWebkitMarginStart:
+        return direction == LTR ? CSSPropertyMarginLeft : CSSPropertyMarginRight;
+
+    case CSSPropertyWebkitPaddingEnd:
+        return direction == LTR ? CSSPropertyPaddingRight : CSSPropertyPaddingLeft;
+    case CSSPropertyWebkitPaddingStart:
+        return direction == LTR ? CSSPropertyPaddingLeft : CSSPropertyPaddingRight;
+
+    case CSSPropertyWebkitBorderEnd:
+        return direction == LTR ? CSSPropertyBorderRight : CSSPropertyBorderLeft;
+    case CSSPropertyWebkitBorderEndColor:
+        return direction == LTR ? CSSPropertyBorderRightColor : CSSPropertyBorderLeftColor;
+    case CSSPropertyWebkitBorderEndStyle:
+        return direction == LTR ? CSSPropertyBorderRightStyle : CSSPropertyBorderLeftStyle;
+    case CSSPropertyWebkitBorderEndWidth:
+        return direction == LTR ? CSSPropertyBorderRightWidth : CSSPropertyBorderLeftWidth;
+
+    case CSSPropertyWebkitBorderStart:
+        return direction == LTR ? CSSPropertyBorderLeft : CSSPropertyBorderRight;
+    case CSSPropertyWebkitBorderStartColor:
+        return direction == LTR ? CSSPropertyBorderLeftColor : CSSPropertyBorderRightColor;
+    case CSSPropertyWebkitBorderStartStyle:
+        return direction == LTR ? CSSPropertyBorderLeftStyle : CSSPropertyBorderRightStyle;
+    case CSSPropertyWebkitBorderStartWidth:
+        return direction == LTR ? CSSPropertyBorderLeftWidth : CSSPropertyBorderRightWidth;
+
+    default:
+        return propertyID;
+    }
+}
+
 } // namespace WebCore

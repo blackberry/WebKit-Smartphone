@@ -108,7 +108,7 @@ bool WebHaltablePlugin::isWindowed() const
 
 String WebHaltablePlugin::pluginName() const
 {
-    return [[m_view pluginPackage] name];
+    return [[m_view pluginPackage] pluginInfo].name;
 }
 
 @implementation WebBaseNetscapePluginView
@@ -146,7 +146,7 @@ String WebHaltablePlugin::pluginName() const
 #if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
     // Enable "kiosk mode" when instantiating the QT plug-in inside of Dashboard. See <rdar://problem/6878105>
     if ([[[NSBundle mainBundle] bundleIdentifier] isEqualToString:@"com.apple.dashboard.client"] &&
-        [[[_pluginPackage.get() bundle] bundleIdentifier] isEqualToString:@"com.apple.QuickTime Plugin.plugin"]) {
+        [_pluginPackage.get() bundleIdentifier] == "com.apple.QuickTime Plugin.plugin") {
         RetainPtr<NSMutableArray> mutableKeys(AdoptNS, [keys mutableCopy]);
         RetainPtr<NSMutableArray> mutableValues(AdoptNS, [values mutableCopy]);
 
@@ -510,9 +510,9 @@ String WebHaltablePlugin::pluginName() const
     ASSERT(_isStarted);
     Element *element = [self element];
 #if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
-    CGImageRef cgImage = CGImageRetain([core([self webFrame])->nodeImage(element) CGImageForProposedRect:nil context:nil hints:nil]);
+    CGImageRef cgImage = CGImageRetain([core([self webFrame])->nodeImage(element).get() CGImageForProposedRect:nil context:nil hints:nil]);
 #else
-    RetainPtr<CGImageSourceRef> imageRef(AdoptCF, CGImageSourceCreateWithData((CFDataRef)[core([self webFrame])->nodeImage(element) TIFFRepresentation], 0));
+    RetainPtr<CGImageSourceRef> imageRef(AdoptCF, CGImageSourceCreateWithData((CFDataRef)[core([self webFrame])->nodeImage(element).get() TIFFRepresentation], 0));
     CGImageRef cgImage = CGImageSourceCreateImageAtIndex(imageRef.get(), 0, 0);
 #endif
     ASSERT(cgImage);
@@ -578,14 +578,7 @@ String WebHaltablePlugin::pluginName() const
 
 - (BOOL)supportsSnapshotting
 {
-    NSBundle *pluginBundle = [_pluginPackage.get() bundle];
-    if (![[pluginBundle bundleIdentifier] isEqualToString:@"com.macromedia.Flash Player.plugin"])
-        return YES;
-    
-    // Flash has a bogus Info.plist entry for CFBundleVersionString, so use CFBundleShortVersionString.
-    NSString *versionString = [pluginBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-    // Flash 10.1d51 has a crashing bug if sent a drawRect event when using the CA rendering model: <rdar://problem/7739922>
-    return ![versionString isEqual:@"10.1.51.95"];
+    return [_pluginPackage.get() supportsSnapshotting];
 }
 
 - (BOOL)hasBeenHalted
@@ -924,7 +917,7 @@ String WebHaltablePlugin::pluginName() const
 }
 
 
-- (CString)resolvedURLStringForURL:(const char*)url target:(const char*)target;
+- (CString)resolvedURLStringForURL:(const char*)url target:(const char*)target
 {
     String relativeURLString = String::fromUTF8(url);
     if (relativeURLString.isNull())
@@ -954,6 +947,14 @@ String WebHaltablePlugin::pluginName() const
         renderer->repaintRectangle(contentRect);
     }
 }
+
+#ifndef BUILDING_ON_TIGER
+- (CALayer *)pluginLayer
+{
+    ASSERT_NOT_REACHED();
+    return nil;
+}
+#endif
 
 @end
 

@@ -135,6 +135,11 @@ void LayoutTestController::setUserStyleSheetLocation(JSStringRef path)
 {
 }
 
+void LayoutTestController::setViewModeMediaFeature(JSStringRef mode)
+{
+    // FIXME: implement
+}
+
 void LayoutTestController::setWindowIsKey(bool windowIsKey)
 {
     // FIXME: implement
@@ -228,6 +233,16 @@ void LayoutTestController::clearPersistentUserStyleSheet()
     // FIXME: implement
 }
 
+void LayoutTestController::clearAllApplicationCaches()
+{
+    // FIXME: implement to support Application Cache quotas.
+}
+
+void LayoutTestController::setApplicationCacheOriginQuota(unsigned long long quota)
+{
+    // FIXME: implement to support Application Cache quotas.
+}
+
 void LayoutTestController::clearAllDatabases()
 {
     // FIXME: implement
@@ -254,6 +269,16 @@ unsigned LayoutTestController::numberOfActiveAnimations() const
     return 0;
 }
 
+void LayoutTestController::suspendAnimations() const
+{
+    // FIXME: implement
+}
+
+void LayoutTestController::resumeAnimations() const
+{
+    // FIXME: implement
+}
+
 unsigned LayoutTestController::workerThreadCount() const
 {
     // FIXME: implement
@@ -271,6 +296,12 @@ bool LayoutTestController::pauseTransitionAtTimeOnElementWithId(JSStringRef prop
     return false;
 }
 
+void LayoutTestController::setMockDeviceOrientation(bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma)
+{
+    // FIXME: Implement for DeviceOrientation layout tests.
+    // See https://bugs.webkit.org/show_bug.cgi?id=30335.
+}
+
 void LayoutTestController::setMockGeolocationPosition(double latitude, double longitude, double accuracy)
 {
     // FIXME: Implement for Geolocation layout tests.
@@ -281,6 +312,18 @@ void LayoutTestController::setMockGeolocationError(int code, JSStringRef message
 {
     // FIXME: Implement for Geolocation layout tests.
     // See https://bugs.webkit.org/show_bug.cgi?id=28264.
+}
+
+void LayoutTestController::setGeolocationPermission(bool allow)
+{
+    // FIXME: Implement for Geolocation layout tests.
+    setGeolocationPermissionCommon(allow);
+}
+
+void LayoutTestController::setMockSpeechInputResult(JSStringRef result)
+{
+    // FIXME: Implement for speech input layout tests.
+    // See https://bugs.webkit.org/show_bug.cgi?id=39485.
 }
 
 void LayoutTestController::setIconDatabaseEnabled(bool iconDatabaseEnabled)
@@ -327,12 +370,12 @@ void LayoutTestController::overridePreference(JSStringRef /* key */, JSStringRef
     // FIXME: implement
 }
 
-void LayoutTestController::addUserScript(JSStringRef source, bool runAtStart)
+void LayoutTestController::addUserScript(JSStringRef source, bool runAtStart, bool allFrames)
 {
     printf("LayoutTestController::addUserScript not implemented.\n");
 }
 
-void LayoutTestController::addUserStyleSheet(JSStringRef source)
+void LayoutTestController::addUserStyleSheet(JSStringRef source, bool allFrames)
 {
     printf("LayoutTestController::addUserStyleSheet not implemented.\n");
 }
@@ -451,3 +494,26 @@ void LayoutTestController::setEditingBehavior(const char* editingBehavior)
 {
     // FIXME: Implement
 }
+
+void LayoutTestController::abortModal()
+{
+}
+
+JSRetainPtr<JSStringRef> LayoutTestController::pageProperty(const char* propertyName, int pageNumber) const
+{
+    // FIXME: Implement
+    return 0;
+}
+
+bool LayoutTestController::isPageBoxVisible(int pageNumber) const
+{
+    // FIXME: Implement
+    return true;
+}
+
+JSRetainPtr<JSStringRef> LayoutTestController::pageSizeAndMarginsInPixels(int pageNumber, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft) const
+{
+    // FIXME: Implement
+    return 0;
+}
+

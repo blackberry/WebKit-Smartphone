@@ -41,11 +41,9 @@ function getShadowXY(cssValue)
 {
     var text = cssValue.cssText;
     // Shadow cssText looks like "rgb(0, 0, 255) 0px -3px 10px 0px"
-    var shadowPositionRegExp = /\)\s*(\d+)px\s*(-?\d+)px/;
-    var result = shadowPositionRegExp.exec(cssValue.cssText);
-
-    var result = [parseInt(result[1]), parseInt(result[2])];
-    return result;
+    var shadowPositionRegExp = /\)\s*(-?\d+)px\s*(-?\d+)px/;
+    var result = shadowPositionRegExp.exec(text);
+    return [parseInt(result[1]), parseInt(result[2])];
 }
 
 function checkExpectedValue(expected, index)
@@ -55,6 +53,7 @@ function checkExpectedValue(expected, index)
     var property = expected[index][2];
     var expectedValue = expected[index][3];
     var tolerance = expected[index][4];
+    var postCompletionCallback = expected[index][5];
 
     var computedValue;
     var pass = false;
@@ -120,7 +119,13 @@ function checkExpectedValue(expected, index)
                     break;
                 case CSSPrimitiveValue.CSS_RECT:
                     computedValue = computedStyle.getRectValue();
-                    pass = computedValue == expectedValue;
+                    computedValue = [computedValue.top.getFloatValue(CSSPrimitiveValue.CSS_NUMBER),
+                                     computedValue.right.getFloatValue(CSSPrimitiveValue.CSS_NUMBER),
+                                     computedValue.bottom.getFloatValue(CSSPrimitiveValue.CSS_NUMBER),
+                                     computedValue.left.getFloatValue(CSSPrimitiveValue.CSS_NUMBER)];
+                     pass = true;
+                     for (var i = 0; i < 4; ++i)
+                         pass &= isCloseEnough(computedValue[i], expectedValue[i], tolerance);
                     break;
                 default:
                     computedValue = computedStyle.getFloatValue(CSSPrimitiveValue.CSS_NUMBER);
@@ -133,6 +138,9 @@ function checkExpectedValue(expected, index)
         result += "PASS - \"" + property + "\" property for \"" + elementId + "\" element at " + time + "s saw something close to: " + expectedValue + "<br>";
     else
         result += "FAIL - \"" + property + "\" property for \"" + elementId + "\" element at " + time + "s expected: " + expectedValue + " but saw: " + computedValue + "<br>";
+
+    if (postCompletionCallback)
+      result += postCompletionCallback();
 }
 
 function endTest()

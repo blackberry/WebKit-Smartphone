@@ -1,0 +1,94 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x103
+  RenderBlock {HTML} at (0,0) size 800x103
+    RenderBody {BODY} at (8,16) size 784x79
+      RenderBlock {P} at (0,0) size 784x21
+        RenderText {#text} at (0,1) size 292x19
+          text run at (0,1) width 292: "The following two lines should look the same:"
+      RenderBlock {DIV} at (0,37) size 784x21
+        RenderInline {SPAN} at (0,0) size 12x19
+          RenderInline (generated) at (0,0) size 12x19
+            RenderCounter at (0,1) size 12x19
+              text run at (0,1) width 12: "A"
+        RenderText {#text} at (12,1) size 4x19
+          text run at (12,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 11x19
+          RenderInline (generated) at (0,0) size 11x19
+            RenderCounter at (16,1) size 11x19
+              text run at (16,1) width 11: "B"
+        RenderText {#text} at (27,1) size 4x19
+          text run at (27,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 11x19
+          RenderInline (generated) at (0,0) size 11x19
+            RenderCounter at (31,1) size 11x19
+              text run at (31,1) width 11: "C"
+        RenderText {#text} at (42,1) size 4x19
+          text run at (42,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 12x19
+          RenderInline (generated) at (0,0) size 12x19
+            RenderCounter at (46,1) size 12x19
+              text run at (46,1) width 12: "D"
+        RenderText {#text} at (58,1) size 4x19
+          text run at (58,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 10x19
+          RenderInline (generated) at (0,0) size 10x19
+            RenderCounter at (62,1) size 10x19
+              text run at (62,1) width 10: "E"
+        RenderText {#text} at (72,1) size 4x19
+          text run at (72,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 9x19
+          RenderInline (generated) at (0,0) size 9x19
+            RenderCounter at (76,1) size 9x19
+              text run at (76,1) width 9: "F"
+        RenderText {#text} at (85,1) size 4x19
+          text run at (85,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 12x19
+          RenderInline (generated) at (0,0) size 12x19
+            RenderCounter at (89,1) size 12x19
+              text run at (89,1) width 12: "G"
+        RenderText {#text} at (101,1) size 4x19
+          text run at (101,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 12x19
+          RenderInline (generated) at (0,0) size 12x19
+            RenderCounter at (105,1) size 12x19
+              text run at (105,1) width 12: "H"
+        RenderText {#text} at (117,1) size 4x19
+          text run at (117,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 5x19
+          RenderInline (generated) at (0,0) size 5x19
+            RenderCounter at (121,1) size 5x19
+              text run at (121,1) width 5: "I"
+        RenderText {#text} at (126,1) size 4x19
+          text run at (126,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 6x19
+          RenderInline (generated) at (0,0) size 6x19
+            RenderCounter at (130,1) size 6x19
+              text run at (130,1) width 6: "J"
+        RenderText {#text} at (136,1) size 4x19
+          text run at (136,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 12x19
+          RenderInline (generated) at (0,0) size 12x19
+            RenderCounter at (140,1) size 12x19
+              text run at (140,1) width 12: "K"
+        RenderText {#text} at (152,1) size 4x19
+          text run at (152,1) width 4: " "
+        RenderInline {SPAN} at (0,0) size 10x19
+          RenderInline (generated) at (0,0) size 10x19
+            RenderCounter at (156,1) size 10x19
+              text run at (156,1) width 10: "L"
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {DIV} at (0,58) size 784x21
+        RenderText {#text} at (0,1) size 165x19
+          text run at (0,1) width 15: "A "
+          text run at (15,1) width 15: "B "
+          text run at (30,1) width 15: "C "
+          text run at (45,1) width 16: "D "
+          text run at (61,1) width 14: "E "
+          text run at (75,1) width 13: "F "
+          text run at (88,1) width 16: "G "
+          text run at (104,1) width 16: "H "
+          text run at (120,1) width 9: "I "
+          text run at (129,1) width 10: "J "
+          text run at (139,1) width 16: "K "
+          text run at (155,1) width 10: "L"

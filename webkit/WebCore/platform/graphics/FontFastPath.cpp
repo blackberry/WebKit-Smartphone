@@ -29,7 +29,6 @@
 #include "FontFallbackList.h"
 #include "GlyphBuffer.h"
 #include "GlyphPageTreeNode.h"
-#include "IntPoint.h"
 #include "SimpleFontData.h"
 #include "WidthIterator.h"
 
@@ -180,76 +179,6 @@ GlyphData Font::glyphDataForCharacter(UChar32 c, bool mirror, bool forceSmallCap
     return data;
 }
 
-void Font::setCodePath(CodePath p)
-{
-    s_codePath = p;
-}
-
-Font::CodePath Font::codePath()
-{
-    return s_codePath;
-}
-
-Font::CodePath Font::codePath(const TextRun& run) const
-{
-    if (s_codePath != Auto)
-        return s_codePath;
-
-    // Start from 0 since drawing and highlighting also measure the characters before run->from
-    for (int i = 0; i < run.length(); i++) {
-        const UChar c = run[i];
-        if (c < 0x300)      // U+0300 through U+036F Combining diacritical marks
-            continue;
-        if (c <= 0x36F)
-            return Complex;
-
-        if (c < 0x0591 || c == 0x05BE)     // U+0591 through U+05CF excluding U+05BE Hebrew combining marks, Hebrew punctuation Paseq, Sof Pasuq and Nun Hafukha
-            continue;
-        if (c <= 0x05CF)
-            return Complex;
-
-        if (c < 0x0600)     // U+0600 through U+1059 Arabic, Syriac, Thaana, Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada, Malayalam, Sinhala, Thai, Lao, Tibetan, Myanmar
-            continue;
-        if (c <= 0x1059)
-            return Complex;
-
-        if (c < 0x1100)     // U+1100 through U+11FF Hangul Jamo (only Ancient Korean should be left here if you precompose; Modern Korean will be precomposed as a result of step A)
-            continue;
-        if (c <= 0x11FF)
-            return Complex;
-
-        if (c < 0x1780)     // U+1780 through U+18AF Khmer, Mongolian
-            continue;
-        if (c <= 0x18AF)
-            return Complex;
-
-        if (c < 0x1900)     // U+1900 through U+194F Limbu (Unicode 4.0)
-            continue;
-        if (c <= 0x194F)
-            return Complex;
-
-        if (c < 0x1E00)     // U+1E00 through U+2000 characters with diacritics and stacked diacritics
-            continue;
-        if (c <= 0x2000)
-            return SimpleWithGlyphOverflow;
-
-        if (c < 0x20D0)     // U+20D0 through U+20FF Combining marks for symbols
-            continue;
-        if (c <= 0x20FF)
-            return Complex;
-
-        if (c < 0xFE20)     // U+FE20 through U+FE2F Combining half marks
-            continue;
-        if (c <= 0xFE2F)
-            return Complex;
-    }
-
-    if (typesettingFeatures())
-        return Complex;
-
-    return Simple;
-}
-
 void Font::drawSimpleText(GraphicsContext* context, const TextRun& run, const FloatPoint& point, int from, int to) const
 {
     // This glyph buffer holds our glyphs+advances+font data for each glyph.
@@ -327,7 +256,7 @@ float Font::floatWidthForSimpleText(const TextRun& run, GlyphBuffer* glyphBuffer
     return it.m_runWidthSoFar;
 }
 
-FloatRect Font::selectionRectForSimpleText(const TextRun& run, const IntPoint& point, int h, int from, int to) const
+FloatRect Font::selectionRectForSimpleText(const TextRun& run, const FloatPoint& point, int h, int from, int to) const
 {
     WidthIterator it(this, run);
     it.advance(from);
@@ -335,19 +264,19 @@ FloatRect Font::selectionRectForSimpleText(const TextRun& run, const IntPoint& p
     it.advance(to);
     float afterWidth = it.m_runWidthSoFar;
 
-    // Using roundf() rather than ceilf() for the right edge as a compromise to ensure correct caret positioning
+    // Using roundf() rather than ceilf() for the right edge as a compromise to ensure correct caret positioning.
     if (run.rtl()) {
         it.advance(run.length());
         float totalWidth = it.m_runWidthSoFar;
         return FloatRect(point.x() + floorf(totalWidth - afterWidth), point.y(), roundf(totalWidth - beforeWidth) - floorf(totalWidth - afterWidth), h);
-    } else {
-        return FloatRect(point.x() + floorf(beforeWidth), point.y(), roundf(afterWidth) - floorf(beforeWidth), h);
     }
+
+    return FloatRect(point.x() + floorf(beforeWidth), point.y(), roundf(afterWidth) - floorf(beforeWidth), h);
 }
 
-int Font::offsetForPositionForSimpleText(const TextRun& run, int x, bool includePartialGlyphs) const
+int Font::offsetForPositionForSimpleText(const TextRun& run, float x, bool includePartialGlyphs) const
 {
-    float delta = (float)x;
+    float delta = x;
 
     WidthIterator it(this, run);
     GlyphBuffer localGlyphBuffer;

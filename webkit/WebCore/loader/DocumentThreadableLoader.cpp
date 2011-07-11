@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2009 Google Inc. All rights reserved.
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -38,10 +37,12 @@
 #include "Document.h"
 #include "Frame.h"
 #include "FrameLoader.h"
+#include "ResourceHandle.h"
 #include "ResourceRequest.h"
 #include "SecurityOrigin.h"
 #include "SubresourceLoader.h"
 #include "ThreadableLoaderClient.h"
+#include <wtf/UnusedParam.h>
 
 namespace WebCore {
 
@@ -76,20 +77,20 @@ DocumentThreadableLoader::DocumentThreadableLoader(Document* document, Threadabl
     }
 
     if (m_options.crossOriginRequestPolicy == DenyCrossOriginRequests) {
-        m_client->didFail(ResourceError());
+        m_client->didFail(ResourceError(errorDomainWebKitInternal, 0, request.url().string(), "Cross origin requests are not supported."));
         return;
     }
     
     ASSERT(m_options.crossOriginRequestPolicy == UseAccessControl);
 
-    OwnPtr<ResourceRequest> crossOriginRequest(new ResourceRequest(request));
+    OwnPtr<ResourceRequest> crossOriginRequest = adoptPtr(new ResourceRequest(request));
     crossOriginRequest->removeCredentials();
     crossOriginRequest->setAllowCookies(m_options.allowCredentials);
 
     if (!m_options.forcePreflight && isSimpleCrossOriginAccessRequest(crossOriginRequest->httpMethod(), crossOriginRequest->httpHeaderFields()))
         makeSimpleCrossOriginAccessRequest(*crossOriginRequest);
     else {
-        m_actualRequest.set(crossOriginRequest.release());
+        m_actualRequest = crossOriginRequest.release();
 
         if (CrossOriginPreflightResultCache::shared().canSkipPreflight(document->securityOrigin()->toString(), m_actualRequest->url(), m_options.allowCredentials, m_actualRequest->httpMethod(), m_actualRequest->httpHeaderFields()))
             preflightSuccess();
@@ -104,7 +105,7 @@ void DocumentThreadableLoader::makeSimpleCrossOriginAccessRequest(const Resource
 
     // Cross-origin requests are only defined for HTTP. We would catch this when checking response headers later, but there is no reason to send a request that's guaranteed to be denied.
     if (!request.url().protocolInHTTPFamily()) {
-        m_client->didFail(ResourceError());
+        m_client->didFail(ResourceError(errorDomainWebKitInternal, 0, request.url().string(), "Cross origin requests are only supported for HTTP."));
         return;
     }
 
@@ -123,9 +124,6 @@ void DocumentThreadableLoader::makeCrossOriginAccessRequestWithPreflight(const R
     preflightRequest.setAllowCookies(m_options.allowCredentials);
     preflightRequest.setHTTPMethod("OPTIONS");
     preflightRequest.setHTTPHeaderField("Access-Control-Request-Method", request.httpMethod());
-#if OS(OLYMPIA)
-    preflightRequest.setTargetType(request.targetType());
-#endif
 
     const HTTPHeaderMap& requestHeaderFields = request.httpHeaderFields();
 
@@ -190,25 +188,26 @@ void DocumentThreadableLoader::didReceiveResponse(SubresourceLoader* loader, con
     ASSERT(m_client);
     ASSERT_UNUSED(loader, loader == m_loader);
 
+    String accessControlErrorDescription;
     if (m_actualRequest) {
-        if (!passesAccessControlCheck(response, m_options.allowCredentials, m_document->securityOrigin())) {
-            preflightFailure();
+        if (!passesAccessControlCheck(response, m_options.allowCredentials, m_document->securityOrigin(), accessControlErrorDescription)) {
+            preflightFailure(response.url(), accessControlErrorDescription);
             return;
         }
 
-        OwnPtr<CrossOriginPreflightResultCacheItem> preflightResult(new CrossOriginPreflightResultCacheItem(m_options.allowCredentials));
-        if (!preflightResult->parse(response)
-            || !preflightResult->allowsCrossOriginMethod(m_actualRequest->httpMethod())
-            || !preflightResult->allowsCrossOriginHeaders(m_actualRequest->httpHeaderFields())) {
-            preflightFailure();
+        OwnPtr<CrossOriginPreflightResultCacheItem> preflightResult = adoptPtr(new CrossOriginPreflightResultCacheItem(m_options.allowCredentials));
+        if (!preflightResult->parse(response, accessControlErrorDescription)
+            || !preflightResult->allowsCrossOriginMethod(m_actualRequest->httpMethod(), accessControlErrorDescription)
+            || !preflightResult->allowsCrossOriginHeaders(m_actualRequest->httpHeaderFields(), accessControlErrorDescription)) {
+            preflightFailure(response.url(), accessControlErrorDescription);
             return;
         }
 
         CrossOriginPreflightResultCache::shared().appendEntry(m_document->securityOrigin()->toString(), m_actualRequest->url(), preflightResult.release());
     } else {
         if (!m_sameOriginRequest && m_options.crossOriginRequestPolicy == UseAccessControl) {
-            if (!passesAccessControlCheck(response, m_options.allowCredentials, m_document->securityOrigin())) {
-                m_client->didFail(ResourceError());
+            if (!passesAccessControlCheck(response, m_options.allowCredentials, m_document->securityOrigin(), accessControlErrorDescription)) {
+                m_client->didFail(ResourceError(errorDomainWebKitInternal, 0, response.url().string(), accessControlErrorDescription));
                 return;
             }
         }
@@ -267,14 +266,20 @@ bool DocumentThreadableLoader::getShouldUseCredentialStorage(SubresourceLoader* 
     return false; // Only FrameLoaderClient can ultimately permit credential use.
 }
 
-void DocumentThreadableLoader::didReceiveAuthenticationChallenge(SubresourceLoader* loader, const AuthenticationChallenge&)
+void DocumentThreadableLoader::didReceiveAuthenticationChallenge(SubresourceLoader* loader, const AuthenticationChallenge& challenge)
 {
     ASSERT(loader == m_loader);
     // Users are not prompted for credentials for cross-origin requests.
     if (!m_sameOriginRequest) {
+#if PLATFORM(MAC) || USE(CFNETWORK) || USE(CURL)
+        loader->handle()->receivedRequestToContinueWithoutCredential(challenge);
+#else
+        // These platforms don't provide a way to continue without credentials, cancel the load altogether.
+        UNUSED_PARAM(challenge);
         RefPtr<DocumentThreadableLoader> protect(this);
         m_client->didFail(loader->blockedError());
         cancel();
+#endif
     }
 }
 
@@ -294,10 +299,10 @@ void DocumentThreadableLoader::preflightSuccess()
     loadRequest(*actualRequest, SkipSecurityCheck);
 }
 
-void DocumentThreadableLoader::preflightFailure()
+void DocumentThreadableLoader::preflightFailure(const String& url, const String& errorDescription)
 {
     m_actualRequest = 0; // Prevent didFinishLoading() from bypassing access check.
-    m_client->didFail(ResourceError());
+    m_client->didFail(ResourceError(errorDomainWebKitInternal, 0, url, errorDescription));
 }
 
 void DocumentThreadableLoader::loadRequest(const ResourceRequest& request, SecurityCheckPolicy securityCheck)

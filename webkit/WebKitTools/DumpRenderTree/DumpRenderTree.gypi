@@ -9,6 +9,12 @@
             'chromium/CppBoundClass.h',
             'chromium/CppVariant.cpp',
             'chromium/CppVariant.h',
+            'chromium/DRTDevToolsAgent.cpp',
+            'chromium/DRTDevToolsAgent.h',
+            'chromium/DRTDevToolsCallArgs.cpp',
+            'chromium/DRTDevToolsCallArgs.h',
+            'chromium/DRTDevToolsClient.cpp',
+            'chromium/DRTDevToolsClient.h',
             'chromium/DumpRenderTree.cpp',
             'chromium/EventSender.cpp',
             'chromium/EventSender.h',
@@ -20,6 +26,10 @@
             'chromium/NotificationPresenter.cpp',
             'chromium/PlainTextController.cpp',
             'chromium/PlainTextController.h',
+            'chromium/Task.h',
+            'chromium/Task.cpp',
+            'chromium/TestEventPrinter.h',
+            'chromium/TestEventPrinter.cpp',
             'chromium/TestNavigationController.cpp',
             'chromium/TestNavigationController.h',
             'chromium/TestShell.cpp',
@@ -31,6 +41,16 @@
             'chromium/TextInputController.h',
             'chromium/WebViewHost.cpp',
             'chromium/WebViewHost.h',
+        ],
+        'conditions': [
+            ['OS=="win"', {
+                'drt_files': [
+                    'chromium/WebThemeControlDRT.cpp',
+                    'chromium/WebThemeControlDRT.h',
+                    'chromium/WebThemeEngineDRT.cpp',
+                    'chromium/WebThemeEngineDRT.h',
+                ],
+            }],
         ],
     }
 }

@@ -23,16 +23,13 @@
 
 #include "GRefPtr.h"
 
-typedef struct _GtkTargetList GtkTargetList;
-typedef struct _GdkCursor GdkCursor;
-
 namespace WTF {
 
-template <> GtkTargetList* refGPtr(GtkTargetList* ptr);
-template <> void derefGPtr(GtkTargetList* ptr);
+template <> GtkTargetList* refPlatformPtr(GtkTargetList* ptr);
+template <> void derefPlatformPtr(GtkTargetList* ptr);
 
-template <> GdkCursor* refGPtr(GdkCursor* ptr);
-template <> void derefGPtr(GdkCursor* ptr);
+template <> GdkCursor* refPlatformPtr(GdkCursor* ptr);
+template <> void derefPlatformPtr(GdkCursor* ptr);
 
 }
 

@@ -31,7 +31,7 @@
 #include "config.h"
 #include "WebRuntimeFeatures.h"
 
-#include "Database.h"
+#include "AbstractDatabase.h"
 #include "RuntimeEnabledFeatures.h"
 #include "WebMediaPlayerClientImpl.h"
 #include "WebSocket.h"
@@ -43,14 +43,14 @@ namespace WebKit {
 void WebRuntimeFeatures::enableDatabase(bool enable)
 {
 #if ENABLE(DATABASE)
-    Database::setIsAvailable(enable);
+    AbstractDatabase::setIsAvailable(enable);
 #endif
 }
 
 bool WebRuntimeFeatures::isDatabaseEnabled()
 {
 #if ENABLE(DATABASE)
-    return Database::isAvailable();
+    return AbstractDatabase::isAvailable();
 #else
     return false;
 #endif
@@ -221,6 +221,68 @@ bool WebRuntimeFeatures::isTouchEnabled()
 {
 #if ENABLE(TOUCH_EVENTS)
     return RuntimeEnabledFeatures::touchEnabled();
+#else
+    return false;
+#endif
+}
+
+void WebRuntimeFeatures::enableDeviceMotion(bool enable)
+{
+    RuntimeEnabledFeatures::setDeviceMotionEnabled(enable);
+}
+
+bool WebRuntimeFeatures::isDeviceMotionEnabled()
+{
+    return RuntimeEnabledFeatures::deviceMotionEnabled();
+}
+
+void WebRuntimeFeatures::enableDeviceOrientation(bool enable)
+{
+    RuntimeEnabledFeatures::setDeviceOrientationEnabled(enable);
+}
+
+bool WebRuntimeFeatures::isDeviceOrientationEnabled()
+{
+    return RuntimeEnabledFeatures::deviceOrientationEnabled();
+}
+
+void WebRuntimeFeatures::enableSpeechInput(bool enable)
+{
+    RuntimeEnabledFeatures::setSpeechInputEnabled(enable);
+}
+
+bool WebRuntimeFeatures::isSpeechInputEnabled()
+{
+    return RuntimeEnabledFeatures::speechInputEnabled();
+}
+
+void WebRuntimeFeatures::enableXHRResponseBlob(bool enable)
+{
+#if ENABLE(XHR_RESPONSE_BLOB)
+    RuntimeEnabledFeatures::setXHRResponseBlobEnabled(enable);
+#endif
+}
+
+bool WebRuntimeFeatures::isXHRResponseBlobEnabled()
+{
+#if ENABLE(XHR_RESPONSE_BLOB)
+    return RuntimeEnabledFeatures::xhrResponseBlobEnabled();
+#else
+    return false;
+#endif
+}
+
+void WebRuntimeFeatures::enableFileSystem(bool enable)
+{
+#if ENABLE(FILE_SYSTEM)
+    RuntimeEnabledFeatures::setFileSystemEnabled(enable);
+#endif
+}
+
+bool WebRuntimeFeatures::isFileSystemEnabled()
+{
+#if ENABLE(FILE_SYSTEM)
+    return RuntimeEnabledFeatures::fileSystemEnabled();
 #else
     return false;
 #endif

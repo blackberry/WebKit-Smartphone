@@ -1,12 +1,3 @@
-function dumpArray(result)
-{
-    if (result instanceof Array) {
-        for (var i = 0; i < result.length; ++i)
-            output(result[i]);
-    } else
-        output(result);
-}
-
 // Frontend functions.
 
 function frontend_expandDOMSubtree(node)
@@ -69,7 +60,7 @@ function frontend_getSelectedElementStyles(excludeComputed, excludeMatched)
                 continue;
             if (section.element.previousSibling && section.element.previousSibling.className === "styles-sidebar-separator")
                 result.push("======== " + section.element.previousSibling.textContent + " ========");
-            result.push((section.expanded ? "[expanded] " : "[collapsed] ") + section.titleElement.textContent + " (" + section.subtitleElement.textContent + ")");
+            result.push((section.expanded ? "[expanded] " : "[collapsed] ") + section.titleElement.textContent + " (" + section.subtitleAsTextForTest + ")");
             section.expand();
             frontend_dumpStyleTreeOutline(section.propertiesTreeOutline, result);
             result.push("");
@@ -101,6 +92,12 @@ function frontend_dumpStyleTreeOutline(treeItem, result)
 
 function frontend_dumpStyleTreeItem(treeItem, result, prefix)
 {
+    // Filter out width and height properties in order to minimize
+    // potential diffs.
+    if (!treeItem.listItemElement.textContent.indexOf("width") ||
+        !treeItem.listItemElement.textContent.indexOf("height"))
+        return;
+
     if (treeItem.listItemElement.hasStyleClass("inherited"))
         return;
     var typePrefix = "";
@@ -108,9 +105,16 @@ function frontend_dumpStyleTreeItem(treeItem, result, prefix)
         typePrefix += "/-- overloaded --/ ";
     if (treeItem.listItemElement.hasStyleClass("disabled"))
         typePrefix += "/-- disabled --/ ";
-    result.push(prefix + typePrefix + treeItem.listItemElement.textContent);
+    var textContent = treeItem.listItemElement.textContent;
+
+    // Add non-selectable url text.
+    var textData = treeItem.listItemElement.querySelector("[data-uncopyable]");
+    if (textData)
+        textContent += textData.getAttribute("data-uncopyable");
+
+    result.push(prefix + typePrefix + textContent);
     treeItem.expand();
     var children = treeItem.children;
     for (var i = 0; children && i < children.length; ++i)
-        frontend_dumpStyleTreeItem(children[i], result, prefix + "> ");
+        frontend_dumpStyleTreeItem(children[i], result, prefix + "    ");
 }

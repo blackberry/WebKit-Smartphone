@@ -51,6 +51,7 @@
 #include "V8HTMLCollection.h"
 #include "V8HTMLDocument.h"
 #include "V8IDBRequest.h"
+#include "V8IDBTransaction.h"
 #include "V8IsolatedContext.h"
 #include "V8Location.h"
 #include "V8MessageChannel.h"
@@ -82,7 +83,6 @@
 
 #include <algorithm>
 #include <utility>
-#include <v8.h>
 #include <v8-debug.h>
 #include <wtf/Assertions.h>
 #include <wtf/OwnArrayPtr.h>
@@ -222,11 +222,7 @@ PassRefPtr<NodeFilter> V8DOMWrapper::wrapNativeNodeFilter(v8::Handle<v8::Value> 
     // to NodeFilter. NodeFilter has a ref counted pointer to NodeFilterCondition.
     // In NodeFilterCondition, filter object is persisted in its constructor,
     // and disposed in its destructor.
-    if (!filter->IsFunction())
-        return 0;
-
-    NodeFilterCondition* condition = new V8NodeFilterCondition(filter);
-    return NodeFilter::create(condition);
+    return NodeFilter::create(V8NodeFilterCondition::create(filter));
 }
 
 static bool globalObjectPrototypeIsDOMWindow(v8::Handle<v8::Object> objectPrototype)
@@ -286,6 +282,8 @@ v8::Local<v8::Object> V8DOMWrapper::instantiateV8Object(V8Proxy* proxy, WrapperT
     if (!instance.IsEmpty()) {
         // Avoid setting the DOM wrapper for failed allocations.
         setDOMWrapper(instance, type, impl);
+        if (type == &V8HTMLDocument::info)
+            instance = V8HTMLDocument::WrapInShadowObject(instance, static_cast<Node*>(impl));
     }
     return instance;
 }
@@ -331,9 +329,8 @@ bool V8DOMWrapper::isWrapperOfType(v8::Handle<v8::Value> value, WrapperTypeInfo*
     return typeInfo == type;
 }
 
-v8::Handle<v8::Object> V8DOMWrapper::getWrapper(Node* node)
+v8::Handle<v8::Object> V8DOMWrapper::getWrapperSlow(Node* node)
 {
-    ASSERT(WTF::isMainThread());
     V8IsolatedContext* context = V8IsolatedContext::getEntered();
     if (LIKELY(!context)) {
         v8::Persistent<v8::Object>* wrapper = node->wrapper();
@@ -341,7 +338,6 @@ v8::Handle<v8::Object> V8DOMWrapper::getWrapper(Node* node)
             return v8::Handle<v8::Object>();
         return *wrapper;
     }
-
     DOMNodeMapping& domNodeMap = context->world()->domDataStore()->domNodeMap();
     return domNodeMap.get(node);
 }
@@ -382,6 +378,8 @@ v8::Handle<v8::Value> V8DOMWrapper::convertEventTargetToV8Object(EventTarget* ta
 #if ENABLE(INDEXED_DATABASE)
     if (IDBRequest* idbRequest = target->toIDBRequest())
         return toV8(idbRequest);
+    if (IDBTransaction* idbTransaction = target->toIDBTransaction())
+        return toV8(idbTransaction);
 #endif
 
 #if ENABLE(WEB_SOCKETS)
@@ -425,7 +423,7 @@ v8::Handle<v8::Value> V8DOMWrapper::convertEventTargetToV8Object(EventTarget* ta
         return toV8(eventSource);
 #endif
 
-#if ENABLE(FILE_READER)
+#if ENABLE(BLOB)
     if (FileReader* fileReader = target->toFileReader())
         return toV8(fileReader);
 #endif
@@ -450,5 +448,18 @@ PassRefPtr<EventListener> V8DOMWrapper::getEventListener(v8::Local<v8::Value> va
     return 0;
 #endif
 }
+
+#if ENABLE(XPATH)
+// XPath-related utilities
+RefPtr<XPathNSResolver> V8DOMWrapper::getXPathNSResolver(v8::Handle<v8::Value> value, V8Proxy* proxy)
+{
+    RefPtr<XPathNSResolver> resolver;
+    if (V8XPathNSResolver::HasInstance(value))
+        resolver = V8XPathNSResolver::toNative(v8::Handle<v8::Object>::Cast(value));
+    else if (value->IsObject())
+        resolver = V8CustomXPathNSResolver::create(value->ToObject());
+    return resolver;
+}
+#endif
 
 }  // namespace WebCore

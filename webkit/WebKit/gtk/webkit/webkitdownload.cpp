@@ -485,8 +485,9 @@ void webkit_download_start(WebKitDownload* download)
     g_return_if_fail(priv->status == WEBKIT_DOWNLOAD_STATUS_CREATED);
     g_return_if_fail(priv->timer == NULL);
 
+    // For GTK, when downloading a file NetworkingContext is null
     if (!priv->resourceHandle)
-        priv->resourceHandle = ResourceHandle::create(core(priv->networkRequest), priv->downloadClient, 0, false, false);
+        priv->resourceHandle = ResourceHandle::create(/* Null NetworkingContext */ NULL, core(priv->networkRequest), priv->downloadClient, false, false);
     else {
         priv->resourceHandle->setClient(priv->downloadClient);
 
@@ -905,7 +906,7 @@ static void webkit_download_error(WebKitDownload* download, const ResourceError&
     webkit_download_close_stream(download);
 
     WebKitDownloadPrivate* priv = download->priv;
-    GRefPtr<WebKitDownload> protect(download);
+    PlatformRefPtr<WebKitDownload> protect(download);
 
     g_timer_stop(priv->timer);
     webkit_download_set_status(download, WEBKIT_DOWNLOAD_STATUS_ERROR);

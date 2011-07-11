@@ -10,9 +10,6 @@
  * 2.  Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer in the
  *     documentation and/or other materials provided with the distribution.
- * 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of
- *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -37,34 +34,64 @@
 
 namespace WebCore {
 
-class IDBDatabaseRequest;
-class IDBObjectStoreRequest;
-class IndexedDatabaseRequest;
+class IDBCursor;
+class IDBDatabase;
+class IDBIndex;
+class IDBKey;
+class IDBObjectStore;
+class IDBFactory;
 class SerializedScriptValue;
 
 class IDBAny : public RefCounted<IDBAny> {
 public:
-    static PassRefPtr<IDBAny> create();
+    static PassRefPtr<IDBAny> createInvalid();
+    static PassRefPtr<IDBAny> createNull();
+    template<typename T>
+    static PassRefPtr<IDBAny> create(T* idbObject)
+    {
+        RefPtr<IDBAny> any = IDBAny::createInvalid();
+        any->set(idbObject);
+        return any.release();
+    }
+    template<typename T>
+    static PassRefPtr<IDBAny> create(PassRefPtr<T> idbObject)
+    {
+        RefPtr<IDBAny> any = IDBAny::createInvalid();
+        any->set(idbObject);
+        return any.release();
+    }
     ~IDBAny();
 
     enum Type {
         UndefinedType = 0,
-        IDBDatabaseRequestType,
-        IDBObjectStoreRequestType,
-        IndexedDatabaseRequestType,
+        NullType,
+        IDBCursorType,
+        IDBDatabaseType,
+        IDBFactoryType,
+        IDBIndexType,
+        IDBKeyType,
+        IDBObjectStoreType,
         SerializedScriptValueType
     };
 
     Type type() const { return m_type; }
-
-    PassRefPtr<IDBDatabaseRequest> idbDatabaseRequest();
-    PassRefPtr<IDBObjectStoreRequest> idbObjectStoreRequest();
-    PassRefPtr<IndexedDatabaseRequest> indexedDatabaseRequest();
+    // Use type() to figure out which one of these you're allowed to call.
+    PassRefPtr<IDBCursor> idbCursor();
+    PassRefPtr<IDBDatabase> idbDatabase();
+    PassRefPtr<IDBFactory> idbFactory();
+    PassRefPtr<IDBIndex> idbIndex();
+    PassRefPtr<IDBKey> idbKey();
+    PassRefPtr<IDBObjectStore> idbObjectStore();
     PassRefPtr<SerializedScriptValue> serializedScriptValue();
 
-    void set(PassRefPtr<IDBDatabaseRequest>);
-    void set(PassRefPtr<IDBObjectStoreRequest>);
-    void set(PassRefPtr<IndexedDatabaseRequest>);
+    // Set can only be called once.
+    void setNull();
+    void set(PassRefPtr<IDBCursor>);
+    void set(PassRefPtr<IDBDatabase>);
+    void set(PassRefPtr<IDBFactory>);
+    void set(PassRefPtr<IDBIndex>);
+    void set(PassRefPtr<IDBKey>);
+    void set(PassRefPtr<IDBObjectStore>);
     void set(PassRefPtr<SerializedScriptValue>);
 
 private:
@@ -73,9 +100,12 @@ private:
     Type m_type;
 
     // Only one of the following should ever be in use at any given time.
-    RefPtr<IDBDatabaseRequest> m_idbDatabaseRequest;
-    RefPtr<IDBObjectStoreRequest> m_idbObjectStoreRequest;
-    RefPtr<IndexedDatabaseRequest> m_indexedDatabaseRequest;
+    RefPtr<IDBCursor> m_idbCursor;
+    RefPtr<IDBDatabase> m_idbDatabase;
+    RefPtr<IDBFactory> m_idbFactory;
+    RefPtr<IDBIndex> m_idbIndex;
+    RefPtr<IDBKey> m_idbKey;
+    RefPtr<IDBObjectStore> m_idbObjectStore;
     RefPtr<SerializedScriptValue> m_serializedScriptValue;
 };
 

@@ -24,13 +24,13 @@
 #include "FrameView.h"
 #include "GraphicsContext.h"
 #include "IntRect.h"
+#include "QWebPageClient.h"
+#include "TiledBackingStore.h"
+#include "qgraphicswebview.h"
 #include "qwebframe.h"
 #include "qwebframe_p.h"
 #include "qwebpage.h"
 #include "qwebpage_p.h"
-#include "QWebPageClient.h"
-#include "TiledBackingStore.h"
-
 #include <QtCore/qmetaobject.h>
 #include <QtCore/qsharedpointer.h>
 #include <QtGui/qgraphicsscene.h>
@@ -41,7 +41,6 @@
 #include <QtGui/qwidget.h>
 
 #include <Settings.h>
-
 
 namespace WebCore {
 
@@ -59,8 +58,8 @@ public:
     virtual void update(const QRect& dirtyRect);
     virtual void setInputMethodEnabled(bool enable);
     virtual bool inputMethodEnabled() const;
-#if QT_VERSION >= 0x040600
-    virtual void setInputMethodHint(Qt::InputMethodHint hint, bool enable);
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
+    virtual void setInputMethodHints(Qt::InputMethodHints hints);
 #endif
 
 #ifndef QT_NO_CURSOR
@@ -76,8 +75,10 @@ public:
     virtual QObject* pluginParent() const;
 
     virtual QStyle* style() const;
-    
+
     virtual bool viewResizesToContentsEnabled() const { return false; }
+
+    virtual QRectF windowRect() const;
 
     QWidget* view;
 };
@@ -120,7 +121,7 @@ class QGraphicsItemOverlay : public QGraphicsItem {
 
 class PageClientQGraphicsWidget : public QWebPageClient {
 public:
-    PageClientQGraphicsWidget(QGraphicsWidget* v, QWebPage* p)
+    PageClientQGraphicsWidget(QGraphicsWebView* v, QWebPage* p)
         : view(v)
         , page(p)
         , viewResizesToContents(false)
@@ -145,8 +146,8 @@ public:
     virtual void update(const QRect& dirtyRect);
     virtual void setInputMethodEnabled(bool enable);
     virtual bool inputMethodEnabled() const;
-#if QT_VERSION >= 0x040600
-    virtual void setInputMethodHint(Qt::InputMethodHint hint, bool enable);
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
+    virtual void setInputMethodHints(Qt::InputMethodHints hints);
 #endif
 
 #ifndef QT_NO_CURSOR
@@ -182,7 +183,9 @@ public:
     virtual bool allowsAcceleratedCompositing() const { return true; }
 #endif
 
-    QGraphicsWidget* view;
+    virtual QRectF windowRect() const;
+
+    QGraphicsWebView* view;
     QWebPage* page;
     bool viewResizesToContents;
 

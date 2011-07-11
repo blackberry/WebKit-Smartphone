@@ -27,7 +27,7 @@
 #include "config.h"
 #include "CachedFont.h"
 
-#if PLATFORM(CG) || PLATFORM(QT) || PLATFORM(GTK) || (PLATFORM(CHROMIUM) && (OS(WINDOWS) || OS(LINUX))) || PLATFORM(HAIKU) || OS(WINCE) || PLATFORM(OLYMPIA)
+#if PLATFORM(CG) || PLATFORM(QT) || PLATFORM(GTK) || (PLATFORM(CHROMIUM) && (OS(WINDOWS) || OS(LINUX))) || PLATFORM(HAIKU) || OS(WINCE) || PLATFORM(ANDROID) || PLATFORM(OLYMPIA)
 #define STORE_FONT_CUSTOM_PLATFORM_DATA
 #endif
 
@@ -71,7 +71,7 @@ CachedFont::~CachedFont()
 #endif
 }
 
-void CachedFont::load(DocLoader*)
+void CachedFont::load(CachedResourceLoader*)
 {
     // Don't load the file yet.  Wait for an access before triggering the load.
     setLoading(true);
@@ -94,7 +94,7 @@ void CachedFont::data(PassRefPtr<SharedBuffer> data, bool allDataReceived)
     checkNotify();
 }
 
-void CachedFont::beginLoadIfNeeded(DocLoader* dl)
+void CachedFont::beginLoadIfNeeded(CachedResourceLoader* dl)
 {
     if (!m_loadInitiated) {
         m_loadInitiated = true;
@@ -136,7 +136,7 @@ bool CachedFont::ensureSVGFontData()
 {
     ASSERT(m_isSVGFont);
     if (!m_externalSVGDocument && !errorOccurred() && !isLoading() && m_data) {
-        m_externalSVGDocument = SVGDocument::create(0);
+        m_externalSVGDocument = SVGDocument::create(0, KURL());
         m_externalSVGDocument->open();
 
         RefPtr<TextResourceDecoder> decoder = TextResourceDecoder::create("application/xml");
@@ -176,11 +176,9 @@ SVGFontElement* CachedFont::getSVGFontById(const String& fontName) const
         return static_cast<SVGFontElement*>(list->item(0));
 
     for (unsigned i = 0; i < listLength; ++i) {
-        Node* node = list->item(i);
-        if (static_cast<Element*>(node)->getAttribute(static_cast<Element*>(node)->idAttributeName()) != fontName)
-            continue;
-
-        return static_cast<SVGFontElement*>(node);
+        SVGFontElement* element = static_cast<SVGFontElement*>(list->item(i));
+        if (element->getIdAttribute() == fontName)
+            return element;
     }
 
     return 0;

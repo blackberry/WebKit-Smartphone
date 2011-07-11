@@ -28,7 +28,7 @@
 #include "CachedImage.h"
 #include "CachedScript.h"
 #include "CachedXSLStyleSheet.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "Document.h"
 #include "FrameLoader.h"
 #include "FrameLoaderTypes.h"
@@ -65,7 +65,6 @@ Cache::Cache()
     , m_deadDecodedDataDeletionInterval(cDefaultDecodedDataDeletionInterval)
     , m_liveSize(0)
     , m_deadSize(0)
-    , m_client(0)
 {
 }
 
@@ -84,9 +83,9 @@ static CachedResource* createResource(CachedResource::Type type, const KURL& url
     case CachedResource::XSLStyleSheet:
         return new CachedXSLStyleSheet(url.string());
 #endif
-#if ENABLE(XBL)
-    case CachedResource::XBLStyleSheet:
-        return new CachedXBLDocument(url.string());
+#if ENABLE(LINK_PREFETCH)
+    case CachedResource::LinkPrefetch:
+        return new CachedResource(url.string(), CachedResource::LinkPrefetch);
 #endif
     default:
         break;
@@ -95,28 +94,33 @@ static CachedResource* createResource(CachedResource::Type type, const KURL& url
     return 0;
 }
 
-CachedResource* Cache::requestResource(DocLoader* docLoader, CachedResource::Type type, const KURL& url, const String& charset, bool requestIsPreload)
+CachedResource* Cache::requestResource(CachedResourceLoader* cachedResourceLoader, CachedResource::Type type, const KURL& url, const String& charset, bool requestIsPreload)
 {
     // FIXME: Do we really need to special-case an empty URL?
     // Would it be better to just go on with the cache code and let it fail later?
     if (url.isEmpty())
         return 0;
-    
+
     // Look up the resource in our map.
     CachedResource* resource = resourceForURL(url.string());
-    
+
     if (resource && requestIsPreload && !resource->isPreloaded())
         return 0;
-    
-    if (SecurityOrigin::restrictAccessToLocal() && !SecurityOrigin::canLoad(url, String(), docLoader->doc())) {
-        Document* doc = docLoader->doc();
-        if (doc && !requestIsPreload)
-            FrameLoader::reportLocalLoadFailed(doc->frame(), url.string());
+
+    if (!cachedResourceLoader->doc()->securityOrigin()->canDisplay(url)) {
+        if (!requestIsPreload)
+            FrameLoader::reportLocalLoadFailed(cachedResourceLoader->doc()->frame(), url.string());
         return 0;
     }
 
+    if (resource && resource->type() != type) {
+        LOG(ResourceLoading, "Cache::requestResource found a cache resource with matching url but different type, evicting and loading with new type.");
+        evict(resource);
+        resource = 0;
+    }
+
 #if OS(OLYMPIA)
-    Settings* settings = docLoader ? docLoader->doc()->settings() : 0;
+    Settings* settings = cachedResourceLoader ? cachedResourceLoader->doc()->settings() : 0;
 #endif
     
     if (!resource) {
@@ -128,7 +132,7 @@ CachedResource* Cache::requestResource(DocLoader* docLoader, CachedResource::Typ
         // FIXME: CachedResource should just use normal refcounting instead.
         resource->setInCache(true);
         
-        resource->load(docLoader);
+        resource->load(cachedResourceLoader);
         
         if (resource->errorOccurred()) {
             // We don't support immediate loads, but we do support immediate failure.
@@ -148,12 +152,9 @@ CachedResource* Cache::requestResource(DocLoader* docLoader, CachedResource::Typ
         else {
             // Kick the resource out of the cache, because the cache is disabled.
             resource->setInCache(false);
-            resource->setDocLoader(docLoader);
+            resource->setCachedResourceLoader(cachedResourceLoader);
         }
     }
-
-    if (resource->type() != type)
-        return 0;
 
 #if OS(OLYMPIA)
     if (!disabled() && settings && settings->useCache()) {
@@ -167,10 +168,10 @@ CachedResource* Cache::requestResource(DocLoader* docLoader, CachedResource::Typ
     return resource;
 }
     
-CachedCSSStyleSheet* Cache::requestUserCSSStyleSheet(DocLoader* docLoader, const String& url, const String& charset)
+CachedCSSStyleSheet* Cache::requestUserCSSStyleSheet(CachedResourceLoader* cachedResourceLoader, const String& url, const String& charset)
 {
 #if OS(OLYMPIA)
-    Settings* settings = docLoader ? docLoader->doc()->settings() : 0;
+    Settings* settings = cachedResourceLoader ? cachedResourceLoader->doc()->settings() : 0;
 #endif
 
     CachedCSSStyleSheet* userSheet;
@@ -185,7 +186,7 @@ CachedCSSStyleSheet* Cache::requestUserCSSStyleSheet(DocLoader* docLoader, const
         // FIXME: CachedResource should just use normal refcounting instead.
         userSheet->setInCache(true);
         // Don't load incrementally, skip load checks, don't send resource load callbacks.
-        userSheet->load(docLoader, false, SkipSecurityCheck, false);
+        userSheet->load(cachedResourceLoader, false, SkipSecurityCheck, false);
 #if OS(OLYMPIA)
         if (!disabled() && settings && settings->useCache())
 #else
@@ -208,7 +209,7 @@ CachedCSSStyleSheet* Cache::requestUserCSSStyleSheet(DocLoader* docLoader, const
     return userSheet;
 }
     
-void Cache::revalidateResource(CachedResource* resource, DocLoader* docLoader)
+void Cache::revalidateResource(CachedResource* resource, CachedResourceLoader* cachedResourceLoader)
 {
     ASSERT(resource);
     ASSERT(resource->inCache());
@@ -227,7 +228,7 @@ void Cache::revalidateResource(CachedResource* resource, DocLoader* docLoader)
     m_resources.set(url, newResource);
     newResource->setInCache(true);
     resourceAccessed(newResource);
-    newResource->load(docLoader);
+    newResource->load(cachedResourceLoader);
 }
     
 void Cache::revalidationSucceeded(CachedResource* revalidatingResource, const ResourceResponse& response)
@@ -448,14 +449,14 @@ void Cache::evict(CachedResource* resource)
         delete resource;
 }
 
-void Cache::addDocLoader(DocLoader* docLoader)
+void Cache::addCachedResourceLoader(CachedResourceLoader* cachedResourceLoader)
 {
-    m_docLoaders.add(docLoader);
+    m_cachedResourceLoaders.add(cachedResourceLoader);
 }
 
-void Cache::removeDocLoader(DocLoader* docLoader)
+void Cache::removeCachedResourceLoader(CachedResourceLoader* cachedResourceLoader)
 {
-    m_docLoaders.remove(docLoader);
+    m_cachedResourceLoaders.remove(cachedResourceLoader);
 }
 
 static inline unsigned fastLog2(unsigned i)
@@ -657,16 +658,12 @@ void Cache::addToLiveResourcesSize(CachedResource* resource)
 {
     m_liveSize += resource->size();
     m_deadSize -= resource->size();
-    if (m_client)
-        m_client->didAddToLiveResourcesSize(resource);
 }
 
 void Cache::removeFromLiveResourcesSize(CachedResource* resource)
 {
     m_liveSize -= resource->size();
     m_deadSize += resource->size();
-    if (m_client)
-        m_client->didRemoveFromLiveResourcesSize(resource);
 }
 
 void Cache::adjustSize(bool live, int delta)
@@ -717,11 +714,6 @@ Cache::Statistics Cache::getStatistics()
         case CachedResource::FontResource:
             stats.fonts.addResource(resource);
             break;
-#if ENABLE(XBL)
-        case CachedResource::XBL:
-            stats.xblDocs.addResource(resource)
-            break;
-#endif
         default:
             break;
         }

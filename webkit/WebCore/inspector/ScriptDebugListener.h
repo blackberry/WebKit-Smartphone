@@ -33,16 +33,20 @@
 #if ENABLE(JAVASCRIPT_DEBUGGER)
 
 #include "ScriptState.h"
+#include <wtf/Forward.h>
 
 namespace WebCore {
 
-class String;
+enum ScriptWorldType {
+MAIN_WORLD = 0,
+EXTENSIONS_WORLD
+};
 
 class ScriptDebugListener {
 public:
     virtual ~ScriptDebugListener() { }
 
-    virtual void didParseSource(const String&  sourceID, const String& url, const String& data, int firstLine) = 0;
+    virtual void didParseSource(const String&  sourceID, const String& url, const String& data, int firstLine, ScriptWorldType) = 0;
     virtual void failedToParseSource(const String& url, const String& data, int firstLine, int errorLine, const String& errorMessage) = 0;
     virtual void didPause(ScriptState*) = 0;
     virtual void didContinue() = 0;

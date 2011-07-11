@@ -131,15 +131,15 @@ JSValue JavaInstance::getMethod(ExecState* exec, const Identifier& propertyName)
     return new (exec) JavaRuntimeMethod(exec, exec->lexicalGlobalObject(), propertyName, methodList);
 }
 
-JSValue JavaInstance::invokeMethod(ExecState* exec, RuntimeMethod* runtimeMethod, const ArgList &args)
+JSValue JavaInstance::invokeMethod(ExecState* exec, RuntimeMethod* runtimeMethod)
 {
     if (!asObject(runtimeMethod)->inherits(&JavaRuntimeMethod::s_info))
-        return throwError(exec, TypeError, "Attempt to invoke non-Java method on Java object.");
+        return throwError(exec, createTypeError(exec, "Attempt to invoke non-Java method on Java object."));
 
     const MethodList& methodList = *runtimeMethod->methods();
 
     int i;
-    int count = args.size();
+    int count = exec->argumentCount();
     JSValue resultValue;
     Method* method = 0;
     size_t numMethods = methodList.size();
@@ -162,14 +162,14 @@ JSValue JavaInstance::invokeMethod(ExecState* exec, RuntimeMethod* runtimeMethod
     }
 
     const JavaMethod* jMethod = static_cast<const JavaMethod*>(method);
-    LOG(LiveConnect, "JavaInstance::invokeMethod call %s %s on %p", UString(jMethod->name()).UTF8String().data(), jMethod->signature(), m_instance->m_instance);
+    LOG(LiveConnect, "JavaInstance::invokeMethod call %s %s on %p", UString(jMethod->name()).utf8().data(), jMethod->signature(), m_instance->m_instance);
 
     Vector<jvalue> jArgs(count);
 
     for (i = 0; i < count; i++) {
         JavaParameter* aParameter = jMethod->parameterAt(i);
-        jArgs[i] = convertValueToJValue(exec, m_rootObject.get(), args.at(i), aParameter->getJNIType(), aParameter->type());
-        LOG(LiveConnect, "JavaInstance::invokeMethod arg[%d] = %s", i, args.at(i).toString(exec).ascii());
+        jArgs[i] = convertValueToJValue(exec, m_rootObject.get(), exec->argument(i), aParameter->getJNIType(), aParameter->type());
+        LOG(LiveConnect, "JavaInstance::invokeMethod arg[%d] = %s", i, exec->argument(i).toString(exec).ascii().data());
     }
 
     jvalue result;
@@ -188,7 +188,7 @@ JSValue JavaInstance::invokeMethod(ExecState* exec, RuntimeMethod* runtimeMethod
         const char *callingURL = 0; // FIXME, need to propagate calling URL to Java
         handled = dispatchJNICall(exec, rootObject->nativeHandle(), obj, jMethod->isStatic(), jMethod->JNIReturnType(), jMethod->methodID(obj), jArgs.data(), result, callingURL, exceptionDescription);
         if (exceptionDescription) {
-            throwError(exec, GeneralError, exceptionDescription.toString(exec));
+            throwError(exec, createError(exec, exceptionDescription.toString(exec)));
             return jsUndefined();
         }
     }
@@ -253,7 +253,7 @@ JSValue JavaInstance::invokeMethod(ExecState* exec, RuntimeMethod* runtimeMethod
                 else {
                     jobject classOfInstance = callJNIMethod<jobject>(result.l, "getClass", "()Ljava/lang/Class;");
                     jstring className = static_cast<jstring>(callJNIMethod<jobject>(classOfInstance, "getName", "()Ljava/lang/String;"));
-                    if (!strcmp(JavaString(className).UTF8String(), "sun.plugin.javascript.webkit.JSObject")) {
+                    if (!strcmp(JavaString(className).utf8(), "sun.plugin.javascript.webkit.JSObject")) {
                         // Pull the nativeJSObject value from the Java instance.  This is a pointer to the JSObject.
                         JNIEnv* env = getJNIEnv();
                         jfieldID fieldID = env->GetFieldID(static_cast<jclass>(classOfInstance), "nativeJSObject", "J");

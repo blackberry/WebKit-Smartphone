@@ -31,7 +31,7 @@ namespace WebKit {
 
 WebPreferences* WebPreferences::shared()
 {
-    static WebPreferences* sharedPreferences = WebPreferences::create().releaseRef();
+    static WebPreferences* sharedPreferences = WebPreferences::create().leakRef();
     return sharedPreferences;
 }
 
@@ -86,4 +86,49 @@ bool WebPreferences::loadsImagesAutomatically() const
     return m_store.loadsImagesAutomatically;
 }
 
+void WebPreferences::setOfflineWebApplicationCacheEnabled(bool b)
+{
+    m_store.offlineWebApplicationCacheEnabled = b;
+    update();
+}
+    
+bool WebPreferences::offlineWebApplicationCacheEnabled() const
+{
+    return m_store.offlineWebApplicationCacheEnabled;
+}
+
+void WebPreferences::setLocalStorageEnabled(bool b)
+{
+    m_store.localStorageEnabled = b;
+    update();
+}
+
+bool WebPreferences::localStorageEnabled() const
+{
+    return m_store.localStorageEnabled;
+}
+
+void WebPreferences::setXSSAuditorEnabled(bool b)
+{
+    m_store.xssAuditorEnabled = b;
+    update();
+}
+
+bool WebPreferences::xssAuditorEnabled() const
+{
+    return m_store.xssAuditorEnabled;
+}
+
+void WebPreferences::setFontSmoothingLevel(FontSmoothingLevel level)
+{
+    m_store.fontSmoothingLevel = level;
+    update();
+}
+
+FontSmoothingLevel WebPreferences::fontSmoothingLevel() const
+{
+    return static_cast<FontSmoothingLevel>(m_store.fontSmoothingLevel);
+}
+
 } // namespace WebKit
+

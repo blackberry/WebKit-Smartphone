@@ -160,4 +160,9 @@ bool Path::hasCurrentPoint() const
     return !isEmpty();
 }
 
+FloatPoint Path::currentPoint() const
+{
+    return m_path->lastPoint();
 }
+
+} // namespace WebCore

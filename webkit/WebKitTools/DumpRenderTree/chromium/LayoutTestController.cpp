@@ -32,12 +32,16 @@
 #include "config.h"
 #include "LayoutTestController.h"
 
+#include "DRTDevToolsAgent.h"
 #include "TestShell.h"
 #include "WebViewHost.h"
-#include "base/string_util.h"
 #include "public/WebAnimationController.h"
+#include "public/WebBindings.h"
 #include "public/WebConsoleMessage.h"
+#include "public/WebDeviceOrientation.h"
+#include "public/WebDeviceOrientationClientMock.h"
 #include "public/WebDocument.h"
+#include "public/WebElement.h"
 #include "public/WebFrame.h"
 #include "public/WebGeolocationServiceMock.h"
 #include "public/WebInputElement.h"
@@ -47,9 +51,13 @@
 #include "public/WebSecurityPolicy.h"
 #include "public/WebSettings.h"
 #include "public/WebSize.h"
+#include "public/WebSpeechInputControllerMock.h"
 #include "public/WebURL.h"
 #include "public/WebView.h"
 #include "webkit/support/webkit_support.h"
+#include <algorithm>
+#include <cstdlib>
+#include <limits>
 #include <wtf/text/WTFString.h>
 
 #if OS(WINDOWS)
@@ -61,8 +69,7 @@ using namespace WebKit;
 using namespace std;
 
 LayoutTestController::LayoutTestController(TestShell* shell)
-    : m_timeoutFactory(this)
-    , m_shell(shell)
+    : m_shell(shell)
     , m_workQueue(this)
 {
 
@@ -78,6 +85,7 @@ LayoutTestController::LayoutTestController(TestShell* shell)
     bindMethod("dumpBackForwardList", &LayoutTestController::dumpBackForwardList);
     bindMethod("dumpFrameLoadCallbacks", &LayoutTestController::dumpFrameLoadCallbacks);
     bindMethod("dumpResourceLoadCallbacks", &LayoutTestController::dumpResourceLoadCallbacks);
+    bindMethod("dumpResourceResponseMIMETypes", &LayoutTestController::dumpResourceResponseMIMETypes);
     bindMethod("dumpStatusCallbacks", &LayoutTestController::dumpWindowStatusChanges);
     bindMethod("dumpTitleChanges", &LayoutTestController::dumpTitleChanges);
     bindMethod("setAcceptsEditing", &LayoutTestController::setAcceptsEditing);
@@ -95,6 +103,7 @@ LayoutTestController::LayoutTestController(TestShell* shell)
     bindMethod("objCIdentityIsEqual", &LayoutTestController::objCIdentityIsEqual);
     bindMethod("setAlwaysAcceptCookies", &LayoutTestController::setAlwaysAcceptCookies);
     bindMethod("showWebInspector", &LayoutTestController::showWebInspector);
+    bindMethod("closeWebInspector", &LayoutTestController::closeWebInspector);
     bindMethod("setWindowIsKey", &LayoutTestController::setWindowIsKey);
     bindMethod("setTabKeyCyclesThroughElements", &LayoutTestController::setTabKeyCyclesThroughElements);
     bindMethod("setUserStyleSheetLocation", &LayoutTestController::setUserStyleSheetLocation);
@@ -112,6 +121,8 @@ LayoutTestController::LayoutTestController(TestShell* shell)
     bindMethod("pauseTransitionAtTimeOnElementWithId", &LayoutTestController::pauseTransitionAtTimeOnElementWithId);
     bindMethod("elementDoesAutoCompleteForElementWithId", &LayoutTestController::elementDoesAutoCompleteForElementWithId);
     bindMethod("numberOfActiveAnimations", &LayoutTestController::numberOfActiveAnimations);
+    bindMethod("suspendAnimations", &LayoutTestController::suspendAnimations);
+    bindMethod("resumeAnimations", &LayoutTestController::resumeAnimations);
     bindMethod("disableImageLoading", &LayoutTestController::disableImageLoading);
     bindMethod("setIconDatabaseEnabled", &LayoutTestController::setIconDatabaseEnabled);
     bindMethod("setCustomPolicyDelegate", &LayoutTestController::setCustomPolicyDelegate);
@@ -132,6 +143,8 @@ LayoutTestController::LayoutTestController(TestShell* shell)
     bindMethod("numberOfPages", &LayoutTestController::numberOfPages);
     bindMethod("dumpSelectionRect", &LayoutTestController::dumpSelectionRect);
     bindMethod("grantDesktopNotificationPermission", &LayoutTestController::grantDesktopNotificationPermission);
+    bindMethod("simulateDesktopNotificationClick", &LayoutTestController::simulateDesktopNotificationClick);
+    bindMethod("setDomainRelaxationForbiddenForURLScheme", &LayoutTestController::setDomainRelaxationForbiddenForURLScheme);
 
     // The following are stubs.
     bindMethod("dumpAsWebArchive", &LayoutTestController::dumpAsWebArchive);
@@ -150,6 +163,8 @@ LayoutTestController::LayoutTestController(TestShell* shell)
     bindMethod("setCallCloseOnWebViews", &LayoutTestController::setCallCloseOnWebViews);
     bindMethod("setPrivateBrowsingEnabled", &LayoutTestController::setPrivateBrowsingEnabled);
     bindMethod("setUseDashboardCompatibilityMode", &LayoutTestController::setUseDashboardCompatibilityMode);
+    bindMethod("clearAllApplicationCaches", &LayoutTestController::clearAllApplicationCaches);
+    bindMethod("setApplicationCacheOriginQuota", &LayoutTestController::setApplicationCacheOriginQuota);
 
     bindMethod("setJavaScriptCanAccessClipboard", &LayoutTestController::setJavaScriptCanAccessClipboard);
     bindMethod("setXSSAuditorEnabled", &LayoutTestController::setXSSAuditorEnabled);
@@ -162,9 +177,15 @@ LayoutTestController::LayoutTestController(TestShell* shell)
     bindMethod("forceRedSelectionColors", &LayoutTestController::forceRedSelectionColors);
     bindMethod("setEditingBehavior", &LayoutTestController::setEditingBehavior);
 
+    bindMethod("setMockDeviceOrientation", &LayoutTestController::setMockDeviceOrientation);
+
     bindMethod("setGeolocationPermission", &LayoutTestController::setGeolocationPermission);
     bindMethod("setMockGeolocationPosition", &LayoutTestController::setMockGeolocationPosition);
     bindMethod("setMockGeolocationError", &LayoutTestController::setMockGeolocationError);
+    bindMethod("abortModal", &LayoutTestController::abortModal);
+    bindMethod("setMockSpeechInputResult", &LayoutTestController::setMockSpeechInputResult);
+
+    bindMethod("markerTextForListItem", &LayoutTestController::markerTextForListItem);
 
     // The fallback method is called when an unknown method is invoked.
     bindFallbackMethod(&LayoutTestController::fallbackMethod);
@@ -175,6 +196,10 @@ LayoutTestController::LayoutTestController(TestShell* shell)
     bindProperty("globalFlag", &m_globalFlag);
     // webHistoryItemCount is used by tests in LayoutTests\http\tests\history
     bindProperty("webHistoryItemCount", &m_webHistoryItemCount);
+}
+
+LayoutTestController::~LayoutTestController()
+{
 }
 
 LayoutTestController::WorkQueue::~WorkQueue()
@@ -189,10 +214,9 @@ void LayoutTestController::WorkQueue::processWorkSoon()
 
     if (!m_queue.isEmpty()) {
         // We delay processing queued work to avoid recursion problems.
-        m_timer.Start(base::TimeDelta(), this, &WorkQueue::processWork);
-    } else if (!m_controller->m_waitUntilDone) {
+        postTask(new WorkQueueTask(this));
+    } else if (!m_controller->m_waitUntilDone)
         m_controller->m_shell->testFinished();
-    }
 }
 
 void LayoutTestController::WorkQueue::processWork()
@@ -201,8 +225,7 @@ void LayoutTestController::WorkQueue::processWork()
     // Quit doing work once a load is in progress.
     while (!m_queue.isEmpty()) {
         bool startedLoad = m_queue.first()->run(shell);
-        delete m_queue.first();
-        m_queue.removeFirst();
+        delete m_queue.takeFirst();
         if (startedLoad)
             return;
     }
@@ -215,8 +238,7 @@ void LayoutTestController::WorkQueue::reset()
 {
     m_frozen = false;
     while (!m_queue.isEmpty()) {
-        delete m_queue.first();
-        m_queue.removeFirst();
+        delete m_queue.takeFirst();
     }
 }
 
@@ -229,9 +251,15 @@ void LayoutTestController::WorkQueue::addWork(WorkItem* work)
     m_queue.append(work);
 }
 
-void LayoutTestController::dumpAsText(const CppArgumentList&, CppVariant* result)
+void LayoutTestController::dumpAsText(const CppArgumentList& arguments, CppVariant* result)
 {
     m_dumpAsText = true;
+    m_generatePixelResults = false;
+
+    // Optional paramater, describing whether it's allowed to dump pixel results in dumpAsText mode.
+    if (arguments.size() > 0 && arguments[0].isBool())
+        m_generatePixelResults = arguments[0].value.boolValue;
+
     result->setNull();
 }
 
@@ -262,6 +290,12 @@ void LayoutTestController::dumpFrameLoadCallbacks(const CppArgumentList&, CppVar
 void LayoutTestController::dumpResourceLoadCallbacks(const CppArgumentList&, CppVariant* result)
 {
     m_dumpResourceLoadCallbacks = true;
+    result->setNull();
+}
+
+void LayoutTestController::dumpResourceResponseMIMETypes(const CppArgumentList&, CppVariant* result)
+{
+    m_dumpResourceResponseMIMETypes = true;
     result->setNull();
 }
 
@@ -298,11 +332,8 @@ void LayoutTestController::setAcceptsEditing(const CppArgumentList& arguments, C
 
 void LayoutTestController::waitUntilDone(const CppArgumentList&, CppVariant* result)
 {
-    if (!webkit_support::BeingDebugged()) {
-        webkit_support::PostDelayedTaskFromHere(
-            m_timeoutFactory.NewRunnableMethod(&LayoutTestController::notifyDoneTimedOut),
-            m_shell->layoutTestTimeout());
-    }
+    if (!webkit_support::BeingDebugged())
+        postDelayedTask(new NotifyDoneTimedOutTask(this), m_shell->layoutTestTimeout());
     m_waitUntilDone = true;
     result->setNull();
 }
@@ -310,15 +341,10 @@ void LayoutTestController::waitUntilDone(const CppArgumentList&, CppVariant* res
 void LayoutTestController::notifyDone(const CppArgumentList&, CppVariant* result)
 {
     // Test didn't timeout. Kill the timeout timer.
-    m_timeoutFactory.RevokeAll();
+    m_taskList.revokeAll();
 
     completeNotifyDone(false);
     result->setNull();
-}
-
-void LayoutTestController::notifyDoneTimedOut()
-{
-    completeNotifyDone(true);
 }
 
 void LayoutTestController::completeNotifyDone(bool isTimeout)
@@ -468,12 +494,14 @@ void LayoutTestController::reset()
     m_dumpEditingCallbacks = false;
     m_dumpFrameLoadCallbacks = false;
     m_dumpResourceLoadCallbacks = false;
+    m_dumpResourceResponseMIMETypes = false;
     m_dumpBackForwardList = false;
     m_dumpChildFrameScrollPositions = false;
     m_dumpChildFramesAsText = false;
     m_dumpWindowStatusChanges = false;
     m_dumpSelectionRect = false;
     m_dumpTitleChanges = false;
+    m_generatePixelResults = true;
     m_acceptsEditing = true;
     m_waitUntilDone = false;
     m_canOpenWindows = false;
@@ -498,6 +526,7 @@ void LayoutTestController::reset()
     else
         m_closeRemainingWindows = true;
     m_workQueue.reset();
+    m_taskList.revokeAll();
 }
 
 void LayoutTestController::locationChangeDone()
@@ -553,6 +582,12 @@ void LayoutTestController::setAlwaysAcceptCookies(const CppArgumentList& argumen
 void LayoutTestController::showWebInspector(const CppArgumentList&, CppVariant* result)
 {
     m_shell->showDevTools();
+    result->setNull();
+}
+
+void LayoutTestController::closeWebInspector(const CppArgumentList& args, CppVariant* result)
+{
+    m_shell->closeDevTools();
     result->setNull();
 }
 
@@ -630,6 +665,18 @@ void LayoutTestController::setUseDashboardCompatibilityMode(const CppArgumentLis
     result->setNull();
 }
 
+void LayoutTestController::clearAllApplicationCaches(const CppArgumentList&, CppVariant* result)
+{
+    // FIXME: implement to support Application Cache Quotas.
+    result->setNull();
+}
+
+void LayoutTestController::setApplicationCacheOriginQuota(const CppArgumentList&, CppVariant* result)
+{
+    // FIXME: implement to support Application Cache Quotas.
+    result->setNull();
+}
+
 void LayoutTestController::setScrollbarPolicy(const CppArgumentList&, CppVariant* result)
 {
     // FIXME: implement.
@@ -688,7 +735,7 @@ void LayoutTestController::pathToLocalResource(const CppArgumentList& arguments,
 
     string url = arguments[0].toString();
 #if OS(WINDOWS)
-    if (StartsWithASCII(url, "/tmp/", true)) {
+    if (!url.find("/tmp/")) {
         // We want a temp file.
         const unsigned tempPrefixLength = 5;
         size_t bufferSize = MAX_PATH;
@@ -700,7 +747,7 @@ void LayoutTestController::pathToLocalResource(const CppArgumentList& arguments,
             tempLength = GetTempPathW(bufferSize, tempPath.get());
             ASSERT(tempLength < bufferSize);
         }
-        std::string resultPath(WebString(tempPath.get(), tempLength).utf8());
+        string resultPath(WebString(tempPath.get(), tempLength).utf8());
         resultPath.append(url.substr(tempPrefixLength));
         result->set(resultPath);
         return;
@@ -709,8 +756,12 @@ void LayoutTestController::pathToLocalResource(const CppArgumentList& arguments,
 
     // Some layout tests use file://// which we resolve as a UNC path.  Normalize
     // them to just file:///.
-    while (StartsWithASCII(url, "file:////", false))
+    string lowerUrl = url;
+    transform(lowerUrl.begin(), lowerUrl.end(), lowerUrl.begin(), ::tolower);
+    while (!lowerUrl.find("file:////")) {
         url = url.substr(0, 8) + url.substr(9);
+        lowerUrl = lowerUrl.substr(0, 8) + lowerUrl.substr(9);
+    }
     result->set(webkit_support::RewriteLayoutTestsURL(url).spec());
 }
 
@@ -799,6 +850,32 @@ int LayoutTestController::numberOfActiveAnimations()
     return controller->numberOfActiveAnimations();
 }
 
+void LayoutTestController::suspendAnimations()
+{
+    WebFrame* webFrame = m_shell->webView()->mainFrame();
+    if (!webFrame)
+        return;
+
+    WebAnimationController* controller = webFrame->animationController();
+    if (!controller)
+        return;
+
+    controller->suspendAnimations();
+}
+
+void LayoutTestController::resumeAnimations()
+{
+    WebFrame* webFrame = m_shell->webView()->mainFrame();
+    if (!webFrame)
+        return;
+
+    WebAnimationController* controller = webFrame->animationController();
+    if (!controller)
+        return;
+
+    controller->resumeAnimations();
+}
+
 void LayoutTestController::pauseAnimationAtTimeOnElementWithId(const CppArgumentList& arguments, CppVariant* result)
 {
     result->set(false);
@@ -836,6 +913,18 @@ void LayoutTestController::numberOfActiveAnimations(const CppArgumentList&, CppV
     result->set(numberOfActiveAnimations());
 }
 
+void LayoutTestController::suspendAnimations(const CppArgumentList&, CppVariant* result)
+{
+    suspendAnimations();
+    result->setNull();
+}
+
+void LayoutTestController::resumeAnimations(const CppArgumentList&, CppVariant* result)
+{
+    resumeAnimations();
+    result->setNull();
+}
+
 void LayoutTestController::disableImageLoading(const CppArgumentList&, CppVariant* result)
 {
     m_shell->webView()->settings()->setLoadsImagesAutomatically(false);
@@ -862,6 +951,26 @@ void LayoutTestController::grantDesktopNotificationPermission(const CppArgumentL
     m_shell->notificationPresenter()->grantPermission(cppVariantToWebString(arguments[0]));
     result->set(true);
 }
+
+void LayoutTestController::simulateDesktopNotificationClick(const CppArgumentList& arguments, CppVariant* result)
+{
+    if (arguments.size() != 1 || !arguments[0].isString()) {
+        result->set(false);
+        return;
+    }
+    if (m_shell->notificationPresenter()->simulateClick(cppVariantToWebString(arguments[0])))
+        result->set(true);
+    else
+        result->set(false);
+}
+
+void LayoutTestController::setDomainRelaxationForbiddenForURLScheme(const CppArgumentList& arguments, CppVariant* result)
+{
+    if (arguments.size() != 2 || !arguments[0].isBool() || !arguments[1].isString())
+        return;
+    m_shell->webView()->setDomainRelaxationForbidden(cppVariantToBool(arguments[0]), cppVariantToWebString(arguments[1]));
+}
+
 
 //
 // Unimplemented stubs
@@ -1008,9 +1117,12 @@ int32_t LayoutTestController::cppVariantToInt32(const CppVariant& value)
     if (value.isInt32())
         return value.toInt32();
     if (value.isString()) {
-        int number;
-        if (StringToInt(value.toString(), &number))
-            return number;
+        string stringSource = value.toString();
+        const char* source = stringSource.data();
+        char* end;
+        long number = strtol(source, &end, 10);
+        if (end == source + stringSource.length() && number >= numeric_limits<int32_t>::min() && number <= numeric_limits<int32_t>::max())
+            return static_cast<int32_t>(number);
     }
     logErrorToConsole("Invalid value for preference. Expected integer value.");
     return 0;
@@ -1246,7 +1358,7 @@ void LayoutTestController::setTimelineProfilingEnabled(const CppArgumentList& ar
     result->setNull();
     if (arguments.size() < 1 || !arguments[0].isBool())
         return;
-    // FIXME: Should call TestShellDevToolsAgent::setTimelineProfilingEnabled().
+    m_shell->drtDevToolsAgent()->setTimelineProfilingEnabled(arguments[0].toBoolean());
 }
 
 void LayoutTestController::evaluateInWebInspector(const CppArgumentList& arguments, CppVariant* result)
@@ -1254,7 +1366,7 @@ void LayoutTestController::evaluateInWebInspector(const CppArgumentList& argumen
     result->setNull();
     if (arguments.size() < 2 || !arguments[0].isInt32() || !arguments[1].isString())
         return;
-    // FIXME: Should call TestShellDevToolsAgent::evaluateInWebInspector().
+    m_shell->drtDevToolsAgent()->evaluateInWebInspector(arguments[0].toInt32(), arguments[1].toString());
 }
 
 void LayoutTestController::forceRedSelectionColors(const CppArgumentList& arguments, CppVariant* result)
@@ -1266,17 +1378,22 @@ void LayoutTestController::forceRedSelectionColors(const CppArgumentList& argume
 void LayoutTestController::addUserScript(const CppArgumentList& arguments, CppVariant* result)
 {
     result->setNull();
-    if (arguments.size() < 2 || !arguments[0].isString() || !arguments[1].isBool())
+    if (arguments.size() < 3 || !arguments[0].isString() || !arguments[1].isBool() || !arguments[2].isBool())
         return;
-    m_shell->webView()->addUserScript(cppVariantToWebString(arguments[0]), arguments[1].toBoolean());
+    WebView::addUserScript(
+        cppVariantToWebString(arguments[0]), WebVector<WebString>(),
+        arguments[1].toBoolean() ? WebView::UserScriptInjectAtDocumentStart : WebView::UserScriptInjectAtDocumentEnd,
+        arguments[2].toBoolean() ? WebView::UserContentInjectInAllFrames : WebView::UserContentInjectInTopFrameOnly);
 }
 
 void LayoutTestController::addUserStyleSheet(const CppArgumentList& arguments, CppVariant* result)
 {
     result->setNull();
-    if (arguments.size() < 1 || !arguments[0].isString())
+    if (arguments.size() < 2 || !arguments[0].isString() || !arguments[1].isBool())
         return;
-    m_shell->webView()->addUserStyleSheet(cppVariantToWebString(arguments[0]));
+    WebView::addUserStyleSheet(
+        cppVariantToWebString(arguments[0]), WebVector<WebString>(),
+        arguments[2].toBoolean() ? WebView::UserContentInjectInAllFrames : WebView::UserContentInjectInTopFrameOnly);
 }
 
 void LayoutTestController::setEditingBehavior(const CppArgumentList& arguments, CppVariant* results)
@@ -1289,6 +1406,18 @@ void LayoutTestController::setEditingBehavior(const CppArgumentList& arguments, 
         settings->setEditingBehavior(WebSettings::EditingBehaviorWin);
     else
         logErrorToConsole("Passed invalid editing behavior. Should be 'mac' or 'win'.");
+}
+
+void LayoutTestController::setMockDeviceOrientation(const CppArgumentList& arguments, CppVariant* result)
+{
+    result->setNull();
+    if (arguments.size() < 6 || !arguments[0].isBool() || !arguments[1].isNumber() || !arguments[2].isBool() || !arguments[3].isNumber() || !arguments[4].isBool() || !arguments[5].isNumber())
+        return;
+
+    WebDeviceOrientation orientation(arguments[0].toBoolean(), arguments[1].toDouble(), arguments[2].toBoolean(), arguments[3].toDouble(), arguments[4].toBoolean(), arguments[5].toDouble());
+
+    ASSERT(m_deviceOrientationClientMock);
+    m_deviceOrientationClientMock->setOrientation(orientation);
 }
 
 void LayoutTestController::setGeolocationPermission(const CppArgumentList& arguments, CppVariant* result)
@@ -1313,4 +1442,41 @@ void LayoutTestController::setMockGeolocationError(const CppArgumentList& argume
     if (arguments.size() < 2 || !arguments[0].isInt32() || !arguments[1].isString())
         return;
     WebGeolocationServiceMock::setMockGeolocationError(arguments[0].toInt32(), cppVariantToWebString(arguments[1]));
+}
+
+void LayoutTestController::abortModal(const CppArgumentList& arguments, CppVariant* result)
+{
+    result->setNull();
+}
+
+void LayoutTestController::setMockSpeechInputResult(const CppArgumentList& arguments, CppVariant* result)
+{
+    result->setNull();
+    if (arguments.size() < 1 || !arguments[0].isString())
+        return;
+
+    m_speechInputControllerMock->setMockRecognitionResult(cppVariantToWebString(arguments[0]));
+}
+
+WebKit::WebSpeechInputController* LayoutTestController::speechInputController(WebKit::WebSpeechInputListener* listener)
+{
+    if (!m_speechInputControllerMock.get())
+        m_speechInputControllerMock.set(WebSpeechInputControllerMock::create(listener));
+    return m_speechInputControllerMock.get();
+}
+
+void LayoutTestController::markerTextForListItem(const CppArgumentList& args, CppVariant* result)
+{
+    WebElement element;
+    if (!WebBindings::getElement(args[0].value.objectValue, &element))
+        result->setNull();
+    else
+        result->set(element.document().frame()->markerTextForListItem(element).utf8());
+}
+
+WebDeviceOrientationClient* LayoutTestController::deviceOrientationClient()
+{
+    if (!m_deviceOrientationClientMock.get())
+        m_deviceOrientationClientMock.set(WebDeviceOrientationClientMock::create());
+    return m_deviceOrientationClientMock.get();
 }

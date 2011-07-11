@@ -69,6 +69,7 @@ static CFBundleRef getWebKitBundle()
 
 WebInspectorClient::WebInspectorClient(WebView* webView)
     : m_inspectedWebView(webView)
+    , m_frontendPage(0)
 {
     ASSERT(m_inspectedWebView);
     m_inspectedWebView->viewWindow((OLE_HANDLE*)&m_inspectedWebViewHwnd);
@@ -76,6 +77,7 @@ WebInspectorClient::WebInspectorClient(WebView* webView)
 
 WebInspectorClient::~WebInspectorClient()
 {
+    m_frontendPage = 0;
 }
 
 void WebInspectorClient::inspectorDestroyed()
@@ -172,8 +174,9 @@ void WebInspectorClient::openInspectorFrontend(InspectorController* inspectorCon
     if (FAILED(frontendWebView->topLevelFrame()->loadRequest(request.get())))
         return;
 
-    Page* page = core(frontendWebView.get());
-    page->inspectorController()->setInspectorFrontendClient(new WebInspectorFrontendClient(m_inspectedWebView, m_inspectedWebViewHwnd, frontendHwnd, frontendWebView, frontendWebViewHwnd, this));
+    m_frontendPage = core(frontendWebView.get());
+    WebInspectorFrontendClient* frontendClient = new WebInspectorFrontendClient(m_inspectedWebView, m_inspectedWebViewHwnd, frontendHwnd, frontendWebView, frontendWebViewHwnd, this);
+    m_frontendPage->inspectorController()->setInspectorFrontendClient(frontendClient);
     m_frontendHwnd = frontendHwnd;
 }
 
@@ -225,7 +228,7 @@ WebInspectorFrontendClient::WebInspectorFrontendClient(WebView* inspectedWebView
 
 WebInspectorFrontendClient::~WebInspectorFrontendClient()
 {
-    destroyInspectorView();
+    destroyInspectorView(true);
 }
 
 void WebInspectorFrontendClient::frontendLoaded()
@@ -257,7 +260,12 @@ void WebInspectorFrontendClient::bringToFront()
 
 void WebInspectorFrontendClient::closeWindow()
 {
-    destroyInspectorView();
+    destroyInspectorView(true);
+}
+
+void WebInspectorFrontendClient::disconnectFromBackend()
+{
+    destroyInspectorView(false);
 }
 
 void WebInspectorFrontendClient::attachWindow()
@@ -341,8 +349,6 @@ void WebInspectorFrontendClient::closeWindowWithoutNotifications()
     HWND hostWindow;
     if (SUCCEEDED(m_inspectedWebView->hostWindow((OLE_HANDLE*)&hostWindow)))
         SendMessage(hostWindow, WM_SIZE, 0, 0);
-
-    m_inspectorClient->updateHighlight();
 }
 
 void WebInspectorFrontendClient::showWindowWithoutNotifications()
@@ -394,16 +400,20 @@ void WebInspectorFrontendClient::showWindowWithoutNotifications()
     m_inspectorClient->updateHighlight();
 }
 
-void WebInspectorFrontendClient::destroyInspectorView()
+void WebInspectorFrontendClient::destroyInspectorView(bool notifyInspectorController)
 {
     if (m_destroyingInspectorView)
         return;
     m_destroyingInspectorView = true;
 
-    m_inspectedWebView->page()->inspectorController()->disconnectFrontend();
 
     closeWindowWithoutNotifications();
-    m_inspectorClient->frontendClosing();
+
+    if (notifyInspectorController) {
+        m_inspectedWebView->page()->inspectorController()->disconnectFrontend();
+        m_inspectorClient->updateHighlight();
+        m_inspectorClient->frontendClosing();
+    }
     ::DestroyWindow(m_frontendHwnd);
 }
 

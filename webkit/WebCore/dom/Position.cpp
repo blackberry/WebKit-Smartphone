@@ -328,6 +328,23 @@ bool Position::atEditingBoundary() const
         && prevPosition.isNotNull() && !prevPosition.node()->isContentEditable();
 }
 
+Node* Position::parentEditingBoundary() const
+{
+    if (!m_anchorNode || !m_anchorNode->document())
+        return 0;
+
+    Node* documentElement = m_anchorNode->document()->documentElement();
+    if (!documentElement)
+        return 0;
+
+    Node* boundary = m_anchorNode.get();
+    while (boundary != documentElement && boundary->parentNode() && m_anchorNode->isContentEditable() == boundary->parentNode()->isContentEditable())
+        boundary = boundary->parentNode();
+    
+    return boundary;
+}
+
+
 bool Position::atStartOfTree() const
 {
     if (isNull())
@@ -739,7 +756,7 @@ bool Position::isCandidate() const
         return m_offset == 0 && !nodeIsUserSelectNone(node()->parent());
 
     if (renderer->isText())
-        return inRenderedText() && !nodeIsUserSelectNone(node());
+        return !nodeIsUserSelectNone(node()) && inRenderedText();
 
     if (isTableElement(node()) || editingIgnoresContent(node()))
         return (atFirstEditingPositionForNode() || atLastEditingPositionForNode()) && !nodeIsUserSelectNone(node()->parent());
@@ -1018,10 +1035,11 @@ void Position::getInlineBoxAndOffset(EAffinity affinity, TextDirection primaryDi
             // an editable block but surrounded by non-editable positions. It acts to negate the logic at the beginning
             // of RenderObject::createVisiblePosition().
             Position equivalent = downstreamIgnoringEditingBoundaries(*this);
-            if (equivalent == *this)
+            if (equivalent == *this) {
                 equivalent = upstreamIgnoringEditingBoundaries(*this);
-            if (equivalent == *this)
-                return;
+                if (equivalent == *this || downstreamIgnoringEditingBoundaries(equivalent) == *this)
+                    return;
+            }
 
             equivalent.getInlineBoxAndOffset(UPSTREAM, primaryDirection, inlineBox, caretOffset);
             return;

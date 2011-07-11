@@ -28,74 +28,39 @@
 
 #include "ArgumentDecoder.h"
 #include "ArgumentEncoder.h"
-#include "WebCoreTypeArgumentMarshalling.h"
-#include <WebCore/PlatformString.h>
+#include "WebCoreArgumentCoders.h"
+#include <wtf/text/WTFString.h>
 
 namespace WebKit {
 
 struct WebPreferencesStore {
     WebPreferencesStore();
-    WebPreferencesStore(const WebPreferencesStore&);
-    WebPreferencesStore& operator=(const WebPreferencesStore&);
-    void swap(WebPreferencesStore&);
 
-    void encode(CoreIPC::ArgumentEncoder& encoder) const
-    {
-        encoder.encode(javaScriptEnabled);
-        encoder.encode(loadsImagesAutomatically);
-        encoder.encode(minimumFontSize);
-        encoder.encode(minimumLogicalFontSize);
-        encoder.encode(defaultFontSize);
-        encoder.encode(defaultFixedFontSize);
-        encoder.encode(standardFontFamily);
-        encoder.encode(cursiveFontFamily);
-        encoder.encode(fantasyFontFamily);
-        encoder.encode(fixedFontFamily);
-        encoder.encode(sansSerifFontFamily);
-        encoder.encode(serifFontFamily);
-    }
+    void encode(CoreIPC::ArgumentEncoder* encoder) const;
+    static bool decode(CoreIPC::ArgumentDecoder*, WebPreferencesStore&);
 
-    static bool decode(CoreIPC::ArgumentDecoder& decoder, WebPreferencesStore& s)
-    {
-        if (!decoder.decode(s.javaScriptEnabled))
-            return false;
-        if (!decoder.decode(s.loadsImagesAutomatically))
-            return false;
-        if (!decoder.decode(s.minimumFontSize))
-            return false;
-        if (!decoder.decode(s.minimumLogicalFontSize))
-            return false;
-        if (!decoder.decode(s.defaultFontSize))
-            return false;
-        if (!decoder.decode(s.defaultFixedFontSize))
-            return false;
-        if (!decoder.decode(s.standardFontFamily))
-            return false;
-        if (!decoder.decode(s.cursiveFontFamily))
-            return false;
-        if (!decoder.decode(s.fantasyFontFamily))
-            return false;
-        if (!decoder.decode(s.fixedFontFamily))
-            return false;
-        if (!decoder.decode(s.sansSerifFontFamily))
-            return false;
-        if (!decoder.decode(s.serifFontFamily))
-            return false;
-        return true;
-    }
+    static void overrideXSSAuditorEnabledForTestRunner(bool);
+    static void removeTestRunnerOverrides();
 
     bool javaScriptEnabled;
     bool loadsImagesAutomatically;
+    bool pluginsEnabled;
+    bool offlineWebApplicationCacheEnabled;
+    bool localStorageEnabled;
+    bool xssAuditorEnabled;
+
+    uint32_t fontSmoothingLevel;
+
     uint32_t minimumFontSize;
     uint32_t minimumLogicalFontSize;
     uint32_t defaultFontSize;
     uint32_t defaultFixedFontSize;
-    WebCore::String standardFontFamily;
-    WebCore::String cursiveFontFamily;
-    WebCore::String fantasyFontFamily;
-    WebCore::String fixedFontFamily;
-    WebCore::String sansSerifFontFamily;
-    WebCore::String serifFontFamily;
+    WTF::String standardFontFamily;
+    WTF::String cursiveFontFamily;
+    WTF::String fantasyFontFamily;
+    WTF::String fixedFontFamily;
+    WTF::String sansSerifFontFamily;
+    WTF::String serifFontFamily;
 };
 
 } // namespace WebKit

@@ -80,6 +80,10 @@
 #if defined(__GNUC__) && !COMPILER(RVCT)
 #define WTF_COMPILER_GCC 1
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
+#define GCC_VERSION_AT_LEAST(major, minor, patch) (GCC_VERSION >= (major * 10000 + minor * 100 + patch))
+#else
+/* define this for !GCC compilers, just so we can write things like COMPILER(GCC) && GCC_VERSION_AT_LEAST(4,1,0) */
+#define GCC_VERSION_AT_LEAST(major, minor, patch) 0
 #endif
 
 /* COMPILER(MINGW) - MinGW GCC */
@@ -100,7 +104,10 @@
 #undef _WIN32
 #endif
 
-
+/* COMPILER(INTEL) - Intel C++ Compiler */
+#if defined(__INTEL_COMPILER)
+#define WTF_COMPILER_INTEL 1
+#endif
 
 /* ==== CPU() - the target CPU architecture ==== */
 
@@ -135,6 +142,9 @@
 #define WTF_MIPS_ARCH_REV __mips_isa_rev
 #define WTF_MIPS_ISA_REV(v) (defined WTF_MIPS_ARCH_REV && WTF_MIPS_ARCH_REV == v)
 #define WTF_MIPS_DOUBLE_FLOAT (defined __mips_hard_float && !defined __mips_single_float)
+#define WTF_MIPS_FP64 (defined __mips_fpr && __mips_fpr == 64)
+/* MIPS requires allocators to use aligned memory */
+#define WTF_USE_ARENA_ALLOC_ALIGNMENT_INTEGER 1
 #endif /* MIPS */
 
 /* CPU(PPC) - PowerPC 32-bit */
@@ -368,12 +378,12 @@
 
 #endif
 
-/* OS(IPHONE_OS) - iPhone OS */
-/* OS(MAC_OS_X) - Mac OS X (not including iPhone OS) */
+/* OS(IOS) - iOS */
+/* OS(MAC_OS_X) - Mac OS X (not including iOS) */
 #if OS(DARWIN) && ((defined(TARGET_OS_EMBEDDED) && TARGET_OS_EMBEDDED)  \
     || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)                   \
     || (defined(TARGET_IPHONE_SIMULATOR) && TARGET_IPHONE_SIMULATOR))
-#define WTF_OS_IPHONE_OS 1
+#define WTF_OS_IOS 1
 #elif OS(DARWIN) && defined(TARGET_OS_MAC) && TARGET_OS_MAC
 #define WTF_OS_MAC_OS_X 1
 #endif
@@ -507,22 +517,22 @@
 
 #endif
 
-/* PLATFORM(IPHONE) */
+/* PLATFORM(IOS) */
 /* FIXME: this is sometimes used as an OS switch and sometimes for higher-level things */
 #if (defined(TARGET_OS_EMBEDDED) && TARGET_OS_EMBEDDED) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
-#define WTF_PLATFORM_IPHONE 1
+#define WTF_PLATFORM_IOS 1
 #endif
 
-/* PLATFORM(IPHONE_SIMULATOR) */
+/* PLATFORM(IOS_SIMULATOR) */
 #if defined(TARGET_IPHONE_SIMULATOR) && TARGET_IPHONE_SIMULATOR
-#define WTF_PLATFORM_IPHONE 1
-#define WTF_PLATFORM_IPHONE_SIMULATOR 1
+#define WTF_PLATFORM_IOS 1
+#define WTF_PLATFORM_IOS_SIMULATOR 1
 #else
-#define WTF_PLATFORM_IPHONE_SIMULATOR 0
+#define WTF_PLATFORM_IOS_SIMULATOR 0
 #endif
 
-#if !defined(WTF_PLATFORM_IPHONE)
-#define WTF_PLATFORM_IPHONE 0
+#if !defined(WTF_PLATFORM_IOS)
+#define WTF_PLATFORM_IOS 0
 #endif
 
 /* PLATFORM(ANDROID) */
@@ -535,16 +545,15 @@
 /* Graphics engines */
 
 /* PLATFORM(CG) and PLATFORM(CI) */
-#if PLATFORM(MAC) || PLATFORM(IPHONE)
+#if PLATFORM(MAC) || PLATFORM(IOS)
 #define WTF_PLATFORM_CG 1
 #endif
-#if PLATFORM(MAC) && !PLATFORM(IPHONE)
+#if PLATFORM(MAC) && !PLATFORM(IOS)
 #define WTF_PLATFORM_CI 1
 #endif
 
 /* PLATFORM(SKIA) for Win/Linux, CG/CI for Mac */
 #if PLATFORM(CHROMIUM)
-#define ENABLE_HISTORY_ALWAYS_ASYNC 1
 #if OS(DARWIN)
 #define WTF_PLATFORM_CG 1
 #define WTF_PLATFORM_CI 1
@@ -564,11 +573,11 @@
 #endif
 
 
-#if OS(WINCE) && PLATFORM(QT)
+#if OS(WINCE)
 #include <ce_time.h>
 #endif
 
-#if (PLATFORM(IPHONE) || PLATFORM(MAC) || PLATFORM(WIN) || (PLATFORM(QT) && OS(DARWIN) && !ENABLE(SINGLE_THREADED))) && !defined(ENABLE_JSC_MULTIPLE_THREADS)
+#if (PLATFORM(IOS) || PLATFORM(MAC) || PLATFORM(WIN) || (PLATFORM(QT) && OS(DARWIN) && !ENABLE(SINGLE_THREADED))) && !defined(ENABLE_JSC_MULTIPLE_THREADS)
 #define ENABLE_JSC_MULTIPLE_THREADS 1
 #endif
 
@@ -578,16 +587,6 @@
 #endif
 
 #if OS(WINCE) && !PLATFORM(QT)
-#undef ENABLE_JSC_MULTIPLE_THREADS
-#define ENABLE_JSC_MULTIPLE_THREADS        0
-#define USE_SYSTEM_MALLOC                  0
-#define ENABLE_ICONDATABASE                0
-#define ENABLE_JAVASCRIPT_DEBUGGER         0
-#define ENABLE_FTPDIR                      0
-#define ENABLE_PAN_SCROLLING               0
-#define ENABLE_WML                         1
-#define HAVE_ACCESSIBILITY                 0
-
 #define NOMINMAX       /* Windows min and max conflict with standard macros */
 #define NOSHLWAPI      /* shlwapi.h not available on WinCe */
 
@@ -606,9 +605,6 @@
 
 #if PLATFORM(QT)
 #define WTF_USE_QT4_UNICODE 1
-#if !defined(ENABLE_WIDGETS_10_SUPPORT)
-#define ENABLE_WIDGETS_10_SUPPORT 1
-#endif
 #elif OS(WINCE)
 #define WTF_USE_WINCE_UNICODE 1
 #elif PLATFORM(GTK)
@@ -619,7 +615,7 @@
 #define WTF_USE_ICU_UNICODE 1
 #endif
 
-#if PLATFORM(MAC) && !PLATFORM(IPHONE)
+#if PLATFORM(MAC) && !PLATFORM(IOS)
 #define WTF_PLATFORM_CF 1
 #define WTF_USE_PTHREADS 1
 #define HAVE_PTHREAD_RWLOCK 1
@@ -634,7 +630,8 @@
 #endif
 #define HAVE_READLINE 1
 #define HAVE_RUNLOOP_TIMER 1
-#endif /* PLATFORM(MAC) && !PLATFORM(IPHONE) */
+#define ENABLE_FULLSCREEN_API 1
+#endif /* PLATFORM(MAC) && !PLATFORM(IOS) */
 
 #if PLATFORM(MAC)
 #define WTF_USE_CARBON_SECURE_INPUT_MODE 1
@@ -647,11 +644,19 @@
 #define WTF_USE_CARBON_SECURE_INPUT_MODE 1
 #endif
 
+#if PLATFORM(BREWMP)
+#define ENABLE_SINGLE_THREADED 1
+#endif
+
 #if PLATFORM(QT) && OS(DARWIN)
 #define WTF_PLATFORM_CF 1
 #endif
 
-#if PLATFORM(IPHONE)
+#if OS(DARWIN) && !defined(BUILDING_ON_TIGER) && !PLATFORM(GTK) && !PLATFORM(QT)
+#define ENABLE_PURGEABLE_MEMORY 1
+#endif
+
+#if PLATFORM(IOS)
 #define ENABLE_CONTEXT_MENUS 0
 #define ENABLE_DRAG_SUPPORT 0
 #define ENABLE_FTPDIR 1
@@ -678,10 +683,14 @@
    This prevents unnecessary invals. */
 #define ENABLE_TEXT_CARET 1
 #define ENABLE_JAVASCRIPT_DEBUGGER 0
+#if !defined(ENABLE_JIT) && !ENABLE(ANDROID_JSC_JIT)
+#define ENABLE_JIT 0
+#endif
 #endif
 
 #if PLATFORM(WIN)
-#define WTF_USE_WININET 1
+#define WTF_PLATFORM_CF 1
+#define WTF_USE_PTHREADS 0
 #endif
 
 #if PLATFORM(WX)
@@ -718,7 +727,7 @@
 #endif
 
 #if !defined(HAVE_ACCESSIBILITY)
-#if PLATFORM(IPHONE) || PLATFORM(MAC) || PLATFORM(WIN) || PLATFORM(GTK) || PLATFORM(CHROMIUM)
+#if PLATFORM(IOS) || PLATFORM(MAC) || PLATFORM(WIN) || PLATFORM(GTK) || PLATFORM(CHROMIUM)
 #define HAVE_ACCESSIBILITY 1
 #endif
 #endif /* !defined(HAVE_ACCESSIBILITY) */
@@ -748,11 +757,12 @@
 #define HAVE_SYS_TIME_H 1
 #define HAVE_SYS_TIMEB_H 1
 
-#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
+#if !defined(TARGETING_TIGER) && !defined(TARGETING_LEOPARD)
 
 #define HAVE_DISPATCH_H 1
+#define HAVE_HOSTED_CORE_ANIMATION 1
 
-#if !PLATFORM(IPHONE) && !PLATFORM(QT)
+#if !PLATFORM(IOS)
 #define HAVE_MADV_FREE_REUSE 1
 #define HAVE_MADV_FREE 1
 #define HAVE_PTHREAD_SETNAME_NP 1
@@ -760,7 +770,7 @@
 
 #endif
 
-#if PLATFORM(IPHONE)
+#if PLATFORM(IOS)
 #define HAVE_MADV_FREE 1
 #endif
 
@@ -770,6 +780,7 @@
 #define HAVE_ERRNO_H 0
 #else
 #define HAVE_SYS_TIMEB_H 1
+#define HAVE_ALIGNED_MALLOC 1
 #endif
 #define HAVE_VIRTUALALLOC 1
 
@@ -818,6 +829,7 @@
 #define ENABLE_FTPDIR 0
 #define WTF_USE_EXTERNAL_CRASH 1
 #define USE_SYSTEM_MALLOC 1
+#define HAVE_PAGE_ALLOCATE_ALIGNED 1
 #define NOMINMAX       // Windows min and max conflict with standard macros
 #else
 
@@ -834,6 +846,13 @@
 #define HAVE_SYS_PARAM_H 1
 #define HAVE_SYS_TIME_H 1
 
+#endif
+
+#if HAVE(MMAP) || (HAVE(VIRTUALALLOC) && HAVE(ALIGNED_MALLOC))
+#define HAVE_PAGE_ALLOCATE_ALIGNED 1
+#endif
+#if HAVE(MMAP)
+#define HAVE_PAGE_ALLOCATE_AT 1
 #endif
 
 /* ENABLE macro defaults */
@@ -877,10 +896,6 @@
 #define ENABLE_DASHBOARD_SUPPORT 0
 #endif
 
-#if !defined(ENABLE_WIDGETS_10_SUPPORT)
-#define ENABLE_WIDGETS_10_SUPPORT 0
-#endif
-
 #if !defined(ENABLE_INSPECTOR)
 #define ENABLE_INSPECTOR 1
 #endif
@@ -891,6 +906,14 @@
 
 #if !defined(ENABLE_NETSCAPE_PLUGIN_API)
 #define ENABLE_NETSCAPE_PLUGIN_API 1
+#endif
+
+#if !defined(ENABLE_NETSCAPE_PLUGIN_METADATA_CACHE)
+#define ENABLE_NETSCAPE_PLUGIN_METADATA_CACHE 0
+#endif
+
+#if !defined(ENABLE_PURGEABLE_MEMORY)
+#define ENABLE_PURGEABLE_MEMORY 0
 #endif
 
 #if !defined(WTF_USE_PLUGIN_HOST_PROCESS)
@@ -929,7 +952,7 @@
 #define ENABLE_NOTIFICATIONS 0
 #endif
 
-#if PLATFORM(IPHONE)
+#if PLATFORM(IOS)
 #define ENABLE_TEXT_CARET 0
 #endif
 
@@ -941,13 +964,18 @@
 #define ENABLE_ON_FIRST_TEXTAREA_FOCUS_SELECT_ALL 0
 #endif
 
+#if !defined(ENABLE_FULLSCREEN_API)
+#define ENABLE_FULLSCREEN_API 0
+#endif
+
 #if !defined(WTF_USE_JSVALUE64) && !defined(WTF_USE_JSVALUE32) && !defined(WTF_USE_JSVALUE32_64)
 #if (CPU(X86_64) && (OS(UNIX) || OS(WINDOWS))) \
     || (CPU(IA64) && !CPU(IA64_32)) \
     || CPU(ALPHA) \
-    || CPU(SPARC64)
+    || CPU(SPARC64) \
+    || CPU(PPC64)
 #define WTF_USE_JSVALUE64 1
-#elif (CPU(ARM) && !OS(OLYMPIA)) || CPU(PPC64) || CPU(MIPS)
+#elif CPU(MIPS) || (CPU(ARM_TRADITIONAL) && COMPILER(MSVC))
 #define WTF_USE_JSVALUE32 1
 #elif OS(WINDOWS) && COMPILER(MINGW)
 /* Using JSVALUE32_64 causes padding/alignement issues for JITStubArg
@@ -962,77 +990,56 @@ on MinGW. See https://bugs.webkit.org/show_bug.cgi?id=29268 */
 #define ENABLE_REPAINT_THROTTLING 0
 #endif
 
-#if !defined(ENABLE_JIT)
-
-/* The JIT is tested & working on x86_64 Mac */
-#if CPU(X86_64) && PLATFORM(MAC)
-    #define ENABLE_JIT 1
-/* The JIT is tested & working on x86 Mac */
-#elif CPU(X86) && PLATFORM(MAC)
-    #define ENABLE_JIT 1
-    #define WTF_USE_JIT_STUB_ARGUMENT_VA_LIST 1
-#elif CPU(ARM_THUMB2) && PLATFORM(IPHONE)
-    #define ENABLE_JIT 1
-/* The JIT is tested & working on Android */
-#elif CPU(ARM_THUMB2) && PLATFORM(ANDROID) && ENABLE(ANDROID_JSC_JIT)
-    #define ENABLE_JIT 1
-/* The JIT is tested & working on x86 Windows */
-#elif CPU(X86) && PLATFORM(WIN)
-    #define ENABLE_JIT 1
+/* Disable the JIT on versiond of GCC prior to 4.1 */
+#if !defined(ENABLE_JIT) && COMPILER(GCC) && !GCC_VERSION_AT_LEAST(4,1,0)
+#define ENABLE_JIT 0
 #endif
 
-#if PLATFORM(QT) || PLATFORM(WX)
-#if CPU(X86_64) && OS(DARWIN)
-    #define ENABLE_JIT 1
-#elif CPU(X86) && OS(DARWIN)
-    #define ENABLE_JIT 1
-    #define WTF_USE_JIT_STUB_ARGUMENT_VA_LIST 1
-#elif CPU(X86) && OS(WINDOWS) && COMPILER(MINGW) && GCC_VERSION >= 40100
-    #define ENABLE_JIT 1
-    #define WTF_USE_JIT_STUB_ARGUMENT_VA_LIST 1
-#elif CPU(X86) && OS(WINDOWS) && COMPILER(MSVC)
-    #define ENABLE_JIT 1
-    #define WTF_USE_JIT_STUB_ARGUMENT_REGISTER 1
-#elif CPU(X86) && OS(LINUX) && GCC_VERSION >= 40100
-    #define ENABLE_JIT 1
-    #define WTF_USE_JIT_STUB_ARGUMENT_VA_LIST 1
-#elif CPU(X86_64) && OS(LINUX) && GCC_VERSION >= 40100
-    #define ENABLE_JIT 1
-#elif CPU(ARM_TRADITIONAL) && OS(LINUX)
-    #define ENABLE_JIT 1
-#elif CPU(ARM_TRADITIONAL) && OS(SYMBIAN) && COMPILER(RVCT)
-    #define ENABLE_JIT 1
-#elif CPU(MIPS) && OS(LINUX)
-    #define ENABLE_JIT 1
-    #define WTF_USE_JIT_STUB_ARGUMENT_VA_LIST 0
-#endif
-#endif /* PLATFORM(QT) */
-
-#endif /* !defined(ENABLE_JIT) */
-
-/* CPU architecture specific optimizations */
-#if CPU(ARM_TRADITIONAL)
-#if ENABLE(JIT) && !defined(ENABLE_JIT_OPTIMIZE_MOD) && WTF_ARM_ARCH_AT_LEAST(5)
-#define ENABLE_JIT_OPTIMIZE_MOD 1
-#endif
+/* JIT is not implemented for 64 bit on MSVC */
+#if !defined(ENABLE_JIT) && COMPILER(MSVC) && CPU(X86_64)
+#define ENABLE_JIT 0
 #endif
 
+/* The JIT is enabled by default on all x86, x64-64, ARM & MIPS platforms. */
+#if !defined(ENABLE_JIT) \
+    && !OS(OLYMPIA) \
+    && (CPU(X86) || CPU(X86_64) || CPU(ARM) || CPU(MIPS)) \
+    && (OS(DARWIN) || !COMPILER(GCC) || GCC_VERSION_AT_LEAST(4,1,0))
+#define ENABLE_JIT 1
+#endif
+
+/* Ensure that either the JIT or the interpreter has been enabled. */
+#if !defined(ENABLE_INTERPRETER) && !ENABLE(JIT)
+#define ENABLE_INTERPRETER 1
+#endif
+#if !(ENABLE(JIT) || ENABLE(INTERPRETER))
+#error You have to have at least one execution model enabled to build JSC
+#endif
+
+/* Configure the JIT */
 #if ENABLE(JIT)
-#ifndef ENABLE_JIT_OPTIMIZE_CALL
-#define ENABLE_JIT_OPTIMIZE_CALL 1
-#endif
-#ifndef ENABLE_JIT_OPTIMIZE_NATIVE_CALL
-#define ENABLE_JIT_OPTIMIZE_NATIVE_CALL 1
-#endif
-#ifndef ENABLE_JIT_OPTIMIZE_PROPERTY_ACCESS
-#define ENABLE_JIT_OPTIMIZE_PROPERTY_ACCESS 1
-#endif
-#ifndef ENABLE_JIT_OPTIMIZE_METHOD_CALLS
-#define ENABLE_JIT_OPTIMIZE_METHOD_CALLS 1
-#endif
-#ifndef ENABLE_JIT_OPTIMIZE_MOD
-#define ENABLE_JIT_OPTIMIZE_MOD 0
-#endif
+    #if CPU(ARM_TRADITIONAL)
+    #if !defined(ENABLE_JIT_USE_SOFT_MODULO) && WTF_ARM_ARCH_AT_LEAST(5)
+    #define ENABLE_JIT_USE_SOFT_MODULO 1
+    #endif
+    #endif
+
+    #if !defined(ENABLE_JIT_OPTIMIZE_NATIVE_CALL) && CPU(X86) && USE(JSVALUE32)
+    #define ENABLE_JIT_OPTIMIZE_NATIVE_CALL 0
+    #endif
+
+    #ifndef ENABLE_JIT_OPTIMIZE_CALL
+    #define ENABLE_JIT_OPTIMIZE_CALL 1
+    #endif
+    #ifndef ENABLE_JIT_OPTIMIZE_NATIVE_CALL
+    #define ENABLE_JIT_OPTIMIZE_NATIVE_CALL 1
+    #endif
+    #ifndef ENABLE_JIT_OPTIMIZE_PROPERTY_ACCESS
+    #define ENABLE_JIT_OPTIMIZE_PROPERTY_ACCESS 1
+    #endif
+    #ifndef ENABLE_JIT_OPTIMIZE_METHOD_CALLS
+    #define ENABLE_JIT_OPTIMIZE_METHOD_CALLS 1
+    #endif
 #endif
 
 #if CPU(X86) && COMPILER(MSVC)
@@ -1043,20 +1050,22 @@ on MinGW. See https://bugs.webkit.org/show_bug.cgi?id=29268 */
 #define JSC_HOST_CALL
 #endif
 
-#if (COMPILER(GCC) || COMPILER(RVCT4GNU)) && !ENABLE(JIT)
+/* Configure the interpreter */
+#if COMPILER(GCC) || COMPILER(RVCT4GNU)
 #define HAVE_COMPUTED_GOTO 1
 #endif
+#if HAVE(COMPUTED_GOTO) && ENABLE(INTERPRETER)
+#define ENABLE_COMPUTED_GOTO_INTERPRETER 1
+#endif
 
-/* Yet Another Regex Runtime. */
-#if !defined(ENABLE_YARR_JIT)
+/* Regular Expression Tracing - Set to 1 to trace RegExp's in jsc.  Results dumped at exit */
+#define ENABLE_REGEXP_TRACING 0
 
-/* YARR and YARR_JIT is usually turned on for JIT enabled ports */
-#if ENABLE(JIT)
+/* Yet Another Regex Runtime - turned on by default for JIT enabled ports. */
+#if ENABLE(JIT) && !defined(ENABLE_YARR) && !defined(ENABLE_YARR_JIT)
 #define ENABLE_YARR 1
 #define ENABLE_YARR_JIT 1
 #endif
-
-#endif /* !defined(ENABLE_YARR_JIT) */
 
 /* Sanity Check */
 #if ENABLE(YARR_JIT) && !ENABLE(YARR)
@@ -1068,42 +1077,67 @@ on MinGW. See https://bugs.webkit.org/show_bug.cgi?id=29268 */
 #endif
 /* Setting this flag prevents the assembler from using RWX memory; this may improve
    security but currectly comes at a significant performance cost. */
-#if PLATFORM(IPHONE)
+#if !defined(ENABLE_ASSEMBLER_WX_EXCLUSIVE)
+#if PLATFORM(IOS)
 #define ENABLE_ASSEMBLER_WX_EXCLUSIVE 1
 #else
 #define ENABLE_ASSEMBLER_WX_EXCLUSIVE 0
+#endif
+#endif
+
+/* Pick which allocator to use; we only need an executable allocator if the assembler is compiled in.
+   On x86-64 we use a single fixed mmap, on other platforms we mmap on demand. */
+#if ENABLE(ASSEMBLER)
+#if CPU(X86_64)
+#define ENABLE_EXECUTABLE_ALLOCATOR_FIXED 1
+#else
+#define ENABLE_EXECUTABLE_ALLOCATOR_DEMAND 1
+#endif
 #endif
 
 #if !defined(ENABLE_PAN_SCROLLING) && OS(WINDOWS)
 #define ENABLE_PAN_SCROLLING 1
 #endif
 
-/* Use the QXmlStreamReader implementation for XMLTokenizer */
+#if !defined(ENABLE_SMOOTH_SCROLLING)
+#define ENABLE_SMOOTH_SCROLLING 0
+#endif
+
+/* Use the QXmlStreamReader implementation for XMLDocumentParser */
 /* Use the QXmlQuery implementation for XSLTProcessor */
 #if PLATFORM(QT)
 #define WTF_USE_QXMLSTREAM 1
 #define WTF_USE_QXMLQUERY 1
 #endif
 
-#if !PLATFORM(QT) && !PLATFORM(OLYMPIA)
-#define WTF_USE_FONT_FAST_PATH 1
+#if PLATFORM(MAC)
+/* Complex text framework */
+#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
+#define WTF_USE_ATSUI 0
+#define WTF_USE_CORE_TEXT 1
+#else
+#define WTF_USE_ATSUI 1
+#define WTF_USE_CORE_TEXT 0
 #endif
 
 /* Accelerated compositing */
-#if PLATFORM(MAC)
 #if !defined(BUILDING_ON_TIGER)
 #define WTF_USE_ACCELERATED_COMPOSITING 1
 #endif
 #endif
 
-#if PLATFORM(IPHONE)
+#if PLATFORM(IOS)
+#define WTF_USE_ACCELERATED_COMPOSITING 1
+#endif
+
+#if PLATFORM(QT)
 #define WTF_USE_ACCELERATED_COMPOSITING 1
 #endif
 
 /* FIXME: Defining ENABLE_3D_RENDERING here isn't really right, but it's always used with
    with WTF_USE_ACCELERATED_COMPOSITING, and it allows the feature to be turned on and
    off in one place. */
-#if PLATFORM(WIN)
+#if PLATFORM(WIN) && !OS(WINCE)
 #include "QuartzCorePresent.h"
 #if QUARTZCORE_PRESENT
 #define WTF_USE_ACCELERATED_COMPOSITING 1
@@ -1111,7 +1145,7 @@ on MinGW. See https://bugs.webkit.org/show_bug.cgi?id=29268 */
 #endif
 #endif
 
-#if (PLATFORM(MAC) && !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)) || PLATFORM(IPHONE)
+#if (PLATFORM(MAC) && !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)) || PLATFORM(IOS)
 #define WTF_USE_PROTECTION_SPACE_AUTH_CALLBACK 1
 #endif
 
@@ -1129,5 +1163,25 @@ on MinGW. See https://bugs.webkit.org/show_bug.cgi?id=29268 */
 #define WTF_PLATFORM_CFNETWORK Error USE_macro_should_be_used_with_CFNETWORK
 
 #define ENABLE_JSC_ZOMBIES 0
+
+/* FIXME: Eventually we should enable this for all platforms and get rid of the define. */
+#if PLATFORM(MAC) || PLATFORM(WIN)
+#define WTF_USE_PLATFORM_STRATEGIES 1
+#endif
+
+/* Geolocation request policy. pre-emptive policy is to acquire user permission before acquiring location.
+   Client based implementations will have option to choose between pre-emptive and nonpre-emptive permission policy.
+   pre-emptive permission policy is enabled by default for all client-based implementations. */
+#if ENABLE(CLIENT_BASED_GEOLOCATION)
+#define WTF_USE_PREEMPT_GEOLOCATION_PERMISSION 1
+#endif
+
+#if CPU(ARM_THUMB2)
+#define ENABLE_BRANCH_COMPACTION 1
+#endif
+
+#if PLATFORM(GTK) || (PLATFORM(EFL) && ENABLE(GLIB_SUPPORT))
+#include "GTypedefs.h"
+#endif
 
 #endif /* WTF_Platform_h */

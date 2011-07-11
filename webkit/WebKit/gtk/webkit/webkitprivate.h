@@ -48,20 +48,26 @@
 #include "ArchiveResource.h"
 #include "BackForwardList.h"
 #include "DataObjectGtk.h"
-#include <enchant.h>
+#include "DragActions.h"
+#include "Frame.h"
 #include "GOwnPtr.h"
 #include "Geolocation.h"
 #include "HistoryItem.h"
-#include "Settings.h"
-#include "Page.h"
-#include "Frame.h"
 #include "InspectorClientGtk.h"
+#include "IntPoint.h"
 #include "FrameLoaderClient.h"
+#include "FullscreenVideoController.h"
+#include "Node.h"
+#include "Page.h"
+#include "PlatformString.h"
 #include "ResourceHandle.h"
 #include "ResourceRequest.h"
 #include "ResourceResponse.h"
 #include "WindowFeatures.h"
 #include "SecurityOrigin.h"
+#include "Settings.h"
+#include <enchant.h>
+#include <wtf/OwnPtr.h>
 #include <wtf/text/CString.h>
 
 #include <atk/atk.h>
@@ -95,18 +101,31 @@ namespace WebKit {
 
     WebCore::ResourceResponse core(WebKitNetworkResponse* response);
 
-    WebCore::EditingBehavior core(WebKitEditingBehavior type);
+    WebCore::EditingBehaviorType core(WebKitEditingBehavior type);
 
     WebKitSecurityOrigin* kit(WebCore::SecurityOrigin*);
     WebCore::SecurityOrigin* core(WebKitSecurityOrigin*);
 
     WebKitHitTestResult* kit(const WebCore::HitTestResult&);
 
-    WebKit::PasteboardHelperGtk* pasteboardHelperInstance();
+    PasteboardHelperGtk* pasteboardHelperInstance();
+
+    typedef struct DroppingContext_ {
+        WebKitWebView* webView;
+        GdkDragContext* gdkContext;
+        RefPtr<WebCore::DataObjectGtk> dataObject;
+        WebCore::IntPoint lastMotionPosition;
+        int pendingDataRequests;
+        bool dropHappened;
+    } DroppingContext;
 }
 
 extern "C" {
     void webkit_init();
+
+#ifdef HAVE_GSETTINGS
+    GSettings* inspectorGSettings();
+#endif
 
 #define WEBKIT_PARAM_READABLE ((GParamFlags)(G_PARAM_READABLE|G_PARAM_STATIC_NAME|G_PARAM_STATIC_NICK|G_PARAM_STATIC_BLURB))
 #define WEBKIT_PARAM_READWRITE ((GParamFlags)(G_PARAM_READWRITE|G_PARAM_STATIC_NAME|G_PARAM_STATIC_NICK|G_PARAM_STATIC_BLURB))
@@ -137,22 +156,32 @@ extern "C" {
 
         gboolean zoomFullContent;
         WebKitLoadStatus loadStatus;
-        char* encoding;
-        char* customEncoding;
+        CString encoding;
+        CString customEncoding;
 
-        char* iconURI;
+        CString iconURI;
 
         gboolean disposing;
         gboolean usePrimaryForPaste;
 
+#if ENABLE(VIDEO)
+        FullscreenVideoController* fullscreenVideoController;
+#endif
+
         // These are hosted here because the DataSource object is
         // created too late in the frame loading process.
         WebKitWebResource* mainResource;
-        char* mainResourceIdentifier;
+        CString mainResourceIdentifier;
         GHashTable* subResources;
-        char* tooltipText;
+        CString tooltipText;
 
-        HashMap<GdkDragContext*, RefPtr<WebCore::DataObjectGtk> > draggingDataObjects;
+        int currentClickCount;
+        WebCore::IntPoint* previousClickPoint;
+        guint previousClickButton;
+        guint32 previousClickTime;
+
+        HashMap<GdkDragContext*, RefPtr<WebCore::DataObjectGtk> >* draggingDataObjects;
+        HashMap<GdkDragContext*, WebKit::DroppingContext*>* droppingContexts;
     };
 
     #define WEBKIT_WEB_FRAME_GET_PRIVATE(obj)    (G_TYPE_INSTANCE_GET_PRIVATE((obj), WEBKIT_TYPE_WEB_FRAME, WebKitWebFramePrivate))
@@ -178,8 +207,8 @@ extern "C" {
         gboolean disposed;
     };
 
-    PassRefPtr<WebCore::Frame>
-    webkit_web_frame_init_with_web_view(WebKitWebView*, WebCore::HTMLFrameOwnerElement*);
+    WTF::String
+    webkitUserAgent();
 
     void
     webkit_web_frame_core_frame_gone(WebKitWebFrame*);
@@ -241,7 +270,7 @@ extern "C" {
     webkit_web_view_request_download(WebKitWebView* web_view, WebKitNetworkRequest* request, const WebCore::ResourceResponse& response = WebCore::ResourceResponse(), WebCore::ResourceHandle* handle = 0);
 
     void
-    webkit_web_view_add_resource(WebKitWebView*, char*, WebKitWebResource*);
+    webkit_web_view_add_resource(WebKitWebView*, const char*, WebKitWebResource*);
 
     WebKitWebResource*
     webkit_web_view_get_resource(WebKitWebView*, char*);
@@ -257,6 +286,12 @@ extern "C" {
 
     void
     webkit_web_view_set_tooltip_text(WebKitWebView*, const char*);
+
+    WEBKIT_API void
+    webkit_web_view_execute_core_command_by_name(WebKitWebView* webView, const gchar* name, const gchar* value);
+
+    WEBKIT_API gboolean
+    webkit_web_view_is_command_enabled(WebKitWebView* webView, const gchar* name);
 
     WebKitDownload*
     webkit_download_new_with_handle(WebKitNetworkRequest* request, WebCore::ResourceHandle* handle, const WebCore::ResourceResponse& response);
@@ -326,6 +361,12 @@ extern "C" {
     webkit_web_frame_number_of_active_animations(WebKitWebFrame* frame);
 
     WEBKIT_API void
+    webkit_web_frame_suspend_animations(WebKitWebFrame* frame);
+
+    WEBKIT_API void
+    webkit_web_frame_resume_animations(WebKitWebFrame* frame);
+
+    WEBKIT_API void
     webkit_web_frame_clear_main_frame_name(WebKitWebFrame* frame);
 
     WEBKIT_API AtkObject*
@@ -379,6 +420,9 @@ extern "C" {
 
     WEBKIT_API void
     webkit_web_frame_layout(WebKitWebFrame* frame);
+
+    void webkitWebViewEnterFullscreen(WebKitWebView* webView, WebCore::Node* node);
+    void webkitWebViewExitFullscreen(WebKitWebView* webView);
 }
 
 #endif

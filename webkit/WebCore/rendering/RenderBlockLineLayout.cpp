@@ -25,11 +25,13 @@
 
 #include "BidiResolver.h"
 #include "CharacterNames.h"
+#include "Hyphenation.h"
 #include "InlineIterator.h"
 #include "InlineTextBox.h"
 #include "Logging.h"
 #include "RenderArena.h"
 #include "RenderInline.h"
+#include "RenderLayer.h"
 #include "RenderListMarker.h"
 #include "RenderView.h"
 #include "TrailingFloatsRootInlineBox.h"
@@ -38,6 +40,11 @@
 #include <wtf/RefCountedLeakCounter.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/Vector.h>
+
+#if ENABLE(SVG)
+#include "RenderSVGInlineText.h"
+#include "SVGRootInlineBox.h"
+#endif
 
 using namespace std;
 using namespace WTF;
@@ -182,7 +189,7 @@ static inline InlineBox* createInlineBoxForRenderer(RenderObject* obj, bool isRo
         // We only treat a box as text for a <br> if we are on a line by ourself or in strict mode
         // (Note the use of strict mode.  In "almost strict" mode, we don't treat the box for <br> as text.)
         if (obj->isBR())
-            textBox->setIsText(isOnlyRun || obj->document()->inStrictMode());
+            textBox->setIsText(isOnlyRun || obj->document()->inNoQuirksMode());
         return textBox;
     }
     
@@ -291,6 +298,8 @@ RootInlineBox* RenderBlock::constructLine(unsigned runCount, BidiRun* firstRun, 
             text->setStart(r->m_start);
             text->setLen(r->m_stop - r->m_start);
             text->m_dirOverride = r->dirOverride(visuallyOrdered);
+            if (r->m_hasHyphen)
+                text->setHasHyphen(true);
         }
     }
 
@@ -344,22 +353,19 @@ void RenderBlock::computeHorizontalPositionsForLine(RootInlineBox* lineBox, bool
             }
             HashSet<const SimpleFontData*> fallbackFonts;
             GlyphOverflow glyphOverflow;
-            r->m_box->setWidth(rt->width(r->m_start, r->m_stop - r->m_start, totWidth, firstLine, &fallbackFonts, &glyphOverflow));
-            if (!fallbackFonts.isEmpty()
-#if ENABLE(SVG)
-                    && !isSVGText()
-#endif
-            ) {
+            int hyphenWidth = 0;
+            if (static_cast<InlineTextBox*>(r->m_box)->hasHyphen()) {
+                const AtomicString& hyphenString = rt->style()->hyphenString();
+                hyphenWidth = rt->style(firstLine)->font().width(TextRun(hyphenString.characters(), hyphenString.length()));
+            }
+            r->m_box->setWidth(rt->width(r->m_start, r->m_stop - r->m_start, totWidth, firstLine, &fallbackFonts, &glyphOverflow) + hyphenWidth);
+            if (!fallbackFonts.isEmpty()) {
                 ASSERT(r->m_box->isText());
                 GlyphOverflowAndFallbackFontsMap::iterator it = textBoxDataMap.add(static_cast<InlineTextBox*>(r->m_box), make_pair(Vector<const SimpleFontData*>(), GlyphOverflow())).first;
                 ASSERT(it->second.first.isEmpty());
                 copyToVector(fallbackFonts, it->second.first);
             }
-            if ((glyphOverflow.top || glyphOverflow.bottom || glyphOverflow.left || glyphOverflow.right)
-#if ENABLE(SVG)
-                && !isSVGText()
-#endif
-            ) {
+            if ((glyphOverflow.top || glyphOverflow.bottom || glyphOverflow.left || glyphOverflow.right)) {
                 ASSERT(r->m_box->isText());
                 GlyphOverflowAndFallbackFontsMap::iterator it = textBoxDataMap.add(static_cast<InlineTextBox*>(r->m_box), make_pair(Vector<const SimpleFontData*>(), GlyphOverflow())).first;
                 it->second.second = glyphOverflow;
@@ -465,7 +471,7 @@ void RenderBlock::computeHorizontalPositionsForLine(RootInlineBox* lineBox, bool
 
                 // Only justify text if whitespace is collapsed.
                 if (r->m_object->style()->collapseWhiteSpace()) {
-                    spaceAdd = (availableWidth - totWidth) * spaces / numSpaces;
+                    spaceAdd = (availableWidth > totWidth ? availableWidth - totWidth : 0) * spaces / numSpaces;
                     static_cast<InlineTextBox*>(r->m_box)->setSpaceAdd(spaceAdd);
                     totWidth += spaceAdd;
                 }
@@ -508,12 +514,6 @@ void RenderBlock::computeVerticalPositionsForLine(RootInlineBox* lineBox, BidiRu
     // Positioned objects and zero-length text nodes destroy their boxes in
     // position(), which unnecessarily dirties the line.
     lineBox->markDirty(false);
-}
-
-// collects one line of the paragraph and transforms it to visual order
-void RenderBlock::bidiReorderLine(InlineBidiResolver& resolver, const InlineIterator& end, bool previousLineBrokeCleanly)
-{
-    resolver.createBidiRunsForLine(end, style()->visuallyOrdered(), previousLineBrokeCleanly);
 }
 
 static inline bool isCollapsibleSpace(UChar character, RenderText* renderer)
@@ -560,6 +560,9 @@ void RenderBlock::layoutInlineChildren(bool relayoutChildren, int& repaintTop, i
         Vector<FloatWithRect> floats;
         bool hasInlineChild = false;
         while (o) {
+            if (!hasInlineChild && o->isInline())
+                hasInlineChild = true;
+
             if (o->isReplaced() || o->isFloating() || o->isPositioned()) {
                 RenderBox* box = toRenderBox(o);
                 
@@ -581,7 +584,6 @@ void RenderBlock::layoutInlineChildren(bool relayoutChildren, int& repaintTop, i
                     o->layoutIfNeeded();
                 }
             } else if (o->isText() || (o->isRenderInline() && !endOfInline)) {
-                hasInlineChild = true;
                 if (fullLayout || o->selfNeedsLayout())
                     dirtyLineBoxesForRenderer(o, fullLayout);
                 o->setNeedsLayout(false);
@@ -672,7 +674,8 @@ void RenderBlock::layoutInlineChildren(bool relayoutChildren, int& repaintTop, i
             isLineEmpty = true;
             
             EClear clear = CNONE;
-            end = findNextLineBreak(resolver, firstLine, isLineEmpty, previousLineBrokeCleanly, &clear);
+            bool hyphenated;
+            end = findNextLineBreak(resolver, firstLine, isLineEmpty, previousLineBrokeCleanly, hyphenated, &clear);
             if (resolver.position().atEnd()) {
                 resolver.deleteRuns();
                 checkForFloatsFromLastLine = true;
@@ -681,7 +684,7 @@ void RenderBlock::layoutInlineChildren(bool relayoutChildren, int& repaintTop, i
             ASSERT(end != resolver.position());
 
             if (!isLineEmpty) {
-                bidiReorderLine(resolver, end, previousLineBrokeCleanly);
+                resolver.createBidiRunsForLine(end, style()->visuallyOrdered(), previousLineBrokeCleanly);
                 ASSERT(resolver.position() == end);
 
                 BidiRun* trailingSpaceRun = 0;
@@ -738,20 +741,37 @@ void RenderBlock::layoutInlineChildren(bool relayoutChildren, int& repaintTop, i
 
                 RootInlineBox* lineBox = 0;
                 if (resolver.runCount()) {
+                    if (hyphenated)
+                        resolver.logicallyLastRun()->m_hasHyphen = true;
                     lineBox = constructLine(resolver.runCount(), resolver.firstRun(), resolver.lastRun(), firstLine, !end.obj, end.obj && !end.pos ? end.obj : 0);
                     if (lineBox) {
                         lineBox->setEndsWithBreak(previousLineBrokeCleanly);
 
-                        // Now we position all of our text runs horizontally.
+#if ENABLE(SVG)
+                        bool isSVGRootInlineBox = lineBox->isSVGRootInlineBox();
+#else
+                        bool isSVGRootInlineBox = false;
+#endif
+
                         GlyphOverflowAndFallbackFontsMap textBoxDataMap;
-                        computeHorizontalPositionsForLine(lineBox, firstLine, resolver.firstRun(), trailingSpaceRun, end.atEnd(), textBoxDataMap);
+
+                        // Now we position all of our text runs horizontally.
+                        if (!isSVGRootInlineBox)
+                            computeHorizontalPositionsForLine(lineBox, firstLine, resolver.firstRun(), trailingSpaceRun, end.atEnd(), textBoxDataMap);
 
                         // Now position our text runs vertically.
                         computeVerticalPositionsForLine(lineBox, resolver.firstRun(), textBoxDataMap);
 
 #if ENABLE(SVG)
-                        // Special SVG text layout code
-                        lineBox->computePerCharacterLayoutInformation();
+                        // SVG text layout code computes vertical & horizontal positions on its own.
+                        // Note that we still need to execute computeVerticalPositionsForLine() as
+                        // it calls InlineTextBox::positionLineBox(), which tracks whether the box
+                        // contains reversed text or not. If we wouldn't do that editing and thus
+                        // text selection in RTL boxes would not work as expected.
+                        if (isSVGRootInlineBox) {
+                            ASSERT(isSVGText());
+                            static_cast<SVGRootInlineBox*>(lineBox)->computePerCharacterLayoutInformation();
+                        }
 #endif
 
 #if PLATFORM(MAC)
@@ -1139,7 +1159,7 @@ static inline bool shouldCollapseWhiteSpace(const RenderStyle* style, bool isLin
 static inline bool shouldPreserveNewline(RenderObject* object)
 {
 #if ENABLE(SVG)
-    if (object->isSVGText())
+    if (object->isSVGInlineText())
         return false;
 #endif
 
@@ -1306,8 +1326,40 @@ static inline unsigned textWidth(RenderText* text, unsigned from, unsigned len, 
     return font.width(TextRun(text->characters() + from, len, !collapseWhiteSpace, xPos));
 }
 
+static void tryHyphenating(RenderText* text, const Font& font, const AtomicString& localeIdentifier, int lastSpace, int pos, int xPos, int availableWidth, bool isFixedPitch, bool collapseWhiteSpace, int lastSpaceWordSpacing, InlineIterator& lineBreak, int nextBreakable, bool& hyphenated)
+{
+    const AtomicString& hyphenString = text->style()->hyphenString();
+    int hyphenWidth = font.width(TextRun(hyphenString.characters(), hyphenString.length()));
+
+    int maxPrefixWidth = availableWidth - xPos - hyphenWidth - lastSpaceWordSpacing;
+    // If the maximum width available for the prefix before the hyphen is small, then it is very unlikely
+    // that an hyphenation opportunity exists, so do not bother to look for it.
+    if (maxPrefixWidth <= font.pixelSize() * 5 / 4)
+        return;
+
+    unsigned prefixLength = font.offsetForPosition(TextRun(text->characters() + lastSpace, pos - lastSpace, !collapseWhiteSpace, xPos + lastSpaceWordSpacing), maxPrefixWidth, false);
+    if (!prefixLength)
+        return;
+
+    prefixLength = lastHyphenLocation(text->characters() + lastSpace, pos - lastSpace, prefixLength + 1, localeIdentifier);
+    if (!prefixLength)
+        return;
+
+#if !ASSERT_DISABLED
+    int prefixWidth = hyphenWidth + textWidth(text, lastSpace, prefixLength, font, xPos, isFixedPitch, collapseWhiteSpace) + lastSpaceWordSpacing;
+    ASSERT(xPos + prefixWidth <= availableWidth);
+#else
+    UNUSED_PARAM(isFixedPitch);
+#endif
+
+    lineBreak.obj = text;
+    lineBreak.pos = lastSpace + prefixLength;
+    lineBreak.nextBreakablePosition = nextBreakable;
+    hyphenated = true;
+}
+
 InlineIterator RenderBlock::findNextLineBreak(InlineBidiResolver& resolver, bool firstLine,  bool& isLineEmpty, bool& previousLineBrokeCleanly, 
-                                              EClear* clear)
+                                              bool& hyphenated, EClear* clear)
 {
     ASSERT(resolver.position().block == this);
 
@@ -1355,13 +1407,15 @@ InlineIterator RenderBlock::findNextLineBreak(InlineBidiResolver& resolver, bool
     bool prevLineBrokeCleanly = previousLineBrokeCleanly;
     previousLineBrokeCleanly = false;
 
+    hyphenated = false;
+
     bool autoWrapWasEverTrueOnLine = false;
     bool floatsFitOnLine = true;
     
     // Firefox and Opera will allow a table cell to grow to fit an image inside it under
     // very specific circumstances (in order to match common WinIE renderings). 
     // Not supporting the quirk has caused us to mis-render some real sites. (See Bugzilla 10517.) 
-    bool allowImagesToBreak = !style()->htmlHacks() || !isTableCell() || !style()->width().isIntrinsicOrAuto();
+    bool allowImagesToBreak = !document()->inQuirksMode() || !isTableCell() || !style()->width().isIntrinsicOrAuto();
 
     EWhiteSpace currWS = style()->whiteSpace();
     EWhiteSpace lastWS = currWS;
@@ -1373,7 +1427,7 @@ InlineIterator RenderBlock::findNextLineBreak(InlineBidiResolver& resolver, bool
         autoWrapWasEverTrueOnLine = autoWrapWasEverTrueOnLine || autoWrap;
 
 #if ENABLE(SVG)
-        bool preserveNewline = o->isSVGText() ? false : RenderStyle::preserveNewline(currWS);
+        bool preserveNewline = o->isSVGInlineText() ? false : RenderStyle::preserveNewline(currWS);
 #else
         bool preserveNewline = RenderStyle::preserveNewline(currWS);
 #endif
@@ -1524,12 +1578,18 @@ InlineIterator RenderBlock::findNextLineBreak(InlineBidiResolver& resolver, bool
 
             RenderText* t = toRenderText(o);
 
+#if ENABLE(SVG)
+            bool isSVGText = t->isSVGInlineText();
+#endif
+
             int strlen = t->textLength();
             int len = strlen - pos;
             const UChar* str = t->characters();
 
-            const Font& f = t->style(firstLine)->font();
+            RenderStyle* style = t->style(firstLine);
+            const Font& f = style->font();
             bool isFixedPitch = f.isFixedPitch();
+            bool canHyphenate = style->hyphens() == HyphensAuto && WebCore::canHyphenate(style->hyphenationLocale());
 
             int lastSpace = pos;
             int wordSpacing = o->style()->wordSpacing();
@@ -1537,7 +1597,7 @@ InlineIterator RenderBlock::findNextLineBreak(InlineBidiResolver& resolver, bool
 
             // Non-zero only when kerning is enabled, in which case we measure words with their trailing
             // space, then subtract its width.
-            int wordTrailingSpaceWidth = f.typesettingFeatures() & Kerning ? f.spaceWidth() + wordSpacing : 0;
+            int wordTrailingSpaceWidth = f.typesettingFeatures() & Kerning ? f.width(TextRun(&space, 1)) + wordSpacing : 0;
 
             int wrapW = tmpW + inlineWidth(o, !appliedStartWidth, true);
             int charWidth = 0;
@@ -1599,9 +1659,26 @@ InlineIterator RenderBlock::findNextLineBreak(InlineBidiResolver& resolver, bool
                     len--;
                     lastSpaceWordSpacing = 0;
                     lastSpace = pos; // Cheesy hack to prevent adding in widths of the run twice.
+                    if (style->hyphens() == HyphensNone) {
+                        // Prevent a line break at the soft hyphen by ensuring that betweenWords is false
+                        // in the next iteration.
+                        atStart = true;
+                    }
                     continue;
                 }
-                
+ 
+#if ENABLE(SVG)
+                if (isSVGText) {
+                    RenderSVGInlineText* svgInlineText = static_cast<RenderSVGInlineText*>(t);
+                    if (pos > 0) {
+                        if (svgInlineText->characterStartsNewTextChunk(pos)) {
+                            addMidpoint(lineMidpointState, InlineIterator(0, o, pos - 1));
+                            addMidpoint(lineMidpointState, InlineIterator(0, o, pos));
+                        }
+                    }
+                }
+#endif
+
                 bool applyWordSpacing = false;
                 
                 currentCharacterIsWS = currentCharacterIsSpace || (breakNBSP && c == noBreakSpace);
@@ -1669,6 +1746,11 @@ InlineIterator RenderBlock::findNextLineBreak(InlineBidiResolver& resolver, bool
                             }
                         }
                         if (lineWasTooWide || w + tmpW > width) {
+                            if (canHyphenate && w + tmpW > width) {
+                                tryHyphenating(t, f, style->hyphenationLocale(), lastSpace, pos, w + tmpW - additionalTmpW, width, isFixedPitch, collapseWhiteSpace, lastSpaceWordSpacing, lBreak, nextBreakable, hyphenated);
+                                if (hyphenated)
+                                    goto end;
+                            }
                             if (lBreak.obj && shouldPreserveNewline(lBreak.obj) && lBreak.obj->isText() && toRenderText(lBreak.obj)->textLength() && !toRenderText(lBreak.obj)->isWordBreak() && toRenderText(lBreak.obj)->characters()[lBreak.pos] == '\n') {
                                 if (!stoppedIgnoringSpaces && pos > 0) {
                                     // We need to stop right before the newline and then start up again.
@@ -1774,9 +1856,15 @@ InlineIterator RenderBlock::findNextLineBreak(InlineBidiResolver& resolver, bool
             }
 
             // IMPORTANT: pos is > length here!
-            if (!ignoringSpaces)
-                tmpW += textWidth(t, lastSpace, pos - lastSpace, f, w + tmpW, isFixedPitch, collapseWhiteSpace) + lastSpaceWordSpacing;
+            int additionalTmpW = ignoringSpaces ? 0 : textWidth(t, lastSpace, pos - lastSpace, f, w + tmpW, isFixedPitch, collapseWhiteSpace) + lastSpaceWordSpacing;
+            tmpW += additionalTmpW;
             tmpW += inlineWidth(o, !appliedStartWidth, true);
+
+            if (canHyphenate && w + tmpW > width) {
+                tryHyphenating(t, f, style->hyphenationLocale(), lastSpace, pos, w + tmpW - additionalTmpW, width, isFixedPitch, collapseWhiteSpace, lastSpaceWordSpacing, lBreak, nextBreakable, hyphenated);
+                if (hyphenated)
+                    goto end;
+            }
         } else
             ASSERT_NOT_REACHED();
 

@@ -104,7 +104,7 @@ COMPtr<HistoryDelegate> sharedHistoryDelegate;
 IWebFrame* frame;
 HWND webViewWindow;
 
-LayoutTestController* gLayoutTestController = 0;
+RefPtr<LayoutTestController> gLayoutTestController;
 
 UINT_PTR waitToDumpWatchdog = 0;
 
@@ -134,21 +134,39 @@ bool setAlwaysAcceptCookies(bool alwaysAcceptCookies)
 
 wstring urlSuitableForTestResult(const wstring& url)
 {
-    if (!url.c_str() || url.find(L"file://") == wstring::npos)
+    if (url.find(L"file://") == wstring::npos)
+        return url;
+
+    return lastPathComponent(url);
+}
+
+wstring lastPathComponent(const wstring& url)
+{
+    if (url.empty())
         return url;
 
     return PathFindFileNameW(url.c_str());
 }
 
-string toUTF8(BSTR bstr)
+static string toUTF8(const wchar_t* wideString, size_t length)
 {
-    int result = WideCharToMultiByte(CP_UTF8, 0, bstr, SysStringLen(bstr) + 1, 0, 0, 0, 0);
+    int result = WideCharToMultiByte(CP_UTF8, 0, wideString, length + 1, 0, 0, 0, 0);
     Vector<char> utf8Vector(result);
-    result = WideCharToMultiByte(CP_UTF8, 0, bstr, SysStringLen(bstr) + 1, utf8Vector.data(), result, 0, 0);
+    result = WideCharToMultiByte(CP_UTF8, 0, wideString, length + 1, utf8Vector.data(), result, 0, 0);
     if (!result)
         return string();
 
     return string(utf8Vector.data(), utf8Vector.size() - 1);
+}
+
+string toUTF8(BSTR bstr)
+{
+    return toUTF8(bstr, SysStringLen(bstr));
+}
+
+string toUTF8(const wstring& wideString)
+{
+    return toUTF8(wideString.c_str(), wideString.length());
 }
 
 static LRESULT CALLBACK DumpRenderTreeWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -687,7 +705,7 @@ void dump()
             COMPtr<IWebFramePrivate> framePrivate;
             if (FAILED(frame->QueryInterface(&framePrivate)))
                 goto fail;
-            framePrivate->renderTreeAsExternalRepresentation(&resultString);
+            framePrivate->renderTreeAsExternalRepresentation(gLayoutTestController->isPrinting(), &resultString);
         }
         
         if (!resultString)
@@ -713,10 +731,11 @@ void dump()
         fflush(stderr);
     }
 
-    if (dumpPixels) {
-        if (!gLayoutTestController->dumpAsText() && !gLayoutTestController->dumpDOMAsWebArchive() && !gLayoutTestController->dumpSourceAsWebArchive())
-            dumpWebViewAsPixelsAndCompareWithExpected(gLayoutTestController->expectedPixelHash());
-    }
+    if (dumpPixels
+     && gLayoutTestController->generatePixelResults()
+     && !gLayoutTestController->dumpDOMAsWebArchive()
+     && !gLayoutTestController->dumpSourceAsWebArchive())
+        dumpWebViewAsPixelsAndCompareWithExpected(gLayoutTestController->expectedPixelHash());
 
     printf("#EOF\n");   // terminate the (possibly empty) pixels block
     fflush(stdout);
@@ -903,7 +922,7 @@ static void runTest(const string& testPathOrURL)
 
     CFRelease(url);
 
-    ::gLayoutTestController = new LayoutTestController(pathOrURL, expectedPixelHash);
+    ::gLayoutTestController = LayoutTestController::create(pathOrURL, expectedPixelHash);
     done = false;
     topLoadingFrame = 0;
 
@@ -969,8 +988,10 @@ static void runTest(const string& testPathOrURL)
         DispatchMessage(&msg);
     }
 
-    if (shouldEnableDeveloperExtras(pathOrURL.c_str()))
+    if (shouldEnableDeveloperExtras(pathOrURL.c_str())) {
         gLayoutTestController->closeWebInspector();
+        gLayoutTestController->setDeveloperExtrasEnabled(false);
+    }
 
     resetWebViewToConsistentStateBeforeTesting();
 
@@ -992,8 +1013,7 @@ static void runTest(const string& testPathOrURL)
 
 exit:
     SysFreeString(urlBStr);
-    ::gLayoutTestController->deref();
-    ::gLayoutTestController = 0;
+    ::gLayoutTestController.clear();
 
     return;
 }
@@ -1212,8 +1232,17 @@ RetainPtr<CFURLCacheRef> sharedCFURLCache()
 }
 #endif
 
+static LONG WINAPI exceptionFilter(EXCEPTION_POINTERS*)
+{
+    fputs("#CRASHED\n", stderr);
+    fflush(stderr);
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
 int main(int argc, char* argv[])
 {
+    ::SetUnhandledExceptionFilter(exceptionFilter);
+
     leakChecking = false;
 
     _setmode(1, _O_BINARY);

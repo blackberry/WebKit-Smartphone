@@ -46,7 +46,7 @@ WebInspector.EventListenersSidebarPane = function()
     option.label = WebInspector.UIString("Selected Node Only");
     this.settingsSelectElement.appendChild(option);
 
-    WebInspector.settings.addEventListener("loaded", this._settingsLoaded, this);
+    WebInspector.applicationSettings.addEventListener("loaded", this._settingsLoaded, this);
     this.settingsSelectElement.addEventListener("click", function(event) { event.stopPropagation() }, false);
     this.settingsSelectElement.addEventListener("change", this._changeSetting.bind(this), false);
 
@@ -56,7 +56,7 @@ WebInspector.EventListenersSidebarPane = function()
 WebInspector.EventListenersSidebarPane.prototype = {
     _settingsLoaded: function()
     {
-        var filter = WebInspector.settings.eventListenersFilter;
+        var filter = WebInspector.applicationSettings.eventListenersFilter;
         if (filter === "all")
             this.settingsSelectElement[0].selected = true;
         if (filter === "selected")
@@ -112,7 +112,7 @@ WebInspector.EventListenersSidebarPane.prototype = {
     _changeSetting: function(event)
     {
         var selectedOption = this.settingsSelectElement[this.settingsSelectElement.selectedIndex];
-        WebInspector.settings.eventListenersFilter = selectedOption.value;
+        WebInspector.applicationSettings.eventListenersFilter = selectedOption.value;
 
         for (var i = 0; i < this.sections.length; ++i)
             this.sections[i].update();
@@ -142,7 +142,7 @@ WebInspector.EventListenersSection.prototype = {
     {
         // A Filtered Array simplifies when to create connectors
         var filteredEventListeners = this.eventListeners;
-        if (WebInspector.settings.eventListenersFilter === "selected") {
+        if (WebInspector.applicationSettings.eventListenersFilter === "selected") {
             filteredEventListeners = [];
             for (var i = 0; i < this.eventListeners.length; ++i) {
                 var eventListener = this.eventListeners[i];
@@ -183,23 +183,27 @@ WebInspector.EventListenerBar = function(eventListener, nodeId)
     this._setFunctionSubtitle();
     this.editable = false;
     this.element.className = "event-bar"; /* Changed from "section" */
-    this.propertiesElement.className = "event-properties"; /* Changed from "properties" */
+    this.propertiesElement.className = "event-properties source-code"; /* Changed from "properties" */
 }
 
 WebInspector.EventListenerBar.prototype = {
     update: function()
     {
-        var properties = [];
-        for (var propertyName in this.eventListener) {
-            // Just build properties in place - no need to reach out for injected script.
-            var value = this.eventListener[propertyName];
-            if (value instanceof WebInspector.DOMNode)
-                value = new WebInspector.ObjectProxy(value.injectedScriptId, value.id, [], appropriateSelectorForNode(value), true);
-            else
-                value = WebInspector.ObjectProxy.wrapPrimitiveValue(value);
-            properties.push(new WebInspector.ObjectPropertyProxy(propertyName, value));
+        function updateWithNodeObject(nodeObject)
+        {
+            var properties = [];
+            if (nodeObject)
+                properties.push(new WebInspector.RemoteObjectProperty("node", nodeObject));
+
+            for (var propertyName in this.eventListener) {
+                var value = WebInspector.RemoteObject.fromPrimitiveValue(this.eventListener[propertyName]);
+                properties.push(new WebInspector.RemoteObjectProperty(propertyName, value));
+            }
+            this.updateProperties(properties);
         }
-        this.updateProperties(properties);
+        var node = this.eventListener.node;
+        delete this.eventListener.node;
+        WebInspector.RemoteObject.resolveNode(node, updateWithNodeObject.bind(this));
     },
 
     _setNodeTitle: function()

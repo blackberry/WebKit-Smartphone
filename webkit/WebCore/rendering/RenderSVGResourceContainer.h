@@ -30,59 +30,44 @@ namespace WebCore {
 class RenderSVGResourceContainer : public RenderSVGHiddenContainer,
                                    public RenderSVGResource {
 public:
-    RenderSVGResourceContainer(SVGStyledElement* node)
-        : RenderSVGHiddenContainer(node)
-        , RenderSVGResource()
-        , m_id(node->getIDAttribute())
-    {
-        ASSERT(node->document());
-        node->document()->accessSVGExtensions()->addResource(m_id, this);
-    }
+    RenderSVGResourceContainer(SVGStyledElement*);
+    virtual ~RenderSVGResourceContainer();
 
-    virtual ~RenderSVGResourceContainer()
-    {
-        ASSERT(node());
-        ASSERT(node()->document());
-        node()->document()->accessSVGExtensions()->removeResource(m_id);
-    }
-
-    void idChanged()
-    {
-        ASSERT(node());
-        ASSERT(node()->document());
-        SVGDocumentExtensions* extensions = node()->document()->accessSVGExtensions();
-
-        // Remove old id, that is guaranteed to be present in cache
-        extensions->removeResource(m_id);
-
-        m_id = static_cast<Element*>(node())->getIDAttribute();
-
-        // It's possible that an element is referencing us with the new id, and has to be notified that we're existing now
-        if (extensions->isPendingResource(m_id)) {
-            OwnPtr<HashSet<SVGStyledElement*> > clients(extensions->removePendingResource(m_id));
-            if (clients->isEmpty())
-                return;
-
-            HashSet<SVGStyledElement*>::const_iterator it = clients->begin();
-            const HashSet<SVGStyledElement*>::const_iterator end = clients->end();
-
-            for (; it != end; ++it) {
-                if (RenderObject* renderer = (*it)->renderer())
-                    renderer->setNeedsLayout(true);
-            }
-        }
-
-        // Recache us with the new id
-        extensions->addResource(m_id, this);
-    }
+    virtual void layout();
+    virtual void destroy();
+    virtual void styleDidChange(StyleDifference, const RenderStyle* oldStyle);
 
     virtual bool isSVGResourceContainer() const { return true; }
     virtual bool drawsContents() { return false; }
-
     virtual RenderSVGResourceContainer* toRenderSVGResourceContainer() { return this; }
 
+    static AffineTransform transformOnNonScalingStroke(RenderObject*, const AffineTransform& resourceTransform);
+
+    void idChanged();
+
+protected:
+    enum InvalidationMode {
+        LayoutAndBoundariesInvalidation,
+        BoundariesInvalidation,
+        RepaintInvalidation,
+        ParentOnlyInvalidation
+    };
+
+    // Used from the invalidateClient/invalidateClients methods from classes, inheriting from us.
+    void markAllClientsForInvalidation(InvalidationMode);
+    void markClientForInvalidation(RenderObject*, InvalidationMode);
+
 private:
+    friend class SVGResourcesCache;
+    void addClient(RenderObject*);
+    void removeClient(RenderObject*);
+
+private:
+    void registerResource();
+
     AtomicString m_id;
+    bool m_registered;
+    HashSet<RenderObject*> m_clients;
 };
 
 inline RenderSVGResourceContainer* getRenderSVGResourceContainerById(Document* document, const AtomicString& id)

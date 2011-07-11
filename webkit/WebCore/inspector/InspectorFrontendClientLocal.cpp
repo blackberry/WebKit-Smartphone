@@ -37,8 +37,8 @@
 #include "FloatRect.h"
 #include "Frame.h"
 #include "FrameView.h"
+#include "InspectorBackendDispatcher.h"
 #include "InspectorController.h"
-#include "InspectorFrontend.h"
 #include "InspectorFrontendHost.h"
 #include "Page.h"
 #include "PlatformString.h"
@@ -70,11 +70,8 @@ InspectorFrontendClientLocal::~InspectorFrontendClientLocal()
     
 void InspectorFrontendClientLocal::windowObjectCleared()
 {
-    // Grant the inspector the ability to script the inspected page.
-    m_frontendPage->mainFrame()->document()->securityOrigin()->grantUniversalAccess();
     // FIXME: don't keep reference to the script state
     m_frontendScriptState = scriptStateFromPage(debuggerWorld(), m_frontendPage);
-    ScriptGlobalObject::set(m_frontendScriptState, "InspectorBackend", m_inspectorController->inspectorBackend());
     m_frontendHost = InspectorFrontendHost::create(this, m_frontendPage);
     ScriptGlobalObject::set(m_frontendScriptState, "InspectorFrontendHost", m_frontendHost.get());
 }
@@ -82,14 +79,7 @@ void InspectorFrontendClientLocal::windowObjectCleared()
 void InspectorFrontendClientLocal::frontendLoaded()
 {
     bringToFront();
-    // Create InspectorFrontend and set it to InspectorController.
-    ASSERT(m_frontendScriptState);
-    ScriptObject webInspectorObj;
-    if (!ScriptGlobalObject::get(m_frontendScriptState, "WebInspector", webInspectorObj)) {
-        ASSERT_NOT_REACHED();
-        return;
-    }
-    m_inspectorController->setFrontend(new InspectorFrontend(webInspectorObj));
+    m_inspectorController->connectFrontend();
 }
 
 void InspectorFrontendClientLocal::requestAttachWindow()
@@ -136,8 +126,7 @@ void InspectorFrontendClientLocal::setAttachedWindow(bool attached)
         ASSERT_NOT_REACHED();
         return;
     }
-    ScriptFunctionCall function(webInspectorObj, "dispatch"); 
-    function.appendArgument("setAttachedWindow");
+    ScriptFunctionCall function(webInspectorObj, "setAttachedWindow");
     function.appendArgument(attached);
     function.call();
 }
@@ -148,7 +137,7 @@ void InspectorFrontendClientLocal::restoreAttachedWindowHeight()
     String attachedHeight = m_inspectorController->setting(inspectorAttachedHeightName);
     bool success = true;
     int height = attachedHeight.toInt(&success);
-    unsigned preferredHeight = success ? height : defaultAttachedHeight;
+    unsigned preferredHeight = success ? static_cast<unsigned>(height) : defaultAttachedHeight;
     
     // This call might not go through (if the window starts out detached), but if the window is initially created attached,
     // InspectorController::attachWindow is never called, so we need to make sure to set the attachedWindowHeight.
@@ -161,7 +150,12 @@ unsigned InspectorFrontendClientLocal::constrainedAttachedWindowHeight(unsigned 
     using namespace std;
     return roundf(max(minimumAttachedHeight, min<float>(preferredHeight, totalWindowHeight * maximumAttachedHeightRatio)));
 }
-    
+
+void InspectorFrontendClientLocal::sendMessageToBackend(const String& message)
+{
+    m_inspectorController->inspectorBackendDispatcher()->dispatch(message);
+}
+
 } // namespace WebCore
 
 #endif

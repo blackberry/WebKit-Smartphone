@@ -1,7 +1,7 @@
-/**
+/*
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
- * Copyright (C) 2003 Apple Computer, Inc.
+ * Copyright (C) 2003, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -32,14 +32,20 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-HTMLHRElement::HTMLHRElement(const QualifiedName& tagName, Document* doc)
-    : HTMLElement(tagName, doc)
+HTMLHRElement::HTMLHRElement(const QualifiedName& tagName, Document* document)
+    : HTMLElement(tagName, document)
 {
     ASSERT(hasTagName(hrTag));
 }
 
-HTMLHRElement::~HTMLHRElement()
+PassRefPtr<HTMLHRElement> HTMLHRElement::create(Document* document)
 {
+    return adoptRef(new HTMLHRElement(hrTag, document));
+}
+
+PassRefPtr<HTMLHRElement> HTMLHRElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new HTMLHRElement(tagName, document));
 }
 
 bool HTMLHRElement::mapToEntry(const QualifiedName& attrName, MappedAttributeEntry& result) const
@@ -98,46 +104,6 @@ void HTMLHRElement::parseMappedAttribute(Attribute* attr)
             addCSSLength(attr, CSSPropertyHeight, String::number(size-2));
     } else
         HTMLElement::parseMappedAttribute(attr);
-}
-
-String HTMLHRElement::align() const
-{
-    return getAttribute(alignAttr);
-}
-
-void HTMLHRElement::setAlign(const String &value)
-{
-    setAttribute(alignAttr, value);
-}
-
-bool HTMLHRElement::noShade() const
-{
-    return !getAttribute(noshadeAttr).isNull();
-}
-
-void HTMLHRElement::setNoShade(bool noShade)
-{
-    setAttribute(noshadeAttr, noShade ? "" : 0);
-}
-
-String HTMLHRElement::size() const
-{
-    return getAttribute(sizeAttr);
-}
-
-void HTMLHRElement::setSize(const String &value)
-{
-    setAttribute(sizeAttr, value);
-}
-
-String HTMLHRElement::width() const
-{
-    return getAttribute(widthAttr);
-}
-
-void HTMLHRElement::setWidth(const String &value)
-{
-    setAttribute(widthAttr, value);
 }
 
 }

@@ -26,14 +26,10 @@
 #ifndef CSSFontFaceSource_h
 #define CSSFontFaceSource_h
 
-#include "AtomicString.h"
 #include "CachedResourceClient.h"
 #include "CachedResourceHandle.h"
 #include <wtf/HashMap.h>
-
-#if ENABLE(SVG_FONTS)
-#include "SVGFontFaceElement.h"
-#endif
+#include <wtf/text/AtomicString.h>
 
 namespace WebCore {
 
@@ -42,6 +38,11 @@ class CSSFontFace;
 class CSSFontSelector;
 class FontDescription;
 class SimpleFontData;
+#if ENABLE(SVG_FONTS)
+class SVGFontElement;
+class SVGFontFaceElement;
+#endif
+
 
 class CSSFontFaceSource : public CachedResourceClient {
 public:

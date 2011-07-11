@@ -33,6 +33,7 @@
 #include "V8Console.h"
 
 #include "Console.h"
+#include "ScriptCallStack.h"
 #include "ScriptProfile.h"
 #include "V8Binding.h"
 #include "V8Proxy.h"
@@ -42,11 +43,41 @@ namespace WebCore {
 
 typedef Vector<RefPtr<ScriptProfile> > ProfilesArray;
 
-v8::Handle<v8::Value> V8Console::profilesAccessorGetter(v8::Local<v8::String>, const v8::AccessorInfo&)
+#if ENABLE(JAVASCRIPT_DEBUGGER)
+v8::Handle<v8::Value> V8Console::profilesAccessorGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
 {
     INC_STATS("DOM.Console.profilesAccessorGetter");
-    // FIXME: Provide a real implementation.
-    return v8::Array::New(0);
+    Console* imp = V8Console::toNative(info.Holder());
+    const ProfilesArray& profiles = imp->profiles();
+    v8::Handle<v8::Array> result = v8::Array::New(profiles.size());
+    int index = 0;
+    ProfilesArray::const_iterator end = profiles.end();
+    for (ProfilesArray::const_iterator iter = profiles.begin(); iter != end; ++iter)
+        result->Set(v8::Integer::New(index++), toV8(iter->get()));
+    return result;
+}
+#endif
+
+v8::Handle<v8::Value> V8Console::traceCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.Console.traceCallback");
+    Console* imp = V8Console::toNative(args.Holder());
+    v8::HandleScope handleScope;
+    ScriptState* scriptState = ScriptState::current();
+    v8::Local<v8::StackTrace> stackTrace = v8::StackTrace::CurrentStackTrace(ScriptCallStack::maxCallStackSizeToCapture);
+    OwnPtr<ScriptCallStack> callStack(ScriptCallStack::create(scriptState, stackTrace));
+    imp->trace(callStack.get());
+    return v8::Handle<v8::Value>();
+}
+
+v8::Handle<v8::Value> V8Console::assertCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.Console.assertCallback");
+    Console* imp = V8Console::toNative(args.Holder());
+    OwnPtr<ScriptCallStack> callStack(ScriptCallStack::create(args, 1, ScriptCallStack::maxCallStackSizeToCapture));
+    bool condition = args[0]->BooleanValue();
+    imp->assertCondition(condition, callStack.get());
+    return v8::Handle<v8::Value>();
 }
 
 } // namespace WebCore

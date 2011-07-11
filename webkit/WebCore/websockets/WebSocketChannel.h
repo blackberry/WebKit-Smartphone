@@ -37,13 +37,13 @@
 #include "ThreadableWebSocketChannel.h"
 #include "Timer.h"
 #include "WebSocketHandshake.h"
+#include <wtf/Forward.h>
 #include <wtf/RefCounted.h>
 #include <wtf/Vector.h>
 
 namespace WebCore {
 
     class ScriptExecutionContext;
-    class String;
     class SocketStreamHandle;
     class SocketStreamError;
     class WebSocketChannelClient;
@@ -79,20 +79,31 @@ namespace WebCore {
     private:
         WebSocketChannel(ScriptExecutionContext*, WebSocketChannelClient*, const KURL&, const String& protocol);
 
-        bool appendToBuffer(const char* data, int len);
-        void skipBuffer(int len);
+        bool appendToBuffer(const char* data, size_t len);
+        void skipBuffer(size_t len);
         bool processBuffer();
+        void resumeTimerFired(Timer<WebSocketChannel>* timer);
+
+#if ENABLE(INSPECTOR)
+        unsigned long identifier();
+#endif
 
         ScriptExecutionContext* m_context;
         WebSocketChannelClient* m_client;
         WebSocketHandshake m_handshake;
         RefPtr<SocketStreamHandle> m_handle;
         char* m_buffer;
-        int m_bufferSize;
+        size_t m_bufferSize;
 
+        Timer<WebSocketChannel> m_resumeTimer;
         bool m_suspended;
         bool m_closed;
+        bool m_shouldDiscardReceivedData;
         unsigned long m_unhandledBufferedAmount;
+
+#if ENABLE(INSPECTOR)
+        unsigned long m_identifier;
+#endif
     };
 
 } // namespace WebCore

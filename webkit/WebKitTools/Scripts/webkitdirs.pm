@@ -1,4 +1,4 @@
-# Copyright (C) 2005, 2006, 2007 Apple Inc. All rights reserved.
+# Copyright (C) 2005, 2006, 2007, 2010 Apple Inc. All rights reserved.
 # Copyright (C) 2009 Google Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -50,6 +50,7 @@ BEGIN {
 our @EXPORT_OK;
 
 my $architecture;
+my $numberOfCPUs;
 my $baseProductDir;
 my @baseProductDirOption;
 my $configuration;
@@ -73,6 +74,7 @@ my $isInspectorFrontend;
 my $vcBuildPath;
 my $windowsTmpPath;
 my $windowsSourceDir;
+my $winVersion;
 my $willUseVCExpressWhenBuilding = 0;
 
 # Defined in VCSUtils.
@@ -116,7 +118,9 @@ sub determineBaseProductDir
     return if defined $baseProductDir;
     determineSourceDir();
 
-    if (isAppleMacWebKit()) {
+    $baseProductDir = $ENV{"WEBKITOUTPUTDIR"};
+
+    if (!defined($baseProductDir) and isAppleMacWebKit()) {
         # Silently remove ~/Library/Preferences/xcodebuild.plist which can
         # cause build failure. The presence of
         # ~/Library/Preferences/xcodebuild.plist can prevent xcodebuild from
@@ -149,7 +153,7 @@ sub determineBaseProductDir
     }
 
     if (!defined($baseProductDir)) { # Port-spesific checks failed, use default
-        $baseProductDir = $ENV{"WEBKITOUTPUTDIR"} || "$sourceDir/WebKitBuild";
+        $baseProductDir = "$sourceDir/WebKitBuild";
     }
 
     if ((1 == 1) || isOlympia()) {
@@ -233,12 +237,36 @@ sub determineArchitecture
     }
 }
 
+sub determineNumberOfCPUs
+{
+    return if defined $numberOfCPUs;
+    if (isLinux()) {
+        # First try the nproc utility, if it exists. If we get no
+        # results fall back to just interpretting /proc directly.
+        chomp($numberOfCPUs = `nproc 2> /dev/null`);
+        if ($numberOfCPUs eq "") {
+            $numberOfCPUs = (grep /processor/, `cat /proc/cpuinfo`);
+        }
+    } elsif (isWindows() || isCygwin()) {
+        if (defined($ENV{NUMBER_OF_PROCESSORS})) {
+            $numberOfCPUs = $ENV{NUMBER_OF_PROCESSORS};
+        } else {
+            # Assumes cygwin
+            $numberOfCPUs = `ls /proc/registry/HKEY_LOCAL_MACHINE/HARDWARE/DESCRIPTION/System/CentralProcessor | wc -w`;
+        }
+    } elsif (isDarwin()) {
+        $numberOfCPUs = `sysctl -n hw.ncpu`;
+    }
+}
+
 sub jscPath($)
 {
     my ($productDir) = @_;
     my $jscName = "jsc";
     $jscName .= "_debug"  if (isCygwin() && ($configuration eq "Debug"));
-    return "$productDir/$jscName";
+    $jscName .= ".exe" if (isWindows() || isCygwin());
+    return "$productDir/$jscName" if -e "$productDir/$jscName";
+    return "$productDir/JavaScriptCore.framework/Resources/$jscName";
 }
 
 sub argumentsForConfiguration()
@@ -382,7 +410,7 @@ sub XcodeCoverageSupportOptions()
     push @coverageSupportOptions, "GCC_INSTRUMENT_PROGRAM_FLOW_ARCS=YES";
     push @coverageSupportOptions, "EXTRA_LINK= \$(EXTRA_LINK) -ftest-coverage -fprofile-arcs";
     push @coverageSupportOptions, "OTHER_CFLAGS= \$(OTHER_CFLAGS) -DCOVERAGE -MD";
-    push @coverageSupportOptions, "OTHER_LDFLAGS=\$(OTHER_LDFLAGS) -ftest-coverage -fprofile-arcs -framework AppKit";
+    push @coverageSupportOptions, "OTHER_LDFLAGS=\$(OTHER_LDFLAGS) -ftest-coverage -fprofile-arcs -lgcov";
     return @coverageSupportOptions;
 }
 
@@ -470,6 +498,12 @@ sub architecture()
 {
     determineArchitecture();
     return $architecture;
+}
+
+sub numberOfCPUs()
+{
+    determineNumberOfCPUs();
+    return $numberOfCPUs;
 }
 
 sub setArchitecture
@@ -573,7 +607,11 @@ sub builtDylibPathForName
         return "$configurationProductDir/libwxwebkit.dylib";
     }
     if (isGtk()) {
-        return "$configurationProductDir/$libraryName/../.libs/libwebkit-1.0.so";
+        my $libraryDir = "$configurationProductDir/$libraryName/../.libs/";
+        if (-e $libraryDir . "libwebkitgtk-3.0.so") {
+            return $libraryDir . "libwebkitgtk-3.0.so";
+        }
+        return $libraryDir . "libwebkitgtk-1.0.so";
     }
     if (isEfl()) {
         return "$configurationProductDir/$libraryName/../.libs/libewebkit.so";
@@ -650,7 +688,7 @@ sub determineQtFeatureDefaults()
     my $defaults = `qmake CONFIG+=compute_defaults 2>&1`;
     chdir $originalCwd;
 
-    while ($defaults =~ m/(\S*?)=(.*?)( |$)/gi) {
+    while ($defaults =~ m/(\S+?)=(\S+?)/gi) {
         $qtFeatureDefaults{$1}=$2;
     }
 }
@@ -694,8 +732,6 @@ sub determineIsSymbian()
         $isSymbian = 1;
         return;
     }
-
-    $isSymbian = defined($ENV{'EPOCROOT'});
 }
 
 sub determineIsEfl()
@@ -789,6 +825,41 @@ sub determineIsChromium()
 sub isCygwin()
 {
     return ($^O eq "cygwin") || 0;
+}
+
+sub determineWinVersion()
+{
+    return if $winVersion;
+
+    if (!isCygwin()) {
+        $winVersion = -1;
+        return;
+    }
+
+    my $versionString = `uname -s`;
+    $versionString =~ /(\d\.\d)/;
+    $winVersion = $1;
+}
+
+sub winVersion()
+{
+    determineWinVersion();
+    return $winVersion;
+}
+
+sub isWindows7()
+{
+    return winVersion() eq "6.1";
+}
+
+sub isWindowsVista()
+{
+    return winVersion() eq "6.0";
+}
+
+sub isWindowsXP()
+{
+    return winVersion() eq "5.1";
 }
 
 sub isDarwin()
@@ -1257,6 +1328,21 @@ sub autotoolsFlag($$)
     return $prefix . '-' . $feature;
 }
 
+sub autogenArgumentsHaveChanged($@)
+{
+    my ($filename, @currentArguments) = @_;
+
+    if (! -e $filename) {
+        return 1;
+    }
+
+    open(AUTOTOOLS_ARGUMENTS, $filename);
+    chomp(my $previousArguments = <AUTOTOOLS_ARGUMENTS>);
+    close(AUTOTOOLS_ARGUMENTS);
+
+    return $previousArguments ne join(" ", @currentArguments);
+}
+
 sub buildAutotoolsProject($@)
 {
     my ($clean, @buildParams) = @_;
@@ -1279,6 +1365,12 @@ sub buildAutotoolsProject($@)
         }
     }
 
+    # Automatically determine the number of CPUs for make only
+    # if make arguments haven't already been specified.
+    if ($makeArgs eq "") {
+        $makeArgs = "-j" . numberOfCPUs();
+    }
+
     $prefix = $ENV{"WebKitInstallationPrefix"} if !defined($prefix);
     push @buildArgs, "--prefix=" . $prefix if defined($prefix);
 
@@ -1295,31 +1387,37 @@ sub buildAutotoolsProject($@)
     }
 
     if (! -d $dir) {
-        system "mkdir", "-p", "$dir";
-        if (! -d $dir) {
-            die "Failed to create build directory " . $dir;
-        }
+        File::Path::mkpath($dir) or die "Failed to create build directory " . $dir
     }
-
     chdir $dir or die "Failed to cd into " . $dir . "\n";
 
-    my $result;
     if ($clean) {
-        #$result = system $make, "distclean";
         return 0;
     }
 
-    print "Calling configure in " . $dir . "\n\n";
-    print "Installation prefix directory: $prefix\n" if(defined($prefix));
+    # If GNUmakefile exists, don't run autogen.sh. The makefile should be
+    # smart enough to track autotools dependencies and re-run autogen.sh
+    # when build files change.
+    my $autogenArgumentsFile = "previous-autogen-arguments.txt";
+    my $result;
+    if (!(-e "GNUmakefile") or autogenArgumentsHaveChanged($autogenArgumentsFile, @buildArgs)) {
 
-    # Make the path relative since it will appear in all -I compiler flags.
-    # Long argument lists cause bizarre slowdowns in libtool.
-    my $relSourceDir = File::Spec->abs2rel($sourceDir);
-    $relSourceDir = "." if !$relSourceDir;
+        # Write autogen.sh arguments to a file so that we can detect
+        # when they change and automatically re-run it.
+        open(AUTOTOOLS_ARGUMENTS, ">$autogenArgumentsFile");
+        print AUTOTOOLS_ARGUMENTS  join(" ", @buildArgs);
+        close(AUTOTOOLS_ARGUMENTS);
 
-    $result = system "$relSourceDir/autogen.sh", @buildArgs;
-    if ($result ne 0) {
-        die "Failed to setup build environment using 'autotools'!\n";
+        print "Calling configure in " . $dir . "\n\n";
+        print "Installation prefix directory: $prefix\n" if(defined($prefix));
+
+        # Make the path relative since it will appear in all -I compiler flags.
+        # Long argument lists cause bizarre slowdowns in libtool.
+        my $relSourceDir = File::Spec->abs2rel($sourceDir) || ".";
+        $result = system "$relSourceDir/autogen.sh", @buildArgs;
+        if ($result ne 0) {
+            die "Failed to setup build environment using 'autotools'!\n";
+        }
     }
 
     $result = system "$make $makeArgs";
@@ -1369,6 +1467,8 @@ sub buildQMakeProject($@)
 
     print "Generating derived sources\n\n";
 
+    push @buildArgs, "OUTPUT_DIR=" . baseProductDir() . "/$config";
+
     my @dsQmakeArgs = @buildArgs;
     push @dsQmakeArgs, "-r";
     push @dsQmakeArgs, sourceDir() . "/DerivedSources.pro";
@@ -1382,7 +1482,12 @@ sub buildQMakeProject($@)
     my $dsMakefile = "Makefile.DerivedSources";
 
     # Iterate over different source directories manually to workaround a problem with qmake+extraTargets+s60
-    for my $subdir ("JavaScriptCore", "WebCore", "WebKit/qt/Api") {
+    my @subdirs = ("JavaScriptCore", "WebCore", "WebKit/qt/Api");
+    if (grep { $_ eq "CONFIG+=webkit2"} @buildArgs) {
+        push @subdirs, "WebKit2";
+    }
+
+    for my $subdir (@subdirs) {
         print "Calling '$make $makeargs -f $dsMakefile generated_files' in " . $dir . "/$subdir\n\n";
         if ($make eq "nmake") {
             my $subdirWindows = $subdir;
@@ -1396,7 +1501,6 @@ sub buildQMakeProject($@)
         }
     }
 
-    push @buildArgs, "OUTPUT_DIR=" . baseProductDir() . "/$config";
     push @buildArgs, sourceDir() . "/WebKit.pro";
     if ($config =~ m/debug/i) {
         push @buildArgs, "CONFIG-=release";
@@ -1455,16 +1559,15 @@ sub buildGtkProject($$@)
     return buildAutotoolsProject($clean, @buildArgs);
 }
 
-sub buildChromiumMakefile($$$)
+sub buildChromiumMakefile($$)
 {
-    my ($dir, $target, $clean) = @_;
-    chdir $dir;
+    my ($target, $clean) = @_;
     if ($clean) {
         return system qw(rm -rf out);
     }
     my $config = configuration();
-    my $numCpus = (grep /processor/, `cat /proc/cpuinfo`) || 1;
-    my @command = ("make", "-j$numCpus", "BUILDTYPE=$config", $target);
+    my $numCpus = numberOfCPUs();
+    my @command = ("make", "-fMakefile.chromium", "-j$numCpus", "BUILDTYPE=$config", $target);
     print join(" ", @command) . "\n";
     return system @command;
 }
@@ -1513,6 +1616,9 @@ sub buildChromium($@)
 {
     my ($clean, @options) = @_;
 
+    # We might need to update DEPS or re-run GYP if things have changed.
+    system("perl", "WebKitTools/Scripts/update-webkit-chromium") == 0 or die $!;
+
     my $result = 1;
     if (isDarwin()) {
         # Mac build - builds the root xcode project.
@@ -1522,7 +1628,7 @@ sub buildChromium($@)
         $result = buildChromiumVisualStudioProject("WebKit/chromium/WebKit.sln", $clean);
     } elsif (isLinux()) {
         # Linux build - build using make.
-        $ result = buildChromiumMakefile("WebKit/chromium/", "all", $clean);
+        $ result = buildChromiumMakefile("all", $clean);
     } else {
         print STDERR "This platform is not supported by chromium.\n";
     }
@@ -1573,17 +1679,18 @@ sub runSafari
     }
 
     if (isAppleWinWebKit()) {
-        my $script = "run-webkit-nightly.cmd";
-        my $result = system "cp", "$FindBin::Bin/$script", productDir();
+        my $result;
+        my $productDir = productDir();
+        if ($debugger) {
+            setupCygwinEnv();
+            chomp($ENV{WEBKITNIGHTLY} = `cygpath -wa "$productDir"`);
+            my $safariPath = safariPath();
+            chomp($safariPath = `cygpath -wa "$safariPath"`);
+            $result = system $vcBuildPath, "/debugexe", "\"$safariPath\"", @ARGV;
+        } else {
+            $result = system File::Spec->catfile(productDir(), "WebKit.exe"), @ARGV;
+        }
         return $result if $result;
-
-        my $cwd = getcwd();
-        chdir productDir();
-
-        my $debuggerFlag = $debugger ? "/debugger" : "";
-        $result = system "cmd", "/c", "call $script $debuggerFlag";
-        chdir $cwd;
-        return $result;
     }
 
     return 1;
@@ -1626,6 +1733,45 @@ sub debugMiniBrowser
         return;
     }
     
+    return 1;
+}
+
+sub runWebKitTestRunner
+{
+    if (isAppleMacWebKit()) {
+        my $productDir = productDir();
+        print "Starting WebKitTestRunner with DYLD_FRAMEWORK_PATH set to point to $productDir.\n";
+        $ENV{DYLD_FRAMEWORK_PATH} = $productDir;
+        $ENV{WEBKIT_UNSET_DYLD_FRAMEWORK_PATH} = "YES";
+        my $webKitTestRunnerPath = "$productDir/WebKitTestRunner";
+        if (!isTiger() && architecture()) {
+            return system "arch", "-" . architecture(), $webKitTestRunnerPath, @ARGV;
+        } else {
+            return system $webKitTestRunnerPath, @ARGV;
+        }
+    }
+
+    return 1;
+}
+
+sub debugWebKitTestRunner
+{
+    if (isAppleMacWebKit()) {
+        my $gdbPath = "/usr/bin/gdb";
+        die "Can't find gdb executable. Is gdb installed?\n" unless -x $gdbPath;
+
+        my $productDir = productDir();
+        $ENV{DYLD_FRAMEWORK_PATH} = $productDir;
+        $ENV{WEBKIT_UNSET_DYLD_FRAMEWORK_PATH} = 'YES';
+
+        my $webKitTestRunnerPath = "$productDir/WebKitTestRunner";
+
+        print "Starting WebKitTestRunner under gdb with DYLD_FRAMEWORK_PATH set to point to $productDir.\n";
+        my @architectureFlags = ("-arch", architecture()) if !isTiger();
+        exec $gdbPath, @architectureFlags, $webKitTestRunnerPath or die;
+        return;
+    }
+
     return 1;
 }
 

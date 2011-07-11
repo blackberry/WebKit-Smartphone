@@ -81,11 +81,13 @@ public:
 
     virtual void setNeedsDisplay();
     virtual void setNeedsDisplayInRect(const FloatRect&);
+    virtual void setContentsNeedsDisplay();
 
     virtual void setContentsRect(const IntRect&);
 
     virtual void setContentsToImage(Image*);
-    virtual void setContentsToVideo(PlatformLayer*);
+    virtual void setContentsToMedia(PlatformLayer*);
+    virtual void setContentsToCanvas(PlatformLayer*);
 
     virtual PlatformLayer* platformLayer() const;
 
@@ -135,13 +137,12 @@ private:
     enum ContentsLayerPurpose {
         NoContentsLayer = 0,
         ContentsLayerForImage,
-        ContentsLayerForVideo
+        ContentsLayerForVideo,
+        ContentsLayerForCanvas,
     };
 
     ContentsLayerPurpose m_contentsLayerPurpose;
     bool m_contentsLayerHasBackgroundColor : 1;
-
-    NativeImagePtr m_pendingContentsImage;
 };
 
 } // namespace WebCore

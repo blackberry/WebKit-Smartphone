@@ -32,13 +32,14 @@
 
 namespace WebCore {
 
+class ColumnInfo;
 class InlineIterator;
 class RenderInline;
 
 struct BidiRun;
 
 template <class Iterator, class Run> class BidiResolver;
-template <class Iterator> class MidpointState;
+template <class Iterator> struct MidpointState;
 typedef BidiResolver<InlineIterator, BidiRun> InlineBidiResolver;
 typedef MidpointState<InlineIterator> LineMidpointState;
 
@@ -111,8 +112,6 @@ public:
 
     bool containsNonZeroBidiLevel() const;
 
-    virtual void setSelectionState(SelectionState s);
-
     GapRects selectionGapRectsForRepaint(RenderBoxModelObject* repaintContainer);
     IntRect fillLeftSelectionGap(RenderObject* selObj, int xPos, int yPos, int height, RenderBlock* rootBlock, 
                                  int blockX, int blockY, int tx, int ty, const PaintInfo*);
@@ -150,15 +149,36 @@ public:
     static void appendRunsForObject(int start, int end, RenderObject*, InlineBidiResolver&);    
     static bool requiresLineBox(const InlineIterator&, bool isLineEmpty = true, bool previousLineBrokeCleanly = true);
 
-    Vector<IntRect>* columnRects() const;
+    ColumnInfo* columnInfo() const;
     int columnGap() const;
 
-protected:
-    void moveChildTo(RenderObject* to, RenderObjectChildList* toChildList, RenderObject* child);
-    void moveChildTo(RenderObject* to, RenderObjectChildList* toChildList, RenderObject* beforeChild, RenderObject* child);
-    void moveAllChildrenTo(RenderObject* to, RenderObjectChildList* toChildList, bool fullRemoveAppend = false);
-    void moveAllChildrenTo(RenderObject* to, RenderObjectChildList* toChildList, RenderObject* beforeChild);
+    virtual void updateFirstLetter();
 
+protected:
+    // These functions are only used internally to manipulate the render tree structure via remove/insert/appendChildNode.
+    // Since they are typically called only to move objects around within anonymous blocks (which only have layers in
+    // the case of column spans), the default for fullRemoveInsert is false rather than true.
+    void moveChildTo(RenderBlock* to, RenderObject* child, bool fullRemoveInsert = false)
+    {
+        return moveChildTo(to, child, 0, fullRemoveInsert);
+    }
+    void moveChildTo(RenderBlock* to, RenderObject* child, RenderObject* beforeChild, bool fullRemoveInsert = false);
+    void moveAllChildrenTo(RenderBlock* to, bool fullRemoveInsert = false)
+    {
+        return moveAllChildrenTo(to, 0, fullRemoveInsert);
+    }
+    void moveAllChildrenTo(RenderBlock* to, RenderObject* beforeChild, bool fullRemoveInsert = false)
+    {
+        return moveChildrenTo(to, firstChild(), 0, beforeChild, fullRemoveInsert);
+    }
+    // Move all of the kids from |startChild| up to but excluding |endChild|.  0 can be passed as the endChild to denote
+    // that all the kids from |startChild| onwards should be added.
+    void moveChildrenTo(RenderBlock* to, RenderObject* startChild, RenderObject* endChild, bool fullRemoveInsert = false)
+    {
+        return moveChildrenTo(to, startChild, endChild, 0, fullRemoveInsert);
+    }
+    void moveChildrenTo(RenderBlock* to, RenderObject* startChild, RenderObject* endChild, RenderObject* beforeChild, bool fullRemoveInsert = false);
+    
     int maxTopPosMargin() const { return m_maxMargin ? m_maxMargin->m_topPos : MaxMargin::topPosDefault(this); }
     int maxTopNegMargin() const { return m_maxMargin ? m_maxMargin->m_topNeg : MaxMargin::topNegDefault(this); }
     int maxBottomPosMargin() const { return m_maxMargin ? m_maxMargin->m_bottomPos : MaxMargin::bottomPosDefault(this); }
@@ -193,8 +213,6 @@ protected:
     virtual int firstLineBoxBaseline() const;
     virtual int lastLineBoxBaseline() const;
 
-    virtual void updateFirstLetter();
-
     virtual void updateHitTestResult(HitTestResult&, const IntPoint&);
 
     // Delay update scrollbar until finishDelayRepaint() will be
@@ -210,7 +228,19 @@ protected:
 
     virtual bool hasLineIfEmpty() const;
     bool layoutOnlyPositionedObjects();
-    
+
+#if ENABLE(SVG)
+protected:
+
+    // Only used by RenderSVGText, which explicitely overrides RenderBlock::layoutBlock(), do NOT use for anything else.
+    void forceLayoutInlineChildren()
+    {
+        int repaintTop = 0;
+        int repaintBottom = 0;
+        layoutInlineChildren(true, repaintTop, repaintBottom);
+    }
+#endif
+
 private:
     virtual RenderObjectChildList* virtualChildren() { return children(); }
     virtual const RenderObjectChildList* virtualChildren() const { return children(); }
@@ -226,6 +256,8 @@ private:
 
     virtual void dirtyLinesFromChangedChild(RenderObject* child) { m_lineBoxes.dirtyLinesFromChangedChild(this, child); }
 
+    void addChildToContinuation(RenderObject* newChild, RenderObject* beforeChild);
+    void addChildIgnoringContinuation(RenderObject* newChild, RenderObject* beforeChild);
     void addChildToAnonymousColumnBlocks(RenderObject* newChild, RenderObject* beforeChild);
     virtual void addChildIgnoringAnonymousColumnBlocks(RenderObject* newChild, RenderObject* beforeChild = 0);
     
@@ -264,7 +296,6 @@ private:
     };
 
     // The following functions' implementations are in RenderBlockLineLayout.cpp.
-    void bidiReorderLine(InlineBidiResolver&, const InlineIterator& end, bool previousLineBrokeCleanly);
     RootInlineBox* determineStartPosition(bool& firstLine, bool& fullLayout, bool& previousLineBrokeCleanly,
                                           InlineBidiResolver&, Vector<FloatWithRect>& floats, unsigned& numCleanFloats);
     RootInlineBox* determineEndPosition(RootInlineBox* startBox, InlineIterator& cleanLineStart,
@@ -276,7 +307,7 @@ private:
     void skipTrailingWhitespace(InlineIterator&, bool isLineEmpty, bool previousLineBrokeCleanly);
     int skipLeadingWhitespace(InlineBidiResolver&, bool firstLine, bool isLineEmpty, bool previousLineBrokeCleanly);
     void fitBelowFloats(int widthToFit, bool firstLine, int& availableWidth);
-    InlineIterator findNextLineBreak(InlineBidiResolver&, bool firstLine, bool& isLineEmpty, bool& previousLineBrokeCleanly, EClear* clear = 0);
+    InlineIterator findNextLineBreak(InlineBidiResolver&, bool firstLine, bool& isLineEmpty, bool& previousLineBrokeCleanly, bool& hyphenated, EClear* = 0);
     RootInlineBox* constructLine(unsigned runCount, BidiRun* firstRun, BidiRun* lastRun, bool firstLine, bool lastLine, RenderObject* endObject);
     InlineFlowBox* createLineBoxes(RenderObject*, bool firstLine);
     void computeHorizontalPositionsForLine(RootInlineBox*, bool firstLine, BidiRun* firstRun, BidiRun* trailingSpaceRun, bool reachedEnd, GlyphOverflowAndFallbackFontsMap&);
@@ -322,6 +353,7 @@ private:
     int leftOffset() const;
     virtual bool hitTestColumns(const HitTestRequest&, HitTestResult&, int x, int y, int tx, int ty, HitTestAction);
     virtual bool hitTestContents(const HitTestRequest&, HitTestResult&, int x, int y, int tx, int ty, HitTestAction);
+    bool hitTestFloats(const HitTestRequest&, HitTestResult&, int x, int y, int tx, int ty);
 
     virtual bool isPointInOverflowControl(HitTestResult&, int x, int y, int tx, int ty);
 
@@ -393,6 +425,14 @@ private:
     void updateScrollInfoAfterLayout();
 
     RenderObject* splitAnonymousBlocksAroundChild(RenderObject* beforeChild);
+    void splitBlocks(RenderBlock* fromBlock, RenderBlock* toBlock, RenderBlock* middleBlock,
+                     RenderObject* beforeChild, RenderBoxModelObject* oldCont);
+    void splitFlow(RenderObject* beforeChild, RenderBlock* newBlockBox,
+                   RenderObject* newChild, RenderBoxModelObject* oldCont);
+    RenderBlock* clone() const;
+    RenderBlock* continuationBefore(RenderObject* beforeChild);
+    RenderBlock* containingColumnsBlock(bool allowAnonymousColumnBlock = true);
+    RenderBlock* columnsBlockForSpanningElement(RenderObject* newChild);
     
     struct FloatingObject : Noncopyable {
         enum Type {

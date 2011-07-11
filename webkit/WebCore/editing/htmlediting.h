@@ -39,7 +39,6 @@ class HTMLElement;
 class Node;
 class Position;
 class Range;
-class String;
 class VisiblePosition;
 class VisibleSelection;
 
@@ -219,9 +218,8 @@ bool canMergeLists(Element* firstList, Element* secondList);
 // -------------------------------------------------------------------------
 // VisibleSelection
 // -------------------------------------------------------------------------
-    
-// Functions returning VisibleSelection
 
+// Functions returning VisibleSelection
 VisibleSelection avoidIntersectionWithNode(const VisibleSelection&, Node*);
 VisibleSelection selectionForParagraphIteration(const VisibleSelection&);
     

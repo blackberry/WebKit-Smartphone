@@ -260,12 +260,14 @@ WebInspector.TextViewer.prototype = {
             return;  // Do not trigger editing from line numbers.
 
         var oldContent = lineRow.lastChild.innerHTML;
-        this._editingLine = WebInspector.startEditing(lineRow.lastChild, this._commitEditingLine.bind(this, lineRow.lineNumber, lineRow.lastChild), this._cancelEditingLine.bind(this, lineRow.lastChild, oldContent), null, true);
+        var cancelEditingCallback = this._cancelEditingLine.bind(this, lineRow.lastChild, oldContent);
+        var commitEditingCallback = this._commitEditingLine.bind(this, lineRow.lineNumber, lineRow.lastChild, cancelEditingCallback);
+        this._editingLine = WebInspector.startEditing(lineRow.lastChild, commitEditingCallback, cancelEditingCallback, null, true);
     },
 
-    _commitEditingLine: function(lineNumber, element)
+    _commitEditingLine: function(lineNumber, element, cancelEditingCallback)
     {
-        this._editCallback(lineNumber, element.textContent)
+        this._editCallback(lineNumber, element.textContent, cancelEditingCallback);
         delete this._editingLine;
     },
 
@@ -483,6 +485,9 @@ WebInspector.TextViewer.prototype = {
         if (selection.isCollapsed)
             return null;
         var selectionRange = selection.getRangeAt(0);
+        // Selection may be outside of the viewer.
+        if (!this.element.isAncestor(selectionRange.startContainer) || !this.element.isAncestor(selectionRange.endContainer))
+            return null;
         var start = this._selectionToPosition(selectionRange.startContainer, selectionRange.startOffset);
         var end = this._selectionToPosition(selectionRange.endContainer, selectionRange.endOffset);
         return new WebInspector.TextRange(start.line, start.column, end.line, end.column);
@@ -546,28 +551,24 @@ WebInspector.TextViewer.prototype = {
             return { line: lineNumber, column: this._textModel.lineLength(lineNumber) };
 
         var column = 0;
-        if (lineRow.chunk) {
-            // This is chunk.
-            var text = lineRow.lastChild.textContent;
-            for (var i = 0; i < offset; ++i) {
-                if (text.charAt(i) === "\n") {
-                    lineNumber++;
-                    column = 0;
-                } else
-                    column++; 
-            }
-            return { line: lineNumber, column: column };
-        }
-
-        // This is individul line.
-        var column = 0;
         var node = lineRow.lastChild.traverseNextTextNode(lineRow.lastChild);
         while (node && node !== container) {
             column += node.textContent.length;
             node = node.traverseNextTextNode(lineRow.lastChild);
         }
-        column += offset;
-        return { line: lineRow.lineNumber, column: column };
+
+        // This may be chunk and chunks may contain \n.
+        if (node === container && offset) {
+            var text = node.textContent;
+            for (var i = 0; i < offset; ++i) {
+                if (text.charAt(i) === "\n") {
+                    lineNumber++;
+                    column = 0;
+                } else
+                    column++;
+            }
+        }
+        return { line: lineNumber, column: column };
     },
 
     _appendSpan: function(element, content, className)

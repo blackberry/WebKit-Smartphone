@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 Apple Inc. All rights reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,6 +30,7 @@
 #ifndef JITStubs_h
 #define JITStubs_h
 
+#include "CallData.h"
 #include "MacroAssemblerCodeRef.h"
 #include "Register.h"
 #include "ThunkGenerators.h"
@@ -143,10 +145,10 @@ namespace JSC {
 #endif // COMPILER(MSVC) || (OS(WINDOWS) && COMPILER(GCC))
 #elif CPU(ARM_THUMB2)
     struct JITStackFrame {
-        void* reserved; // Unused
+        JITStubArg reserved; // Unused
         JITStubArg args[6];
-#if USE(JSVALUE32_64)
-        void* padding[2]; // Maintain 16-byte stack alignment.
+#if !USE(JSVALUE32_64)
+        void* padding; // Maintain 16-byte stack alignment.
 #endif
 
         ReturnAddressPtr thunkReturnAddress;
@@ -161,8 +163,6 @@ namespace JSC {
         CallFrame* callFrame;
         JSValue* exception;
 
-        void* padding2;
-
         // These arguments passed on the stack.
         Profiler** enabledProfilerReference;
         JSGlobalData* globalData;
@@ -170,6 +170,10 @@ namespace JSC {
         ReturnAddressPtr* returnAddressSlot() { return &thunkReturnAddress; }
     };
 #elif CPU(ARM_TRADITIONAL)
+#if COMPILER(MSVC)
+#pragma pack(push)
+#pragma pack(4)
+#endif // COMPILER(MSVC)
     struct JITStackFrame {
         JITStubArg padding; // Unused
         JITStubArg args[7];
@@ -194,10 +198,17 @@ namespace JSC {
         // When JIT code makes a call, it pushes its return address just below the rest of the stack.
         ReturnAddressPtr* returnAddressSlot() { return &thunkReturnAddress; }
     };
+#if COMPILER(MSVC)
+#pragma pack(pop)
+#endif // COMPILER(MSVC)
 #elif CPU(MIPS)
     struct JITStackFrame {
-        void* reserved; // Unused
+        JITStubArg reserved; // Unused
         JITStubArg args[6];
+
+#if USE(JSVALUE32_64)
+        void* padding; // Make the overall stack length 8-byte aligned.
+#endif
 
         void* preservedGP; // store GP when using PIC code
         void* preservedS0;
@@ -224,26 +235,19 @@ namespace JSC {
 
 #define JITSTACKFRAME_ARGS_INDEX (OBJECT_OFFSETOF(JITStackFrame, args) / sizeof(void*))
 
-#if USE(JIT_STUB_ARGUMENT_VA_LIST)
-    #define STUB_ARGS_DECLARATION void* args, ...
-    #define STUB_ARGS (reinterpret_cast<void**>(vl_args) - 1)
+#define STUB_ARGS_DECLARATION void** args
+#define STUB_ARGS (args)
 
+#if CPU(X86)
     #if COMPILER(MSVC)
-    #define JIT_STUB __cdecl
-    #else
-    #define JIT_STUB
-    #endif
-#else
-    #define STUB_ARGS_DECLARATION void** args
-    #define STUB_ARGS (args)
-
-    #if CPU(X86) && COMPILER(MSVC)
     #define JIT_STUB __fastcall
-    #elif CPU(X86) && COMPILER(GCC)
+    #elif COMPILER(GCC)
     #define JIT_STUB  __attribute__ ((fastcall))
     #else
-    #define JIT_STUB
+    #error "JIT_STUB function calls require fastcall conventions on x86, add appropriate directive/attribute here for your compiler!"
     #endif
+#else
+    #define JIT_STUB
 #endif
 
     extern "C" void ctiVMThrowTrampoline();
@@ -256,7 +260,7 @@ namespace JSC {
         ~JITThunks();
 
         static void tryCacheGetByID(CallFrame*, CodeBlock*, ReturnAddressPtr returnAddress, JSValue baseValue, const Identifier& propertyName, const PropertySlot&, StructureStubInfo* stubInfo);
-        static void tryCachePutByID(CallFrame*, CodeBlock*, ReturnAddressPtr returnAddress, JSValue baseValue, const PutPropertySlot&, StructureStubInfo* stubInfo);
+        static void tryCachePutByID(CallFrame*, CodeBlock*, ReturnAddressPtr returnAddress, JSValue baseValue, const PutPropertySlot&, StructureStubInfo* stubInfo, bool direct);
 
         MacroAssemblerCodePtr ctiStringLengthTrampoline() { return m_trampolineStructure.ctiStringLengthTrampoline; }
         MacroAssemblerCodePtr ctiVirtualCallLink() { return m_trampolineStructure.ctiVirtualCallLink; }
@@ -377,6 +381,9 @@ extern "C" {
     void JIT_STUB cti_op_put_by_id(STUB_ARGS_DECLARATION);
     void JIT_STUB cti_op_put_by_id_fail(STUB_ARGS_DECLARATION);
     void JIT_STUB cti_op_put_by_id_generic(STUB_ARGS_DECLARATION);
+    void JIT_STUB cti_op_put_by_id_direct(STUB_ARGS_DECLARATION);
+    void JIT_STUB cti_op_put_by_id_direct_fail(STUB_ARGS_DECLARATION);
+    void JIT_STUB cti_op_put_by_id_direct_generic(STUB_ARGS_DECLARATION);
     void JIT_STUB cti_op_put_by_index(STUB_ARGS_DECLARATION);
     void JIT_STUB cti_op_put_by_val(STUB_ARGS_DECLARATION);
     void JIT_STUB cti_op_put_by_val_byte_array(STUB_ARGS_DECLARATION);

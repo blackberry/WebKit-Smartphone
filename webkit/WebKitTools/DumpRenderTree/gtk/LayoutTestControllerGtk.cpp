@@ -52,6 +52,8 @@ bool webkit_web_frame_pause_animation(WebKitWebFrame* frame, const gchar* name, 
 bool webkit_web_frame_pause_transition(WebKitWebFrame* frame, const gchar* name, double time, const gchar* element);
 bool webkit_web_frame_pause_svg_animation(WebKitWebFrame* frame, const gchar* name, double time, const gchar* element);
 unsigned int webkit_web_frame_number_of_active_animations(WebKitWebFrame* frame);
+void webkit_web_frame_suspend_animations(WebKitWebFrame* frame);
+void webkit_web_frame_resume_animations(WebKitWebFrame* frame);
 void webkit_application_cache_set_maximum_size(unsigned long long size);
 unsigned int webkit_worker_thread_count(void);
 void webkit_white_list_access_from_origin(const gchar* sourceOrigin, const gchar* destinationProtocol, const gchar* destinationHost, bool allowDestinationSubdomains);
@@ -60,6 +62,8 @@ int webkit_web_frame_page_number_for_element_by_id(WebKitWebFrame* frame, const 
 int webkit_web_frame_number_of_pages(WebKitWebFrame* frame, float pageWidth, float pageHeight);
 void webkit_web_inspector_execute_script(WebKitWebInspector* inspector, long callId, const gchar* script);
 gchar* webkit_web_frame_marker_text_for_list_item(WebKitWebFrame* frame, JSContextRef context, JSValueRef nodeObject);
+void webkit_web_view_execute_core_command_by_name(WebKitWebView* webView, const gchar* name, const gchar* value);
+gboolean webkit_web_view_is_command_enabled(WebKitWebView* webView, const gchar* name);
 }
 
 static gchar* copyWebSettingKey(gchar* preferenceKey)
@@ -171,6 +175,24 @@ int LayoutTestController::numberOfPages(float pageWidth, float pageHeight)
     return webkit_web_frame_number_of_pages(mainFrame, pageWidth, pageHeight);
 }
 
+JSRetainPtr<JSStringRef> LayoutTestController::pageProperty(const char* propertyName, int pageNumber) const
+{
+    // FIXME: implement
+    return JSRetainPtr<JSStringRef>();
+}
+
+bool LayoutTestController::isPageBoxVisible(int pageNumber) const
+{
+    // FIXME: implement
+    return false;
+}
+
+JSRetainPtr<JSStringRef> LayoutTestController::pageSizeAndMarginsInPixels(int pageNumber, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft) const
+{
+    // FIXME: implement
+    return JSRetainPtr<JSStringRef>();
+}
+
 size_t LayoutTestController::webHistoryItemCount()
 {
     // FIXME: implement
@@ -229,6 +251,15 @@ void LayoutTestController::setAlwaysAcceptCookies(bool alwaysAcceptCookies)
 #ifdef HAVE_LIBSOUP_2_29_90
     SoupSession* session = webkit_get_default_session();
     SoupCookieJar* jar = reinterpret_cast<SoupCookieJar*>(soup_session_get_feature(session, SOUP_TYPE_COOKIE_JAR));
+
+    /* If the jar was not created - we create it on demand, i.e, just
+       in case we have HTTP requests - then we must create it here in
+       order to set the proper accept policy */
+    if (!jar) {
+        jar = soup_cookie_jar_new();
+        soup_session_add_feature(session, SOUP_SESSION_FEATURE(jar));
+        g_object_unref(jar);
+    }
 
     SoupCookieJarAcceptPolicy policy;
 
@@ -320,6 +351,27 @@ void LayoutTestController::setUserStyleSheetLocation(JSStringRef path)
     userStyleSheet = JSStringCopyUTF8CString(path);
     if (userStyleSheetEnabled)
         setUserStyleSheetEnabled(true);
+}
+
+void LayoutTestController::setViewModeMediaFeature(JSStringRef mode)
+{
+    WebKitWebView* view = webkit_web_frame_get_web_view(mainFrame);
+    ASSERT(view);
+
+    char* viewMode = JSStringCopyUTF8CString(mode);
+
+    if (!g_strcmp0(viewMode, "windowed"))
+        webkit_web_view_set_view_mode(view, WEBKIT_WEB_VIEW_VIEW_MODE_WINDOWED);
+    else if (!g_strcmp0(viewMode, "floating"))
+        webkit_web_view_set_view_mode(view, WEBKIT_WEB_VIEW_VIEW_MODE_FLOATING);
+    else if (!g_strcmp0(viewMode, "fullscreen"))
+        webkit_web_view_set_view_mode(view, WEBKIT_WEB_VIEW_VIEW_MODE_FULLSCREEN);
+    else if (!g_strcmp0(viewMode, "maximized"))
+        webkit_web_view_set_view_mode(view, WEBKIT_WEB_VIEW_VIEW_MODE_MAXIMIZED);
+    else if (!g_strcmp0(viewMode, "minimized"))
+        webkit_web_view_set_view_mode(view, WEBKIT_WEB_VIEW_VIEW_MODE_MINIMIZED);
+
+    g_free(viewMode);
 }
 
 void LayoutTestController::setWindowIsKey(bool windowIsKey)
@@ -424,6 +476,12 @@ void LayoutTestController::disableImageLoading()
     // Also need to make sure image loading is re-enabled for each new test.
 }
 
+void LayoutTestController::setMockDeviceOrientation(bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma)
+{
+    // FIXME: Implement for DeviceOrientation layout tests.
+    // See https://bugs.webkit.org/show_bug.cgi?id=30335.
+}
+
 void LayoutTestController::setMockGeolocationPosition(double latitude, double longitude, double accuracy)
 {
     // FIXME: Implement for Geolocation layout tests.
@@ -434,6 +492,18 @@ void LayoutTestController::setMockGeolocationError(int code, JSStringRef message
 {
     // FIXME: Implement for Geolocation layout tests.
     // See https://bugs.webkit.org/show_bug.cgi?id=28264.
+}
+
+void LayoutTestController::setGeolocationPermission(bool allow)
+{
+    // FIXME: Implement for Geolocation layout tests.
+    setGeolocationPermissionCommon(allow);
+}
+
+void LayoutTestController::setMockSpeechInputResult(JSStringRef result)
+{
+    // FIXME: Implement for speech input layout tests.
+    // See https://bugs.webkit.org/show_bug.cgi?id=39485.
 }
 
 void LayoutTestController::setIconDatabaseEnabled(bool flag)
@@ -480,18 +550,30 @@ bool LayoutTestController::elementDoesAutoCompleteForElementWithId(JSStringRef i
 
 void LayoutTestController::execCommand(JSStringRef name, JSStringRef value)
 {
-    // FIXME: implement
+    WebKitWebView* view = webkit_web_frame_get_web_view(mainFrame);
+    ASSERT(view);
+
+    gchar* cName = JSStringCopyUTF8CString(name);
+    gchar* cValue = JSStringCopyUTF8CString(value);
+    webkit_web_view_execute_core_command_by_name(view, cName, cValue);
+    g_free(cName);
+    g_free(cValue);
+}
+
+bool LayoutTestController::isCommandEnabled(JSStringRef name)
+{
+    WebKitWebView* view = webkit_web_frame_get_web_view(mainFrame);
+    ASSERT(view);
+
+    gchar* cName = JSStringCopyUTF8CString(name);
+    gboolean result = webkit_web_view_is_command_enabled(view, cName);
+    g_free(cName);
+    return result;
 }
 
 void LayoutTestController::setCacheModel(int)
 {
     // FIXME: implement
-}
-
-bool LayoutTestController::isCommandEnabled(JSStringRef /*name*/)
-{
-    // FIXME: implement
-    return false;
 }
 
 void LayoutTestController::setPersistentUserStyleSheetLocation(JSStringRef jsURL)
@@ -502,6 +584,16 @@ void LayoutTestController::setPersistentUserStyleSheetLocation(JSStringRef jsURL
 void LayoutTestController::clearPersistentUserStyleSheet()
 {
     // FIXME: implement
+}
+
+void LayoutTestController::clearAllApplicationCaches()
+{
+    // FIXME: implement to support Application Cache quotas.
+}
+
+void LayoutTestController::setApplicationCacheOriginQuota(unsigned long long quota)
+{
+    // FIXME: implement to support Application Cache quotas.
 }
 
 void LayoutTestController::clearAllDatabases()
@@ -560,6 +652,16 @@ unsigned LayoutTestController::numberOfActiveAnimations() const
     return webkit_web_frame_number_of_active_animations(mainFrame);
 }
 
+void LayoutTestController::suspendAnimations() const
+{
+    webkit_web_frame_suspend_animations(mainFrame);
+}
+
+void LayoutTestController::resumeAnimations() const
+{
+    webkit_web_frame_resume_animations(mainFrame);
+}
+
 void LayoutTestController::overridePreference(JSStringRef key, JSStringRef value)
 {
     gchar* name = JSStringCopyUTF8CString(key);
@@ -606,12 +708,12 @@ void LayoutTestController::overridePreference(JSStringRef key, JSStringRef value
     g_free(strValue);
 }
 
-void LayoutTestController::addUserScript(JSStringRef source, bool runAtStart)
+void LayoutTestController::addUserScript(JSStringRef source, bool runAtStart, bool allFrames)
 {
     printf("LayoutTestController::addUserScript not implemented.\n");
 }
 
-void LayoutTestController::addUserStyleSheet(JSStringRef source)
+void LayoutTestController::addUserStyleSheet(JSStringRef source, bool allFrames)
 {
     printf("LayoutTestController::addUserStyleSheet not implemented.\n");
 }
@@ -704,4 +806,8 @@ void LayoutTestController::setEditingBehavior(const char* editingBehavior)
         g_object_set(G_OBJECT(settings), "editing-behavior", WEBKIT_EDITING_BEHAVIOR_WINDOWS, NULL);
     if (!strcmp(editingBehavior, "mac"))
         g_object_set(G_OBJECT(settings), "editing-behavior", WEBKIT_EDITING_BEHAVIOR_MAC, NULL);
+}
+
+void LayoutTestController::abortModal()
+{
 }

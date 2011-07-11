@@ -31,8 +31,7 @@
 #include "config.h"
 #include "RuntimeEnabledFeatures.h"
 
-#include "Database.h"
-#include "DatabaseSync.h"
+#include "AbstractDatabase.h"
 #include "MediaPlayer.h"
 #include "SharedWorkerRepository.h"
 #include "WebSocket.h"
@@ -48,6 +47,17 @@ bool RuntimeEnabledFeatures::isIndexedDBEnabled = false;
 bool RuntimeEnabledFeatures::isWebGLEnabled = false;
 bool RuntimeEnabledFeatures::isPushStateEnabled = false;
 bool RuntimeEnabledFeatures::isTouchEnabled = true;
+bool RuntimeEnabledFeatures::isDeviceMotionEnabled = true;
+bool RuntimeEnabledFeatures::isDeviceOrientationEnabled = true;
+bool RuntimeEnabledFeatures::isSpeechInputEnabled = true;
+
+#if ENABLE(XHR_RESPONSE_BLOB)
+bool RuntimeEnabledFeatures::isXHRResponseBlobEnabled = false;
+#endif
+
+#if ENABLE(FILE_SYSTEM)
+bool RuntimeEnabledFeatures::isFileSystemEnabled = false;
+#endif
 
 #if ENABLE(VIDEO)
 
@@ -76,6 +86,11 @@ bool RuntimeEnabledFeatures::mediaErrorEnabled()
     return MediaPlayer::isAvailable();
 }
 
+bool RuntimeEnabledFeatures::timeRangesEnabled()
+{
+    return MediaPlayer::isAvailable();
+}
+
 #endif
 
 #if ENABLE(SHARED_WORKERS)
@@ -95,12 +110,12 @@ bool RuntimeEnabledFeatures::webSocketEnabled()
 #if ENABLE(DATABASE)
 bool RuntimeEnabledFeatures::openDatabaseEnabled()
 {
-    return Database::isAvailable();
+    return AbstractDatabase::isAvailable();
 }
 
 bool RuntimeEnabledFeatures::openDatabaseSyncEnabled()
 {
-    return DatabaseSync::isAvailable();
+    return AbstractDatabase::isAvailable();
 }
 #endif
 

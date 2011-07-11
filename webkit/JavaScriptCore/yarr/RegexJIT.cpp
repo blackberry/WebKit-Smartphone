@@ -345,6 +345,15 @@ class RegexGenerator : private MacroAssembler {
             ASSERT(alternativeValid());
             return alternative()->m_terms[t];
         }
+        bool isLastTerm()
+        {
+            ASSERT(alternativeValid());
+            return (t + 1) == alternative()->m_terms.size();
+        }
+        bool isMainDisjunction()
+        {
+            return !disjunction->m_parent;
+        }
 
         PatternTerm& lookaheadTerm()
         {
@@ -902,6 +911,11 @@ class RegexGenerator : private MacroAssembler {
         PatternDisjunction* disjunction = term.parentheses.disjunction;
         ASSERT(term.quantityCount == 1);
 
+        if (term.parentheses.isCopy) {
+            m_shouldFallBack = true;
+            return;
+        }
+
         unsigned preCheckedCount = ((term.quantityCount == 1) && (term.quantityType == QuantifierFixedCount)) ? disjunction->m_minimumSize : 0;
 
         unsigned parenthesesFrameLocation = term.frameLocation;
@@ -987,6 +1001,68 @@ class RegexGenerator : private MacroAssembler {
                 nonGreedySkipParentheses.link(this);
             success.link(this);
         }
+    }
+
+    void generateParenthesesGreedyNoBacktrack(TermGenerationState& state)
+    {
+        PatternTerm& parenthesesTerm = state.term();
+        PatternDisjunction* disjunction = parenthesesTerm.parentheses.disjunction;
+        ASSERT(parenthesesTerm.type == PatternTerm::TypeParenthesesSubpattern);
+        ASSERT(parenthesesTerm.quantityCount != 1); // Handled by generateParenthesesSingle.
+
+        // Capturing not yet implemented!
+        if (parenthesesTerm.invertOrCapture) {
+            m_shouldFallBack = true;
+            return;
+        }
+
+        // Quantification limit not yet implemented!
+        if (parenthesesTerm.quantityCount != 0xffffffff) {
+            m_shouldFallBack = true;
+            return;
+        }
+
+        // Need to reset nested subpatterns between iterations...
+        // for the minute this crude check rejects all patterns with any subpatterns!
+        if (m_pattern.m_numSubpatterns) {
+            m_shouldFallBack = true;
+            return;
+        }
+
+        TermGenerationState parenthesesState(disjunction, state.checkedTotal);
+
+        Label matchAgain(this);
+
+        storeToFrame(index, parenthesesTerm.frameLocation); // Save the current index to check for zero len matches later.
+
+        for (parenthesesState.resetAlternative(); parenthesesState.alternativeValid(); parenthesesState.nextAlternative()) {
+
+            PatternAlternative* alternative = parenthesesState.alternative();
+            optimizeAlternative(alternative);
+
+            int countToCheck = alternative->m_minimumSize;
+            if (countToCheck) {
+                parenthesesState.addBacktrackJump(jumpIfNoAvailableInput(countToCheck));
+                parenthesesState.checkedTotal += countToCheck;
+            }
+
+            for (parenthesesState.resetTerm(); parenthesesState.termValid(); parenthesesState.nextTerm())
+                generateTerm(parenthesesState);
+
+            // If we get here, we matched! If the index advanced then try to match more since limit isn't supported yet.
+            branch32(GreaterThan, index, Address(stackPointerRegister, (parenthesesTerm.frameLocation * sizeof(void*))), matchAgain);
+
+            parenthesesState.linkAlternativeBacktracks(this);
+            // We get here if the alternative fails to match - fall through to the next iteration, or out of the loop.
+
+            if (countToCheck) {
+                sub32(Imm32(countToCheck), index);
+                parenthesesState.checkedTotal -= countToCheck;
+            }
+        }
+
+        // If the last alternative falls through to here, we have a failed match...
+        // Which means that we match whatever we have matched up to this point (even if nothing).
     }
 
     void generateParentheticalAssertion(TermGenerationState& state)
@@ -1100,15 +1176,24 @@ class RegexGenerator : private MacroAssembler {
             break;
 
         case PatternTerm::TypeBackReference:
-            ASSERT_NOT_REACHED();
+            m_shouldFallBack = true;
             break;
 
         case PatternTerm::TypeForwardReference:
             break;
 
         case PatternTerm::TypeParenthesesSubpattern:
-            ASSERT((term.quantityCount == 1) && !term.parentheses.isCopy); // must fallback to pcre before this point
-            generateParenthesesSingle(state);
+            if (term.quantityCount == 1) {
+                generateParenthesesSingle(state);
+                break;
+            } else if (state.isLastTerm() && state.isMainDisjunction()) { // Is this is the last term of the main disjunction?
+                // If this has a greedy quantifier, then it will never need to backtrack!
+                if (term.quantityType == QuantifierGreedy) {
+                    generateParenthesesGreedyNoBacktrack(state);
+                    break;
+                }
+            }
+            m_shouldFallBack = true;
             break;
 
         case PatternTerm::TypeParentheticalAssertion:
@@ -1159,16 +1244,18 @@ class RegexGenerator : private MacroAssembler {
             // If we get here, the alternative matched.
             if (m_pattern.m_body->m_callFrameSize)
                 addPtr(Imm32(m_pattern.m_body->m_callFrameSize * sizeof(void*)), stackPointerRegister);
-            
+
             ASSERT(index != returnRegister);
             if (m_pattern.m_body->m_hasFixedSize) {
                 move(index, returnRegister);
                 if (alternative->m_minimumSize)
                     sub32(Imm32(alternative->m_minimumSize), returnRegister);
+
+                store32(returnRegister, output);
             } else
-                pop(returnRegister);
+                load32(Address(output), returnRegister);
+
             store32(index, Address(output, 4));
-            store32(returnRegister, output);
 
             generateReturn();
 
@@ -1252,7 +1339,7 @@ class RegexGenerator : private MacroAssembler {
             if (!m_pattern.m_body->m_hasFixedSize) {
                 move(index, regT0);
                 sub32(Imm32(countCheckedForCurrentAlternative - 1), regT0);
-                poke(regT0, m_pattern.m_body->m_callFrameSize);
+                store32(regT0, Address(output));
             }
 
             // Update index if necessary, and loop (without checking).
@@ -1267,9 +1354,9 @@ class RegexGenerator : private MacroAssembler {
             if (countCheckedForCurrentAlternative - 1) {
                 move(index, regT0);
                 sub32(Imm32(countCheckedForCurrentAlternative - 1), regT0);
-                poke(regT0, m_pattern.m_body->m_callFrameSize);
+                store32(regT0, Address(output));
             } else
-                poke(index, m_pattern.m_body->m_callFrameSize);
+                store32(index, Address(output));
         }
         // Check if there is sufficent input to run the first alternative again.
         jumpIfAvailableInput(incrementForNextIter).linkTo(firstAlternativeInputChecked, this);
@@ -1295,11 +1382,8 @@ class RegexGenerator : private MacroAssembler {
         // it has either been incremented by 1 or by (countToCheckForFirstAlternative + 1) ... 
         // but since we're about to return a failure this doesn't really matter!)
 
-        unsigned frameSize = m_pattern.m_body->m_callFrameSize;
-        if (!m_pattern.m_body->m_hasFixedSize)
-            ++frameSize;
-        if (frameSize)
-            addPtr(Imm32(frameSize * sizeof(void*)), stackPointerRegister);
+        if (m_pattern.m_body->m_callFrameSize)
+            addPtr(Imm32(m_pattern.m_body->m_callFrameSize * sizeof(void*)), stackPointerRegister);
 
         move(Imm32(-1), returnRegister);
 
@@ -1332,6 +1416,9 @@ class RegexGenerator : private MacroAssembler {
         push(ARMRegisters::r4);
         push(ARMRegisters::r5);
         push(ARMRegisters::r6);
+#if CPU(ARM_TRADITIONAL)
+        push(ARMRegisters::r8); // scratch register
+#endif
         move(ARMRegisters::r3, output);
 #elif CPU(MIPS)
         // Do nothing.
@@ -1349,6 +1436,9 @@ class RegexGenerator : private MacroAssembler {
         pop(X86Registers::ebx);
         pop(X86Registers::ebp);
 #elif CPU(ARM)
+#if CPU(ARM_TRADITIONAL)
+        pop(ARMRegisters::r8); // scratch register
+#endif
         pop(ARMRegisters::r6);
         pop(ARMRegisters::r5);
         pop(ARMRegisters::r4);
@@ -1361,6 +1451,7 @@ class RegexGenerator : private MacroAssembler {
 public:
     RegexGenerator(RegexPattern& pattern)
         : m_pattern(pattern)
+        , m_shouldFallBack(false)
     {
     }
 
@@ -1368,9 +1459,8 @@ public:
     {
         generateEnter();
 
-        // TODO: do I really want this on the stack?
         if (!m_pattern.m_body->m_hasFixedSize)
-            push(index);
+            store32(index, Address(output));
 
         if (m_pattern.m_body->m_callFrameSize)
             subPtr(Imm32(m_pattern.m_body->m_callFrameSize * sizeof(void*)), stackPointerRegister);
@@ -1382,7 +1472,7 @@ public:
     {
         generate();
 
-        LinkBuffer patchBuffer(this, globalData->executableAllocator.poolForSize(size()));
+        LinkBuffer patchBuffer(this, globalData->executableAllocator.poolForSize(size()), 0);
 
         for (unsigned i = 0; i < m_backtrackRecords.size(); ++i)
             patchBuffer.patch(m_backtrackRecords[i].dataLabel, patchBuffer.locationOf(m_backtrackRecords[i].backtrackLocation));
@@ -1390,28 +1480,34 @@ public:
         jitObject.set(patchBuffer.finalizeCode());
     }
 
+    bool shouldFallBack()
+    {
+        return m_shouldFallBack;
+    }
+
 private:
     RegexPattern& m_pattern;
+    bool m_shouldFallBack;
     Vector<AlternativeBacktrackRecord> m_backtrackRecords;
 };
 
 void jitCompileRegex(JSGlobalData* globalData, RegexCodeBlock& jitObject, const UString& patternString, unsigned& numSubpatterns, const char*& error, bool ignoreCase, bool multiline)
 {
     RegexPattern pattern(ignoreCase, multiline);
-
     if ((error = compileRegex(patternString, pattern)))
         return;
-
     numSubpatterns = pattern.m_numSubpatterns;
 
-    if (pattern.m_shouldFallBack) {
-        JSRegExpIgnoreCaseOption ignoreCaseOption = ignoreCase ? JSRegExpIgnoreCase : JSRegExpDoNotIgnoreCase;
-        JSRegExpMultilineOption multilineOption = multiline ? JSRegExpMultiline : JSRegExpSingleLine;
-        jitObject.setFallback(jsRegExpCompile(reinterpret_cast<const UChar*>(patternString.data()), patternString.size(), ignoreCaseOption, multilineOption, &numSubpatterns, &error));
-    } else {
+    if (!pattern.m_containsBackreferences && globalData->canUseJIT()) {
         RegexGenerator generator(pattern);
         generator.compile(globalData, jitObject);
+        if (!generator.shouldFallBack())
+            return;
     }
+
+    JSRegExpIgnoreCaseOption ignoreCaseOption = ignoreCase ? JSRegExpIgnoreCase : JSRegExpDoNotIgnoreCase;
+    JSRegExpMultilineOption multilineOption = multiline ? JSRegExpMultiline : JSRegExpSingleLine;
+    jitObject.setFallback(jsRegExpCompile(reinterpret_cast<const UChar*>(patternString.characters()), patternString.length(), ignoreCaseOption, multilineOption, &numSubpatterns, &error));
 }
 
 }}

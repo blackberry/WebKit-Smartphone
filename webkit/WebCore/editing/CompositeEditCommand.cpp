@@ -36,6 +36,7 @@
 #include "Document.h"
 #include "DocumentFragment.h"
 #include "EditorInsertAction.h"
+#include "Frame.h"
 #include "HTMLElement.h"
 #include "HTMLNames.h"
 #include "InlineTextBox.h"
@@ -294,24 +295,24 @@ void CompositeEditCommand::joinTextNodes(PassRefPtr<Text> text1, PassRefPtr<Text
 
 void CompositeEditCommand::inputText(const String& text, bool selectInsertedText)
 {
-    int offset = 0;
-    int length = text.length();
+    unsigned offset = 0;
+    unsigned length = text.length();
     RefPtr<Range> startRange = Range::create(document(), Position(document()->documentElement(), 0), endingSelection().start());
-    int startIndex = TextIterator::rangeLength(startRange.get());
-    int newline;
+    unsigned startIndex = TextIterator::rangeLength(startRange.get());
+    size_t newline;
     do {
         newline = text.find('\n', offset);
         if (newline != offset) {
             RefPtr<InsertTextCommand> command = InsertTextCommand::create(document());
             applyCommandToComposite(command);
-            int substringLength = newline == -1 ? length - offset : newline - offset;
+            int substringLength = newline == notFound ? length - offset : newline - offset;
             command->input(text.substring(offset, substringLength), false);
         }
-        if (newline != -1)
+        if (newline != notFound)
             insertLineBreak();
             
         offset = newline + 1;
-    } while (newline != -1 && offset != length);
+    } while (newline != notFound && offset != length);
     
     if (selectInsertedText) {
         RefPtr<Range> selectedRange = TextIterator::rangeFromLocationAndLength(document()->documentElement(), startIndex, length);
@@ -370,9 +371,9 @@ void CompositeEditCommand::deleteSelection(const VisibleSelection &selection, bo
         applyCommandToComposite(DeleteSelectionCommand::create(selection, smartDelete, mergeBlocksAfterDelete, replace, expandForSpecialElements));
 }
 
-void CompositeEditCommand::removeCSSProperty(PassRefPtr<CSSMutableStyleDeclaration> style, CSSPropertyID property)
+void CompositeEditCommand::removeCSSProperty(PassRefPtr<StyledElement> element, CSSPropertyID property)
 {
-    applyCommandToComposite(RemoveCSSPropertyCommand::create(document(), style, property));
+    applyCommandToComposite(RemoveCSSPropertyCommand::create(document(), element, property));
 }
 
 void CompositeEditCommand::removeNodeAttribute(PassRefPtr<Element> element, const QualifiedName& attribute)
@@ -573,7 +574,7 @@ void CompositeEditCommand::deleteInsignificantText(const Position& start, const 
         if (node->isTextNode()) {
             Text* textNode = static_cast<Text*>(node);
             int startOffset = node == start.node() ? start.deprecatedEditingOffset() : 0;
-            int endOffset = node == end.node() ? end.deprecatedEditingOffset() : textNode->length();
+            int endOffset = node == end.node() ? end.deprecatedEditingOffset() : static_cast<int>(textNode->length());
             deleteInsignificantText(textNode, startOffset, endOffset);
         }
         if (node == end.node())
@@ -728,30 +729,6 @@ void CompositeEditCommand::pushAnchorElementDown(Node* anchorNode)
     // Clones of anchorNode have been pushed down, now remove it.
     if (anchorNode->inDocument())
         removeNodePreservingChildren(anchorNode);
-}
-
-// We must push partially selected anchors down before creating or removing
-// links from a selection to create fully selected chunks that can be removed.
-// ApplyStyleCommand doesn't do this for us because styles can be nested.
-// Anchors cannot be nested.
-void CompositeEditCommand::pushPartiallySelectedAnchorElementsDown()
-{
-    VisibleSelection originalSelection = endingSelection();
-    VisiblePosition visibleStart(originalSelection.start());
-    VisiblePosition visibleEnd(originalSelection.end());
-    
-    Node* startAnchor = enclosingAnchorElement(originalSelection.start());
-    VisiblePosition startOfStartAnchor(Position(startAnchor, 0));
-    if (startAnchor && startOfStartAnchor != visibleStart)
-        pushAnchorElementDown(startAnchor);
-
-    Node* endAnchor = enclosingAnchorElement(originalSelection.end());
-    VisiblePosition endOfEndAnchor(Position(endAnchor, 0));
-    if (endAnchor && endOfEndAnchor != visibleEnd)
-        pushAnchorElementDown(endAnchor);
-
-    ASSERT(originalSelection.start().node()->inDocument() && originalSelection.end().node()->inDocument());
-    setEndingSelection(originalSelection);
 }
 
 // Clone the paragraph between start and end under blockElement,
@@ -963,6 +940,7 @@ void CompositeEditCommand::moveParagraphs(const VisiblePosition& startOfParagrap
     // FIXME (5098931): We should add a new insert action "WebViewInsertActionMoved" and call shouldInsertFragment here.
     
     setEndingSelection(VisibleSelection(start, end, DOWNSTREAM));
+    document()->frame()->editor()->clearMisspellingsAndBadGrammar(endingSelection());
     deleteSelection(false, false, false, false);
 
     ASSERT(destination.deepEquivalent().node()->inDocument());
@@ -992,7 +970,9 @@ void CompositeEditCommand::moveParagraphs(const VisiblePosition& startOfParagrap
     setEndingSelection(destination);
     ASSERT(endingSelection().isCaretOrRange());
     applyCommandToComposite(ReplaceSelectionCommand::create(document(), fragment, true, false, !preserveStyle, false, true));
-    
+
+    document()->frame()->editor()->markMisspellingsAndBadGrammar(endingSelection());
+
     // If the selection is in an empty paragraph, restore styles from the old empty paragraph to the new empty paragraph.
     bool selectionIsEmptyParagraph = endingSelection().isCaret() && isStartOfParagraph(endingSelection().visibleStart()) && isEndOfParagraph(endingSelection().visibleStart());
     if (styleInEmptyParagraph && selectionIsEmptyParagraph)
@@ -1024,7 +1004,8 @@ bool CompositeEditCommand::breakOutOfEmptyListItem()
     // FIXME: Can't we do something better when the immediate parent wasn't a list node?
     if (!listNode
         || (!listNode->hasTagName(ulTag) && !listNode->hasTagName(olTag))
-        || !listNode->isContentEditable())
+        || !listNode->isContentEditable()
+        || listNode == emptyListItem->rootEditableElement())
         return false;
 
     RefPtr<Element> newBlock = 0;
@@ -1198,6 +1179,8 @@ PassRefPtr<Node> CompositeEditCommand::splitTreeToNode(Node* start, Node* end, b
 
     RefPtr<Node> node;
     for (node = start; node && node->parent() != end; node = node->parent()) {
+        if (!node->parent()->isElementNode())
+            break;
         VisiblePosition positionInParent(Position(node->parent(), 0), DOWNSTREAM);
         VisiblePosition positionInNode(Position(node, 0), DOWNSTREAM);
         if (positionInParent != positionInNode)

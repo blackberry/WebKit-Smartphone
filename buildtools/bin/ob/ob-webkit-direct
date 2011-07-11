@@ -13,12 +13,17 @@ fi
 if [ ! -f "$WEBKITOUTPUTDIR/$CPUNAME/$OLYMPIABUILDCONFIG/Makefile" ] ; then
     pushd $OLYMPIAROOT/olympia
 
-    export WKXMLARGS="--xslt --xpath"
-    export WKMOBILEARGS="--xhtmlmp"
-    export WKSVGARGS="--svg --svg-animation --svg-as-image --svg-foreign-object --svg-use --svg-fonts"
-    export WKFEATURES="--geolocation --channel-messaging --datagrid --eventsource --database --dom-storage --offline-web-applications --icon-database --web-sockets --orientation-events --touch-events --video --workers --shared-workers"
+    ARGSFILE=$OLYMPIAJAVA/bbnsl/webkitsupport/build-webkit-args.env
+    if [ -f $ARGSFILE ]; then
+      source $ARGSFILE
+    else
+      export WKXMLARGS="--xslt --xpath"
+      export WKMOBILEARGS=""
+      export WKSVGARGS="--svg --svg-animation --svg-as-image --svg-foreign-object --svg-use --svg-fonts"
+      export WKFEATURES="--geolocation --channel-messaging --eventsource --database --dom-storage --offline-web-applications --icon-database --orientation-events --video --workers --shared-workers"
+    fi
 
-    export WKBUILDARGS="$WKXMLARGS $WKMOBILEARGS $WKSVGARGS $WKFEATURES"
+    export WKBUILDARGS="$WKXMLARGS $WKMOBILEARGS $WKSVGARGS $WKFEATURES $WEBKITFLAGS"
 
 
     MAKE=$MAKECMD \

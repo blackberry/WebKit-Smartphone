@@ -34,11 +34,12 @@
 
 #include "Document.h"
 #include "IntRect.h"
-#include "StringHash.h"
+#include <wtf/Forward.h>
 #include <wtf/HashSet.h>
 #include <wtf/OwnPtr.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/PassOwnPtr.h>
+#include <wtf/text/StringHash.h>
 
 #if USE(ACCELERATED_COMPOSITING)
 #include "GraphicsLayer.h"
@@ -55,6 +56,7 @@ class QTMovieVisualContext;
 namespace WebCore {
 
 class GStreamerGWorld;
+class MediaPlayerPrivateInterface;
 
 // Structure that will hold every native
 // types supported by the current media player.
@@ -67,6 +69,8 @@ struct PlatformMedia {
         QTMovieGWorldType,
         QTMovieVisualContextType,
         GStreamerGWorldType,
+        ChromiumMediaPlayerType,
+        QtMediaPlayerType,
     } type;
 
     union {
@@ -74,6 +78,8 @@ struct PlatformMedia {
         QTMovieGWorld* qtMovieGWorld;
         QTMovieVisualContext* qtMovieVisualContext;
         GStreamerGWorld* gstreamerGWorld;
+        MediaPlayerPrivateInterface* chromiumMediaPlayer;
+        MediaPlayerPrivateInterface* qtMediaPlayer;
     } media;
 };
 
@@ -85,8 +91,6 @@ class GraphicsContext;
 class IntRect;
 class IntSize;
 class MediaPlayer;
-class MediaPlayerPrivateInterface;
-class String;
 class TimeRanges;
 
 class MediaPlayerClient {
@@ -117,6 +121,9 @@ public:
     // the playback rate has changed
     virtual void mediaPlayerRateChanged(MediaPlayer*) { }
 
+    // the play/pause status changed
+    virtual void mediaPlayerPlaybackStateChanged(MediaPlayer*) { }
+
     // The MediaPlayer has found potentially problematic media content.
     // This is used internally to trigger swapping from a <video>
     // element to an <embed> in standalone documents
@@ -144,7 +151,7 @@ public:
 
     static PassOwnPtr<MediaPlayer> create(MediaPlayerClient* client)
     {
-        return new MediaPlayer(client);
+        return adoptPtr(new MediaPlayer(client));
     }
     virtual ~MediaPlayer();
 
@@ -237,6 +244,7 @@ public:
     void timeChanged();
     void sizeChanged();
     void rateChanged();
+    void playbackStateChanged();
     void durationChanged();
 
     void repaint();
@@ -244,6 +252,7 @@ public:
     MediaPlayerClient* mediaPlayerClient() const { return m_mediaPlayerClient; }
 
     bool hasAvailableVideoFrame() const;
+    void prepareForRendering();
 
     bool canLoadPoster() const;
     void setPoster(const String&);
@@ -251,6 +260,9 @@ public:
 #if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
     void deliverNotification(MediaPlayerProxyNotificationType notification);
     void setMediaPlayerProxy(WebMediaPlayerProxy* proxy);
+    void setControls(bool);
+    void enterFullscreen();
+    void exitFullscreen();
 #endif
 
 #if USE(ACCELERATED_COMPOSITING)

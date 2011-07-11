@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2009, 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,22 +30,19 @@
 #include "HTMLDataGridRowElement.h"
 
 #include "HTMLNames.h"
-#include "Text.h"
 
 namespace WebCore {
 
 using namespace HTMLNames;
 
-HTMLDataGridRowElement::HTMLDataGridRowElement(const QualifiedName& name, Document* doc)
-    : HTMLElement(name, doc)
+inline HTMLDataGridRowElement::HTMLDataGridRowElement(const QualifiedName& name, Document* document)
+    : HTMLElement(name, document)
 {
 }
 
-bool HTMLDataGridRowElement::checkDTD(const Node* newChild)
+PassRefPtr<HTMLDataGridRowElement> HTMLDataGridRowElement::create(const QualifiedName& name, Document* document)
 {
-    if (newChild->isTextNode())
-        return static_cast<const Text*>(newChild)->containsOnlyWhitespace();
-    return newChild->hasTagName(drowTag) || newChild->hasTagName(dcellTag);
+    return adoptRef(new HTMLDataGridRowElement(name, document));
 }
 
 bool HTMLDataGridRowElement::selected() const

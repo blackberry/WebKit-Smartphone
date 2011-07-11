@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Copyright (C) 2010 Google Inc. All rights reserved.
+# Copyright (C) 2010 Gabor Rapcsanyi <rgabor@inf.u-szeged.hu>, University of Szeged
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -41,6 +42,9 @@ import signal
 import sys
 import time
 import webbrowser
+import operator
+import tempfile
+import shutil
 
 from webkitpy.common.system.executive import Executive
 
@@ -116,9 +120,12 @@ class WebKitPort(base.Port):
         return True
 
     def diff_image(self, expected_filename, actual_filename,
-                   diff_filename=None):
+                   diff_filename=None, tolerance=0.1):
         """Return True if the two files are different. Also write a delta
         image of the two images into |diff_filename| if it is not None."""
+
+        # FIXME: either expose the tolerance argument as a command-line
+        # parameter, or make it go away and always use exact matches.
 
         # Handle the case where the test didn't actually generate an image.
         actual_length = os.stat(actual_filename).st_size
@@ -127,13 +134,11 @@ class WebKitPort(base.Port):
                 shutil.copyfile(actual_filename, expected_filename)
             return True
 
-        sp = self._diff_image_request(expected_filename, actual_filename)
+        sp = self._diff_image_request(expected_filename, actual_filename, tolerance)
         return self._diff_image_reply(sp, expected_filename, diff_filename)
 
-    def _diff_image_request(self, expected_filename, actual_filename):
-        # FIXME: either expose the tolerance argument as a command-line
-        # parameter, or make it go away and aways use exact matches.
-        command = [self._path_to_image_diff(), '--tolerance', '0.1']
+    def _diff_image_request(self, expected_filename, actual_filename, tolerance):
+        command = [self._path_to_image_diff(), '--tolerance', str(tolerance)]
         sp = server_process.ServerProcess(self, 'ImageDiff', command)
 
         actual_length = os.stat(actual_filename).st_size
@@ -216,6 +221,66 @@ class WebKitPort(base.Port):
             "platform/win",
         ]
 
+    def _runtime_feature_list(self):
+        """Return the supported features of DRT. If a port doesn't support
+        this DRT switch, it has to override this method to return None"""
+        driver_path = self._path_to_driver()
+        feature_list = ' '.join(os.popen(driver_path + " --print-supported-features 2>&1").readlines())
+        if "SupportedFeatures:" in feature_list:
+            return feature_list
+        return None
+
+    def _supported_symbol_list(self):
+        """Return the supported symbols of WebCore."""
+        webcore_library_path = self._path_to_webcore_library()
+        if not webcore_library_path:
+            return None
+        symbol_list = ' '.join(os.popen("nm " + webcore_library_path).readlines())
+        return symbol_list
+
+    def _directories_for_features(self):
+        """Return the supported feature dictionary. The keys are the
+        features and the values are the directories in lists."""
+        directories_for_features = {
+            "Accelerated Compositing": ["compositing"],
+            "3D Rendering": ["animations/3d", "transforms/3d"],
+        }
+        return directories_for_features
+
+    def _directories_for_symbols(self):
+        """Return the supported feature dictionary. The keys are the
+        symbols and the values are the directories in lists."""
+        directories_for_symbol = {
+            "MathMLElement": ["mathml"],
+            "GraphicsLayer": ["compositing"],
+            "WebCoreHas3DRendering": ["animations/3d", "transforms/3d"],
+            "WebGLShader": ["fast/canvas/webgl"],
+            "WMLElement": ["http/tests/wml", "fast/wml", "wml"],
+            "parseWCSSInputProperty": ["fast/wcss"],
+            "isXHTMLMPDocument": ["fast/xhtmlmp"],
+        }
+        return directories_for_symbol
+
+    def _skipped_tests_for_unsupported_features(self):
+        """Return the directories of unsupported tests. Search for the
+        symbols in the symbol_list, if found add the corresponding
+        directories to the skipped directory list."""
+        feature_list = self._runtime_feature_list()
+        directories = self._directories_for_features()
+
+        # if DRT feature detection not supported
+        if not feature_list:
+            feature_list = self._supported_symbol_list()
+            directories = self._directories_for_symbols()
+
+        if not feature_list:
+            return []
+
+        skipped_directories = [directories[feature]
+                              for feature in directories.keys()
+                              if feature not in feature_list]
+        return reduce(operator.add, skipped_directories)
+
     def _tests_for_disabled_features(self):
         # FIXME: This should use the feature detection from
         # webkitperl/features.pm to match run-webkit-tests.
@@ -237,7 +302,8 @@ class WebKitPort(base.Port):
             "http/tests/webarchive",
             "svg/custom/image-with-prefix-in-webarchive.svg",
         ]
-        return disabled_feature_tests + webarchive_tests
+        unsupported_feature_tests = self._skipped_tests_for_unsupported_features()
+        return disabled_feature_tests + webarchive_tests + unsupported_feature_tests
 
     def _tests_from_skipped_file(self, skipped_file):
         tests_to_skip = []
@@ -278,14 +344,17 @@ class WebKitPort(base.Port):
         # This routine reads those files and turns contents into the
         # format expected by test_expectations.
 
-        # Use a set to allow duplicates
-        tests_to_skip = set(self._expectations_from_skipped_files())
-
-        tests_to_skip.update(self._tests_for_other_platforms())
-        tests_to_skip.update(self._tests_for_disabled_features())
+        tests_to_skip = self.skipped_layout_tests()
         skip_lines = map(lambda test_path: "BUG_SKIPPED SKIP : %s = FAIL" %
                                 test_path, tests_to_skip)
         return "\n".join(skip_lines)
+
+    def skipped_layout_tests(self):
+        # Use a set to allow duplicates
+        tests_to_skip = set(self._expectations_from_skipped_files())
+        tests_to_skip.update(self._tests_for_other_platforms())
+        tests_to_skip.update(self._tests_for_disabled_features())
+        return tests_to_skip
 
     def test_platform_name(self):
         return self._name + self.version()
@@ -293,39 +362,6 @@ class WebKitPort(base.Port):
     def test_platform_names(self):
         return self.test_base_platform_names() + (
             'mac-tiger', 'mac-leopard', 'mac-snowleopard')
-
-    def _configuration_file_path(self):
-        build_root = self._webkit_build_directory(["--top-level"])
-        return os.path.join(build_root, "Configuration")
-
-    # Easy override for unit tests
-    def _open_configuration_file(self):
-        configuration_path = self._configuration_file_path()
-        return codecs.open(configuration_path, "r", "utf-8")
-
-    def _read_configuration(self):
-        try:
-            with self._open_configuration_file() as file:
-                return file.readline().rstrip()
-        except IOError, e:
-            return None
-
-    # FIXME: This list may be incomplete as Apple has some sekret configs.
-    _RECOGNIZED_CONFIGURATIONS = ("Debug", "Release")
-
-    def default_configuration(self):
-        # FIXME: Unify this with webkitdir.pm configuration reading code.
-        configuration = self._read_configuration()
-        if not configuration:
-            configuration = "Release"
-        if configuration not in self._RECOGNIZED_CONFIGURATIONS:
-            _log.warn("Configuration \"%s\" found in %s is not a recognized value.\n" % (configuration, self._configuration_file_path()))
-            _log.warn("Scripts may fail.  See 'set-webkit-configuration --help'.")
-        return configuration
-
-    def _webkit_build_directory(self, args):
-        args = [self.script_path("webkit-build-directory")] + args
-        return self._executive.run_command(args).rstrip()
 
     def _build_path(self, *comps):
         if not self._cached_build_root:
@@ -337,6 +373,9 @@ class WebKitPort(base.Port):
 
     def _path_to_driver(self):
         return self._build_path('DumpRenderTree')
+
+    def _path_to_webcore_library(self):
+        return None
 
     def _path_to_helper(self):
         return None
@@ -370,6 +409,10 @@ class WebKitDriver(base.Driver):
         self._port = port
         # FIXME: driver_options is never used.
         self._image_path = image_path
+        self._driver_tempdir = tempfile.mkdtemp(prefix='DumpRenderTree-')
+
+    def __del__(self):
+        shutil.rmtree(self._driver_tempdir)
 
     def start(self):
         command = []
@@ -378,8 +421,9 @@ class WebKitDriver(base.Driver):
         command += [self._port._path_to_driver(), '-']
         if self._image_path:
             command.append('--pixel-tests')
-        environment = os.environ
+        environment = self._port.setup_environ_for_server()
         environment['DYLD_FRAMEWORK_PATH'] = self._port._build_path()
+        environment['DUMPRENDERTREE_TEMP'] = self._driver_tempdir
         self._server_process = server_process.ServerProcess(self._port,
             "DumpRenderTree", command, environment)
 
@@ -390,9 +434,6 @@ class WebKitDriver(base.Driver):
         self._server_process.stop()
         self._server_process.start()
         return
-
-    def returncode(self):
-        return self._server_process.returncode()
 
     # FIXME: This function is huge.
     def run_test(self, uri, timeoutms, image_hash):

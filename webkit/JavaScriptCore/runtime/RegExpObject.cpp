@@ -22,12 +22,15 @@
 #include "RegExpObject.h"
 
 #include "Error.h"
+#include "ExceptionHelpers.h"
 #include "JSArray.h"
 #include "JSGlobalObject.h"
 #include "JSString.h"
 #include "Lookup.h"
 #include "RegExpConstructor.h"
 #include "RegExpPrototype.h"
+#include "StringConcatenate.h"
+#include <wtf/PassOwnPtr.h>
 
 namespace JSC {
 
@@ -60,7 +63,7 @@ const ClassInfo RegExpObject::info = { "RegExp", 0, 0, ExecState::regExpTable };
 
 RegExpObject::RegExpObject(JSGlobalObject* globalObject, NonNullPassRefPtr<Structure> structure, NonNullPassRefPtr<RegExp> regExp)
     : JSObjectWithGlobalObject(globalObject, structure)
-    , d(new RegExpObjectData(regExp, 0))
+    , d(adoptPtr(new RegExpObjectData(regExp, 0)))
 {
 }
 
@@ -113,21 +116,21 @@ void setRegExpObjectLastIndex(ExecState* exec, JSObject* baseObject, JSValue val
     asRegExpObject(baseObject)->setLastIndex(value.toInteger(exec));
 }
 
-JSValue RegExpObject::test(ExecState* exec, const ArgList& args)
+JSValue RegExpObject::test(ExecState* exec)
 {
-    return jsBoolean(match(exec, args));
+    return jsBoolean(match(exec));
 }
 
-JSValue RegExpObject::exec(ExecState* exec, const ArgList& args)
+JSValue RegExpObject::exec(ExecState* exec)
 {
-    if (match(exec, args))
+    if (match(exec))
         return exec->lexicalGlobalObject()->regExpConstructor()->arrayOfMatches(exec);
     return jsNull();
 }
 
-static JSValue JSC_HOST_CALL callRegExpObject(ExecState* exec, JSObject* function, JSValue, const ArgList& args)
+static EncodedJSValue JSC_HOST_CALL callRegExpObject(ExecState* exec)
 {
-    return asRegExpObject(function)->exec(exec, args);
+    return JSValue::encode(asRegExpObject(exec->callee())->exec(exec));
 }
 
 CallType RegExpObject::getCallData(CallData& callData)
@@ -137,13 +140,13 @@ CallType RegExpObject::getCallData(CallData& callData)
 }
 
 // Shared implementation used by test and exec.
-bool RegExpObject::match(ExecState* exec, const ArgList& args)
+bool RegExpObject::match(ExecState* exec)
 {
     RegExpConstructor* regExpConstructor = exec->lexicalGlobalObject()->regExpConstructor();
 
-    UString input = args.isEmpty() ? regExpConstructor->input() : args.at(0).toString(exec);
+    UString input = !exec->argumentCount() ? regExpConstructor->input() : exec->argument(0).toString(exec);
     if (input.isNull()) {
-        throwError(exec, GeneralError, makeString("No input to ", toString(exec), "."));
+        throwError(exec, createError(exec, makeString("No input to ", toString(exec), ".")));
         return false;
     }
 
@@ -154,7 +157,7 @@ bool RegExpObject::match(ExecState* exec, const ArgList& args)
         return position >= 0;
     }
 
-    if (d->lastIndex < 0 || d->lastIndex > input.size()) {
+    if (d->lastIndex < 0 || d->lastIndex > input.length()) {
         d->lastIndex = 0;
         return false;
     }

@@ -1,3 +1,226 @@
+2010-09-07  Adam Barth  <abarth@webkit.org>
+
+        Minor tweaks to the reviewtool UI.
+
+        Rename Cancel to Discard to make it more clear what the button does.
+        Also, move the style declaration for the focus ring later in the sheet
+        so it works.
+
+        * PrettyPatch/PrettyPatch.rb:
+        * code-review.js:
+
+2010-09-06  Adam Barth  <abarth@webkit.org>
+
+        Small UI tweak to the reviewtool.  Make the Ok/Cancel buttons a bit
+        bigger.
+
+        * PrettyPatch/PrettyPatch.rb:
+
+2010-09-06  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Eric Seidel.
+
+        [reviewtool] Add a quick animation for opening/closing comment boxes
+        https://bugs.webkit.org/show_bug.cgi?id=45278
+
+        The 200ms animation slides in and out the line-by-line comment box.
+
+        * code-review.js:
+
+2010-09-06  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Eric Seidel.
+
+        [reviewtool] Add a field for overall comments
+        https://bugs.webkit.org/show_bug.cgi?id=45273
+
+        This patch does a couple logically separate things that could be
+        separated into smaller patches:
+
+        1) This patch adds an "overall comments" field where you can enter
+           overall comments about the patch.  These comments appear at the top
+           of the bugzilla posting.  Currently, these aren't redisplayed when
+           viewing the patch, but I plan to add that in a future patch.
+
+        2) This patch renames some of the CSS classes to more consistently
+           follow the camelCase style that PrettyPatch uses.
+
+        3) This patch moves the "prepare comments" button to the left of the
+           toolbar and renames is to "publish comments".  This makes more sense
+           when you scroll to the bottom of the page and enter in some overall
+           comments.
+
+        4) When you attempt to add a comment to a line that already has a
+           "frozen" comment, we now unfreeze the comment instead of doing
+           nothing.  The old behavior was kind of frustrating if you didn't
+           know that you could unfreeze a comment by clicking on it.
+
+        * PrettyPatch/PrettyPatch.rb:
+            - Update CSS.
+        * code-review.js:
+
+2010-09-06  Adam Barth  <abarth@webkit.org>
+
+        [reviewtool] Tweak the ok button to cancel the comment if the comment
+        is empty.  Previously we would get into a bad state where a line had a
+        comment but there was no longer any way to access it.
+
+        * code-review.js:
+
+2010-09-06  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Eric Seidel.
+
+        [reviewtool] Add an "ok" button that collapses review comments
+        https://bugs.webkit.org/show_bug.cgi?id=45255
+
+        Many folks (including myself) are too trigger-happy with the "delete"
+        button that we end up deleting perfectly good review comments.  This
+        patch adds an "ok" button to absorb these clicks (and renames "delete"
+        to "cancel").  When you click the ok button, the comment becomes
+        non-editable and the box shrinks to fit the text.  You can click the
+        text to get back to the editable version.
+
+        * code-review.js:
+
+2010-08-31  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Eric Seidel.
+
+        [reviewtool] Make it easy to scroll through review comments
+        https://bugs.webkit.org/show_bug.cgi?id=45002
+
+        This patch lets you scroll through review comments using "n" (for next)
+        and "p" (for previous).  It also attributes comments to their authors.
+
+        * PrettyPatch/PrettyPatch.rb:
+        * code-review.js:
+
+2010-08-31  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Eric Seidel.
+
+        [reviewtool] Show previous comments inline in diff
+        https://bugs.webkit.org/show_bug.cgi?id=44977
+
+        This patch adds basic support for showing previous comments inline in
+        the diff.  We crawl the bugs.webkit.org comments about this attachment
+        and extract comments related to specific lines.  We then show the
+        comments inline in the diff.
+
+        This part of the tool needs a bunch of polish, but this at least is a
+        starting point for further work.
+
+        * PrettyPatch/PrettyPatch.rb:
+        * code-review.js:
+
+2010-08-31  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Eric Seidel.
+
+        [reviewtool] Allow reviewer to select lines of context by dragging over the line numbers
+        https://bugs.webkit.org/show_bug.cgi?id=44936
+
+        * PrettyPatch/PrettyPatch.rb:
+            - Add a version number to bust through bugs.webkit.org's aggressive
+              cacheing.
+        * code-review.js:
+
+2010-08-30  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Eric Seidel.
+
+        [review tool] Let reviewer select how much context to show in snippet
+        https://bugs.webkit.org/show_bug.cgi?id=44905
+
+        We now highlight the context for a comment in yellow on the left (where
+        the line numbers are).  Clicking a line number expands or contracts the
+        amount of context, as appropriate.  Informal user testing indicates
+        that we might want to support drag as well.
+
+        This patch also changes the "open a comment box here" action to
+        double-click to avoid issues with mis-clicks.
+
+        * PrettyPatch/PrettyPatch.rb:
+        * code-review.js:
+
+2010-08-29  Adam Barth  <abarth@webkit.org>
+
+        Attempt to make Sam's life easier by not opening a comment text field
+        if there's a selection.  This should make it easier to copy/paste text
+        out of the diff without accidentally opening comment boxes.
+
+        * code-review.js:
+
+2010-08-29  Adam Barth  <abarth@webkit.org>
+
+        Turns out we're supposed to use find instead of children here.
+
+        * code-review.js:
+
+2010-08-29  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Eric Seidel.
+
+        Awesomify pretty-diff based review tool
+        https://bugs.webkit.org/show_bug.cgi?id=44835
+
+        This patch replaces the existing inline comment feature with a new
+        implementation.  Hopefully the new implementation is more awesome.
+        It's not 100% done yet, but I'd like to get this version out there to
+        see how it works.
+
+        Unlike the previous version this version works with the "Formatted
+        Diff" link instead of the "Review Patch" link.  Hopefully that will
+        avoid interfering with folks who like the old style review.
+
+        * PrettyPatch/PrettyPatch.rb:
+        * code-review.js: Added.
+        * prototype.js: Removed.
+
+2010-08-19  Tony Chang  <tony@chromium.org>
+
+        Reviewed by Adam Barth.
+
+        webkit-patch barfed on upload with a new image test result
+        https://bugs.webkit.org/show_bug.cgi?id=39097
+
+        * PrettyPatch/PrettyPatch.rb: don't use full path to git
+
+2010-08-19  Tony Chang  <tony@chromium.org>
+
+        Unreviewed, setting svn:eol-style native on ChangeLog.
+
+2010-08-19  Tony Chang  <tony@chromium.org>
+
+        Unreviewed.  Just removing \r's from ChangeLog.
+
+2010-08-02  Adam Roben  <aroben@apple.com>
+
+        Tell the patch prettifier about some (not so) new directories
+
+        * PrettyPatch/PrettyPatch.rb: Added WebKit2, autotools, and cmake
+        directories.
+
+2010-07-27  Joseph Pecoraro  <joepeck@webkit.org>
+
+        Reviewed by David Kilzer.
+
+        Provide a Helpful Link for Web Inspector Bugs in Bugzilla
+        https://bugs.webkit.org/show_bug.cgi?id=43065
+
+        * template/en/custom/global/choose-product.html.tmpl: Added. Explicitly added a link for the Web Inspector.
+
+2010-06-09  Julie Parent  <jparent@chromium.org>
+
+        Reviewed by David Kilzer.
+
+        Bugzilla: Don't send mail for cancel/deny/granted for in-rietveld.
+
+        https://bugs.webkit.org/show_bug.cgi?id=40345
+
+        * Bugzilla/Flag.pm:
+
 2010-05-17  Julie Parent  <jparent@chromium.org>
 
         Reviewed by Ojan Vafai.

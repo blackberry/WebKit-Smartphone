@@ -30,6 +30,7 @@
 #define IDBCallbacksProxy_h
 
 #include "IDBCallbacks.h"
+#include <wtf/PassOwnPtr.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
 
@@ -41,17 +42,18 @@ class WebIDBCallbacks;
 
 namespace WebCore {
 
-class IDBDatabaseError;
-class IDBDatabase;
-class SerializedScriptValue;
-
 class IDBCallbacksProxy : public IDBCallbacks {
 public:
     static PassRefPtr<IDBCallbacksProxy> create(PassOwnPtr<WebKit::WebIDBCallbacks>);
     virtual ~IDBCallbacksProxy();
 
     virtual void onError(PassRefPtr<IDBDatabaseError>);
-    virtual void onSuccess(PassRefPtr<IDBDatabase>);
+    virtual void onSuccess(); // For "null".
+    virtual void onSuccess(PassRefPtr<IDBCursorBackendInterface>);
+    virtual void onSuccess(PassRefPtr<IDBDatabaseBackendInterface>);
+    virtual void onSuccess(PassRefPtr<IDBIndexBackendInterface>);
+    virtual void onSuccess(PassRefPtr<IDBKey>);
+    virtual void onSuccess(PassRefPtr<IDBObjectStoreBackendInterface>);
     virtual void onSuccess(PassRefPtr<SerializedScriptValue>);
 
 private:

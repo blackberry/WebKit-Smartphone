@@ -47,7 +47,9 @@ ScrollView::ScrollView()
     , m_prohibitsScrolling(false)
     , m_canBlitOnScroll(true)
     , m_scrollbarsAvoidingResizer(0)
+#if ENABLE(FIXED_REPORTED_SIZE)
     , m_fixedReportedSizeChanged(false)
+#endif
     , m_canOverscroll(false)
     , m_scrollbarsSuppressed(false)
     , m_inUpdateScrollbars(false)
@@ -55,6 +57,7 @@ ScrollView::ScrollView()
     , m_drawPanScrollIcon(false)
     , m_useFixedLayout(false)
     , m_paintsEntireContents(false)
+    , m_scrollOriginX(0)
 {
     platformInit();
 }
@@ -214,6 +217,7 @@ IntRect ScrollView::visibleContentRect(bool includeScrollbars) const
 }
 #endif
 
+#if ENABLE(FIXED_REPORTED_SIZE)
 int ScrollView::reportedWidth() const
 {
     return m_fixedReportedSize.isEmpty() ? width() : m_fixedReportedSize.width();
@@ -236,6 +240,7 @@ void ScrollView::setFixedReportedSize(const IntSize& newSize)
     m_fixedReportedSizeChanged = true;
     m_fixedReportedSize = newSize;
 }
+#endif
 
 int ScrollView::layoutWidth() const
 {
@@ -293,17 +298,43 @@ void ScrollView::setContentsSize(const IntSize& newSize)
 
 IntPoint ScrollView::maximumScrollPosition() const
 {
-#if PLATFORM(OLYMPIA)
+#if ENABLE(FIXED_REPORTED_SIZE)
     // FIXME: We don't have to worry about scrollbars since they are off for our port and
     // we want to be able to clamp to our reported size since it is the actual visible size.
     // This can't be upstreamed unless/until we find a better way to do this or get rid
     // of this false dichotomy...
-    IntSize maximumOffset = contentsSize() - IntSize(reportedWidth(), reportedHeight());
+    IntPoint maximumOffset(contentsWidth() - reportedWidth() - m_scrollOriginX, contentsHeight() - reportedHeight());
 #else
-    IntSize maximumOffset = contentsSize() - visibleContentRect().size();
+    IntPoint maximumOffset(contentsWidth() - visibleWidth() - m_scrollOriginX, contentsHeight() - visibleHeight());
 #endif
     maximumOffset.clampNegativeToZero();
-    return IntPoint(maximumOffset.width(), maximumOffset.height());
+    return maximumOffset;
+}
+
+IntPoint ScrollView::minimumScrollPosition() const
+{
+    return IntPoint(-m_scrollOriginX, 0);
+}
+
+IntPoint ScrollView::adjustScrollPositionWithinRange(const IntPoint& scrollPoint) const
+{
+    IntPoint newScrollPosition = scrollPoint.shrunkTo(maximumScrollPosition());
+    newScrollPosition = newScrollPosition.expandedTo(minimumScrollPosition());
+    return newScrollPosition;
+}
+
+int ScrollView::scrollSize(ScrollbarOrientation orientation) const
+{
+    Scrollbar* scrollbar = ((orientation == HorizontalScrollbar) ? m_horizontalScrollbar : m_verticalScrollbar).get();
+    return scrollbar ? (scrollbar->totalSize() - scrollbar->visibleSize()) : 0;
+}
+
+void ScrollView::setScrollOffsetFromAnimation(const IntPoint& offset)
+{
+    if (m_horizontalScrollbar)
+        m_horizontalScrollbar->setValue(offset.x(), Scrollbar::FromScrollAnimator);
+    if (m_verticalScrollbar)
+        m_verticalScrollbar->setValue(offset.y(), Scrollbar::FromScrollAnimator);
 }
 
 void ScrollView::valueChanged(Scrollbar* scrollbar)
@@ -312,7 +343,7 @@ void ScrollView::valueChanged(Scrollbar* scrollbar)
     IntSize newOffset = m_scrollOffset;
     if (scrollbar) {
         if (scrollbar->orientation() == HorizontalScrollbar)
-            newOffset.setWidth(scrollbar->value());
+            newOffset.setWidth(scrollbar->value() - m_scrollOriginX);
         else if (scrollbar->orientation() == VerticalScrollbar)
             newOffset.setHeight(scrollbar->value());
     }
@@ -322,6 +353,15 @@ void ScrollView::valueChanged(Scrollbar* scrollbar)
         return;
     m_scrollOffset = newOffset;
 
+    if (scrollbarsSuppressed())
+        return;
+
+    repaintFixedElementsAfterScrolling();
+    scrollContents(scrollDelta);
+}
+
+void ScrollView::valueChanged(const IntSize& scrollDelta)
+{
     if (scrollbarsSuppressed())
         return;
 
@@ -347,8 +387,7 @@ void ScrollView::setScrollPosition(const IntPoint& scrollPoint)
 
     IntPoint newScrollPosition = scrollPoint;
     if (!m_canOverscroll) {
-        newScrollPosition = scrollPoint.shrunkTo(maximumScrollPosition());
-        newScrollPosition.clampNegativeToZero();
+        newScrollPosition = adjustScrollPositionWithinRange(scrollPoint);
     }
 
     if (newScrollPosition == scrollPosition())
@@ -472,18 +511,13 @@ void ScrollView::updateScrollbars(const IntSize& desiredOffset)
         return;
 
     m_inUpdateScrollbars = true;
-#if PLATFORM(OLYMPIA)
-    // FIXME: Comment in maximumScrollPosition also applies here...
-    IntSize maxScrollPosition(contentsWidth() - reportedWidth(), contentsHeight() - reportedHeight());
-#else
-    IntSize maxScrollPosition(contentsWidth() - visibleWidth(), contentsHeight() - visibleHeight());
-#endif
+
     IntSize scroll = desiredOffset;
     if (!m_canOverscroll && desiredOffset != m_scrollOffset) {
-        scroll = desiredOffset.shrunkTo(maxScrollPosition);
-        scroll.clampNegativeToZero();
+        IntPoint scrollPoint = adjustScrollPositionWithinRange(IntPoint(desiredOffset.width(), desiredOffset.height()));
+        IntSize scroll(scrollPoint.x(), scrollPoint.y());
     }
- 
+
     if (m_horizontalScrollbar) {
         int clientWidth = visibleWidth();
         m_horizontalScrollbar->setEnabled(contentsWidth() > clientWidth);
@@ -501,7 +535,7 @@ void ScrollView::updateScrollbars(const IntSize& desiredOffset)
             m_horizontalScrollbar->setSuppressInvalidation(true);
         m_horizontalScrollbar->setSteps(Scrollbar::pixelsPerLineStep(), pageStep);
         m_horizontalScrollbar->setProportion(clientWidth, contentsWidth());
-        m_horizontalScrollbar->setValue(scroll.width());
+        m_horizontalScrollbar->setValue(scroll.width() + m_scrollOriginX, Scrollbar::NotFromScrollAnimator);
         if (m_scrollbarsSuppressed)
             m_horizontalScrollbar->setSuppressInvalidation(false); 
     } 
@@ -523,7 +557,7 @@ void ScrollView::updateScrollbars(const IntSize& desiredOffset)
             m_verticalScrollbar->setSuppressInvalidation(true);
         m_verticalScrollbar->setSteps(Scrollbar::pixelsPerLineStep(), pageStep);
         m_verticalScrollbar->setProportion(clientHeight, contentsHeight());
-        m_verticalScrollbar->setValue(scroll.height());
+        m_verticalScrollbar->setValue(scroll.height(), Scrollbar::NotFromScrollAnimator);
         if (m_scrollbarsSuppressed)
             m_verticalScrollbar->setSuppressInvalidation(false);
     }
@@ -540,7 +574,11 @@ void ScrollView::updateScrollbars(const IntSize& desiredOffset)
     IntSize scrollDelta = scroll - m_scrollOffset;
     if (scrollDelta != IntSize()) {
        m_scrollOffset = scroll;
+#if PLATFORM(OLYMPIA)
        scrollContents(scrollDelta);
+#else
+       valueChanged(scrollDelta);
+#endif
     }
 
     m_inUpdateScrollbars = false;
@@ -573,7 +611,8 @@ void ScrollView::scrollContents(const IntSize& scrollDelta)
 
     if (canBlitOnScroll()) { // The main frame can just blit the WebView window
         // FIXME: Find a way to scroll subframes with this faster path
-        hostWindow()->scroll(-scrollDelta, scrollViewRect, clipRect);
+        if (!scrollContentsFastPath(-scrollDelta, scrollViewRect, clipRect))
+            hostWindow()->invalidateContentsForSlowScroll(-scrollDelta, updateRect, false, this);
     } else { 
        // We need to go ahead and repaint the entire backing store.  Do it now before moving the
        // windowed plugins.
@@ -585,6 +624,12 @@ void ScrollView::scrollContents(const IntSize& scrollDelta)
 
     // Now blit the backingstore into the window which should be very fast.
     hostWindow()->invalidateWindow(IntRect(), true);
+}
+
+bool ScrollView::scrollContentsFastPath(const IntSize& scrollDelta, const IntRect& rectToScroll, const IntRect& clipRect)
+{
+    hostWindow()->scroll(scrollDelta, rectToScroll, clipRect);
+    return true;
 }
 
 IntPoint ScrollView::windowToContents(const IntPoint& windowPoint) const
@@ -722,11 +767,16 @@ void ScrollView::wheelEvent(PlatformWheelEvent& e)
         if (e.granularity() == ScrollByPageWheelEvent) {
             ASSERT(deltaX == 0);
             bool negative = deltaY < 0;
-            deltaY = max(max<int>(visibleHeight() * Scrollbar::minFractionToStepWhenPaging(), visibleHeight() - Scrollbar::maxOverlapBetweenPages()), 1);
+            deltaY = max(max(static_cast<float>(visibleHeight()) * Scrollbar::minFractionToStepWhenPaging(), static_cast<float>(visibleHeight() - Scrollbar::maxOverlapBetweenPages())), 1.0f);
             if (negative)
                 deltaY = -deltaY;
         }
-        scrollBy(IntSize(-deltaX, -deltaY));
+
+        // Should we fall back on scrollBy() if there is no scrollbar for a non-zero delta?
+        if (deltaY && m_verticalScrollbar)
+            m_verticalScrollbar->scroll(ScrollUp, ScrollByPixel, deltaY);
+        if (deltaX && m_horizontalScrollbar)
+            m_horizontalScrollbar->scroll(ScrollLeft, ScrollByPixel, deltaX);
     }
 }
 
@@ -1004,6 +1054,16 @@ void ScrollView::removePanScrollIcon()
     hostWindow()->invalidateContentsAndWindow(IntRect(m_panScrollIconPoint, IntSize(panIconSizeLength, panIconSizeLength)), true /*immediate*/);
 }
 
+
+void ScrollView::setScrollOriginX(int x)
+{ 
+    if (platformWidget())
+        platformSetScrollOriginX(x);
+    else
+        m_scrollOriginX = x;
+}
+
+
 #if !PLATFORM(WX) && !PLATFORM(GTK) && !PLATFORM(QT) && !PLATFORM(EFL)
 
 void ScrollView::platformInit()
@@ -1031,6 +1091,10 @@ void ScrollView::platformRemoveChild(Widget*)
 #if !PLATFORM(MAC)
 
 void ScrollView::platformSetScrollbarsSuppressed(bool)
+{
+}
+
+void ScrollView::platformSetScrollOriginX(int)
 {
 }
 

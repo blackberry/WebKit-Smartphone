@@ -1,0 +1,22 @@
+<html>
+<head>
+<style>
+#square { display: table-cell; height: 256px; width: 256px; background-color: blue; color: white; text-align: center; vertical-align: middle;}
+</style>
+<script>
+window.onorientationchange = function()
+{
+    alert("If the blue square on this web page is visible then this test PASSED. Otherwise, it FAILED.");
+}
+</script>
+</head>
+<body>
+<p>This test can be used to verify that the window redraws before an Orientation Event is fired so that the web page is always visible.</p>
+<ol>
+    <li>Rotate the device to cause a JavaScript alert().</li>
+    <li>While the JavaScript alert dialog is present, if the blue square (below) is visible then this test PASSEd. Otherwise, it FAILED.</li>
+</ol>
+<hr/>
+<div id="square">Change the orientation of your device.</div>
+</body>
+</html>

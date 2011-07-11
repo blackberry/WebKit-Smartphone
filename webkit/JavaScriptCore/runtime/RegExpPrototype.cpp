@@ -33,22 +33,21 @@
 #include "PrototypeFunction.h"
 #include "RegExpObject.h"
 #include "RegExp.h"
+#include "RegExpCache.h"
 
 namespace JSC {
 
 ASSERT_CLASS_FITS_IN_CELL(RegExpPrototype);
 
-static JSValue JSC_HOST_CALL regExpProtoFuncTest(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL regExpProtoFuncExec(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL regExpProtoFuncCompile(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL regExpProtoFuncToString(ExecState*, JSObject*, JSValue, const ArgList&);
+static EncodedJSValue JSC_HOST_CALL regExpProtoFuncTest(ExecState*);
+static EncodedJSValue JSC_HOST_CALL regExpProtoFuncExec(ExecState*);
+static EncodedJSValue JSC_HOST_CALL regExpProtoFuncCompile(ExecState*);
+static EncodedJSValue JSC_HOST_CALL regExpProtoFuncToString(ExecState*);
 
 // ECMA 15.10.5
 
-const ClassInfo RegExpPrototype::info = { "RegExpPrototype", 0, 0, 0 };
-
 RegExpPrototype::RegExpPrototype(ExecState* exec, JSGlobalObject* globalObject, NonNullPassRefPtr<Structure> structure, Structure* prototypeFunctionStructure)
-    : JSObject(structure)
+    : RegExpObject(globalObject, structure, RegExp::create(&exec->globalData(), "", ""))
 {
     putDirectFunctionWithoutTransition(exec, new (exec) NativeFunctionWrapper(exec, globalObject, prototypeFunctionStructure, 0, exec->propertyNames().compile, regExpProtoFuncCompile), DontEnum);
     putDirectFunctionWithoutTransition(exec, new (exec) NativeFunctionWrapper(exec, globalObject, prototypeFunctionStructure, 0, exec->propertyNames().exec, regExpProtoFuncExec), DontEnum);
@@ -57,54 +56,58 @@ RegExpPrototype::RegExpPrototype(ExecState* exec, JSGlobalObject* globalObject, 
 }
 
 // ------------------------------ Functions ---------------------------
-    
-JSValue JSC_HOST_CALL regExpProtoFuncTest(ExecState* exec, JSObject*, JSValue thisValue, const ArgList& args)
+
+EncodedJSValue JSC_HOST_CALL regExpProtoFuncTest(ExecState* exec)
 {
+    JSValue thisValue = exec->hostThisValue();
     if (!thisValue.inherits(&RegExpObject::info))
-        return throwError(exec, TypeError);
-    return asRegExpObject(thisValue)->test(exec, args);
+        return throwVMTypeError(exec);
+    return JSValue::encode(asRegExpObject(thisValue)->test(exec));
 }
 
-JSValue JSC_HOST_CALL regExpProtoFuncExec(ExecState* exec, JSObject*, JSValue thisValue, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL regExpProtoFuncExec(ExecState* exec)
 {
+    JSValue thisValue = exec->hostThisValue();
     if (!thisValue.inherits(&RegExpObject::info))
-        return throwError(exec, TypeError);
-    return asRegExpObject(thisValue)->exec(exec, args);
+        return throwVMTypeError(exec);
+    return JSValue::encode(asRegExpObject(thisValue)->exec(exec));
 }
 
-JSValue JSC_HOST_CALL regExpProtoFuncCompile(ExecState* exec, JSObject*, JSValue thisValue, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL regExpProtoFuncCompile(ExecState* exec)
 {
+    JSValue thisValue = exec->hostThisValue();
     if (!thisValue.inherits(&RegExpObject::info))
-        return throwError(exec, TypeError);
+        return throwVMTypeError(exec);
 
     RefPtr<RegExp> regExp;
-    JSValue arg0 = args.at(0);
-    JSValue arg1 = args.at(1);
+    JSValue arg0 = exec->argument(0);
+    JSValue arg1 = exec->argument(1);
     
     if (arg0.inherits(&RegExpObject::info)) {
         if (!arg1.isUndefined())
-            return throwError(exec, TypeError, "Cannot supply flags when constructing one RegExp from another.");
+            return throwVMError(exec, createTypeError(exec, "Cannot supply flags when constructing one RegExp from another."));
         regExp = asRegExpObject(arg0)->regExp();
     } else {
-        UString pattern = args.isEmpty() ? UString("") : arg0.toString(exec);
+        UString pattern = !exec->argumentCount() ? UString("") : arg0.toString(exec);
         UString flags = arg1.isUndefined() ? UString("") : arg1.toString(exec);
-        regExp = RegExp::create(&exec->globalData(), pattern, flags);
+        regExp = exec->globalData().regExpCache()->lookupOrCreate(pattern, flags);
     }
 
     if (!regExp->isValid())
-        return throwError(exec, SyntaxError, makeString("Invalid regular expression: ", regExp->errorMessage()));
+        return throwVMError(exec, createSyntaxError(exec, makeString("Invalid regular expression: ", regExp->errorMessage())));
 
     asRegExpObject(thisValue)->setRegExp(regExp.release());
     asRegExpObject(thisValue)->setLastIndex(0);
-    return jsUndefined();
+    return JSValue::encode(jsUndefined());
 }
 
-JSValue JSC_HOST_CALL regExpProtoFuncToString(ExecState* exec, JSObject*, JSValue thisValue, const ArgList&)
+EncodedJSValue JSC_HOST_CALL regExpProtoFuncToString(ExecState* exec)
 {
+    JSValue thisValue = exec->hostThisValue();
     if (!thisValue.inherits(&RegExpObject::info)) {
         if (thisValue.inherits(&RegExpPrototype::info))
-            return jsNontrivialString(exec, "//");
-        return throwError(exec, TypeError);
+            return JSValue::encode(jsNontrivialString(exec, "//"));
+        return throwVMTypeError(exec);
     }
 
     char postfix[5] = { '/', 0, 0, 0, 0 };
@@ -117,7 +120,7 @@ JSValue JSC_HOST_CALL regExpProtoFuncToString(ExecState* exec, JSObject*, JSValu
         postfix[index] = 'm';
     UString source = asRegExpObject(thisValue)->get(exec, exec->propertyNames().source).toString(exec);
     // If source is empty, use "/(?:)/" to avoid colliding with comment syntax
-    return jsMakeNontrivialString(exec, "/", source.size() ? source : UString("(?:)"), postfix);
+    return JSValue::encode(jsMakeNontrivialString(exec, "/", source.length() ? source : UString("(?:)"), postfix));
 }
 
 } // namespace JSC

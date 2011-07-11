@@ -315,13 +315,14 @@ class BuildBot(object):
         # See https://bugs.webkit.org/show_bug.cgi?id=33296 and related bugs.
         self.core_builder_names_regexps = [
             "SnowLeopard.*Build",
-            "SnowLeopard.*Test",
+            "SnowLeopard.*\(Test",  # Exclude WebKit2 for now.
             "Leopard",
             "Tiger",
             "Windows.*Build",
-            "GTK",
+            "GTK.*32",
+            "GTK.*64.*Debug",  # Disallow the 64-bit Release bot which is broken.
             "Qt",
-            "Chromium",
+            "Chromium.*Release$",
         ]
 
     def _parse_last_build_cell(self, builder, cell):
@@ -333,7 +334,12 @@ class BuildBot(object):
             builder['built_revision'] = int(revision_string) \
                                         if not re.match('\D', revision_string) \
                                         else None
-            builder['is_green'] = not re.search('fail', cell.renderContents())
+
+            # FIXME: We treat slave lost as green even though it is not to
+            # work around the Qts bot being on a broken internet connection.
+            # The real fix is https://bugs.webkit.org/show_bug.cgi?id=37099
+            builder['is_green'] = not re.search('fail', cell.renderContents()) or \
+                                  not not re.search('lost', cell.renderContents())
 
             status_link_regexp = r"builders/(?P<builder_name>.*)/builds/(?P<build_number>\d+)"
             link_match = re.match(status_link_regexp, status_link['href'])

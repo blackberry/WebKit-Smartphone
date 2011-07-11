@@ -3,7 +3,7 @@
 #
 # Copyright (C) 2005 Nikolas Zimmermann <wildfox@kde.org>
 # Copyright (C) 2006 Samuel Weinig <sam.weinig@gmail.com>
-# Copyright (C) 2007 Apple Inc. All rights reserved.
+# Copyright (C) 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
 # Copyright (C) 2009 Cameron McCormack <cam@mcc.id.au>
 #
 # This library is free software; you can redistribute it and/or
@@ -24,11 +24,14 @@
 
 package CodeGenerator;
 
+use strict;
+
 use File::Find;
 
 my $useDocument = "";
 my $useGenerator = "";
 my $useOutputDir = "";
+my $useOutputHeadersDir = "";
 my $useDirectories = "";
 my $useLayerOnTop = 0;
 my $preprocessor;
@@ -78,9 +81,11 @@ sub new
     $useDirectories = shift;
     $useGenerator = shift;
     $useOutputDir = shift;
+    $useOutputHeadersDir = shift;
     $useLayerOnTop = shift;
     $preprocessor = shift;
     $writeDependencies = shift;
+    $verbose = shift;
 
     bless($reference, $object);
     return $reference;
@@ -101,10 +106,10 @@ sub ProcessDocument
     $defines = shift;
 
     my $ifaceName = "CodeGenerator" . $useGenerator;
+    require $ifaceName . ".pm";
 
     # Dynamically load external code generation perl module
-    require $ifaceName . ".pm";
-    $codeGenerator = $ifaceName->new($object, $useOutputDir, $useLayerOnTop, $preprocessor, $writeDependencies);
+    $codeGenerator = $ifaceName->new($object, $useOutputDir, $useOutputHeadersDir, $useLayerOnTop, $preprocessor, $writeDependencies, $verbose);
     unless (defined($codeGenerator)) {
         my $classes = $useDocument->classes;
         foreach my $class (@$classes) {
@@ -272,7 +277,7 @@ sub ParseInterface
         return $interface if $interface->name eq $interfaceName;
     }
 
-    die("Could NOT find interface definition for $interface in $filename");
+    die("Could NOT find interface definition for $interfaceName in $filename");
 }
 
 # Helpers for all CodeGenerator***.pm modules
@@ -338,6 +343,7 @@ sub WK_ucfirst
     my ($object, $param) = @_;
     my $ret = ucfirst($param);
     $ret =~ s/Xml/XML/ if $ret =~ /^Xml[^a-z]/;
+
     return $ret;
 }
 
@@ -352,6 +358,12 @@ sub WK_lcfirst
     $ret =~ s/jS/js/ if $ret =~ /^jS/;
     $ret =~ s/xML/xml/ if $ret =~ /^xML/;
     $ret =~ s/xSLT/xslt/ if $ret =~ /^xSLT/;
+
+    # For HTML5 FileSystem API Flags attributes.
+    # (create is widely used to instantiate an object and must be avoided.)
+    $ret =~ s/^create/isCreate/ if $ret =~ /^create$/;
+    $ret =~ s/^exclusive/isExclusive/ if $ret =~ /^exclusive$/;
+
     return $ret;
 }
 
@@ -379,5 +391,113 @@ sub LinkOverloadedFunctions
     }
 }
 
+sub AttributeNameForGetterAndSetter
+{
+    my ($generator, $attribute) = @_;
+
+    my $attributeName = $attribute->signature->name;
+
+    # Avoid clash with C++ keyword.
+    $attributeName = "_operator" if $attributeName eq "operator";
+
+    # SVG animated types need to use a special attribute name.
+    # The rest of the special casing for SVG animated types is handled in the language-specific code generators.
+    $attributeName .= "Animated" if $generator->IsSVGAnimatedType($generator->StripModule($attribute->signature->type));
+
+    return $attributeName;
+}
+
+sub ContentAttributeName
+{
+    my ($generator, $implIncludes, $interfaceName, $attribute) = @_;
+
+    my $contentAttributeName = $attribute->signature->extendedAttributes->{"Reflect"};
+    return undef if !$contentAttributeName;
+
+    $contentAttributeName = lc $generator->AttributeNameForGetterAndSetter($attribute) if $contentAttributeName eq "1";
+
+    my $namespace = $generator->NamespaceForAttributeName($interfaceName, $contentAttributeName);
+
+    $implIncludes->{"${namespace}.h"} = 1;
+    return "WebCore::${namespace}::${contentAttributeName}Attr";
+}
+
+sub GetterExpressionPrefix
+{
+    my ($generator, $implIncludes, $interfaceName, $attribute) = @_;
+
+    my $contentAttributeName = $generator->ContentAttributeName($implIncludes, $interfaceName, $attribute);
+
+    if (!$contentAttributeName) {
+        return $generator->WK_lcfirst($generator->AttributeNameForGetterAndSetter($attribute)) . "(";
+    }
+
+    my $functionName;
+    if ($attribute->signature->extendedAttributes->{"URL"}) {
+        if ($attribute->signature->extendedAttributes->{"NonEmpty"}) {
+            $functionName = "getNonEmptyURLAttribute";
+        } else {
+            $functionName = "getURLAttribute";
+        }
+    } elsif ($attribute->signature->type eq "boolean") {
+        $functionName = "hasAttribute";
+    } elsif ($attribute->signature->type eq "long") {
+        $functionName = "getIntegralAttribute";
+    } elsif ($attribute->signature->type eq "unsigned long") {
+        $functionName = "getUnsignedIntegralAttribute";
+    } else {
+        $functionName = "getAttribute";
+    }
+
+    return "$functionName($contentAttributeName"
+}
+
+sub SetterExpressionPrefix
+{
+    my ($generator, $implIncludes, $interfaceName, $attribute) = @_;
+
+    my $contentAttributeName = $generator->ContentAttributeName($implIncludes, $interfaceName, $attribute);
+
+    if (!$contentAttributeName) {
+        return "set" . $generator->WK_ucfirst($generator->AttributeNameForGetterAndSetter($attribute)) . "(";
+    }
+
+    my $functionName;
+    if ($attribute->signature->type eq "boolean") {
+        $functionName = "setBooleanAttribute";
+    } elsif ($attribute->signature->type eq "long") {
+        $functionName = "setIntegralAttribute";
+    } elsif ($attribute->signature->type eq "unsigned long") {
+        $functionName = "setUnsignedIntegralAttribute";
+    } else {
+        $functionName = "setAttribute";
+    }
+
+    return "$functionName($contentAttributeName, "
+}
+
+sub ShouldCheckEnums
+{
+    my $dataNode = shift;
+    return not $dataNode->extendedAttributes->{"DontCheckEnums"};
+}
+
+sub GenerateCompileTimeCheckForEnumsIfNeeded
+{
+    my ($object, $dataNode) = @_;
+    my $interfaceName = $dataNode->name;
+    my @checks = ();
+    # If necessary, check that all constants are available as enums with the same value.
+    if (ShouldCheckEnums($dataNode) && @{$dataNode->constants}) {
+        push(@checks, "\n");
+        foreach my $constant (@{$dataNode->constants}) {
+            my $name = $constant->name;
+            my $value = $constant->value;
+            push(@checks, "COMPILE_ASSERT($value == ${interfaceName}::$name, ${interfaceName}Enum${name}IsWrongUseDontCheckEnums);\n");
+        }
+        push(@checks, "\n");
+    }
+    return @checks;
+}
 
 1;

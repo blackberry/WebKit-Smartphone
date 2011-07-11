@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2006, 2007 Apple Inc. All rights reserved.
  *           (C) 2007 Graham Dennis (graham.dennis@gmail.com)
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,8 +33,10 @@
 
 #include "ApplicationCacheHost.h"
 #include "DocumentLoader.h"
+#include "FileStreamProxy.h"
 #include "Frame.h"
 #include "FrameLoader.h"
+#include "FrameLoaderClient.h"
 #include "InspectorTimelineAgent.h"
 #include "Page.h"
 #include "ProgressTracker.h"
@@ -146,7 +149,7 @@ bool ResourceLoader::load(const ResourceRequest& r)
         return true;
     }
     
-    m_handle = ResourceHandle::create(clientRequest, this, m_frame.get(), m_defersLoading, m_shouldContentSniff);
+    m_handle = ResourceHandle::create(m_frame->loader()->networkingContext(), clientRequest, this, m_defersLoading, m_shouldContentSniff);
 
     return true;
 }
@@ -340,6 +343,12 @@ void ResourceLoader::didCancel(const ResourceError& error)
     if (m_handle)
         m_handle->clearAuthentication();
 
+#if OS(OLYMPIA)
+    // See RIM Bug #1212: we have seen a crash where m_documentLoader is null.
+    // We can't find what causes this, so better to at least avoid crashing.
+    ASSERT(m_documentLoader);
+    if (m_documentLoader)
+#endif
     m_documentLoader->cancelPendingSubstituteLoad(this);
     if (m_handle) {
         m_handle->cancel();
@@ -404,7 +413,7 @@ void ResourceLoader::didReceiveResponse(ResourceHandle*, const ResourceResponse&
 {
 #if ENABLE(INSPECTOR)
     if (InspectorTimelineAgent::instanceCount()) {
-        InspectorTimelineAgent* timelineAgent = m_frame->page() ? m_frame->page()->inspectorTimelineAgent() : 0;
+        InspectorTimelineAgent* timelineAgent = (m_frame && m_frame->page()) ? m_frame->page()->inspectorTimelineAgent() : 0;
         if (timelineAgent)
             timelineAgent->willReceiveResourceResponse(identifier(), response);
     }
@@ -416,7 +425,7 @@ void ResourceLoader::didReceiveResponse(ResourceHandle*, const ResourceResponse&
     didReceiveResponse(response);
 #if ENABLE(INSPECTOR)
     if (InspectorTimelineAgent::instanceCount()) {
-        InspectorTimelineAgent* timelineAgent = m_frame->page() ? m_frame->page()->inspectorTimelineAgent() : 0;
+        InspectorTimelineAgent* timelineAgent = (m_frame && m_frame->page()) ? m_frame->page()->inspectorTimelineAgent() : 0;
         if (timelineAgent)
             timelineAgent->didReceiveResourceResponse();
     }
@@ -427,7 +436,7 @@ void ResourceLoader::didReceiveData(ResourceHandle*, const char* data, int lengt
 {
 #if ENABLE(INSPECTOR)
     if (InspectorTimelineAgent::instanceCount()) {
-        InspectorTimelineAgent* timelineAgent = m_frame->page() ? m_frame->page()->inspectorTimelineAgent() : 0;
+        InspectorTimelineAgent* timelineAgent = (m_frame && m_frame->page()) ? m_frame->page()->inspectorTimelineAgent() : 0;
         if (timelineAgent)
             timelineAgent->willReceiveResourceData(identifier());
     }
@@ -435,7 +444,7 @@ void ResourceLoader::didReceiveData(ResourceHandle*, const char* data, int lengt
     didReceiveData(data, length, lengthReceived, false);
 #if ENABLE(INSPECTOR)
     if (InspectorTimelineAgent::instanceCount()) {
-        InspectorTimelineAgent* timelineAgent = m_frame->page() ? m_frame->page()->inspectorTimelineAgent() : 0;
+        InspectorTimelineAgent* timelineAgent = (m_frame && m_frame->page()) ? m_frame->page()->inspectorTimelineAgent() : 0;
         if (timelineAgent)
             timelineAgent->didReceiveResourceData();
     }
@@ -503,9 +512,24 @@ void ResourceLoader::receivedCancellation(const AuthenticationChallenge&)
 
 void ResourceLoader::willCacheResponse(ResourceHandle*, CacheStoragePolicy& policy)
 {
+    // <rdar://problem/7249553> - There are reports of crashes with this method being called
+    // with a null m_frame->settings(), which can only happen if the frame doesn't have a page.
+    // Sadly we have no reproducible cases of this.
+    // We think that any frame without a page shouldn't have any loads happening in it, yet
+    // there is at least one code path where that is not true.
+    ASSERT(m_frame->settings());
+    
     // When in private browsing mode, prevent caching to disk
-    if (policy == StorageAllowed && m_frame->settings()->privateBrowsingEnabled())
+    if (policy == StorageAllowed && m_frame->settings() && m_frame->settings()->privateBrowsingEnabled())
         policy = StorageAllowedInMemoryOnly;    
 }
+
+#if ENABLE(BLOB)
+AsyncFileStream* ResourceLoader::createAsyncFileStream(FileStreamClient* client)
+{
+    // It is OK to simply return a pointer since FileStreamProxy::create adds an extra ref.
+    return FileStreamProxy::create(m_frame->document()->scriptExecutionContext(), client).get();
+}
+#endif
 
 }

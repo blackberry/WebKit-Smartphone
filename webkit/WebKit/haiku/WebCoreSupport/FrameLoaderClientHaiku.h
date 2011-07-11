@@ -33,6 +33,7 @@
 #include "FrameLoaderClient.h"
 #include "KURL.h"
 #include "ResourceResponse.h"
+#include <wtf/Forward.h>
 
 class BMessenger;
 class WebView;
@@ -44,7 +45,6 @@ namespace WebCore {
     class FormState;
     class NavigationAction;
     class ResourceLoader;
-    class String;
 
     struct LoadErrorResetToken;
 
@@ -130,6 +130,7 @@ namespace WebCore {
         virtual void finishedLoading(DocumentLoader*);
 
         virtual bool canShowMIMEType(const String& MIMEType) const;
+        virtual bool canShowMIMETypeAsHTML(const String& MIMEType) const;
         virtual bool representationExistsForURLScheme(const String& URLScheme) const;
         virtual String generatedMIMETypeForURLScheme(const String& URLScheme) const;
 

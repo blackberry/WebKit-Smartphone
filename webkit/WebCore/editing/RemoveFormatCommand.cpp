@@ -49,7 +49,10 @@ RemoveFormatCommand::RemoveFormatCommand(Document* document)
 void RemoveFormatCommand::doApply()
 {
     Frame* frame = document()->frame();
-    
+
+    if (!frame->selection()->selection().isNonOrphanedCaretOrRange())
+        return;
+
     // Make a plain text string from the selection to remove formatting like tables and lists.
     String string = plainText(frame->selection()->selection().toNormalizedRange().get());
 
@@ -75,7 +78,7 @@ void RemoveFormatCommand::doApply()
     
     // Insert the content with the default style.
     // See <rdar://problem/5794382> RemoveFormat doesn't always reset text alignment
-    frame->setTypingStyle(defaultStyle.get());
+    frame->selection()->setTypingStyle(defaultStyle.release());
     
     inputText(string, true);
 }

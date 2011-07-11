@@ -29,12 +29,12 @@
 #if ENABLE(VIDEO)
 
 #include "MediaPlayer.h"
+#include <wtf/Forward.h>
 
 namespace WebCore {
 
 class IntRect;
 class IntSize;
-class String;
 
 class MediaPlayerPrivateInterface : public Noncopyable {
 public:
@@ -107,6 +107,9 @@ public:
 #if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
     virtual void deliverNotification(MediaPlayerProxyNotificationType) = 0;
     virtual void setMediaPlayerProxy(WebMediaPlayerProxy*) = 0;
+    virtual void setControls(bool) { }
+    virtual void enterFullscreen() { }
+    virtual void exitFullscreen() { }
 #endif
 
 #if USE(ACCELERATED_COMPOSITING)
@@ -119,6 +122,8 @@ public:
     virtual bool hasSingleSecurityOrigin() const { return false; }
 
     virtual MediaPlayer::MovieLoadType movieLoadType() const { return MediaPlayer::Unknown; }
+
+    virtual void prepareForRendering() { }
 
 };
 

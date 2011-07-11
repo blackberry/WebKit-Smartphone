@@ -39,13 +39,14 @@ namespace WebCore {
     // FIXME: Rename this class to StorageTask
     class LocalStorageTask : public Noncopyable {
     public:
-        enum Type { AreaImport, AreaSync, TerminateThread };
+        enum Type { AreaImport, AreaSync, DeleteEmptyDatabase, TerminateThread };
 
         ~LocalStorageTask();
 
-        static PassOwnPtr<LocalStorageTask> createImport(StorageAreaSync* area) { return new LocalStorageTask(AreaImport, area); }
-        static PassOwnPtr<LocalStorageTask> createSync(StorageAreaSync* area) { return new LocalStorageTask(AreaSync, area); }
-        static PassOwnPtr<LocalStorageTask> createTerminate(LocalStorageThread* thread) { return new LocalStorageTask(TerminateThread, thread); }
+        static PassOwnPtr<LocalStorageTask> createImport(StorageAreaSync* area) { return adoptPtr(new LocalStorageTask(AreaImport, area)); }
+        static PassOwnPtr<LocalStorageTask> createSync(StorageAreaSync* area) { return adoptPtr(new LocalStorageTask(AreaSync, area)); }
+        static PassOwnPtr<LocalStorageTask> createDeleteEmptyDatabase(StorageAreaSync* area) { return adoptPtr(new LocalStorageTask(DeleteEmptyDatabase, area)); }
+        static PassOwnPtr<LocalStorageTask> createTerminate(LocalStorageThread* thread) { return adoptPtr(new LocalStorageTask(TerminateThread, thread)); }
 
         void performTask();
 

@@ -38,21 +38,29 @@
 namespace WebCore {
 
 class GLES2ContextInternal;
+class IntSize;
 class Page;
 
 class GLES2Context : public Noncopyable {
 public:
-    // If a Page is specified then the resulting GL ES context draws directly
-    // to the window associated with the Page, otherwise an off-screen GL ES context is
-    // created.
-    static PassOwnPtr<GLES2Context> create(Page*);
+    // Used by the implementation only
+    static PassOwnPtr<GLES2Context> create(PassOwnPtr<GLES2ContextInternal>);
     ~GLES2Context();
 
     bool makeCurrent();
     bool destroy();
     bool swapBuffers();
 
+    // Only valid for offscreen contexts.
+    void resizeOffscreenContent(const IntSize&);
+
+    // Returns the ID of the texture used for offscreen rendering in the context of the parent.
+    // This texture is accessible by the GPU page compositor.
+    unsigned getOffscreenContentParentTextureId();
+
 private:
+    GLES2Context();
+
     friend class GLES2ContextInternal;
     OwnPtr<GLES2ContextInternal> m_internal;
 };

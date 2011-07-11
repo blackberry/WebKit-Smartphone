@@ -27,26 +27,23 @@
 #ifndef MessagePort_h
 #define MessagePort_h
 
-#include "AtomicStringHash.h"
 #include "EventListener.h"
-#include "EventNames.h"
 #include "EventTarget.h"
 #include "MessagePortChannel.h"
-#include <wtf/HashMap.h>
+#include <wtf/Forward.h>
 #include <wtf/OwnPtr.h>
 #include <wtf/PassOwnPtr.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Vector.h>
+#include <wtf/text/AtomicStringHash.h>
 
 namespace WebCore {
 
-    class AtomicStringImpl;
     class Event;
     class Frame;
     class MessagePort;
     class ScriptExecutionContext;
-    class String;
 
     // The overwhelmingly common case is sending a single port, so handle that efficiently with an inline buffer of size 1.
     typedef Vector<RefPtr<MessagePort>, 1> MessagePortArray;

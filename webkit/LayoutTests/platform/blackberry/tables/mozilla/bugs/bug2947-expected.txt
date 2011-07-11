@@ -1,0 +1,94 @@
+layer at (0,0) size 800x1128
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x1128
+  RenderBlock {HTML} at (0,0) size 800x1128
+    RenderBody {BODY} at (8,8) size 784x1112
+      RenderBlock {P} at (0,0) size 784x42
+        RenderText {#text} at (0,1) size 748x40
+          text run at (0,1) width 382: "The table below should have the same width as the red DIV "
+          text run at (382,1) width 366: "below this paragraph. The inner image should just fit. The"
+          text run at (0,22) width 42: "image "
+        RenderInline {EM} at (0,0) size 67x19
+          RenderText {#text} at (42,22) size 67x19
+            text run at (42,22) width 67: "should not"
+        RenderText {#text} at (109,22) size 131x19
+          text run at (109,22) width 131: " overrun the borders."
+      RenderBlock {DIV} at (0,58) size 610x2 [border: (1px solid #FF0000)]
+      RenderTable {TABLE} at (0,76) size 608x389 [border: (1px dotted #000080)]
+        RenderTableSection {TBODY} at (1,1) size 606x387
+          RenderTableRow {TR} at (0,2) size 606x25
+            RenderTableCell {TD} at (2,2) size 140x25 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 7x19
+                text run at (2,3) width 7: "a"
+            RenderTableCell {TD} at (144,2) size 163x25 [border: (1px solid #008000)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 9x19
+                text run at (2,3) width 9: "b"
+            RenderTableCell {TD} at (309,2) size 141x25 [border: (1px solid #008000)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 7x19
+                text run at (2,3) width 7: "c"
+            RenderTableCell {TD} at (452,2) size 152x25 [border: (1px solid #008000)] [r=0 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 8x19
+                text run at (2,3) width 8: "d"
+          RenderTableRow {TR} at (0,29) size 606x25
+            RenderTableCell {TD} at (2,29) size 305x25 [border: (1px solid #008000)] [r=1 c=0 rs=1 cs=2]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "eee"
+            RenderTableCell {TD} at (309,29) size 295x25 [border: (1px solid #008000)] [r=1 c=2 rs=1 cs=2]
+              RenderText {#text} at (2,3) size 5x19
+                text run at (2,3) width 5: "f"
+          RenderTableRow {TR} at (0,56) size 606x329
+            RenderTableCell {TD} at (2,56) size 602x329 [border: (1px solid #008000)] [r=2 c=0 rs=1 cs=4]
+              RenderImage {IMG} at (2,2) size 593x325
+              RenderText {#text} at (0,0) size 0x0
+      RenderBlock {DIV} at (0,481) size 610x2 [border: (1px solid #FF0000)]
+      RenderBlock {P} at (0,499) size 784x21
+        RenderText {#text} at (0,1) size 390x19
+          text run at (0,1) width 390: "Mozilla makes the table way too small for no apparent reason."
+      RenderBlock {P} at (0,536) size 784x21
+        RenderText {#text} at (0,1) size 249x19
+          text run at (0,1) width 249: "Here is the same table, one pixel wider:"
+      RenderTable {TABLE} at (0,573) size 609x389 [border: (1px dotted #000080)]
+        RenderTableSection {TBODY} at (1,1) size 607x387
+          RenderTableRow {TR} at (0,2) size 607x25
+            RenderTableCell {TD} at (2,2) size 141x25 [border: (1px solid #008000)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 7x19
+                text run at (2,3) width 7: "a"
+            RenderTableCell {TD} at (145,2) size 163x25 [border: (1px solid #008000)] [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 9x19
+                text run at (2,3) width 9: "b"
+            RenderTableCell {TD} at (310,2) size 141x25 [border: (1px solid #008000)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 7x19
+                text run at (2,3) width 7: "c"
+            RenderTableCell {TD} at (453,2) size 152x25 [border: (1px solid #008000)] [r=0 c=3 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 8x19
+                text run at (2,3) width 8: "d"
+          RenderTableRow {TR} at (0,29) size 607x25
+            RenderTableCell {TD} at (2,29) size 306x25 [border: (1px solid #008000)] [r=1 c=0 rs=1 cs=2]
+              RenderText {#text} at (2,3) size 21x19
+                text run at (2,3) width 21: "eee"
+            RenderTableCell {TD} at (310,29) size 295x25 [border: (1px solid #008000)] [r=1 c=2 rs=1 cs=2]
+              RenderText {#text} at (2,3) size 5x19
+                text run at (2,3) width 5: "f"
+          RenderTableRow {TR} at (0,56) size 607x329
+            RenderTableCell {TD} at (2,56) size 603x329 [border: (1px solid #008000)] [r=2 c=0 rs=1 cs=4]
+              RenderImage {IMG} at (2,2) size 593x325
+              RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,978) size 784x42
+        RenderText {#text} at (0,1) size 758x40
+          text run at (0,1) width 541: "Observations: Fiddle about with the content of the \"eee\" cell and everything changes. "
+          text run at (541,1) width 217: "Remove any of the three rows and"
+          text run at (0,22) width 333: "things change. Remove any of the four columns and "
+          text run at (333,22) width 335: "things change. Remove the image and things change."
+      RenderBlock {P} at (0,1036) size 784x21
+        RenderText {#text} at (0,1) size 596x19
+          text run at (0,1) width 494: "(Note: If the image has disappeared from the server, replace it with any 593px "
+          text run at (494,1) width 102: "image you like.)"
+      RenderBlock {P} at (0,1073) size 784x21
+        RenderText {#text} at (0,1) size 56x19
+          text run at (0,1) width 56: "See also "
+        RenderInline {A} at (0,0) size 98x19 [color=#0000EE]
+          RenderText {#text} at (56,1) size 98x19
+            text run at (56,1) width 98: "tablewidth.html"
+        RenderText {#text} at (154,1) size 4x19
+          text run at (154,1) width 4: "."
+      RenderBlock {HR} at (0,1110) size 784x2 [border: (1px inset #000000)]

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2009, 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,6 +31,7 @@
 #include "Interpreter.h"
 #include "Nodes.h"
 #include "SamplingTool.h"
+#include <wtf/PassOwnPtr.h>
 
 namespace JSC {
 
@@ -86,6 +87,8 @@ namespace JSC {
     protected:
         JITCode m_jitCodeForCall;
         JITCode m_jitCodeForConstruct;
+        MacroAssemblerCodePtr m_jitCodeForCallWithArityCheck;
+        MacroAssemblerCodePtr m_jitCodeForConstructWithArityCheck;
 #endif
     };
 
@@ -95,6 +98,8 @@ namespace JSC {
     public:
         static PassRefPtr<NativeExecutable> create(MacroAssemblerCodePtr callThunk, NativeFunction function, MacroAssemblerCodePtr constructThunk, NativeFunction constructor)
         {
+            if (!callThunk)
+                return adoptRef(new NativeExecutable(JITCode(), function, JITCode(), constructor));
             return adoptRef(new NativeExecutable(JITCode::HostFunction(callThunk), function, JITCode::HostFunction(constructThunk), constructor));
         }
 
@@ -110,6 +115,8 @@ namespace JSC {
         {
             m_jitCodeForCall = callThunk;
             m_jitCodeForConstruct = constructThunk;
+            m_jitCodeForCallWithArityCheck = callThunk.addressForCall();
+            m_jitCodeForConstructWithArityCheck = constructThunk.addressForCall();
         }
 
         NativeFunction m_function;
@@ -167,7 +174,7 @@ namespace JSC {
         bool usesArguments() const { return m_features & ArgumentsFeature; }
         bool needsActivation() const { return m_features & (EvalFeature | ClosureFeature | WithFeature | CatchFeature); }
 
-        virtual ExceptionInfo* reparseExceptionInfo(JSGlobalData*, ScopeChainNode*, CodeBlock*) = 0;
+        virtual PassOwnPtr<ExceptionInfo> reparseExceptionInfo(JSGlobalData*, ScopeChainNode*, CodeBlock*) = 0;
 
     protected:
         void recordParse(CodeFeatures features, int firstLine, int lastLine)
@@ -188,40 +195,38 @@ namespace JSC {
 
         ~EvalExecutable();
 
-        EvalCodeBlock& bytecode(ExecState* exec, ScopeChainNode* scopeChainNode)
+        JSObject* compile(ExecState* exec, ScopeChainNode* scopeChainNode)
         {
-            if (!m_evalCodeBlock) {
-                JSObject* error = compile(exec, scopeChainNode);
-                ASSERT_UNUSED(!error, error);
-            }
+            JSObject* error = 0;
+            if (!m_evalCodeBlock)
+                error = compileInternal(exec, scopeChainNode);
+            ASSERT(!error == !!m_evalCodeBlock);
+            return error;
+        }
+
+        EvalCodeBlock& generatedBytecode()
+        {
+            ASSERT(m_evalCodeBlock);
             return *m_evalCodeBlock;
         }
 
-        JSObject* compile(ExecState*, ScopeChainNode*);
-
-        ExceptionInfo* reparseExceptionInfo(JSGlobalData*, ScopeChainNode*, CodeBlock*);
         static PassRefPtr<EvalExecutable> create(ExecState* exec, const SourceCode& source) { return adoptRef(new EvalExecutable(exec, source)); }
 
-    private:
-        EvalExecutable(ExecState* exec, const SourceCode& source)
-            : ScriptExecutable(exec, source)
-            , m_evalCodeBlock(0)
-        {
-        }
-        EvalCodeBlock* m_evalCodeBlock;
-
 #if ENABLE(JIT)
-    public:
-        JITCode& jitCode(ExecState* exec, ScopeChainNode* scopeChainNode)
+        JITCode& generatedJITCode()
         {
-            if (!m_jitCodeForCall)
-                generateJITCode(exec, scopeChainNode);
-            return m_jitCodeForCall;
+            return generatedJITCodeForCall();
         }
+#endif
 
     private:
-        void generateJITCode(ExecState*, ScopeChainNode*);
-#endif
+        EvalExecutable(ExecState*, const SourceCode&);
+
+        JSObject* compileInternal(ExecState*, ScopeChainNode*);
+
+        virtual PassOwnPtr<ExceptionInfo> reparseExceptionInfo(JSGlobalData*, ScopeChainNode*, CodeBlock*);
+
+        OwnPtr<EvalCodeBlock> m_evalCodeBlock;
     };
 
     class ProgramExecutable : public ScriptExecutable {
@@ -233,41 +238,38 @@ namespace JSC {
 
         ~ProgramExecutable();
 
-        ProgramCodeBlock& bytecode(ExecState* exec, ScopeChainNode* scopeChainNode)
+        JSObject* compile(ExecState* exec, ScopeChainNode* scopeChainNode)
         {
-            if (!m_programCodeBlock) {
-                JSObject* error = compile(exec, scopeChainNode);
-                ASSERT_UNUSED(!error, error);
-            }
+            JSObject* error = 0;
+            if (!m_programCodeBlock)
+                error = compileInternal(exec, scopeChainNode);
+            ASSERT(!error == !!m_programCodeBlock);
+            return error;
+        }
+
+        ProgramCodeBlock& generatedBytecode()
+        {
+            ASSERT(m_programCodeBlock);
             return *m_programCodeBlock;
         }
 
         JSObject* checkSyntax(ExecState*);
-        JSObject* compile(ExecState*, ScopeChainNode*);
-
-        // CodeBlocks for program code are transient and therefore do not gain from from throwing out there exception information.
-        ExceptionInfo* reparseExceptionInfo(JSGlobalData*, ScopeChainNode*, CodeBlock*) { ASSERT_NOT_REACHED(); return 0; }
-
-    private:
-        ProgramExecutable(ExecState* exec, const SourceCode& source)
-            : ScriptExecutable(exec, source)
-            , m_programCodeBlock(0)
-        {
-        }
-        ProgramCodeBlock* m_programCodeBlock;
 
 #if ENABLE(JIT)
-    public:
-        JITCode& jitCode(ExecState* exec, ScopeChainNode* scopeChainNode)
+        JITCode& generatedJITCode()
         {
-            if (!m_jitCodeForCall)
-                generateJITCode(exec, scopeChainNode);
-            return m_jitCodeForCall;
+            return generatedJITCodeForCall();
         }
+#endif
 
     private:
-        void generateJITCode(ExecState*, ScopeChainNode*);
-#endif
+        ProgramExecutable(ExecState*, const SourceCode&);
+
+        JSObject* compileInternal(ExecState*, ScopeChainNode*);
+
+        virtual PassOwnPtr<ExceptionInfo> reparseExceptionInfo(JSGlobalData*, ScopeChainNode*, CodeBlock*);
+
+        OwnPtr<ProgramCodeBlock> m_programCodeBlock;
     };
 
     class FunctionExecutable : public ScriptExecutable {
@@ -293,7 +295,7 @@ namespace JSC {
         // Returns either call or construct bytecode. This can be appropriate
         // for answering questions that that don't vary between call and construct --
         // for example, argumentsRegister().
-        FunctionCodeBlock& generatedByteCode()
+        FunctionCodeBlock& generatedBytecode()
         {
             if (m_codeBlockForCall)
                 return *m_codeBlockForCall;
@@ -301,12 +303,13 @@ namespace JSC {
             return *m_codeBlockForConstruct;
         }
 
-        FunctionCodeBlock& bytecodeForCall(ExecState* exec, ScopeChainNode* scopeChainNode) 
+        JSObject* compileForCall(ExecState* exec, ScopeChainNode* scopeChainNode)
         {
-            ASSERT(scopeChainNode);
+            JSObject* error = 0;
             if (!m_codeBlockForCall)
-                compileForCall(exec, scopeChainNode);
-            return *m_codeBlockForCall;
+                error = compileForCallInternal(exec, scopeChainNode);
+            ASSERT(!error == !!m_codeBlockForCall);
+            return error;
         }
 
         bool isGeneratedForCall() const
@@ -320,12 +323,13 @@ namespace JSC {
             return *m_codeBlockForCall;
         }
 
-        FunctionCodeBlock& bytecodeForConstruct(ExecState* exec, ScopeChainNode* scopeChainNode) 
+        JSObject* compileForConstruct(ExecState* exec, ScopeChainNode* scopeChainNode)
         {
-            ASSERT(scopeChainNode);
+            JSObject* error = 0;
             if (!m_codeBlockForConstruct)
-                compileForConstruct(exec, scopeChainNode);
-            return *m_codeBlockForConstruct;
+                error = compileForConstructInternal(exec, scopeChainNode);
+            ASSERT(!error == !!m_codeBlockForConstruct);
+            return error;
         }
 
         bool isGeneratedForConstruct() const
@@ -346,70 +350,42 @@ namespace JSC {
         SharedSymbolTable* symbolTable() const { return m_symbolTable; }
 
         void recompile(ExecState*);
-        ExceptionInfo* reparseExceptionInfo(JSGlobalData*, ScopeChainNode*, CodeBlock*);
-        void markAggregate(MarkStack& markStack);
-        static PassRefPtr<FunctionExecutable> fromGlobalCode(const Identifier&, ExecState*, Debugger*, const SourceCode&, int* errLine = 0, UString* errMsg = 0);
+        void markAggregate(MarkStack&);
+        static PassRefPtr<FunctionExecutable> fromGlobalCode(const Identifier&, ExecState*, Debugger*, const SourceCode&, JSObject** exception);
 
     private:
-        FunctionExecutable(JSGlobalData* globalData, const Identifier& name, const SourceCode& source, bool forceUsesArguments, FunctionParameters* parameters, int firstLine, int lastLine)
-            : ScriptExecutable(globalData, source)
-            , m_numVariables(0)
-            , m_forceUsesArguments(forceUsesArguments)
-            , m_parameters(parameters)
-            , m_codeBlockForCall(0)
-            , m_codeBlockForConstruct(0)
-            , m_name(name)
-            , m_symbolTable(0)
-        {
-            m_firstLine = firstLine;
-            m_lastLine = lastLine;
-        }
+        FunctionExecutable(JSGlobalData*, const Identifier& name, const SourceCode&, bool forceUsesArguments, FunctionParameters*, int firstLine, int lastLine);
+        FunctionExecutable(ExecState*, const Identifier& name, const SourceCode&, bool forceUsesArguments, FunctionParameters*, int firstLine, int lastLine);
 
-        FunctionExecutable(ExecState* exec, const Identifier& name, const SourceCode& source, bool forceUsesArguments, FunctionParameters* parameters, int firstLine, int lastLine)
-            : ScriptExecutable(exec, source)
-            , m_numVariables(0)
-            , m_forceUsesArguments(forceUsesArguments)
-            , m_parameters(parameters)
-            , m_codeBlockForCall(0)
-            , m_codeBlockForConstruct(0)
-            , m_name(name)
-            , m_symbolTable(0)
-        {
-            m_firstLine = firstLine;
-            m_lastLine = lastLine;
-        }
+        JSObject* compileForCallInternal(ExecState*, ScopeChainNode*);
+        JSObject* compileForConstructInternal(ExecState*, ScopeChainNode*);
 
-        void compileForCall(ExecState*, ScopeChainNode*);
-        void compileForConstruct(ExecState*, ScopeChainNode*);
+        virtual PassOwnPtr<ExceptionInfo> reparseExceptionInfo(JSGlobalData*, ScopeChainNode*, CodeBlock*);
 
         unsigned m_numVariables : 31;
         bool m_forceUsesArguments : 1;
 
         RefPtr<FunctionParameters> m_parameters;
-        FunctionCodeBlock* m_codeBlockForCall;
-        FunctionCodeBlock* m_codeBlockForConstruct;
+        OwnPtr<FunctionCodeBlock> m_codeBlockForCall;
+        OwnPtr<FunctionCodeBlock> m_codeBlockForConstruct;
         Identifier m_name;
         SharedSymbolTable* m_symbolTable;
 
 #if ENABLE(JIT)
     public:
-        JITCode& jitCodeForCall(ExecState* exec, ScopeChainNode* scopeChainNode)
+        MacroAssemblerCodePtr generatedJITCodeForCallWithArityCheck()
         {
-            if (!m_jitCodeForCall)
-                generateJITCodeForCall(exec, scopeChainNode);
-            return m_jitCodeForCall;
+            ASSERT(m_jitCodeForCall);
+            ASSERT(m_jitCodeForCallWithArityCheck);
+            return m_jitCodeForCallWithArityCheck;
         }
 
-        JITCode& jitCodeForConstruct(ExecState* exec, ScopeChainNode* scopeChainNode)
+        MacroAssemblerCodePtr generatedJITCodeForConstructWithArityCheck()
         {
-            if (!m_jitCodeForConstruct)
-                generateJITCodeForConstruct(exec, scopeChainNode);
-            return m_jitCodeForConstruct;
+            ASSERT(m_jitCodeForConstruct);
+            ASSERT(m_jitCodeForConstructWithArityCheck);
+            return m_jitCodeForConstructWithArityCheck;
         }
-
-    private:
-        void generateJITCodeForCall(ExecState*, ScopeChainNode*);
-        void generateJITCodeForConstruct(ExecState*, ScopeChainNode*);
 #endif
     };
 

@@ -21,7 +21,7 @@
  * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
  * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #ifndef ResourceResponse_h
@@ -41,6 +41,8 @@ namespace WebCore {
             , m_isMultipartPayload(false)
             , m_wasFetchedViaSPDY(false)
             , m_wasNpnNegotiated(false)
+            , m_wasAlternateProtocolAvailable(false)
+            , m_wasFetchedViaProxy(false)
             , m_responseTime(0)
         {
         }
@@ -52,6 +54,8 @@ namespace WebCore {
             , m_isMultipartPayload(false)
             , m_wasFetchedViaSPDY(false)
             , m_wasNpnNegotiated(false)
+            , m_wasAlternateProtocolAvailable(false)
+            , m_wasFetchedViaProxy(false)
             , m_responseTime(0)
         {
         }
@@ -73,6 +77,18 @@ namespace WebCore {
 
         bool wasNpnNegotiated() const { return m_wasNpnNegotiated; }
         void setWasNpnNegotiated(bool value) { m_wasNpnNegotiated = value; }
+
+        bool wasAlternateProtocolAvailable() const
+        {
+          return m_wasAlternateProtocolAvailable;
+        }
+        void setWasAlternateProtocolAvailable(bool value)
+        {
+          m_wasAlternateProtocolAvailable = value;
+        }
+
+        bool wasFetchedViaProxy() const { return m_wasFetchedViaProxy; }
+        void setWasFetchedViaProxy(bool value) { m_wasFetchedViaProxy = value; }
 
         bool isMultipartPayload() const { return m_isMultipartPayload; }
         void setIsMultipartPayload(bool value) { m_isMultipartPayload = value; }
@@ -113,6 +129,13 @@ namespace WebCore {
 
         // Was the resource fetched over a channel which used TLS/Next-Protocol-Negotiation (also SPDY related).
         bool m_wasNpnNegotiated;
+
+        // Was the resource fetched over a channel which specified "Alternate-Protocol"
+        // (e.g.: Alternate-Protocol: 443:npn-spdy/1).
+        bool m_wasAlternateProtocolAvailable;
+
+        // Was the resource fetched over an explicit proxy (HTTP, SOCKS, etc).
+        bool m_wasFetchedViaProxy;
 
         // The time at which the response headers were received.  For cached
         // responses, this time could be "far" in the past.

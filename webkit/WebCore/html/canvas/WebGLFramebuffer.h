@@ -26,38 +26,59 @@
 #ifndef WebGLFramebuffer_h
 #define WebGLFramebuffer_h
 
-#include "CanvasObject.h"
+#include "WebGLObject.h"
 
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
 
 namespace WebCore {
-    
-    class WebGLFramebuffer : public CanvasObject {
-    public:
-        virtual ~WebGLFramebuffer() { deleteObject(); }
-        
-        static PassRefPtr<WebGLFramebuffer> create(WebGLRenderingContext*);
-        
-        void setIsAttached(unsigned long attachment, bool isAttached);
 
-        bool isDepthAttached() const { return m_isDepthAttached; }
-        bool isStencilAttached() const { return m_isStencilAttached; }
-        bool isDepthStencilAttached() const { return m_isDepthStencilAttached; }
+class WebGLFramebuffer : public WebGLObject {
+public:
+    virtual ~WebGLFramebuffer() { deleteObject(); }
 
-    protected:
-        WebGLFramebuffer(WebGLRenderingContext*);
-        
-        virtual void _deleteObject(Platform3DObject);
+    static PassRefPtr<WebGLFramebuffer> create(WebGLRenderingContext*);
 
-    private:
-        virtual bool isFramebuffer() const { return true; }
+    bool isDepthAttached() const { return (m_depthAttachment && m_depthAttachment->object()); }
+    bool isStencilAttached() const { return (m_stencilAttachment && m_stencilAttachment->object()); }
+    bool isDepthStencilAttached() const { return (m_depthStencilAttachment && m_depthStencilAttachment->object()); }
 
-        bool m_isDepthAttached;
-        bool m_isStencilAttached;
-        bool m_isDepthStencilAttached;
-    };
-    
+    void setAttachment(unsigned long, WebGLObject*);
+
+    // This function is called right after a framebuffer is bound.
+    // Because renderbuffers and textures attached to the framebuffer might
+    // have changed and the framebuffer might have become complete when it
+    // isn't bound, so we need to clear un-initialized renderbuffers.
+    void onBind();
+
+    // When a texture or a renderbuffer changes, we need to check the
+    // current bound framebuffer; if the newly changed object is attached
+    // to the framebuffer and the framebuffer becomes complete, we need to
+    // clear un-initialized renderbuffers.
+    void onAttachedObjectChange(WebGLObject*);
+
+    unsigned long getColorBufferFormat();
+
+protected:
+    WebGLFramebuffer(WebGLRenderingContext*);
+
+    virtual void deleteObjectImpl(Platform3DObject);
+
+private:
+    virtual bool isFramebuffer() const { return true; }
+
+    bool isUninitialized(WebGLObject*);
+    void setInitialized(WebGLObject*);
+    void initializeRenderbuffers();
+
+    // These objects are kept alive by the global table in
+    // WebGLRenderingContext.
+    WebGLObject* m_colorAttachment;
+    WebGLObject* m_depthAttachment;
+    WebGLObject* m_stencilAttachment;
+    WebGLObject* m_depthStencilAttachment;
+};
+
 } // namespace WebCore
 
 #endif // WebGLFramebuffer_h

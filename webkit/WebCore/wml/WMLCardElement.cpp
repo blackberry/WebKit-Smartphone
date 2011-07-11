@@ -55,6 +55,11 @@ WMLCardElement::WMLCardElement(const QualifiedName& tagName, Document* doc)
     ASSERT(hasTagName(cardTag));
 }
 
+PassRefPtr<WMLCardElement> WMLCardElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new WMLCardElement(tagName, document));
+}
+
 WMLCardElement::~WMLCardElement()
 {
 }
@@ -287,7 +292,7 @@ WMLCardElement* WMLCardElement::findNamedCardInDocument(Document* doc, const Str
 
     for (unsigned i = 0; i < length; ++i) {
         WMLCardElement* card = static_cast<WMLCardElement*>(nodeList->item(i));
-        if (card->getIDAttribute() != cardName)
+        if (card->getIdAttribute() != cardName)
             continue;
 
         return card;

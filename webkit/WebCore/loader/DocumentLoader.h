@@ -29,6 +29,7 @@
 #ifndef DocumentLoader_h
 #define DocumentLoader_h
 
+#include "DocumentLoadTiming.h"
 #include "NavigationAction.h"
 #include "ResourceError.h"
 #include "ResourceRequest.h"
@@ -106,6 +107,8 @@ namespace WebCore {
         void prepareForLoadStart();
         bool isClientRedirect() const { return m_isClientRedirect; }
         void setIsClientRedirect(bool isClientRedirect) { m_isClientRedirect = isClientRedirect; }
+        void handledOnloadEvents() { m_wasOnloadHandled = true; }
+        bool wasOnloadHandled() { return m_wasOnloadHandled; }
         bool isLoadingInAPISense() const;
         void setPrimaryLoadComplete(bool);
         void setTitle(const String&);
@@ -205,6 +208,13 @@ namespace WebCore {
         void recordMemoryCacheLoadForFutureClientNotification(const String& url);
         void takeMemoryCacheLoadsForClientNotification(Vector<String>& loads);
 
+        DocumentLoadTiming* timing() { return &m_documentLoadTiming; }
+        void resetTiming() { m_documentLoadTiming = DocumentLoadTiming(); }
+
+        // The WebKit layer calls this function when it's ready for the data to
+        // actually be added to the document.
+        void commitData(const char* bytes, int length);
+
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
         ApplicationCacheHost* applicationCacheHost() const { return m_applicationCacheHost.get(); }
 #endif
@@ -261,6 +271,7 @@ namespace WebCore {
         bool m_gotFirstByte;
         bool m_primaryLoadComplete;
         bool m_isClientRedirect;
+        bool m_wasOnloadHandled;
 
         String m_pageTitle;
         String m_pageIconURL;
@@ -293,6 +304,8 @@ namespace WebCore {
         
         String m_clientRedirectSourceForHistory;
         bool m_didCreateGlobalHistoryEntry;
+
+        DocumentLoadTiming m_documentLoadTiming;
 
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
         friend class ApplicationCacheHost;  // for substitute resource delivery

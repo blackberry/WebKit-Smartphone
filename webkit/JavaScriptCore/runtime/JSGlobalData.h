@@ -41,9 +41,14 @@
 #include "Terminator.h"
 #include "TimeoutChecker.h"
 #include "WeakRandom.h"
+#include <wtf/BumpPointerAllocator.h>
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/RefCounted.h>
+#include <wtf/ThreadSpecific.h>
+#if ENABLE(REGEXP_TRACING)
+#include <wtf/ListHashSet.h>
+#endif
 
 struct OpaqueJSClass;
 struct OpaqueJSClassContextData;
@@ -58,9 +63,13 @@ namespace JSC {
     class JSObject;
     class Lexer;
     class Parser;
+    class RegExpCache;
     class Stringifier;
     class Structure;
     class UString;
+#if ENABLE(REGEXP_TRACING)
+    class RegExp;
+#endif
 
     struct HashTable;
     struct Instruction;    
@@ -165,14 +174,21 @@ namespace JSC {
         ExecutableAllocator executableAllocator;
 #endif
 
+#if !ENABLE(JIT)
+        bool canUseJIT() { return false; } // interpreter only
+#elif !ENABLE(INTERPRETER)
+        bool canUseJIT() { return true; } // jit only
+#else
+        bool canUseJIT() { return m_canUseJIT; }
+#endif
         Lexer* lexer;
         Parser* parser;
         Interpreter* interpreter;
 #if ENABLE(JIT)
-        JITThunks jitStubs;
+        OwnPtr<JITThunks> jitStubs;
         MacroAssemblerCodePtr getCTIStub(ThunkGenerator generator)
         {
-            return jitStubs.ctiStub(this, generator);
+            return jitStubs->ctiStub(this, generator);
         }
         PassRefPtr<NativeExecutable> getHostFunction(NativeFunction function);
         PassRefPtr<NativeExecutable> getHostFunction(NativeFunction function, ThunkGenerator generator);
@@ -185,10 +201,6 @@ namespace JSC {
 #if ENABLE(JIT)
         ReturnAddressPtr exceptionLocation;
 #endif
-
-        const Vector<Instruction>& numericCompareFunction(ExecState*);
-        Vector<Instruction> lazyNumericCompareFunction;
-        bool initializingLazyNumericCompareFunction;
 
         HashMap<OpaqueJSClass*, OpaqueJSClassContextData*> opaqueJSClassData;
 
@@ -207,10 +219,20 @@ namespace JSC {
         
         UString cachedDateString;
         double cachedDateStringValue;
-        
-        WeakRandom weakRandom;
 
         int maxReentryDepth;
+
+        RegExpCache* m_regExpCache;
+
+#if ENABLE(YARR)
+        BumpPointerAllocator m_regexAllocator;
+#endif
+
+#if ENABLE(REGEXP_TRACING)
+        typedef ListHashSet<RefPtr<RegExp> > RTTraceList;
+        RTTraceList* m_rtTraceList;
+#endif
+
 #ifndef NDEBUG
         ThreadIdentifier exclusiveThread;
 #endif
@@ -222,10 +244,18 @@ namespace JSC {
         void startSampling();
         void stopSampling();
         void dumpSampleData(ExecState* exec);
+        RegExpCache* regExpCache() { return m_regExpCache; }
+#if ENABLE(REGEXP_TRACING)
+        void addRegExpToTrace(PassRefPtr<RegExp> regExp);
+#endif
+        void dumpRegExpTrace();
     private:
         JSGlobalData(GlobalDataType, ThreadStackType);
         static JSGlobalData*& sharedInstanceInternal();
         void createNativeThunk();
+#if ENABLE(JIT) && ENABLE(INTERPRETER)
+        bool m_canUseJIT;
+#endif
     };
 
 } // namespace JSC

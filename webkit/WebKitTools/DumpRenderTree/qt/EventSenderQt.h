@@ -29,6 +29,9 @@
 #ifndef EventSenderQt_h
 #define EventSenderQt_h
 
+
+#include "DumpRenderTreeQt.h"
+
 #include <QApplication>
 #include <QBasicTimer>
 #include <QEvent>
@@ -57,6 +60,10 @@ public slots:
     void mouseDown(int button = 0);
     void mouseUp(int button = 0);
     void mouseMoveTo(int x, int y);
+#ifndef QT_NO_WHEELEVENT
+    void mouseScrollBy(int x, int y);
+    void continuousMouseScrollBy(int x, int y);
+#endif
     void leapForward(int ms);
     void keyDown(const QString& string, const QStringList& modifiers = QStringList(), unsigned int location = 0);
     void clearKillRing() {}
@@ -77,6 +84,13 @@ public slots:
 
 protected:
     void timerEvent(QTimerEvent*);
+
+private:
+    bool isGraphicsBased() const { return qobject_cast<WebCore::WebViewGraphicsBased*>(m_page->view()); }
+    QGraphicsSceneMouseEvent* createGraphicsSceneMouseEvent(QEvent::Type, const QPoint& pos, const QPoint& screenPos, Qt::MouseButton, Qt::MouseButtons, Qt::KeyboardModifiers);
+    QGraphicsSceneWheelEvent* createGraphicsSceneWheelEvent(QEvent::Type, const QPoint& pos, const QPoint& screenPos, int delta, Qt::KeyboardModifiers, Qt::Orientation);
+    void sendEvent(QObject* receiver, QEvent* event);
+    void postEvent(QObject* receiver, QEvent* event);
 
 private:
     void sendTouchEvent(QEvent::Type);

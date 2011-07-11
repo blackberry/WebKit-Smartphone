@@ -32,10 +32,15 @@
 
 using namespace WebKit;
 
+WKTypeID WKPreferencesGetTypeID()
+{
+    return toRef(WebPreferences::APIType);
+}
+
 WKPreferencesRef WKPreferencesCreate()
 {
     RefPtr<WebPreferences> preferences = WebPreferences::create();
-    return toRef(preferences.release().releaseRef());
+    return toRef(preferences.release().leakRef());
 }
 
 WKPreferencesRef WKPreferencesCreateCopy(WKPreferencesRef preferencesRef)
@@ -64,13 +69,32 @@ bool WKPreferencesGetLoadsImagesAutomatically(WKPreferencesRef preferencesRef)
     return toWK(preferencesRef)->loadsImagesAutomatically();
 }
 
-WKPreferencesRef WKPreferencesRetain(WKPreferencesRef preferencesRef)
+void WKPreferencesSetOfflineWebApplicationCacheEnabled(WKPreferencesRef preferencesRef, bool offlineWebApplicationCacheEnabled)
 {
-    toWK(preferencesRef)->ref();
-    return preferencesRef;
+    toWK(preferencesRef)->setOfflineWebApplicationCacheEnabled(offlineWebApplicationCacheEnabled);
 }
 
-void WKPreferencesRelease(WKPreferencesRef preferencesRef)
+bool WKPreferencesGetOfflineWebApplicationCacheEnabled(WKPreferencesRef preferencesRef)
 {
-    toWK(preferencesRef)->deref();
+    return toWK(preferencesRef)->offlineWebApplicationCacheEnabled();
+}
+
+void WKPreferencesSetLocalStorageEnabled(WKPreferencesRef preferencesRef, bool localStorageEnabled)
+{
+    toWK(preferencesRef)->setLocalStorageEnabled(localStorageEnabled);
+}
+
+bool WKPreferencesGetLocalStorageEnabled(WKPreferencesRef preferencesRef)
+{
+    return toWK(preferencesRef)->localStorageEnabled();
+}
+
+void WKPreferencesSetXSSAuditorEnabled(WKPreferencesRef preferencesRef, bool xssAuditorEnabled)
+{
+    toWK(preferencesRef)->setXSSAuditorEnabled(xssAuditorEnabled);
+}
+
+bool WKPreferencesGetXSSAuditorEnabled(WKPreferencesRef preferencesRef)
+{
+    return toWK(preferencesRef)->xssAuditorEnabled();
 }

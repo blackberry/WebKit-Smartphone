@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,7 +28,7 @@
 #define WebChromeClient_h
 
 #include <WebCore/ChromeClient.h>
-#include <WebCore/PlatformString.h>
+#include <wtf/text/WTFString.h>
 
 namespace WebKit {
 
@@ -40,6 +41,7 @@ public:
     {
     }
     
+    WebPage* page() const { return m_page; }
 private:
     virtual void chromeDestroyed();
     
@@ -82,17 +84,17 @@ private:
     
     virtual void setResizable(bool);
     
-    virtual void addMessageToConsole(WebCore::MessageSource, WebCore::MessageType, WebCore::MessageLevel, const WebCore::String& message, unsigned int lineNumber, const WebCore::String& sourceID);
+    virtual void addMessageToConsole(WebCore::MessageSource, WebCore::MessageType, WebCore::MessageLevel, const WTF::String& message, unsigned int lineNumber, const WTF::String& sourceID);
     
     virtual bool canRunBeforeUnloadConfirmPanel();
-    virtual bool runBeforeUnloadConfirmPanel(const WebCore::String& message, WebCore::Frame* frame);
+    virtual bool runBeforeUnloadConfirmPanel(const WTF::String& message, WebCore::Frame* frame);
     
     virtual void closeWindowSoon();
     
-    virtual void runJavaScriptAlert(WebCore::Frame*, const WebCore::String&);
-    virtual bool runJavaScriptConfirm(WebCore::Frame*, const WebCore::String&);
-    virtual bool runJavaScriptPrompt(WebCore::Frame*, const WebCore::String& message, const WebCore::String& defaultValue, WebCore::String& result);
-    virtual void setStatusbarText(const WebCore::String&);
+    virtual void runJavaScriptAlert(WebCore::Frame*, const WTF::String&);
+    virtual bool runJavaScriptConfirm(WebCore::Frame*, const WTF::String&);
+    virtual bool runJavaScriptPrompt(WebCore::Frame*, const WTF::String& message, const WTF::String& defaultValue, WTF::String& result);
+    virtual void setStatusbarText(const WTF::String&);
     virtual bool shouldInterruptJavaScript();
     virtual bool tabsToLinks() const;
     
@@ -113,16 +115,17 @@ private:
     virtual void scrollbarsModeDidChange() const;
     virtual void mouseDidMoveOverElement(const WebCore::HitTestResult&, unsigned modifierFlags);
     
-    virtual void setToolTip(const WebCore::String&, WebCore::TextDirection);
+    virtual void setToolTip(const WTF::String&, WebCore::TextDirection);
     
     virtual void print(WebCore::Frame*);
     
 #if ENABLE(DATABASE)
-    virtual void exceededDatabaseQuota(WebCore::Frame*, const WebCore::String& databaseName);
+    virtual void exceededDatabaseQuota(WebCore::Frame*, const WTF::String& databaseName);
 #endif
 
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
     virtual void reachedMaxAppCacheSize(int64_t spaceNeeded);
+    virtual void reachedApplicationCacheOriginQuota(WebCore::SecurityOrigin*);
 #endif
 
 #if ENABLE(DASHBOARD_SUPPORT)
@@ -131,12 +134,12 @@ private:
 
     virtual void populateVisitedLinks();
     
-    virtual WebCore::FloatRect customHighlightRect(WebCore::Node*, const WebCore::AtomicString& type, const WebCore::FloatRect& lineRect);
-    virtual void paintCustomHighlight(WebCore::Node*, const WebCore::AtomicString& type, const WebCore::FloatRect& boxRect, const WebCore::FloatRect& lineRect,
+    virtual WebCore::FloatRect customHighlightRect(WebCore::Node*, const WTF::AtomicString& type, const WebCore::FloatRect& lineRect);
+    virtual void paintCustomHighlight(WebCore::Node*, const WTF::AtomicString& type, const WebCore::FloatRect& boxRect, const WebCore::FloatRect& lineRect,
                                       bool behindText, bool entireLine);
     
-    virtual bool shouldReplaceWithGeneratedFileForUpload(const WebCore::String& path, WebCore::String& generatedFilename);
-    virtual WebCore::String generateReplacementFile(const WebCore::String& path);
+    virtual bool shouldReplaceWithGeneratedFileForUpload(const WTF::String& path, WTF::String& generatedFilename);
+    virtual WTF::String generateReplacementFile(const WTF::String& path);
     
     virtual bool paintCustomScrollbar(WebCore::GraphicsContext*, const WebCore::FloatRect&, WebCore::ScrollbarControlSize, 
                                       WebCore::ScrollbarControlState, WebCore::ScrollbarPart pressedPart, bool vertical,
@@ -149,9 +152,9 @@ private:
     virtual void cancelGeolocationPermissionRequestForFrame(WebCore::Frame*, WebCore::Geolocation*);
     
     virtual void runOpenPanel(WebCore::Frame*, PassRefPtr<WebCore::FileChooser>);
-    virtual void chooseIconForFiles(const Vector<WebCore::String>&, WebCore::FileChooser*);
+    virtual void chooseIconForFiles(const Vector<WTF::String>&, WebCore::FileChooser*);
 
-    virtual bool setCursor(WebCore::PlatformCursorHandle);
+    virtual void setCursor(const WebCore::Cursor&);
     
     // Notification that the given form element has changed. This function
     // will be called frequently, so handling should be very fast.
@@ -162,13 +165,29 @@ private:
     
     virtual PassOwnPtr<WebCore::HTMLParserQuirks> createHTMLParserQuirks();
 
+    virtual bool selectItemWritingDirectionIsNatural();
+    virtual PassRefPtr<WebCore::PopupMenu> createPopupMenu(WebCore::PopupMenuClient*) const;
+    virtual PassRefPtr<WebCore::SearchPopupMenu> createSearchPopupMenu(WebCore::PopupMenuClient*) const;
+
 #if USE(ACCELERATED_COMPOSITING)
     virtual void attachRootGraphicsLayer(WebCore::Frame*, WebCore::GraphicsLayer*);
     virtual void setNeedsOneShotDrawingSynchronization();
     virtual void scheduleCompositingLayerSync();
 #endif
-    
-    WebCore::String m_cachedToolTip;
+
+#if ENABLE(NOTIFICATIONS)
+    virtual WebCore::NotificationPresenter* notificationPresenter() const;
+#endif
+
+#if ENABLE(TOUCH_EVENTS)
+    virtual void needTouchEvents(bool);
+#endif
+
+#if PLATFORM(WIN)
+    virtual void setLastSetCursorToCurrentCursor();
+#endif
+
+    WTF::String m_cachedToolTip;
     WebPage* m_page;
 };
 

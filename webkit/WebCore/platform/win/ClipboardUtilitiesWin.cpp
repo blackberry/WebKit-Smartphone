@@ -31,23 +31,47 @@
 #include "PlatformString.h"
 #include "TextEncoding.h"
 #include "markup.h"
+#include <shlwapi.h>
+#include <wininet.h> // for INTERNET_MAX_URL_LENGTH
+#include <wtf/text/CString.h>
+
+#if PLATFORM(CF)
 #include <CoreFoundation/CoreFoundation.h>
 #include <wtf/RetainPtr.h>
-#include <wtf/text/CString.h>
-#include <shlwapi.h>
-#include <wininet.h>    // for INTERNET_MAX_URL_LENGTH
+#endif
 
 namespace WebCore {
 
+#if PLATFORM(CF)
 FORMATETC* cfHDropFormat()
 {
     static FORMATETC urlFormat = {CF_HDROP, 0, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
     return &urlFormat;
 }
 
+static bool urlFromPath(CFStringRef path, String& url)
+{
+    if (!path)
+        return false;
+
+    RetainPtr<CFURLRef> cfURL(AdoptCF, CFURLCreateWithFileSystemPath(0, path, kCFURLWindowsPathStyle, false));
+    if (!cfURL)
+        return false;
+
+    url = CFURLGetString(cfURL.get());
+
+    // Work around <rdar://problem/6708300>, where CFURLCreateWithFileSystemPath makes URLs with "localhost".
+    if (url.startsWith("file://localhost/"))
+        url.remove(7, 9);
+
+    return true;
+}
+#endif
+
 static bool getWebLocData(IDataObject* dataObject, String& url, String* title) 
 {
     bool succeeded = false;
+#if PLATFORM(CF)
     WCHAR filename[MAX_PATH];
     WCHAR urlBuffer[INTERNET_MAX_URL_LENGTH];
 
@@ -55,8 +79,8 @@ static bool getWebLocData(IDataObject* dataObject, String& url, String* title)
     if (FAILED(dataObject->GetData(cfHDropFormat(), &medium)))
         return false;
 
-    HDROP hdrop = (HDROP)GlobalLock(medium.hGlobal);
-   
+    HDROP hdrop = static_cast<HDROP>(GlobalLock(medium.hGlobal));
+
     if (!hdrop)
         return false;
 
@@ -81,6 +105,7 @@ exit:
     // Free up memory.
     DragFinish(hdrop);
     GlobalUnlock(medium.hGlobal);
+#endif
     return succeeded;
 }
 
@@ -97,7 +122,7 @@ static String extractURL(const String &inURL, String* title)
     return url;
 }
 
-//Firefox text/html
+// Firefox text/html
 static FORMATETC* texthtmlFormat() 
 {
     static UINT cf = RegisterClipboardFormat(L"text/html");
@@ -109,13 +134,13 @@ HGLOBAL createGlobalData(const KURL& url, const String& title)
 {
     String mutableURL(url.string());
     String mutableTitle(title);
-    SIZE_T size = mutableURL.length() + mutableTitle.length() + 2;  // +1 for "\n" and +1 for null terminator
+    SIZE_T size = mutableURL.length() + mutableTitle.length() + 2; // +1 for "\n" and +1 for null terminator
     HGLOBAL cbData = ::GlobalAlloc(GPTR, size * sizeof(UChar));
 
     if (cbData) {
-        PWSTR buffer = (PWSTR)::GlobalLock(cbData);
-        swprintf_s(buffer, size, L"%s\n%s", mutableURL.charactersWithNullTermination(), mutableTitle.charactersWithNullTermination());
-        ::GlobalUnlock(cbData);
+        PWSTR buffer = static_cast<PWSTR>(GlobalLock(cbData));
+        _snwprintf(buffer, size, L"%s\n%s", mutableURL.charactersWithNullTermination(), mutableTitle.charactersWithNullTermination());
+        GlobalUnlock(cbData);
     }
     return cbData;
 }
@@ -125,10 +150,10 @@ HGLOBAL createGlobalData(const String& str)
     HGLOBAL globalData = ::GlobalAlloc(GPTR, (str.length() + 1) * sizeof(UChar));
     if (!globalData)
         return 0;
-    UChar* buffer = static_cast<UChar*>(::GlobalLock(globalData));
+    UChar* buffer = static_cast<UChar*>(GlobalLock(globalData));
     memcpy(buffer, str.characters(), str.length() * sizeof(UChar));
     buffer[str.length()] = 0;
-    ::GlobalUnlock(globalData);
+    GlobalUnlock(globalData);
     return globalData;
 }
 
@@ -137,11 +162,28 @@ HGLOBAL createGlobalData(const Vector<char>& vector)
     HGLOBAL globalData = ::GlobalAlloc(GPTR, vector.size() + 1);
     if (!globalData)
         return 0;
-    char* buffer = static_cast<char*>(::GlobalLock(globalData));
+    char* buffer = static_cast<char*>(GlobalLock(globalData));
     memcpy(buffer, vector.data(), vector.size());
     buffer[vector.size()] = 0;
-    ::GlobalUnlock(globalData);
+    GlobalUnlock(globalData);
     return globalData;
+}
+
+static String getFullCFHTML(IDataObject* data, bool& success)
+{
+    STGMEDIUM store;
+    if (SUCCEEDED(data->GetData(htmlFormat(), &store))) {
+        // MS HTML Format parsing
+        char* data = static_cast<char*>(GlobalLock(store.hGlobal));
+        SIZE_T dataSize = ::GlobalSize(store.hGlobal);
+        String cfhtml(UTF8Encoding().decode(data, dataSize));
+        GlobalUnlock(store.hGlobal);
+        ReleaseStgMedium(&store);
+        success = true;
+        return cfhtml;
+    }
+    success = false;
+    return String();
 }
 
 static void append(Vector<char>& vector, const char* string)
@@ -154,8 +196,19 @@ static void append(Vector<char>& vector, const CString& string)
     vector.append(string.data(), string.length());
 }
 
+// Find the markup between "<!--StartFragment -->" and "<!--EndFragment -->", accounting for browser quirks.
+static String extractMarkupFromCFHTML(const String& cfhtml)
+{
+    unsigned markupStart = cfhtml.find("<html", 0, false);
+    unsigned tagStart = cfhtml.find("startfragment", markupStart, false);
+    unsigned fragmentStart = cfhtml.find('>', tagStart) + 1;
+    unsigned tagEnd = cfhtml.find("endfragment", fragmentStart, false);
+    unsigned fragmentEnd = cfhtml.reverseFind('<', tagEnd);
+    return cfhtml.substring(fragmentStart, fragmentEnd - fragmentStart).stripWhiteSpace();
+}
+
 // Documentation for the CF_HTML format is available at http://msdn.microsoft.com/workshop/networking/clipboard/htmlclipboard.asp
-void markupToCF_HTML(const String& markup, const String& srcURL, Vector<char>& result)
+void markupToCFHTML(const String& markup, const String& srcURL, Vector<char>& result)
 {
     if (markup.isEmpty())
         return;
@@ -256,7 +309,7 @@ FORMATETC* filenameFormat()
     return &urlFormat;
 }
 
-//MSIE HTML Format
+// MSIE HTML Format
 FORMATETC* htmlFormat() 
 {
     static UINT cf = RegisterClipboardFormat(L"HTML Format");
@@ -271,73 +324,59 @@ FORMATETC* smartPasteFormat()
     return &htmlFormat;
 }
 
-static bool urlFromPath(CFStringRef path, String& url)
-{
-    if (!path)
-        return false;
-
-    RetainPtr<CFURLRef> cfURL(AdoptCF, CFURLCreateWithFileSystemPath(0, path, kCFURLWindowsPathStyle, false));
-    if (!cfURL)
-        return false;
-
-    url = CFURLGetString(cfURL.get());
-
-    // Work around <rdar://problem/6708300>, where CFURLCreateWithFileSystemPath makes URLs with "localhost".
-    if (url.startsWith("file://localhost/"))
-        url.remove(7, 9);
-
-    return true;
-}
-
-String getURL(IDataObject* dataObject, bool& success, String* title)
+String getURL(IDataObject* dataObject, DragData::FilenameConversionPolicy filenamePolicy, bool& success, String* title)
 {
     STGMEDIUM store;
     String url;
     success = false;
-    if (getWebLocData(dataObject, url, title)) {
+    if (getWebLocData(dataObject, url, title))
         success = true;
-        return url;
-    } else if (SUCCEEDED(dataObject->GetData(urlWFormat(), &store))) {
-        //URL using unicode
-        UChar* data = (UChar*)GlobalLock(store.hGlobal);
+    else if (SUCCEEDED(dataObject->GetData(urlWFormat(), &store))) {
+        // URL using Unicode
+        UChar* data = static_cast<UChar*>(GlobalLock(store.hGlobal));
         url = extractURL(String(data), title);
-        GlobalUnlock(store.hGlobal);      
+        GlobalUnlock(store.hGlobal);
         ReleaseStgMedium(&store);
         success = true;
     } else if (SUCCEEDED(dataObject->GetData(urlFormat(), &store))) {
-        //URL using ascii
-        char* data = (char*)GlobalLock(store.hGlobal);
+        // URL using ASCII
+        char* data = static_cast<char*>(GlobalLock(store.hGlobal));
         url = extractURL(String(data), title);
-        GlobalUnlock(store.hGlobal);      
+        GlobalUnlock(store.hGlobal);
         ReleaseStgMedium(&store);
         success = true;
-    } else if (SUCCEEDED(dataObject->GetData(filenameWFormat(), &store))) {
-        //file using unicode
-        wchar_t* data = (wchar_t*)GlobalLock(store.hGlobal);
-        if (data && data[0] && (PathFileExists(data) || PathIsUNC(data))) {
-            RetainPtr<CFStringRef> pathAsCFString(AdoptCF, CFStringCreateWithCharacters(kCFAllocatorDefault, (const UniChar*)data, wcslen(data)));
-            if (urlFromPath(pathAsCFString.get(), url)) {
-                if (title)
-                    *title = url;
-                success = true;
-            }
-        }
-        GlobalUnlock(store.hGlobal);      
-        ReleaseStgMedium(&store);
-    } else if (SUCCEEDED(dataObject->GetData(filenameFormat(), &store))) {
-        //filename using ascii
-        char* data = (char*)GlobalLock(store.hGlobal);       
-        if (data && data[0] && (PathFileExistsA(data) || PathIsUNCA(data))) {
-            RetainPtr<CFStringRef> pathAsCFString(AdoptCF, CFStringCreateWithCString(kCFAllocatorDefault, data, kCFStringEncodingASCII));
-            if (urlFromPath(pathAsCFString.get(), url)) {
-                if (title)
-                    *title = url;
-                success = true;
-            }
-        }
-        GlobalUnlock(store.hGlobal);      
-        ReleaseStgMedium(&store);
     }
+#if PLATFORM(CF)
+    else if (filenamePolicy == DragData::ConvertFilenames) {
+        if (SUCCEEDED(dataObject->GetData(filenameWFormat(), &store))) {
+            // file using unicode
+            wchar_t* data = static_cast<wchar_t*>(GlobalLock(store.hGlobal));
+            if (data && data[0] && (PathFileExists(data) || PathIsUNC(data))) {
+                RetainPtr<CFStringRef> pathAsCFString(AdoptCF, CFStringCreateWithCharacters(kCFAllocatorDefault, (const UniChar*)data, wcslen(data)));
+                if (urlFromPath(pathAsCFString.get(), url)) {
+                    if (title)
+                        *title = url;
+                    success = true;
+                }
+            }
+            GlobalUnlock(store.hGlobal);
+            ReleaseStgMedium(&store);
+        } else if (SUCCEEDED(dataObject->GetData(filenameFormat(), &store))) {
+            // filename using ascii
+            char* data = static_cast<char*>(GlobalLock(store.hGlobal));
+            if (data && data[0] && (PathFileExistsA(data) || PathIsUNCA(data))) {
+                RetainPtr<CFStringRef> pathAsCFString(AdoptCF, CFStringCreateWithCString(kCFAllocatorDefault, data, kCFStringEncodingASCII));
+                if (urlFromPath(pathAsCFString.get(), url)) {
+                    if (title)
+                        *title = url;
+                    success = true;
+                }
+            }
+            GlobalUnlock(store.hGlobal);
+            ReleaseStgMedium(&store);
+        }
+    }
+#endif
     return url;
 }
 
@@ -347,93 +386,99 @@ String getPlainText(IDataObject* dataObject, bool& success)
     String text;
     success = false;
     if (SUCCEEDED(dataObject->GetData(plainTextWFormat(), &store))) {
-        //unicode text
-        UChar* data = (UChar*)GlobalLock(store.hGlobal);
+        // Unicode text
+        UChar* data = static_cast<UChar*>(GlobalLock(store.hGlobal));
         text = String(data);
-        GlobalUnlock(store.hGlobal);      
+        GlobalUnlock(store.hGlobal);
         ReleaseStgMedium(&store);
         success = true;
     } else if (SUCCEEDED(dataObject->GetData(plainTextFormat(), &store))) {
-        //ascii text
-        char* data = (char*)GlobalLock(store.hGlobal);
+        // ASCII text
+        char* data = static_cast<char*>(GlobalLock(store.hGlobal));
         text = String(data);
-        GlobalUnlock(store.hGlobal);      
+        GlobalUnlock(store.hGlobal);
         ReleaseStgMedium(&store);
         success = true;
     } else {
-        //If a file is dropped on the window, it does not provide either of the 
-        //plain text formats, so here we try to forcibly get a url.
-        text = getURL(dataObject, success);
+        // FIXME: Originally, we called getURL() here because dragging and dropping files doesn't
+        // populate the drag with text data. Per https://bugs.webkit.org/show_bug.cgi?id=38826, this
+        // is undesirable, so maybe this line can be removed.
+        text = getURL(dataObject, DragData::DoNotConvertFilenames, success);
         success = true;
     }
     return text;
 }
 
+String getTextHTML(IDataObject* data, bool& success)
+{
+    STGMEDIUM store;
+    String html;
+    success = false;
+    if (SUCCEEDED(data->GetData(texthtmlFormat(), &store))) {
+        UChar* data = static_cast<UChar*>(GlobalLock(store.hGlobal));
+        html = String(data);
+        GlobalUnlock(store.hGlobal);
+        ReleaseStgMedium(&store);
+        success = true;
+    }
+    return html;
+}
+
+String getCFHTML(IDataObject* data, bool& success)
+{
+    String cfhtml = getFullCFHTML(data, success);
+    if (success)
+        return extractMarkupFromCFHTML(cfhtml);
+    return String();
+}
+
 PassRefPtr<DocumentFragment> fragmentFromFilenames(Document*, const IDataObject*)
 {
-    //FIXME: We should be able to create fragments from files
+    // FIXME: We should be able to create fragments from files
     return 0;
 }
 
 bool containsFilenames(const IDataObject*)
 {
-    //FIXME: We'll want to update this once we can produce fragments from files
+    // FIXME: We'll want to update this once we can produce fragments from files
     return false;
 }
 
-//Convert a String containing CF_HTML formatted text to a DocumentFragment
-PassRefPtr<DocumentFragment> fragmentFromCF_HTML(Document* doc, const String& cf_html)
-{        
+// Convert a String containing CF_HTML formatted text to a DocumentFragment
+PassRefPtr<DocumentFragment> fragmentFromCFHTML(Document* doc, const String& cfhtml)
+{
     // obtain baseURL if present
     String srcURLStr("sourceURL:");
     String srcURL;
-    unsigned lineStart = cf_html.find(srcURLStr, 0, false);
+    unsigned lineStart = cfhtml.find(srcURLStr, 0, false);
     if (lineStart != -1) {
-        unsigned srcEnd = cf_html.find("\n", lineStart, false);
+        unsigned srcEnd = cfhtml.find("\n", lineStart, false);
         unsigned srcStart = lineStart+srcURLStr.length();
-        String rawSrcURL = cf_html.substring(srcStart, srcEnd-srcStart);
+        String rawSrcURL = cfhtml.substring(srcStart, srcEnd-srcStart);
         replaceNBSPWithSpace(rawSrcURL);
         srcURL = rawSrcURL.stripWhiteSpace();
     }
 
-    // find the markup between "<!--StartFragment -->" and "<!--EndFragment -->", accounting for browser quirks
-    unsigned markupStart = cf_html.find("<html", 0, false);
-    unsigned tagStart = cf_html.find("startfragment", markupStart, false);
-    unsigned fragmentStart = cf_html.find('>', tagStart) + 1;
-    unsigned tagEnd = cf_html.find("endfragment", fragmentStart, false);
-    unsigned fragmentEnd = cf_html.reverseFind('<', tagEnd);
-    String markup = cf_html.substring(fragmentStart, fragmentEnd - fragmentStart).stripWhiteSpace();
-
+    String markup = extractMarkupFromCFHTML(cfhtml);
     return createFragmentFromMarkup(doc, markup, srcURL, FragmentScriptingNotAllowed);
 }
-
 
 PassRefPtr<DocumentFragment> fragmentFromHTML(Document* doc, IDataObject* data) 
 {
     if (!doc || !data)
         return 0;
 
-    STGMEDIUM store;
-    String html;
-    String srcURL;
-    if (SUCCEEDED(data->GetData(htmlFormat(), &store))) {
-        //MS HTML Format parsing
-        char* data = (char*)GlobalLock(store.hGlobal);
-        SIZE_T dataSize = ::GlobalSize(store.hGlobal);
-        String cf_html(UTF8Encoding().decode(data, dataSize));         
-        GlobalUnlock(store.hGlobal);
-        ReleaseStgMedium(&store); 
-        if (PassRefPtr<DocumentFragment> fragment = fragmentFromCF_HTML(doc, cf_html))
+    bool success = false;
+    String cfhtml = getFullCFHTML(data, success);
+    if (success) {
+        if (PassRefPtr<DocumentFragment> fragment = fragmentFromCFHTML(doc, cfhtml))
             return fragment;
-    } 
-    if (SUCCEEDED(data->GetData(texthtmlFormat(), &store))) {
-        //raw html
-        UChar* data = (UChar*)GlobalLock(store.hGlobal);
-        html = String(data);
-        GlobalUnlock(store.hGlobal);      
-        ReleaseStgMedium(&store);
+    }
+
+    String html = getTextHTML(data, success);
+    String srcURL;
+    if (success)
         return createFragmentFromMarkup(doc, html, srcURL, FragmentScriptingNotAllowed);
-    } 
 
     return 0;
 }

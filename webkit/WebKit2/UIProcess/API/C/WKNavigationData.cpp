@@ -30,23 +30,17 @@
 
 using namespace WebKit;
 
-WKStringRef WKNavigationDataGetTitle(WKNavigationDataRef navigationDataRef)
+WKTypeID WKNavigationDataGetTypeID()
 {
-    return toRef(toWK(navigationDataRef)->title().impl());
+    return toRef(WebNavigationData::APIType);
 }
 
-WKURLRef WKNavigationDataGetURL(WKNavigationDataRef navigationDataRef)
+WKStringRef WKNavigationDataCopyTitle(WKNavigationDataRef navigationDataRef)
 {
-    return toURLRef(toWK(navigationDataRef)->url().impl());
+    return toCopiedRef(toWK(navigationDataRef)->title());
 }
 
-WKNavigationDataRef WKNavigationDataRetain(WKNavigationDataRef navigationDataRef)
+WKURLRef WKNavigationDataCopyURL(WKNavigationDataRef navigationDataRef)
 {
-    toWK(navigationDataRef)->ref();
-    return navigationDataRef;
-}
-
-void WKNavigationDataRelease(WKNavigationDataRef navigationDataRef)
-{
-    toWK(navigationDataRef)->deref();
+    return toCopiedURLRef(toWK(navigationDataRef)->url());
 }

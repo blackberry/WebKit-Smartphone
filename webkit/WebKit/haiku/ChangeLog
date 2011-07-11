@@ -1,3 +1,237 @@
+2010-09-13  Enrica Casucci  <enrica@apple.com>
+
+        Reviewed by Sam Weinig.
+
+        Paste should be implemented in WebCore like Copy and Cut for Mac also.
+        https://bugs.webkit.org/show_bug.cgi?id=45494
+        <rdar://problem/7660537>
+
+        On the Mac platform, the implementation of the paste operation is all done
+        at the WebKit level. In order to support it on WebKit2 it is necessary to
+        refactor the code and move this functionality at the level of WebCore like
+        we already have on Windows.
+        The original code relies on some in AppKit functions that call back into
+        WebKit causing problems in WebKit2. All this functionality has been moved
+        at the level of the editor client where it can be dealt with appropriately.
+
+        * WebCoreSupport/FrameLoaderClientHaiku.cpp:
+        (WebCore::FrameLoaderClientHaiku::canShowMIMETypeAsHTML): Added stub.
+        * WebCoreSupport/FrameLoaderClientHaiku.h:
+
+2010-09-10  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Darin Fisher.
+
+        Move code from WebKit-layer to DocumentLoader
+        https://bugs.webkit.org/show_bug.cgi?id=45569
+
+        * WebCoreSupport/FrameLoaderClientHaiku.cpp:
+        (WebCore::FrameLoaderClientHaiku::committedLoad):
+
+2010-09-10  Adam Barth  <abarth@webkit.org>
+
+        Reviewed by Eric Seidel.
+
+        Main resource bytes shouldn't bounce through FrameLoader
+        https://bugs.webkit.org/show_bug.cgi?id=45496
+
+        Now return the bytes to the DocumentLoader.
+
+        * WebCoreSupport/FrameLoaderClientHaiku.cpp:
+        (WebCore::FrameLoaderClientHaiku::committedLoad):
+
+2010-08-06  Gavin Barraclough  <barraclough@apple.com>
+
+        Rubber stamped by Sam Weinig
+
+        Bug 43594 - Add string forwards to Forward.h
+        This allows us to remove forward declarations for these classes from
+        WebCore/WebKit (a step in moving these class from WebCore:: to WTF::).
+
+        * WebCoreSupport/FrameLoaderClientHaiku.h:
+        * WebCoreSupport/InspectorClientHaiku.h:
+
+2010-08-06  Jessie Berlin  <jberlin@apple.com>
+
+        Roll out http://trac.webkit.org/changeset/64801, which broke the Safari Windows Build.
+        Unreviewed.
+
+        * WebCoreSupport/FrameLoaderClientHaiku.h:
+        * WebCoreSupport/InspectorClientHaiku.h:
+
+2010-07-27  Luiz Agostini  <luiz.agostini@openbossa.org>
+
+        Reviewed by Darin Fisher.
+
+        PopupMenu refactoring in preparation to WebKit2
+        https://bugs.webkit.org/show_bug.cgi?id=42592
+
+        As ChromeClient was made responsible for providing PopupMenu and SearchPopupMenu
+        instances, concrete classes that inherit from ChromeClient needed to be changed to
+        implement the new methods.
+
+        * WebCoreSupport/ChromeClientHaiku.cpp:
+        (WebCore::ChromeClientHaiku::selectItemWritingDirectionIsNatural):
+        (WebCore::ChromeClientHaiku::createPopupMenu):
+        (WebCore::ChromeClientHaiku::createSearchPopupMenu):
+        * WebCoreSupport/ChromeClientHaiku.h:
+
+2010-08-02  Jeremy Orlow  <jorlow@chromium.org>
+
+        Speculative revert of 64425 due to Chromium instability
+        https://bugs.webkit.org/show_bug.cgi?id=43347
+
+        * WebCoreSupport/ChromeClientHaiku.cpp:
+        * WebCoreSupport/ChromeClientHaiku.h:
+
+2010-07-27  Luiz Agostini  <luiz.agostini@openbossa.org>
+
+        Reviewed by Darin Fisher.
+
+        PopupMenu refactoring in preparation to WebKit2
+        https://bugs.webkit.org/show_bug.cgi?id=42592
+
+        As ChromeClient was made responsible for providing PopupMenu and SearchPopupMenu
+        instances, concrete classes that inherit from ChromeClient needed to be changed to
+        implement the new methods.
+
+        * WebCoreSupport/ChromeClientHaiku.cpp:
+        (WebCore::ChromeClientHaiku::selectItemWritingDirectionIsNatural):
+        (WebCore::ChromeClientHaiku::createPopupMenu):
+        (WebCore::ChromeClientHaiku::createSearchPopupMenu):
+        * WebCoreSupport/ChromeClientHaiku.h:
+
+2010-07-31  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r64422.
+        http://trac.webkit.org/changeset/64422
+        https://bugs.webkit.org/show_bug.cgi?id=43304
+
+        Build fixes are needed for Snow Leopard and Windows.
+        (Requested by lca on #webkit).
+
+        * WebCoreSupport/ChromeClientHaiku.cpp:
+        * WebCoreSupport/ChromeClientHaiku.h:
+
+2010-07-27  Luiz Agostini  <luiz.agostini@openbossa.org>
+
+        Reviewed by Darin Fisher.
+
+        PopupMenu refactoring in preparation to WebKit2
+        https://bugs.webkit.org/show_bug.cgi?id=42592
+
+        As ChromeClient was made responsible for providing PopupMenu and SearchPopupMenu
+        instances, concrete classes that inherit from ChromeClient needed to be changed to
+        implement the new methods.
+
+        * WebCoreSupport/ChromeClientHaiku.cpp:
+        (WebCore::ChromeClientHaiku::selectItemWritingDirectionIsNatural):
+        (WebCore::ChromeClientHaiku::createPopupMenu):
+        (WebCore::ChromeClientHaiku::createSearchPopupMenu):
+        * WebCoreSupport/ChromeClientHaiku.h:
+
+2010-07-30  Joseph Pecoraro  <joepeck@webkit.org>
+
+        Reviewed by David Kilzer.
+
+        Limit ApplicationCache Total and Per-Origin Storage Capacity (Quotas)
+        https://bugs.webkit.org/show_bug.cgi?id=40627
+
+        * WebCoreSupport/ChromeClientHaiku.cpp:
+        (WebCore::ChromeClientWx::reachedApplicationCacheOriginQuota):
+        * WebCoreSupport/ChromeClientHaiku.h:
+
+2010-07-16  Zhe Su  <suzhe@chromium.org>
+
+        Reviewed by Darin Adler.
+
+        REGRESSION(r61484): Broke focus behaviour on Qt and probably other platforms
+        https://bugs.webkit.org/show_bug.cgi?id=42253
+
+        Dummy implementation of EditorClient::willSetInputMethodState.
+
+        * WebCoreSupport/EditorClientHaiku.cpp:
+        (WebCore::EditorClientHaiku::willSetInputMethodState):
+        * WebCoreSupport/EditorClientHaiku.h:
+
+2010-07-14  Sam Weinig  <sam@webkit.org>
+
+        Reviewed by Darin Adler.
+
+        Patch for https://bugs.webkit.org/show_bug.cgi?id=42232
+        Make changing Cursors work in WebKit2.
+
+        * WebCoreSupport/ChromeClientHaiku.cpp:
+        (WebCore::ChromeClientHaiku::setCursor):
+        * WebCoreSupport/ChromeClientHaiku.h:
+        Change prototype to match new one.
+
+2010-06-14  Ilya Tikhonovsky  <loislo@chromium.org>
+
+        Reviewed by Pavel Feldman.
+
+        WebInspector: On the way to Remote Debugging we want to transfer dom/timeline/etc
+        data from inspected page to WebInspector as JSON string via http. The native
+        serialization to JSON string is supported by InspectorValue's classes. This patch
+        has the implementation of sendMessageToFrontend function. WebKit version of it still
+        uses ScriptFunctionCall and will be switched to another transport a little bit later.
+        https://bugs.webkit.org/show_bug.cgi?id=40134
+
+        * WebCoreSupport/InspectorClientHaiku.cpp:
+        (WebCore::InspectorClientHaiku::sendMessageToFrontend):
+        * WebCoreSupport/InspectorClientHaiku.h:
+
+2010-06-09  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r60889.
+        http://trac.webkit.org/changeset/60889
+        https://bugs.webkit.org/show_bug.cgi?id=40365
+
+        gtk bot has some kind of memory corruption (Requested by
+        loislo on #webkit).
+
+        * WebCoreSupport/InspectorClientHaiku.cpp:
+        * WebCoreSupport/InspectorClientHaiku.h:
+
+2010-06-07  Ilya Tikhonovsky  <loislo@chromium.org>
+
+        Reviewed by Pavel Feldman.
+
+        WebInspector: On the way to Remote Debugging we want to transfer dom/timeline/etc
+        data from inspected page to WebInspector as JSON string via http. The native
+        serialization to JSON string is supported by InspectorValue's classes. This patch
+        has the implementation of sendMessageToFrontend function. WebKit version of it still
+        uses ScriptFunctionCall and will be switched to another transport a little bit later.
+        https://bugs.webkit.org/show_bug.cgi?id=40134
+
+        * WebCoreSupport/InspectorClientHaiku.cpp:
+        (WebCore::InspectorClientHaiku::sendMessageToFrontend):
+        * WebCoreSupport/InspectorClientHaiku.h:
+
+2010-05-31  Lyon Chen  <liachen@rim.com>
+
+        Reviewed by Kent Tamura.
+
+        Enum value FORWARD, BACKWARD, RIGHT, LEFT are causing macro conflicts.
+        https://bugs.webkit.org/show_bug.cgi?id=35530
+
+        Change enum EAlteration from { MOVE, EXTEND } to { AlterationMove, AlterationExtend } and enum EDirection { FORWARD, BACKWARD, RIGHT, LEFT} to { DirectionForward, DirectionBackward, DirectionRight, DirectionLeft } to avoid macro conflict, and also better coding style conformance.
+
+        * WebCoreSupport/EditorClientHaiku.cpp:
+        (WebCore::EditorClientHaiku::handleKeyboardEvent):
+
+2010-05-30  Lyon Chen  <liachen@rim.com>
+
+        Reviewed by Kent Tamura.
+
+        This is a coding style cleanup before fixing to bug 35530.
+
+        Enum value FORWARD, BACKWARD, RIGHT, LEFT are causing macro conflicts.
+        https://bugs.webkit.org/show_bug.cgi?id=35530
+
+        * WebCoreSupport/EditorClientHaiku.cpp:
+        (WebCore::EditorClientHaiku::handleKeyboardEvent):
+
 2010-05-03  Jens Alfke  <snej@chromium.org>
 
         Reviewed by Darin Fisher.

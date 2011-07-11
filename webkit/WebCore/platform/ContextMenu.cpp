@@ -1,7 +1,6 @@
 /*
  * Copyright (C) 2006, 2007 Apple Inc. All rights reserved.
  * Copyright (C) 2008 Christian Dywan <christian@imendio.com>
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -331,13 +330,7 @@ void ContextMenu::populate()
         FrameLoader* loader = frame->loader();
         KURL linkURL = result.absoluteLinkURL();
         if (!linkURL.isEmpty()) {
-#if OS(OLYMPIA)
-            ResourceRequest request(linkURL);
-            request.setTargetType(loader->isLoadingMainFrame() ? ResourceRequest::TargetIsMainFrame : ResourceRequest::TargetIsSubframe);
-            if (loader->canHandleRequest(request)) {
-#else
             if (loader->canHandleRequest(ResourceRequest(linkURL))) {
-#endif
                 appendItem(OpenLinkItem);
                 appendItem(OpenLinkInNewWindowItem);
                 appendItem(DownloadFileItem);
@@ -462,13 +455,7 @@ void ContextMenu::populate()
         FrameLoader* loader = frame->loader();
         KURL linkURL = result.absoluteLinkURL();
         if (!linkURL.isEmpty()) {
-#if OS(OLYMPIA)
-            ResourceRequest request(linkURL);
-            request.setTargetType(loader->isLoadingMainFrame() ? ResourceRequest::TargetIsMainFrame : ResourceRequest::TargetIsSubframe);
-            if (loader->canHandleRequest(request)) {
-#else
             if (loader->canHandleRequest(ResourceRequest(linkURL))) {
-#endif
                 appendItem(OpenLinkItem);
                 appendItem(OpenLinkInNewWindowItem);
                 appendItem(DownloadFileItem);
@@ -583,6 +570,7 @@ void ContextMenu::addInspectElementItem()
         return;
 
     ContextMenuItem InspectElementItem(ActionType, ContextMenuItemTagInspectElement, contextMenuItemTagInspectElement());
+    appendItem(*separatorItem());
     appendItem(InspectElementItem);
 }
 #endif // ENABLE(INSPECTOR)
@@ -594,6 +582,10 @@ void ContextMenu::checkOrEnableIfNeeded(ContextMenuItem& item) const
     
     Frame* frame = m_hitTestResult.innerNonSharedNode()->document()->frame();
     if (!frame)
+        return;
+
+    // Custom items already have proper checked and enabled values.
+    if (ContextMenuItemBaseCustomTag <= item.action() && item.action() <= ContextMenuItemLastCustomTag)
         return;
 
     bool shouldEnable = true;
@@ -827,6 +819,8 @@ void ContextMenu::checkOrEnableIfNeeded(ContextMenuItem& item) const
         case ContextMenuItemTagInspectElement:
 #endif
         case ContextMenuItemBaseCustomTag:
+        case ContextMenuItemCustomTagNoAction:
+        case ContextMenuItemLastCustomTag:
         case ContextMenuItemBaseApplicationTag:
             break;
     }

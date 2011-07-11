@@ -55,6 +55,7 @@ public:
 
 #if PLATFORM(QT)
     PlatformTouchPoint(const QTouchEvent::TouchPoint&);
+    PlatformTouchPoint() {};
 #elif PLATFORM(ANDROID)
     PlatformTouchPoint(const IntPoint& windowPos, State);
 #endif

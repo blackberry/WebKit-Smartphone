@@ -440,6 +440,15 @@ void GraphicsContext::strokeArc(const IntRect& rect, int startAngle, int angleSp
     CGContextRestoreGState(context);
 }
 
+static void addConvexPolygonToContext(CGContextRef context, size_t numPoints, const FloatPoint* points)
+{
+    CGContextBeginPath(context);
+    CGContextMoveToPoint(context, points[0].x(), points[0].y());
+    for (size_t i = 1; i < numPoints; i++)
+        CGContextAddLineToPoint(context, points[i].x(), points[i].y());
+    CGContextClosePath(context);
+}
+
 void GraphicsContext::drawConvexPolygon(size_t npoints, const FloatPoint* points, bool antialiased)
 {
     if (paintingDisabled())
@@ -453,15 +462,30 @@ void GraphicsContext::drawConvexPolygon(size_t npoints, const FloatPoint* points
     if (antialiased != shouldAntialias())
         CGContextSetShouldAntialias(context, antialiased);
 
-    CGContextBeginPath(context);
-    CGContextMoveToPoint(context, points[0].x(), points[0].y());
-    for (size_t i = 1; i < npoints; i++)
-        CGContextAddLineToPoint(context, points[i].x(), points[i].y());
-    CGContextClosePath(context);
-
+    addConvexPolygonToContext(context, npoints, points);
     drawPath();
 
     if (antialiased != shouldAntialias())
+        CGContextSetShouldAntialias(context, shouldAntialias());
+}
+
+void GraphicsContext::clipConvexPolygon(size_t numPoints, const FloatPoint* points, bool antialias)
+{
+    if (paintingDisabled())
+        return;
+
+    if (numPoints <= 1)
+        return;
+
+    CGContextRef context = platformContext();
+
+    if (antialias != shouldAntialias())
+        CGContextSetShouldAntialias(context, antialias);
+    
+    addConvexPolygonToContext(context, numPoints, points);
+    clipPath(RULE_NONZERO);
+
+    if (antialias != shouldAntialias())
         CGContextSetShouldAntialias(context, shouldAntialias());
 }
 
@@ -729,18 +753,6 @@ void GraphicsContext::addInnerRoundedRectClip(const IntRect& rect, int thickness
     CGContextEOClip(context);
 }
 
-void GraphicsContext::clipToImageBuffer(const FloatRect& rect, const ImageBuffer* imageBuffer)
-{
-    if (paintingDisabled())
-        return;
-
-    CGContextTranslateCTM(platformContext(), rect.x(), rect.y() + rect.height());
-    CGContextScaleCTM(platformContext(), 1, -1);
-    CGContextClipToMask(platformContext(), FloatRect(FloatPoint(), rect.size()), imageBuffer->image()->getCGImageRef());
-    CGContextScaleCTM(platformContext(), 1, -1);
-    CGContextTranslateCTM(platformContext(), -rect.x(), -rect.y() - rect.height());
-}
-
 void GraphicsContext::beginTransparencyLayer(float opacity)
 {
     if (paintingDisabled())
@@ -764,7 +776,7 @@ void GraphicsContext::endTransparencyLayer()
     m_data->m_userToDeviceTransformKnownToBeIdentity = false;
 }
 
-void GraphicsContext::setPlatformShadow(const IntSize& offset, int blur, const Color& color, ColorSpace colorSpace)
+void GraphicsContext::setPlatformShadow(const FloatSize& offset, float blur, const Color& color, ColorSpace colorSpace)
 {
     if (paintingDisabled())
         return;
@@ -926,9 +938,17 @@ void GraphicsContext::clip(const Path& path)
     if (paintingDisabled())
         return;
     CGContextRef context = platformContext();
-    CGContextBeginPath(context);
-    CGContextAddPath(context, path.platformPath());
-    CGContextClip(context);
+
+    // CGContextClip does nothing if the path is empty, so in this case, we
+    // instead clip against a zero rect to reduce the clipping region to
+    // nothing - which is the intended behavior of clip() if the path is empty.    
+    if (path.isEmpty())
+        CGContextClipToRect(context, CGRectZero);
+    else {
+        CGContextBeginPath(context);
+        CGContextAddPath(context, path.platformPath());
+        CGContextClip(context);
+    }
     m_data->clip(path);
 }
 

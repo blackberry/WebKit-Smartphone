@@ -29,7 +29,6 @@
 
 #include "WKCACFLayer.h"
 
-#include "WKCACFContextFlusher.h"
 #include "WKCACFLayerRenderer.h"
 #include <wtf/text/CString.h>
 
@@ -44,6 +43,24 @@
 namespace WebCore {
 
 using namespace std;
+
+#ifndef NDEBUG
+void WKCACFLayer::internalCheckLayerConsistency()
+{
+    ASSERT(layer());
+    size_t n = sublayerCount();
+    for (size_t i = 0; i < n; ++i) {
+        // This will ASSERT in internalSublayerAtIndex if this entry doesn't have proper user data
+        WKCACFLayer* sublayer = internalSublayerAtIndex(i);
+
+        // Make sure we don't have any null entries in the list
+        ASSERT(sublayer);
+
+        // Make sure the each layer has a corresponding CACFLayer
+        ASSERT(sublayer->layer());
+    }
+}
+#endif
 
 static void displayCallback(CACFLayerRef layer, CGContextRef context)
 {
@@ -123,7 +140,6 @@ static CFStringRef toCACFFilterType(WKCACFLayer::FilterType type)
     case WKCACFLayer::Linear: return kCACFFilterLinear;
     case WKCACFLayer::Nearest: return kCACFFilterNearest;
     case WKCACFLayer::Trilinear: return kCACFFilterTrilinear;
-    case WKCACFLayer::Lanczos: return kCACFFilterLanczos;
     default: return 0;
     }
 }
@@ -135,9 +151,6 @@ static WKCACFLayer::FilterType fromCACFFilterType(CFStringRef string)
 
     if (CFEqual(string, kCACFFilterTrilinear))
         return WKCACFLayer::Trilinear;
-
-    if (CFEqual(string, kCACFFilterLanczos))
-        return WKCACFLayer::Lanczos;
 
     return WKCACFLayer::Linear;
 }
@@ -166,7 +179,14 @@ WKCACFLayer::~WKCACFLayer()
     // Our superlayer should be holding a reference to us, so there should be no way for us to be destroyed while we still have a superlayer.
     ASSERT(!superlayer());
 
+    // Get rid of the children so we don't have any dangling references around
+    removeAllSublayers();
+
+#ifndef NDEBUG
+    CACFLayerSetUserData(layer(), reinterpret_cast<void*>(0xDEADBEEF));
+#else
     CACFLayerSetUserData(layer(), 0);
+#endif
     CACFLayerSetDisplayCallback(layer(), 0);
 }
 
@@ -179,15 +199,6 @@ void WKCACFLayer::becomeRootLayerForContext(CACFContextRef context)
 void WKCACFLayer::setNeedsCommit()
 {
     WKCACFLayer* root = rootLayer();
-
-    CACFContextRef context = CACFLayerGetContext(root->layer());
-
-    // The context might now be set yet. This happens if a property gets set
-    // before placing the layer in the tree. In this case we don't need to 
-    // worry about remembering the context because we will when the layer is
-    // added to the tree.
-    if (context)
-        WKCACFContextFlusher::shared().addContext(context);
 
     // Call setNeedsRender on the root layer, which will cause a render to 
     // happen in WKCACFLayerRenderer
@@ -206,10 +217,11 @@ void WKCACFLayer::addSublayer(PassRefPtr<WKCACFLayer> sublayer)
 
 void WKCACFLayer::internalInsertSublayer(PassRefPtr<WKCACFLayer> sublayer, size_t index)
 {
-    index = min(index, sublayerCount());
+    index = min(index, sublayerCount() + 1);
     sublayer->removeFromSuperlayer();
     CACFLayerInsertSublayer(layer(), sublayer->layer(), index);
     setNeedsCommit();
+    checkLayerConsistency();
 }
 
 void WKCACFLayer::insertSublayerAboveLayer(PassRefPtr<WKCACFLayer> sublayer, const WKCACFLayer* reference)
@@ -282,12 +294,14 @@ void  WKCACFLayer::adoptSublayers(WKCACFLayer* source)
         sublayers.append(source->internalSublayerAtIndex(i));
 
     setSublayers(sublayers);
+    source->checkLayerConsistency();
 }
 
 void WKCACFLayer::removeFromSuperlayer()
 {
     WKCACFLayer* superlayer = this->superlayer();
     CACFLayerRemoveFromSuperlayer(layer());
+    checkLayerConsistency();
 
     if (superlayer)
         superlayer->setNeedsCommit();
@@ -341,6 +355,9 @@ void WKCACFLayer::setBounds(const CGRect& rect)
 
     if (m_needsDisplayOnBoundsChange)
         setNeedsDisplay();
+
+    if (m_layoutClient)
+        setNeedsLayout();
 }
 
 void WKCACFLayer::setFrame(const CGRect& rect)
@@ -354,6 +371,9 @@ void WKCACFLayer::setFrame(const CGRect& rect)
 
     if (m_needsDisplayOnBoundsChange && !CGSizeEqualToSize(rect.size, oldFrame.size))
         setNeedsDisplay();
+
+    if (m_layoutClient)
+        setNeedsLayout();
 }
 
 void WKCACFLayer::setContentsGravity(ContentsGravityType type)

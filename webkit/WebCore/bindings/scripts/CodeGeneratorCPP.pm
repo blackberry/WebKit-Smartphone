@@ -98,6 +98,7 @@ sub new
 
     $codeGenerator = shift;
     $outputDir = shift;
+    shift; # $outputHeadersDir
     shift; # $useLayerOnTop
     shift; # $preprocessor
     shift; # $writeDependencies
@@ -148,6 +149,7 @@ sub GetClassName
     return "WebDOMObject" if $name eq "DOMObject";
     return "bool" if $name eq "boolean";
     return $name if $codeGenerator->IsPrimitiveType($name);
+    return "WebDOMCustomVoidCallback" if $name eq "VoidCallback";
 
     return "WebDOM$name";
 }
@@ -260,7 +262,7 @@ sub GetCPPTypeGetter
 
     return $argName if $codeGenerator->IsPrimitiveType($type) or $codeGenerator->IsStringType($type);
     return "static_cast<WebCore::Range::CompareHow>($argName)" if $type eq "CompareHow";
-    return "WebCore::SerializedScriptValue::create(WebCore::String($argName))" if $type eq "SerializedScriptValue";
+    return "WebCore::SerializedScriptValue::create(WTF::String($argName))" if $type eq "SerializedScriptValue";
     return "toWebCore($argName)";
 }
 
@@ -280,10 +282,10 @@ sub AddIncludesForType
     my $type = $codeGenerator->StripModule(shift);
 
     return if $codeGenerator->IsNonPointerType($type);
-    return if $type =~ /cconstructor/;
+    return if $type =~ /Constructor/;
 
     if ($codeGenerator->IsStringType($type)) {
-        $implIncludes{"AtomicString.h"} = 1;
+        $implIncludes{"wtf/text/AtomicString.h"} = 1;
         $implIncludes{"KURL.h"} = 1;
         $implIncludes{"WebDOMString.h"} = 1;
         return;
@@ -303,12 +305,12 @@ sub AddIncludesForType
         $implIncludes{"SerializedScriptValue.h"} = 1;
         return;
     }
-
+    
     $implIncludes{"Node.h"} = 1 if $type eq "NodeList";
     $implIncludes{"CSSMutableStyleDeclaration.h"} = 1 if $type eq "CSSStyleDeclaration";
 
     # Default, include the same named file (the implementation) and the same name prefixed with "WebDOM". 
-    $implIncludes{"$type.h"} = 1 unless $type eq "DOMObject";
+    $implIncludes{"$type.h"} = 1 unless $type eq "DOMObject" or $codeGenerator->IsPodType($type);
     $implIncludes{"WebDOM$type.h"} = 1;
 }
 
@@ -378,14 +380,17 @@ sub GenerateHeader
     push(@headerContent, "    $className();\n");
     push(@headerContent, "    explicit $className($implClassNameWithNamespace*);\n");
 
-    # Copy constructor on classes which have the d-ptr
+    # Copy constructor and assignment operator on classes which have the d-ptr
     if ($parentName eq "WebDOMObject") {
         push(@headerContent, "    $className(const $className&);\n");
+        push(@headerContent, "    ${className}& operator=(const $className&);\n");
     }
 
     # Destructor
     if ($parentName eq "WebDOMObject") {
-        push(@headerContent, "    ~$className();\n");
+        push(@headerContent, "    virtual ~$className();\n");
+    } else {
+        push(@headerContent, "    virtual ~$className() { }\n");
     }
 
     push(@headerContent, "\n");
@@ -420,10 +425,14 @@ sub GenerateHeader
         foreach my $attribute (@{$dataNode->attributes}) {
             next if ShouldSkipTypeInHeader($attribute);
 
+            #my $attributeConditionalString = GenerateConditionalString($attribute->signature);
             my $attributeName = $attribute->signature->name;
             my $attributeType = GetCPPType($attribute->signature->type, 0);
             my $attributeIsReadonly = ($attribute->type =~ /^readonly/);
-            my $property = "    " . $attributeType . ($attributeType =~ /\*$/ ? "" : " ") . $attributeName . "() const";
+            my $property = "";
+            
+            $property .= "#if ${attributeConditionalString}\n" if $attributeConditionalString;
+            $property .= "    " . $attributeType . ($attributeType =~ /\*$/ ? "" : " ") . $attributeName . "() const";
 
             my $availabilityMacro = "";
             my $declarationSuffix = ";\n";
@@ -438,10 +447,11 @@ sub GenerateHeader
             if (!$attributeIsReadonly and !$attribute->signature->extendedAttributes->{"Replaceable"}) {
                 $property = "    void $setterName($attributeType)";
                 $property .= $declarationSuffix;
-                push(@headerAttributes, $property);
+                push(@headerAttributes, $property); 
             }
-        }
 
+            #push(@headerAttributes, "#endif\n") if $attributeConditionalString;
+        }
         push(@headerContent, @headerAttributes) if @headerAttributes > 0;
     }
 
@@ -553,7 +563,7 @@ sub AddReturnStatement
 
     # Used to invoke KURLs "const String&" operator
     if ($codeGenerator->IsStringType($typeInfo->signature->type)) {
-        return "    return static_cast<const WebCore::String&>($returnValue);\n";
+        return "    return static_cast<const WTF::String&>($returnValue);\n";
     }
 
     return "    return $returnValue;\n";
@@ -588,7 +598,12 @@ sub GenerateImplementation
     push(@implContentHeader, "\n#include \"config.h\"\n");
     my $conditionalString = GenerateConditionalString($dataNode);
     push(@implContentHeader, "\n#if ${conditionalString}\n\n") if $conditionalString;
-    push(@implContentHeader, "#include \"$className.h\"\n\n");
+    if ($className eq "WebDOMCustomVoidCallback") {
+        # class name will differ from header file name
+        push(@implContentHeader, "#include \"WebDOMVoidCallback.h\"\n\n");
+    } else {
+        push(@implContentHeader, "#include \"$className.h\"\n\n");
+    }
 
     $implIncludes{"WebExceptionHandler.h"} = 1;
     $implIncludes{"$implClassName.h"} = 1;
@@ -626,6 +641,13 @@ sub GenerateImplementation
         push(@implContent, "    : ${baseClass}()\n");
         push(@implContent, "{\n");
         push(@implContent, "    m_impl = copy.impl() ? new ${className}Private(copy.impl()) : 0;\n");
+        push(@implContent, "}\n\n");
+
+        push(@implContent, "${className}& ${className}::operator\=(const ${className}& copy)\n");
+        push(@implContent, "{\n");
+        push(@implContent, "    delete m_impl;\n");
+        push(@implContent, "    m_impl = copy.impl() ? new ${className}Private(copy.impl()) : 0;\n");
+        push(@implContent, "    return *this;\n");
         push(@implContent, "}\n\n");
 
         push(@implContent, "$implClassNameWithNamespace* ${className}::impl() const\n");
@@ -670,27 +692,14 @@ sub GenerateImplementation
             # - GETTER
             my $getterSig = "$attributeType $className\:\:$attributeName() const\n";
             my $hasGetterException = @{$attribute->getterExceptions};
-            my $getterContentHead;
-            my $reflect = $attribute->signature->extendedAttributes->{"Reflect"};
-            my $reflectURL = $attribute->signature->extendedAttributes->{"ReflectURL"};
-            if ($reflect || $reflectURL) {
-                my $contentAttributeName = (($reflect || $reflectURL) eq "1") ? $attributeName : ($reflect || $reflectURL);
-                my $namespace = $codeGenerator->NamespaceForAttributeName($interfaceName, $contentAttributeName);
-                $implIncludes{"${namespace}.h"} = 1;
-                my $getAttributeFunctionName = $reflectURL ? "getURLAttribute" : "getAttribute";
-                $getterContentHead = "impl()->${getAttributeFunctionName}(WebCore::${namespace}::${contentAttributeName}Attr";
-            } else {
-                $getterContentHead = "impl()->" . $codeGenerator->WK_lcfirst($attributeName) . "(";
-            }
+            my $getterContentHead = "impl()->" . $codeGenerator->GetterExpressionPrefix(\%implIncludes, $interfaceName, $attribute);
             my $getterContentTail = ")";
 
             # Special cases
             my @customGetterContent = (); 
             if ($attribute->signature->extendedAttributes->{"ConvertToString"}) {
-                $getterContentHead = "WebCore::String::number(" . $getterContentHead;
+                $getterContentHead = "WTF::String::number(" . $getterContentHead;
                 $getterContentTail .= ")";
-            } elsif ($attribute->signature->extendedAttributes->{"ConvertFromString"}) {
-                $getterContentTail .= ".toInt()";
             } elsif ($attribute->signature->type eq "SerializedScriptValue") {
                 $getterContentHead = "$getterContentHead";
                 $getterContentTail .= "->toString()";                
@@ -741,11 +750,9 @@ sub GenerateImplementation
                 my $argName = "new" . ucfirst($attributeName);
                 my $arg = GetCPPTypeGetter($argName, $idlType);
 
-                # The definition of ConvertFromString and ConvertToString is flipped for the setter
-                if ($attribute->signature->extendedAttributes->{"ConvertFromString"}) {
-                    $arg = "WebCore::String::number($arg)";
-                } elsif ($attribute->signature->extendedAttributes->{"ConvertToString"}) {
-                    $arg = "WebCore::String($arg).toInt()";
+                # The definition of ConvertToString is flipped for the setter
+                if ($attribute->signature->extendedAttributes->{"ConvertToString"}) {
+                    $arg = "WTF::String($arg).toInt()";
                 }
 
                 my $attributeType = GetCPPType($attribute->signature->type, 1);
@@ -753,18 +760,10 @@ sub GenerateImplementation
                 push(@implContent, "{\n");
                 push(@implContent, AddEarlyReturnStatement());
 
-                my $reflect = $attribute->signature->extendedAttributes->{"Reflect"};
-                my $reflectURL = $attribute->signature->extendedAttributes->{"ReflectURL"};
                 push(@implContent, "    $exceptionInit\n") if $hasSetterException;
                 my $ec = $hasSetterException ? ", ec" : "";
-                if ($reflect || $reflectURL) {
-                    my $contentAttributeName = (($reflect || $reflectURL) eq "1") ? $attributeName : ($reflect || $reflectURL);
-                    my $namespace = $codeGenerator->NamespaceForAttributeName($interfaceName, $contentAttributeName);
-                    $implIncludes{"${namespace}.h"} = 1;
-                    push(@implContent, "    impl()->setAttribute(WebCore::${namespace}::${contentAttributeName}Attr, $arg$ec);\n");
-                } else {
-                    push(@implContent, "    impl()->$coreSetterName($arg$ec);\n");
-                }
+                my $setterExpressionPrefix = $codeGenerator->SetterExpressionPrefix(\%implIncludes, $interfaceName, $attribute);
+                push(@implContent, "    impl()->$setterExpressionPrefix$arg$ec);\n");
                 push(@implContent, "    $exceptionRaiseOnError\n") if $hasSetterException;
                 push(@implContent, "}\n\n");
             }
@@ -790,9 +789,6 @@ sub GenerateImplementation
             my %needsCustom = ();
 
             my $parameterIndex = 0;
-
-            # FIXME: Handle Callback support, we're just passing 0 as ScriptExecutionContext for now.
-            push(@parameterNames, "0") if ($dataNode->extendedAttributes->{"Callback"});
 
             my $functionSig = "$returnType $className\:\:$functionName(";
             foreach my $param (@{$function->parameters}) {

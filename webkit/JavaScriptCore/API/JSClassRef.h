@@ -33,7 +33,6 @@
 #include <runtime/UString.h>
 #include <runtime/WeakGCPtr.h>
 #include <wtf/HashMap.h>
-#include <wtf/RefCounted.h>
 
 struct StaticValueEntry : FastAllocBase {
     StaticValueEntry(JSObjectGetPropertyCallback _getProperty, JSObjectSetPropertyCallback _setProperty, JSPropertyAttributes _attributes)
@@ -56,8 +55,8 @@ struct StaticFunctionEntry : FastAllocBase {
     JSPropertyAttributes attributes;
 };
 
-typedef HashMap<RefPtr<JSC::UString::Rep>, StaticValueEntry*> OpaqueJSClassStaticValuesTable;
-typedef HashMap<RefPtr<JSC::UString::Rep>, StaticFunctionEntry*> OpaqueJSClassStaticFunctionsTable;
+typedef HashMap<RefPtr<StringImpl>, StaticValueEntry*> OpaqueJSClassStaticValuesTable;
+typedef HashMap<RefPtr<StringImpl>, StaticFunctionEntry*> OpaqueJSClassStaticFunctionsTable;
 
 struct OpaqueJSClass;
 

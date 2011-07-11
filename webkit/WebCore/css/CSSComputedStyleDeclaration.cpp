@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2004 Zack Rusin <zack@kde.org>
- * Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2007 Alexey Proskuryakov <ap@webkit.org>
  * Copyright (C) 2007 Nicholas Shanks <webkit@nickshanks.com>
  *
@@ -264,7 +264,8 @@ static const int computedProperties[] = {
     CSSPropertyWritingMode,
     CSSPropertyGlyphOrientationHorizontal,
     CSSPropertyGlyphOrientationVertical,
-    CSSPropertyWebkitSvgShadow
+    CSSPropertyWebkitSvgShadow,
+    CSSPropertyVectorEffect
 #endif
 };
 
@@ -383,14 +384,22 @@ PassRefPtr<CSSPrimitiveValue> CSSComputedStyleDeclaration::currentColorOrValidCo
     return CSSPrimitiveValue::createColor(color.rgb());
 }
 
-static PassRefPtr<CSSValue> getBorderRadiusCornerValue(IntSize radius)
+static PassRefPtr<CSSValue> getBorderRadiusCornerValue(LengthSize radius)
 {
-    if (radius.width() == radius.height())
-        return CSSPrimitiveValue::create(radius.width(), CSSPrimitiveValue::CSS_PX);
-
     RefPtr<CSSValueList> list = CSSValueList::createSpaceSeparated();
-    list->append(CSSPrimitiveValue::create(radius.width(), CSSPrimitiveValue::CSS_PX));
-    list->append(CSSPrimitiveValue::create(radius.height(), CSSPrimitiveValue::CSS_PX));
+    if (radius.width() == radius.height()) {
+        if (radius.width().type() == Percent)
+            return CSSPrimitiveValue::create(radius.width().percent(), CSSPrimitiveValue::CSS_PERCENTAGE);
+        return CSSPrimitiveValue::create(radius.width().value(), CSSPrimitiveValue::CSS_PX);
+    }
+    if (radius.width().type() == Percent)
+        list->append(CSSPrimitiveValue::create(radius.width().percent(), CSSPrimitiveValue::CSS_PERCENTAGE));
+    else
+        list->append(CSSPrimitiveValue::create(radius.width().value(), CSSPrimitiveValue::CSS_PX));
+    if (radius.height().type() == Percent)
+        list->append(CSSPrimitiveValue::create(radius.height().percent(), CSSPrimitiveValue::CSS_PERCENTAGE));
+    else
+        list->append(CSSPrimitiveValue::create(radius.height().value(), CSSPrimitiveValue::CSS_PX));
     return list.release();
 }
 
@@ -492,13 +501,29 @@ static PassRefPtr<CSSValue> getTimingFunctionValue(const AnimationList* animList
     RefPtr<CSSValueList> list = CSSValueList::createCommaSeparated();
     if (animList) {
         for (size_t i = 0; i < animList->size(); ++i) {
-            const TimingFunction& tf = animList->animation(i)->timingFunction();
-            list->append(CSSTimingFunctionValue::create(tf.x1(), tf.y1(), tf.x2(), tf.y2()));
+            const TimingFunction* tf = animList->animation(i)->timingFunction().get();
+            if (tf->isCubicBezierTimingFunction()) {
+                const CubicBezierTimingFunction* ctf = static_cast<const CubicBezierTimingFunction*>(tf);
+                list->append(CSSCubicBezierTimingFunctionValue::create(ctf->x1(), ctf->y1(), ctf->x2(), ctf->y2()));
+            } else if (tf->isStepsTimingFunction()) {
+                const StepsTimingFunction* stf = static_cast<const StepsTimingFunction*>(tf);
+                list->append(CSSStepsTimingFunctionValue::create(stf->numberOfSteps(), stf->stepAtStart()));
+            } else {
+                list->append(CSSLinearTimingFunctionValue::create());
+            }
         }
     } else {
         // Note that initialAnimationTimingFunction() is used for both transitions and animations
-        const TimingFunction& tf = Animation::initialAnimationTimingFunction();
-        list->append(CSSTimingFunctionValue::create(tf.x1(), tf.y1(), tf.x2(), tf.y2()));
+        const TimingFunction* tf = Animation::initialAnimationTimingFunction().get();
+        if (tf->isCubicBezierTimingFunction()) {
+            const CubicBezierTimingFunction* ctf = static_cast<const CubicBezierTimingFunction*>(tf);
+            list->append(CSSCubicBezierTimingFunctionValue::create(ctf->x1(), ctf->y1(), ctf->x2(), ctf->y2()));
+        } else if (tf->isStepsTimingFunction()) {
+            const StepsTimingFunction* stf = static_cast<const StepsTimingFunction*>(tf);
+            list->append(CSSStepsTimingFunctionValue::create(stf->numberOfSteps(), stf->stepAtStart()));
+        } else {
+            list->append(CSSLinearTimingFunctionValue::create());
+        }
     }
     return list.release();
 }
@@ -546,13 +571,12 @@ static int cssIdentifierForFontSizeKeyword(int keywordSize)
 
 PassRefPtr<CSSValue> CSSComputedStyleDeclaration::getFontSizeCSSValuePreferringKeyword() const
 {
-    Node* node = m_node.get();
-    if (!node)
+    if (!m_node)
         return 0;
 
-    node->document()->updateLayoutIgnorePendingStylesheets();
+    m_node->document()->updateLayoutIgnorePendingStylesheets();
 
-    RefPtr<RenderStyle> style = node->computedStyle(m_pseudoElementSpecifier);
+    RefPtr<RenderStyle> style = m_node->computedStyle(m_pseudoElementSpecifier);
     if (!style)
         return 0;
 
@@ -560,6 +584,18 @@ PassRefPtr<CSSValue> CSSComputedStyleDeclaration::getFontSizeCSSValuePreferringK
         return CSSPrimitiveValue::createIdentifier(cssIdentifierForFontSizeKeyword(keywordSize));
 
     return CSSPrimitiveValue::create(style->fontDescription().computedPixelSize(), CSSPrimitiveValue::CSS_PX);
+}
+
+bool CSSComputedStyleDeclaration::useFixedFontDefaultSize() const
+{
+    if (!m_node)
+        return false;
+
+    RefPtr<RenderStyle> style = m_node->computedStyle(m_pseudoElementSpecifier);
+    if (!style)
+        return false;
+
+    return style->fontDescription().useFixedDefaultSize();
 }
 
 PassRefPtr<CSSValue> CSSComputedStyleDeclaration::valueForShadow(const ShadowData* shadow, int id) const
@@ -682,6 +718,8 @@ PassRefPtr<CSSValue> CSSComputedStyleDeclaration::getPropertyCSSValue(int proper
     if (!style)
         return 0;
 
+    propertyID = CSSProperty::resolveDirectionAwareProperty(propertyID, style->direction());
+
     switch (static_cast<CSSPropertyID>(propertyID)) {
         case CSSPropertyInvalid:
             break;
@@ -689,6 +727,7 @@ PassRefPtr<CSSValue> CSSComputedStyleDeclaration::getPropertyCSSValue(int proper
         case CSSPropertyBackgroundColor:
             return CSSPrimitiveValue::createColor(m_allowVisitedStyle? style->visitedDependentColor(CSSPropertyBackgroundColor).rgb() : style->backgroundColor().rgb());
         case CSSPropertyBackgroundImage:
+            // FIXME: Broken for multiple backgrounds. https://bugs.webkit.org/show_bug.cgi?id=44853
             if (style->backgroundImage())
                 return style->backgroundImage()->cssValue();
             return CSSPrimitiveValue::createIdentifier(CSSValueNone);
@@ -835,7 +874,7 @@ PassRefPtr<CSSValue> CSSComputedStyleDeclaration::getPropertyCSSValue(int proper
             if (cursors && cursors->size() > 0) {
                 list = CSSValueList::createCommaSeparated();
                 for (unsigned i = 0; i < cursors->size(); ++i)
-                    list->append(CSSPrimitiveValue::create((*cursors)[i].image()->url(), CSSPrimitiveValue::CSS_URI));
+                    list->append((*cursors)[i].image()->cssValue());
             }
             RefPtr<CSSValue> value = CSSPrimitiveValue::create(style->cursor());
             if (list) {
@@ -863,8 +902,6 @@ PassRefPtr<CSSValue> CSSComputedStyleDeclaration::getPropertyCSSValue(int proper
         }
         case CSSPropertyFontSize:
             return CSSPrimitiveValue::create(style->fontDescription().computedPixelSize(), CSSPrimitiveValue::CSS_PX);
-        case CSSPropertyWebkitBinding:
-            break;
         case CSSPropertyFontStyle:
             if (style->fontDescription().italic())
                 return CSSPrimitiveValue::createIdentifier(CSSValueItalic);
@@ -904,6 +941,16 @@ PassRefPtr<CSSValue> CSSComputedStyleDeclaration::getPropertyCSSValue(int proper
             if (style->highlight() == nullAtom)
                 return CSSPrimitiveValue::createIdentifier(CSSValueNone);
             return CSSPrimitiveValue::create(style->highlight(), CSSPrimitiveValue::CSS_STRING);
+        case CSSPropertyWebkitHyphens:
+            return CSSPrimitiveValue::create(style->hyphens());
+        case CSSPropertyWebkitHyphenateCharacter:
+            if (style->hyphenationString().isNull())
+                return CSSPrimitiveValue::createIdentifier(CSSValueAuto);
+            return CSSPrimitiveValue::create(style->hyphenationString(), CSSPrimitiveValue::CSS_STRING);
+        case CSSPropertyWebkitHyphenateLocale:
+            if (style->hyphenationLocale().isNull())
+                return CSSPrimitiveValue::createIdentifier(CSSValueAuto);
+            return CSSPrimitiveValue::create(style->hyphenationLocale(), CSSPrimitiveValue::CSS_STRING);
         case CSSPropertyWebkitBorderFit:
             if (style->borderFit() == BorderFitBorder)
                 return CSSPrimitiveValue::createIdentifier(CSSValueBorder);
@@ -1430,6 +1477,22 @@ PassRefPtr<CSSValue> CSSComputedStyleDeclaration::getPropertyCSSValue(int proper
         case CSSPropertyTextUnderlineWidth:
             break;
 
+        /* Directional properties are resolved by resolveDirectionAwareProperty() before the switch. */
+        case CSSPropertyWebkitBorderEnd:
+        case CSSPropertyWebkitBorderEndColor:
+        case CSSPropertyWebkitBorderEndStyle:
+        case CSSPropertyWebkitBorderEndWidth:
+        case CSSPropertyWebkitBorderStart:
+        case CSSPropertyWebkitBorderStartColor:
+        case CSSPropertyWebkitBorderStartStyle:
+        case CSSPropertyWebkitBorderStartWidth:
+        case CSSPropertyWebkitMarginEnd:
+        case CSSPropertyWebkitMarginStart:
+        case CSSPropertyWebkitPaddingEnd:
+        case CSSPropertyWebkitPaddingStart:
+            ASSERT_NOT_REACHED();
+            break;
+
         /* Unimplemented @font-face properties */
         case CSSPropertyFontStretch:
         case CSSPropertySrc:
@@ -1455,13 +1518,11 @@ PassRefPtr<CSSValue> CSSComputedStyleDeclaration::getPropertyCSSValue(int proper
         case CSSPropertyWebkitColumns:
         case CSSPropertyWebkitColumnRule:
         case CSSPropertyWebkitMarginCollapse:
-        case CSSPropertyWebkitMarginStart:
         case CSSPropertyWebkitMarquee:
         case CSSPropertyWebkitMarqueeSpeed:
         case CSSPropertyWebkitMask:
         case CSSPropertyWebkitMaskRepeatX:
         case CSSPropertyWebkitMaskRepeatY:
-        case CSSPropertyWebkitPaddingStart:
         case CSSPropertyWebkitPerspectiveOriginX:
         case CSSPropertyWebkitPerspectiveOriginY:
         case CSSPropertyWebkitTextStroke:

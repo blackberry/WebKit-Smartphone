@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006 Zack Rusin <zack@kde.org>
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  * All rights reserved.
  *
@@ -48,6 +49,7 @@ namespace WebCore {
     class Page;
     struct FrameLoadRequest;
     class QtAbstractWebPopup;
+    struct ViewportArguments;
 
     class ChromeClientQt : public ChromeClient
     {
@@ -130,6 +132,7 @@ namespace WebCore {
 #endif
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
         virtual void reachedMaxAppCacheSize(int64_t spaceNeeded);
+        virtual void reachedApplicationCacheOriginQuota(SecurityOrigin*);
 #endif
 
 #if ENABLE(NOTIFICATIONS)
@@ -160,34 +163,32 @@ namespace WebCore {
 
         virtual PassOwnPtr<HTMLParserQuirks> createHTMLParserQuirks() { return 0; }
 
-        virtual bool setCursor(PlatformCursorHandle);
+        virtual void setCursor(const Cursor&);
 
         virtual void scrollRectIntoView(const IntRect&, const ScrollView*) const {}
 
         virtual void requestGeolocationPermissionForFrame(Frame*, Geolocation*);
-        virtual void cancelGeolocationPermissionRequestForFrame(Frame*, Geolocation*) { }
+        virtual void cancelGeolocationPermissionRequestForFrame(Frame*, Geolocation*);
 
-#if ENABLE(WIDGETS_10_SUPPORT)
-        virtual bool isWindowed();
-        virtual bool isFloating();
-        virtual bool isFullscreen();
-        virtual bool isMaximized();
-        virtual bool isMinimized();
-#endif
+        virtual bool selectItemWritingDirectionIsNatural();
+        virtual PassRefPtr<PopupMenu> createPopupMenu(PopupMenuClient*) const;
+        virtual PassRefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient*) const;
 
-        QtAbstractWebPopup* createSelectPopup();
+        QWebSelectMethod* createSelectPopup() const;
+
+        virtual void didReceiveViewportArguments(Frame*, const ViewportArguments&) const;
 
         QWebPage* m_webPage;
         WebCore::KURL lastHoverURL;
-        WebCore::String lastHoverTitle;
-        WebCore::String lastHoverContent;
+        WTF::String lastHoverTitle;
+        WTF::String lastHoverContent;
 
         bool toolBarsVisible;
         bool statusBarVisible;
         bool menuBarVisible;
         QEventLoop* m_eventLoop;
 
-        QtPlatformPlugin m_platformPlugin;
+        mutable QtPlatformPlugin m_platformPlugin;
     };
 }
 

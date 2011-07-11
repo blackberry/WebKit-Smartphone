@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2003 Lars Knoll (knoll@kde.org)
- * Copyright (C) 2004, 2005, 2006, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2005, 2006, 2008, 2009, 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2008 Eric Seidel <eric@webkit.org>
  * Copyright (C) 2009 - 2010  Torch Mobile (Beijing) Co. Ltd. All rights reserved.
  *
@@ -23,14 +23,15 @@
 #ifndef CSSParser_h
 #define CSSParser_h
 
-#include "AtomicString.h"
 #include "Color.h"
 #include "CSSParserValues.h"
 #include "CSSSelectorList.h"
 #include "MediaQuery.h"
+#include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/HashMap.h>
 #include <wtf/Vector.h>
+#include <wtf/text/AtomicString.h>
 
 namespace WebCore {
 
@@ -40,6 +41,7 @@ namespace WebCore {
     class CSSRule;
     class CSSRuleList;
     class CSSSelector;
+    class CSSStyleRule;
     class CSSStyleSheet;
     class CSSValue;
     class CSSValueList;
@@ -54,10 +56,12 @@ namespace WebCore {
 
     class CSSParser {
     public:
+        typedef HashMap<CSSStyleRule*, std::pair<unsigned, unsigned> > StyleRuleRanges;
+
         CSSParser(bool strictParsing = true);
         ~CSSParser();
 
-        void parseSheet(CSSStyleSheet*, const String&, Vector<std::pair<unsigned, unsigned> >* ruleStartEndPositions = 0);
+        void parseSheet(CSSStyleSheet*, const String&, int startLineNumber = 0, StyleRuleRanges* ruleRangeMap = 0);
         PassRefPtr<CSSRule> parseRule(CSSStyleSheet*, const String&);
         PassRefPtr<CSSRule> parseKeyframeRule(CSSStyleSheet*, const String&);
         bool parseValue(CSSMutableStyleDeclaration*, int propId, const String&, bool important);
@@ -105,7 +109,7 @@ namespace WebCore {
         PassRefPtr<CSSValue> parseAnimationTimingFunction();
 
         void parseTransformOriginShorthand(RefPtr<CSSValue>&, RefPtr<CSSValue>&, RefPtr<CSSValue>&);
-        bool parseTimingFunctionValue(CSSParserValueList*& args, double& result);
+        bool parseCubicBezierTimingFunctionValue(CSSParserValueList*& args, double& result);
         bool parseAnimationProperty(int propId, RefPtr<CSSValue>&);
         bool parseTransitionShorthand(bool important);
         bool parseAnimationShorthand(bool important);
@@ -123,7 +127,7 @@ namespace WebCore {
         bool parseColorParameters(CSSParserValue*, int* colorValues, bool parseAlpha);
         bool parseHSLParameters(CSSParserValue*, double* colorValues, bool parseAlpha);
         PassRefPtr<CSSPrimitiveValue> parseColor(CSSParserValue* = 0);
-        bool parseColorFromValue(CSSParserValue*, RGBA32&, bool = false);
+        bool parseColorFromValue(CSSParserValue*, RGBA32&);
         void parseSelector(const String&, Document* doc, CSSSelectorList&);
 
         static bool parseColor(const String&, RGBA32& rgb, bool strict);
@@ -192,12 +196,12 @@ namespace WebCore {
         void endDeclarationsForMarginBox();
 
         MediaQueryExp* createFloatingMediaQueryExp(const AtomicString&, CSSParserValueList*);
-        MediaQueryExp* sinkFloatingMediaQueryExp(MediaQueryExp*);
-        Vector<MediaQueryExp*>* createFloatingMediaQueryExpList();
-        Vector<MediaQueryExp*>* sinkFloatingMediaQueryExpList(Vector<MediaQueryExp*>*);
-        MediaQuery* createFloatingMediaQuery(MediaQuery::Restrictor, const String&, Vector<MediaQueryExp*>*);
-        MediaQuery* createFloatingMediaQuery(Vector<MediaQueryExp*>*);
-        MediaQuery* sinkFloatingMediaQuery(MediaQuery*);
+        PassOwnPtr<MediaQueryExp> sinkFloatingMediaQueryExp(MediaQueryExp*);
+        Vector<OwnPtr<MediaQueryExp> >* createFloatingMediaQueryExpList();
+        PassOwnPtr<Vector<OwnPtr<MediaQueryExp> > > sinkFloatingMediaQueryExpList(Vector<OwnPtr<MediaQueryExp> >*);
+        MediaQuery* createFloatingMediaQuery(MediaQuery::Restrictor, const String&, PassOwnPtr<Vector<OwnPtr<MediaQueryExp> > >);
+        MediaQuery* createFloatingMediaQuery(PassOwnPtr<Vector<OwnPtr<MediaQueryExp> > >);
+        PassOwnPtr<MediaQuery> sinkFloatingMediaQuery(MediaQuery*);
 
         void addNamespace(const AtomicString& prefix, const AtomicString& uri);
 
@@ -219,7 +223,7 @@ namespace WebCore {
         CSSStyleSheet* m_styleSheet;
         RefPtr<CSSRule> m_rule;
         RefPtr<CSSRule> m_keyframe;
-        MediaQuery* m_mediaQuery;
+        OwnPtr<MediaQuery> m_mediaQuery;
         CSSParserValueList* m_valueList;
         CSSProperty** m_parsedProperties;
         CSSSelectorList* m_selectorListForParseSelector;
@@ -242,7 +246,7 @@ namespace WebCore {
         // tokenizer methods and data
         unsigned m_ruleBodyStartOffset;
         unsigned m_ruleBodyEndOffset;
-        Vector<std::pair<unsigned, unsigned> >* m_ruleStartEndOffsets;
+        StyleRuleRanges* m_ruleRanges;
         void markRuleBodyStart();
         void markRuleBodyEnd();
         void resetRuleBodyMarks() { m_ruleBodyStartOffset = m_ruleBodyEndOffset = 0; }
@@ -286,8 +290,8 @@ namespace WebCore {
         int yyleng;
         int yyTok;
         int yy_start;
-        int m_line;
-        int m_lastSelectorLine;
+        int m_lineNumber;
+        int m_lastSelectorLineNumber;
 
         bool m_allowImportRules;
         bool m_allowVariablesRules;
@@ -300,9 +304,9 @@ namespace WebCore {
         HashSet<CSSParserValueList*> m_floatingValueLists;
         HashSet<CSSParserFunction*> m_floatingFunctions;
 
-        MediaQuery* m_floatingMediaQuery;
-        MediaQueryExp* m_floatingMediaQueryExp;
-        Vector<MediaQueryExp*>* m_floatingMediaQueryExpList;
+        OwnPtr<MediaQuery> m_floatingMediaQuery;
+        OwnPtr<MediaQueryExp> m_floatingMediaQueryExp;
+        OwnPtr<Vector<OwnPtr<MediaQueryExp> > > m_floatingMediaQueryExpList;
 
         Vector<CSSSelector*> m_reusableSelectorVector;
 

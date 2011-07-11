@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006, 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +29,7 @@
 
 #include "COMPropertyBag.h"
 #include "COMVariantSetter.h"
+#include "DOMCoreClasses.h"
 #include "WebElementPropertyBag.h"
 #include "WebFrame.h"
 #include "WebGeolocationPolicyListener.h"
@@ -51,9 +53,13 @@
 #endif
 #include <WebCore/HTMLNames.h>
 #include <WebCore/Icon.h>
+#include <WebCore/LocalWindowsContext.h>
 #include <WebCore/LocalizedStrings.h>
 #include <WebCore/NotImplemented.h>
 #include <WebCore/Page.h>
+#include <WebCore/SecurityOrigin.h>
+#include <WebCore/PopupMenuWin.h>
+#include <WebCore/SearchPopupMenuWin.h>
 #include <WebCore/WindowFeatures.h>
 #pragma warning(pop)
 
@@ -534,6 +540,32 @@ void WebChromeClient::mouseDidMoveOverElement(const HitTestResult& result, unsig
     uiDelegate->mouseDidMoveOverElement(m_webView, element.get(), modifierFlags);
 }
 
+bool WebChromeClient::shouldMissingPluginMessageBeButton() const
+{
+    COMPtr<IWebUIDelegate> uiDelegate;
+    if (FAILED(m_webView->uiDelegate(&uiDelegate)))
+        return false;
+    
+    // If the UI delegate implements IWebUIDelegatePrivate3, 
+    // which contains didPressMissingPluginButton, then the message should be a button.
+    COMPtr<IWebUIDelegatePrivate3> uiDelegatePrivate3(Query, uiDelegate);
+    return uiDelegatePrivate3;
+}
+
+void WebChromeClient::missingPluginButtonClicked(Element* element) const
+{
+    COMPtr<IWebUIDelegate> uiDelegate;
+    if (FAILED(m_webView->uiDelegate(&uiDelegate)))
+        return;
+
+    COMPtr<IWebUIDelegatePrivate3> uiDelegatePrivate3(Query, uiDelegate);
+    if (!uiDelegatePrivate3)
+        return;
+
+    COMPtr<IDOMElement> e(AdoptCOM, DOMElement::createInstance(element));
+    uiDelegatePrivate3->didPressMissingPluginButton(e.get());
+}
+
 void WebChromeClient::setToolTip(const String& toolTip, TextDirection)
 {
     m_webView->setToolTip(toolTip);
@@ -588,6 +620,11 @@ void WebChromeClient::exceededDatabaseQuota(Frame* frame, const String& database
 void WebChromeClient::reachedMaxAppCacheSize(int64_t spaceNeeded)
 {
     // FIXME: Free some space.
+    notImplemented();
+}
+
+void WebChromeClient::reachedApplicationCacheOriginQuota(SecurityOrigin*)
+{
     notImplemented();
 }
 #endif
@@ -669,10 +706,9 @@ bool WebChromeClient::paintCustomScrollbar(GraphicsContext* context, const Float
         webState |= WebPressedScrollbarState;
     
     RECT webRect = enclosingIntRect(rect);
-    HDC hDC = context->getWindowsContext(webRect);
-    HRESULT hr = delegate->paintCustomScrollbar(m_webView, hDC, webRect, webSize, webState, webPressedPart, 
+    LocalWindowsContext windowsContext(context, webRect);
+    HRESULT hr = delegate->paintCustomScrollbar(m_webView, windowsContext.hdc(), webRect, webSize, webState, webPressedPart, 
                                                           vertical, value, proportion, webParts);
-    context->releaseWindowsContext(hDC, webRect);
     return SUCCEEDED(hr);
 }
 
@@ -686,9 +722,8 @@ bool WebChromeClient::paintCustomScrollCorner(GraphicsContext* context, const Fl
         return false;
 
     RECT webRect = enclosingIntRect(rect);
-    HDC hDC = context->getWindowsContext(webRect);
-    HRESULT hr = delegate->paintCustomScrollCorner(m_webView, hDC, webRect);
-    context->releaseWindowsContext(hDC, webRect);
+    LocalWindowsContext windowsContext(context, webRect);
+    HRESULT hr = delegate->paintCustomScrollCorner(m_webView, windowsContext.hdc(), webRect);
     return SUCCEEDED(hr);
 }
 
@@ -750,26 +785,33 @@ void WebChromeClient::runOpenPanel(Frame*, PassRefPtr<FileChooser> prpFileChoose
     // FIXME: Show some sort of error if too many files are selected and the buffer is too small.  For now, this will fail silently.
 }
 
-void WebChromeClient::chooseIconForFiles(const Vector<WebCore::String>& filenames, WebCore::FileChooser* chooser)
+void WebChromeClient::chooseIconForFiles(const Vector<WTF::String>& filenames, WebCore::FileChooser* chooser)
 {
     chooser->iconLoaded(Icon::createIconForFiles(filenames));
 }
 
-bool WebChromeClient::setCursor(PlatformCursorHandle cursor)
+void WebChromeClient::setCursor(const Cursor& cursor)
 {
-    if (!cursor)
-        return false;
+    HCURSOR platformCursor = cursor.platformCursor()->nativeCursor();
+    if (!platformCursor)
+        return;
 
     if (COMPtr<IWebUIDelegate> delegate = uiDelegate()) {
         COMPtr<IWebUIDelegatePrivate> delegatePrivate(Query, delegate);
         if (delegatePrivate) {
-            if (SUCCEEDED(delegatePrivate->webViewSetCursor(m_webView, reinterpret_cast<OLE_HANDLE>(cursor))))
-                return true;
+            if (SUCCEEDED(delegatePrivate->webViewSetCursor(m_webView, reinterpret_cast<OLE_HANDLE>(platformCursor))))
+                return;
         }
     }
 
-    ::SetCursor(cursor);
-    return true;
+    m_webView->setLastCursor(platformCursor);
+    ::SetCursor(platformCursor);
+    return;
+}
+
+void WebChromeClient::setLastSetCursorToCurrentCursor()
+{
+    m_webView->setLastCursor(::GetCursor());
 }
 
 void WebChromeClient::requestGeolocationPermissionForFrame(Frame* frame, Geolocation* geolocation)
@@ -833,4 +875,19 @@ void WebChromeClient::exitFullscreenForNode(Node*)
 }
 
 #endif
+
+bool WebChromeClient::selectItemWritingDirectionIsNatural()
+{
+    return true;
+}
+
+PassRefPtr<PopupMenu> WebChromeClient::createPopupMenu(PopupMenuClient* client) const
+{
+    return adoptRef(new PopupMenuWin(client));
+}
+
+PassRefPtr<SearchPopupMenu> WebChromeClient::createSearchPopupMenu(PopupMenuClient* client) const
+{
+    return adoptRef(new SearchPopupMenuWin(client));
+}
 

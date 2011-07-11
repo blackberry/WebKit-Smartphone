@@ -90,11 +90,10 @@ WebInspector.ProfileType.prototype = {
 
 WebInspector.ProfilesPanel = function()
 {
-    WebInspector.Panel.call(this);
+    WebInspector.Panel.call(this, "profiles");
 
     this.createSidebar();
 
-    this.element.addStyleClass("profiles");
     this._profileTypesByIdMap = {};
     this._profileTypeButtonsByIdMap = {};
 
@@ -113,6 +112,9 @@ WebInspector.ProfilesPanel = function()
     this.enableToggleButton = new WebInspector.StatusBarButton("", "enable-toggle-status-bar-item");
     this.enableToggleButton.addEventListener("click", this._toggleProfiling.bind(this), false);
 
+    this.clearResultsButton = new WebInspector.StatusBarButton(WebInspector.UIString("Clear CPU profiles."), "clear-status-bar-item");
+    this.clearResultsButton.addEventListener("click", this._clearProfiles.bind(this), false);
+
     this.profileViewStatusBarItemsContainer = document.createElement("div");
     this.profileViewStatusBarItemsContainer.id = "profile-view-status-bar-items";
 
@@ -121,12 +123,10 @@ WebInspector.ProfilesPanel = function()
 
     this._profiles = [];
     this._profilerEnabled = Preferences.profilerAlwaysEnabled;
-    this.reset();
+    this._reset();
 }
 
 WebInspector.ProfilesPanel.prototype = {
-    toolbarItemClass: "profiles",
-
     get toolbarItemLabel()
     {
         return WebInspector.UIString("Profiles");
@@ -151,24 +151,14 @@ WebInspector.ProfilesPanel.prototype = {
                 items.push(button.element);
             }
         }
-        items.push(this.profileViewStatusBarItemsContainer);
+        items.push(this.clearResultsButton.element, this.profileViewStatusBarItemsContainer);
         return items;
     },
 
     show: function()
     {
         WebInspector.Panel.prototype.show.call(this);
-        if (this._shouldPopulateProfiles)
-            this._populateProfiles();
-    },
-
-    populateInterface: function()
-    {
-        this.reset();
-        if (this.visible)
-            this._populateProfiles();
-        else
-            this._shouldPopulateProfiles = true;
+        this._populateProfiles();
     },
 
     profilerWasEnabled: function()
@@ -177,7 +167,10 @@ WebInspector.ProfilesPanel.prototype = {
             return;
 
         this._profilerEnabled = true;
-        this.populateInterface();
+
+        this._reset();
+        if (this.visible)
+            this._populateProfiles();
     },
 
     profilerWasDisabled: function()
@@ -186,10 +179,15 @@ WebInspector.ProfilesPanel.prototype = {
             return;
 
         this._profilerEnabled = false;
-        this.reset();
+        this._reset();
     },
 
-    reset: function()
+    resetProfiles: function()
+    {
+        this._reset();
+    },
+
+    _reset: function()
     {
         for (var i = 0; i < this._profiles.length; ++i)
             delete this._profiles[i]._profileView;
@@ -202,6 +200,7 @@ WebInspector.ProfilesPanel.prototype = {
         this._profilesIdMap = {};
         this._profileGroups = {};
         this._profileGroupsForLinks = {}
+        this._profilesWereRequested = false;
 
         this.sidebarTreeElement.removeStyleClass("some-expandable");
 
@@ -214,6 +213,12 @@ WebInspector.ProfilesPanel.prototype = {
 
         this._updateInterface();
         this.welcomeView.show();
+    },
+
+    _clearProfiles: function()
+    {
+        InspectorBackend.clearProfiles();
+        this._reset();
     },
 
     registerProfileType: function(profileType)
@@ -315,6 +320,7 @@ WebInspector.ProfilesPanel.prototype = {
             this.welcomeView.hide();
             if (!this.visibleView)
                 this.showProfile(profile);
+            this.dispatchEventToListeners("profile added");
         }
     },
 
@@ -337,6 +343,14 @@ WebInspector.ProfilesPanel.prototype = {
         delete this._profileGroups[profileTitleKey];
 
         sidebarParent.removeChild(profile._profilesTreeElement);
+
+        if (!profile.isTemporary)
+            InspectorBackend.removeProfile(profile.typeId, profile.uid);
+
+        // No other item will be selected if there aren't any other profiles, so
+        // make sure that view gets cleared when the last profile is removed.
+        if (!this._profiles.length)
+            this.closeVisibleView();
     },
 
     showProfile: function(profile)
@@ -360,6 +374,27 @@ WebInspector.ProfilesPanel.prototype = {
         var statusBarItems = view.statusBarItems;
         for (var i = 0; i < statusBarItems.length; ++i)
             this.profileViewStatusBarItemsContainer.appendChild(statusBarItems[i]);
+    },
+
+    getProfiles: function(typeId)
+    {
+        var result = [];
+        var profilesCount = this._profiles.length;
+        for (var i = 0; i < profilesCount; ++i)
+            if (this._profiles[i].typeId === typeId)
+                result.push(this._profiles[i]);
+        return result;
+    },
+
+    updateProfile: function(profile)
+    {
+        var profilesCount = this._profiles.length;
+        for (var i = 0; i < profilesCount; ++i)
+            if (this._profiles[i].typeId === profile.typeId
+                && this._profiles[i].uid === profile.uid) {
+                this._profiles[i] = profile;
+                break;
+            }
     },
 
     showView: function(view)
@@ -466,6 +501,7 @@ WebInspector.ProfilesPanel.prototype = {
             for (var typeId in this._profileTypeButtonsByIdMap)
                 this._profileTypeButtonsByIdMap[typeId].removeStyleClass("hidden");
             this.profileViewStatusBarItemsContainer.removeStyleClass("hidden");
+            this.clearResultsButton.element.removeStyleClass("hidden");
             this.panelEnablerView.visible = false;
         } else {
             this.enableToggleButton.title = WebInspector.UIString("Profiling disabled. Click to enable.");
@@ -473,6 +509,7 @@ WebInspector.ProfilesPanel.prototype = {
             for (var typeId in this._profileTypeButtonsByIdMap)
                 this._profileTypeButtonsByIdMap[typeId].addStyleClass("hidden");
             this.profileViewStatusBarItemsContainer.addStyleClass("hidden");
+            this.clearResultsButton.element.addStyleClass("hidden");
             this.panelEnablerView.visible = true;
         }
     },
@@ -494,12 +531,8 @@ WebInspector.ProfilesPanel.prototype = {
 
     _populateProfiles: function()
     {
-        var sidebarTreeChildrenCount = this.sidebarTree.children.length;
-        for (var i = 0; i < sidebarTreeChildrenCount; ++i) {
-            var treeElement = this.sidebarTree.children[i];
-            if (treeElement.children.length)
-                return;
-        }
+        if (!this._profilerEnabled || this._profilesWereRequested)
+            return;
 
         function populateCallback(profileHeaders) {
             profileHeaders.sort(function(a, b) { return a.uid - b.uid; });
@@ -508,10 +541,9 @@ WebInspector.ProfilesPanel.prototype = {
                 WebInspector.addProfileHeader(profileHeaders[i]);
         }
 
-        var callId = WebInspector.Callback.wrap(populateCallback);
-        InspectorBackend.getProfileHeaders(callId);
+        InspectorBackend.getProfileHeaders(populateCallback);
 
-        delete this._shouldPopulateProfiles;
+        this._profilesWereRequested = true;
     },
 
     updateMainViewWidth: function(width)
@@ -525,14 +557,15 @@ WebInspector.ProfilesPanel.prototype = {
 
 WebInspector.ProfilesPanel.prototype.__proto__ = WebInspector.Panel.prototype;
 
-WebInspector.ProfileSidebarTreeElement = function(profile)
+WebInspector.ProfileSidebarTreeElement = function(profile, titleFormat, className)
 {
     this.profile = profile;
+    this._titleFormat = titleFormat;
 
     if (this.profile.title.indexOf(UserInitiatedProfileName) === 0)
         this._profileNumber = this.profile.title.substring(UserInitiatedProfileName.length + 1);
 
-    WebInspector.SidebarTreeElement.call(this, "profile-sidebar-tree-item", "", "", profile, false);
+    WebInspector.SidebarTreeElement.call(this, className, "", "", profile, false);
 
     this.refreshTitles();
 }
@@ -540,7 +573,13 @@ WebInspector.ProfileSidebarTreeElement = function(profile)
 WebInspector.ProfileSidebarTreeElement.prototype = {
     onselect: function()
     {
-        WebInspector.panels.profiles.showProfile(this.profile);
+        this.treeOutline.panel.showProfile(this.profile);
+    },
+
+    ondelete: function()
+    {
+        this.treeOutline.panel.removeProfileHeader(this.profile);
+        return true;
     },
 
     get mainTitle()
@@ -548,7 +587,7 @@ WebInspector.ProfileSidebarTreeElement.prototype = {
         if (this._mainTitle)
             return this._mainTitle;
         if (this.profile.title.indexOf(UserInitiatedProfileName) === 0)
-            return WebInspector.UIString("Profile %d", this._profileNumber);
+            return WebInspector.UIString(this._titleFormat, this._profileNumber);
         return this.profile.title;
     },
 
@@ -593,11 +632,10 @@ WebInspector.ProfileGroupSidebarTreeElement = function(title, subtitle)
 WebInspector.ProfileGroupSidebarTreeElement.prototype = {
     onselect: function()
     {
-        WebInspector.panels.profiles.showProfile(this.children[this.children.length - 1].profile);
+        if (this.children.length > 0)
+            WebInspector.panels.profiles.showProfile(this.children[this.children.length - 1].profile);
     }
 }
 
 WebInspector.ProfileGroupSidebarTreeElement.prototype.__proto__ = WebInspector.SidebarTreeElement.prototype;
 
-WebInspector.didGetProfileHeaders = WebInspector.Callback.processCallback;
-WebInspector.didGetProfile = WebInspector.Callback.processCallback;

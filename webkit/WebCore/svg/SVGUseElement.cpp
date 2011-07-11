@@ -1,23 +1,23 @@
 /*
-    Copyright (C) 2004, 2005, 2006, 2007, 2008 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-    Copyright (C) Research In Motion Limited 2009-2010. All rights reserved.
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006, 2007, 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ * Copyright (C) Research In Motion Limited 2009-2010. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -32,6 +32,7 @@
 #include "HTMLNames.h"
 #include "NodeRenderStyle.h"
 #include "RegisteredEventListener.h"
+#include "RenderSVGResource.h"
 #include "RenderSVGShadowTreeRootContainer.h"
 #include "SVGElementInstance.h"
 #include "SVGElementInstanceList.h"
@@ -43,6 +44,7 @@
 #include "SVGShadowTreeElements.h"
 #include "SVGSymbolElement.h"
 #include "XLinkNames.h"
+#include "XMLDocumentParser.h"
 #include "XMLSerializer.h"
 
 // Dump SVGElementInstance object tree - useful to debug instanceRoot problems
@@ -53,23 +55,21 @@
 
 namespace WebCore {
 
-SVGUseElement::SVGUseElement(const QualifiedName& tagName, Document* doc)
-    : SVGStyledTransformableElement(tagName, doc)
-    , SVGTests()
-    , SVGLangSpace()
-    , SVGExternalResourcesRequired()
-    , SVGURIReference()
+inline SVGUseElement::SVGUseElement(const QualifiedName& tagName, Document* document)
+    : SVGStyledTransformableElement(tagName, document)
     , m_x(LengthModeWidth)
     , m_y(LengthModeHeight)
     , m_width(LengthModeWidth)
     , m_height(LengthModeHeight)
+    , m_updatesBlocked(false)
     , m_isPendingResource(false)
     , m_needsShadowTreeRecreation(false)
 {
 }
 
-SVGUseElement::~SVGUseElement()
+PassRefPtr<SVGUseElement> SVGUseElement::create(const QualifiedName& tagName, Document* document)
 {
+    return adoptRef(new SVGUseElement(tagName, document));
 }
 
 SVGElementInstance* SVGUseElement::instanceRoot() const
@@ -120,22 +120,29 @@ void SVGUseElement::parseMappedAttribute(Attribute* attr)
 void SVGUseElement::insertedIntoDocument()
 {
     // This functions exists to assure assumptions made in the code regarding SVGElementInstance creation/destruction are satisfied.
-    SVGElement::insertedIntoDocument();
-    ASSERT(!m_targetElementInstance);
+    SVGStyledTransformableElement::insertedIntoDocument();
+    ASSERT(!m_targetElementInstance || ((document()->isSVGDocument() || document()->isXHTMLDocument()) && !static_cast<XMLDocumentParser*>(document()->parser())->wellFormed()));
     ASSERT(!m_isPendingResource);
 }
 
 void SVGUseElement::removedFromDocument()
 {
+    SVGStyledTransformableElement::removedFromDocument();
     m_targetElementInstance = 0;
-    SVGElement::removedFromDocument();
 }
 
 void SVGUseElement::svgAttributeChanged(const QualifiedName& attrName)
 {
     SVGStyledTransformableElement::svgAttributeChanged(attrName);
 
-    if (!renderer())
+    bool isXYAttribute = attrName == SVGNames::xAttr || attrName == SVGNames::yAttr;
+    bool isWidthHeightAttribute = attrName == SVGNames::widthAttr || attrName == SVGNames::heightAttr;
+
+    if (isXYAttribute || isWidthHeightAttribute)
+        updateRelativeLengthsInformation();
+
+    RenderObject* object = renderer();
+    if (!object)
         return;
 
     if (SVGURIReference::isKnownAttribute(attrName)) {
@@ -149,12 +156,12 @@ void SVGUseElement::svgAttributeChanged(const QualifiedName& attrName)
         return;
     }
 
-    if (attrName == SVGNames::xAttr || attrName == SVGNames::yAttr) {
+    if (isXYAttribute) {
         updateContainerOffsets();
         return;
     }
 
-    if (attrName == SVGNames::widthAttr || attrName == SVGNames::heightAttr) {
+    if (isWidthHeightAttribute) {
         updateContainerSizes();
         return;
     }
@@ -166,8 +173,8 @@ void SVGUseElement::svgAttributeChanged(const QualifiedName& attrName)
     }
 
     if (SVGStyledTransformableElement::isKnownAttribute(attrName)) {
-        renderer()->setNeedsTransformUpdate();
-        renderer()->setNeedsLayout(true);
+        object->setNeedsTransformUpdate();
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(object);
         return;
     }
 
@@ -249,8 +256,8 @@ void SVGUseElement::updateContainerSizes()
     // Update whole subtree, scanning for shadow container elements, that correspond to <svg>/<symbol> tags
     updateContainerSize(this, m_targetElementInstance.get());
 
-    if (renderer())
-        renderer()->setNeedsLayout(true);
+    if (RenderObject* object = renderer())
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(object);
 }
 
 static void updateContainerOffset(SVGElementInstance* targetInstance)
@@ -301,29 +308,33 @@ void SVGUseElement::updateContainerOffsets()
     // Update whole subtree, scanning for shadow container elements, marking a cloned use subtree
     updateContainerOffset(m_targetElementInstance.get());
 
-    if (renderer())
-        renderer()->setNeedsLayout(true);
+    if (RenderObject* object = renderer())
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(object);
 }
 
 void SVGUseElement::recalcStyle(StyleChange change)
 {
     // Eventually mark shadow root element needing style recalc
-    if (needsStyleRecalc() && m_targetElementInstance) {
+    if (needsStyleRecalc() && m_targetElementInstance && !m_updatesBlocked) {
         if (SVGElement* shadowRoot = m_targetElementInstance->shadowTreeElement())
             shadowRoot->setNeedsStyleRecalc();
     }
 
     SVGStyledTransformableElement::recalcStyle(change);
 
-    bool needsStyleUpdate = !m_needsShadowTreeRecreation;
-    if (m_needsShadowTreeRecreation) {
-        static_cast<RenderSVGShadowTreeRootContainer*>(renderer())->markShadowTreeForRecreation();
-        m_needsShadowTreeRecreation = false;
-    }
+    // Assure that the shadow tree has not been marked for recreation, while we're building it.
+    if (m_updatesBlocked)
+        ASSERT(!m_needsShadowTreeRecreation);
 
     RenderSVGShadowTreeRootContainer* shadowRoot = static_cast<RenderSVGShadowTreeRootContainer*>(renderer());
     if (!shadowRoot)
         return;
+    
+    bool needsStyleUpdate = !m_needsShadowTreeRecreation;
+    if (m_needsShadowTreeRecreation) {
+        shadowRoot->markShadowTreeForRecreation();
+        m_needsShadowTreeRecreation = false;
+    }
 
     shadowRoot->updateFromElement();
 
@@ -342,7 +353,7 @@ void dumpInstanceTree(unsigned int& depth, String& text, SVGElementInstance* tar
     SVGElement* shadowTreeElement = targetInstance->shadowTreeElement();
     ASSERT(shadowTreeElement);
 
-    String elementId = element->getIDAttribute();
+    String elementId = element->getIdAttribute();
     String elementNodeName = element->nodeName();
     String shadowTreeElementNodeName = shadowTreeElement->nodeName();
     String parentNodeName = element->parentNode() ? element->parentNode()->nodeName() : "null";
@@ -435,6 +446,26 @@ void SVGUseElement::buildPendingResource()
 
 void SVGUseElement::buildShadowAndInstanceTree(SVGShadowTreeRootElement* shadowRoot)
 {
+    struct ShadowTreeUpdateBlocker {
+        ShadowTreeUpdateBlocker(SVGUseElement* currentUseElement)
+            : useElement(currentUseElement)
+        {
+            useElement->setUpdatesBlocked(true);
+        }
+
+        ~ShadowTreeUpdateBlocker()
+        {
+            useElement->setUpdatesBlocked(false);
+        }
+
+        SVGUseElement* useElement;
+    };
+
+    // When cloning the target nodes, they may decide to synchronize style and/or animated SVG attributes.
+    // That causes calls to SVGElementInstance::updateAllInstancesOfElement(), which mark the shadow tree for recreation.
+    // Solution: block any updates to the shadow tree while we're building it.
+    ShadowTreeUpdateBlocker blocker(this);
+
     String id = SVGURIReference::getTarget(href());
     Element* targetElement = document()->getElementById(id);
     if (!targetElement) {
@@ -552,6 +583,9 @@ void SVGUseElement::buildShadowAndInstanceTree(SVGShadowTreeRootElement* shadowR
     // Update container offset/size
     updateContainerOffsets();
     updateContainerSizes();
+
+    // Update relative length information
+    updateRelativeLengthsInformation();
 }
 
 RenderObject* SVGUseElement::createRenderer(RenderArena* arena, RenderStyle*)
@@ -575,8 +609,8 @@ void SVGUseElement::attach()
 
 void SVGUseElement::detach()
 {
-    m_targetElementInstance = 0;
     SVGStyledTransformableElement::detach();
+    m_targetElementInstance = 0;
 }
 
 static bool isDirectReference(Node* n)
@@ -681,7 +715,8 @@ void SVGUseElement::handleDeepUseReferencing(SVGUseElement* use, SVGElementInsta
     while (instance) {
         SVGElement* element = instance->correspondingElement();
 
-        if (element->getIDAttribute() == id) {
+        // FIXME: This should probably be using getIdAttribute instead of idForStyleResolution.
+        if (element->hasID() && element->idForStyleResolution() == id) {
             foundProblem = true;
             return;
         }
@@ -761,7 +796,7 @@ void SVGUseElement::expandUseElementsInShadowTree(SVGShadowTreeRootElement* shad
 
         // Don't ASSERT(target) here, it may be "pending", too.
         // Setup sub-shadow tree root node
-        RefPtr<SVGShadowTreeContainerElement> cloneParent = new SVGShadowTreeContainerElement(document());
+        RefPtr<SVGShadowTreeContainerElement> cloneParent = SVGShadowTreeContainerElement::create(document());
 
         // Spec: In the generated content, the 'use' will be replaced by 'g', where all attributes from the
         // 'use' element except for x, y, width, height and xlink:href are transferred to the generated 'g' element.
@@ -811,7 +846,7 @@ void SVGUseElement::expandSymbolElementsInShadowTree(SVGShadowTreeRootElement* s
         // height are provided on the 'use' element, then these attributes will be transferred to
         // the generated 'svg'. If attributes width and/or height are not specified, the generated
         // 'svg' element will use values of 100% for these attributes.
-        RefPtr<SVGSVGElement> svgElement = new SVGSVGElement(SVGNames::svgTag, document());
+        RefPtr<SVGSVGElement> svgElement = SVGSVGElement::create(SVGNames::svgTag, document());
 
         // Transfer all attributes from <symbol> to the new <svg> element
         svgElement->attributes()->setAttributes(*element->attributes());
@@ -949,6 +984,10 @@ SVGElementInstance* SVGUseElement::instanceForShadowTreeElement(Node* element, S
 
 void SVGUseElement::invalidateShadowTree()
 {
+    // Don't mutate the shadow tree while we're building it.
+    if (m_updatesBlocked)
+        return;
+
     m_needsShadowTreeRecreation = true;
     setNeedsStyleRecalc();
 }
@@ -978,9 +1017,22 @@ void SVGUseElement::transferUseAttributesToReplacedElement(SVGElement* from, SVG
     ASSERT(!ec);
 }
 
-bool SVGUseElement::hasRelativeValues() const
+bool SVGUseElement::selfHasRelativeLengths() const
 {
-    return x().isRelative() || y().isRelative() || width().isRelative() || height().isRelative();
+    if (x().isRelative()
+     || y().isRelative()
+     || width().isRelative()
+     || height().isRelative())
+        return true;
+
+    if (!m_targetElementInstance)
+        return false;
+
+    SVGElement* element = m_targetElementInstance->correspondingElement();
+    if (!element || !element->isStyled())
+        return false;
+
+    return static_cast<SVGStyledElement*>(element)->hasRelativeLengths();
 }
 
 }

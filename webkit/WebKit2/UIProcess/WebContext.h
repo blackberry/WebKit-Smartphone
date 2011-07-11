@@ -26,46 +26,120 @@
 #ifndef WebContext_h
 #define WebContext_h
 
+#include "APIObject.h"
+#include "PluginInfoStore.h"
 #include "ProcessModel.h"
+#include "VisitedLinkProvider.h"
+#include "WebContextInjectedBundleClient.h"
+#include "WebHistoryClient.h"
+#include "WebProcessProxy.h"
+#include <WebCore/LinkHash.h>
+#include <wtf/Forward.h>
 #include <wtf/HashSet.h>
 #include <wtf/PassRefPtr.h>
-#include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
+#include <wtf/text/StringHash.h>
+#include <wtf/text/WTFString.h>
 
 struct WKContextStatistics;
 
 namespace WebKit {
 
 class WebPageNamespace;
+class WebPageProxy;
 class WebPreferences;
 
-class WebContext : public RefCounted<WebContext> {
+class WebContext : public APIObject {
 public:
-    static PassRefPtr<WebContext> create(ProcessModel processModel)
-    {
-        return adoptRef(new WebContext(processModel));
-    }
+    static const Type APIType = TypeContext;
+
+    static WebContext* sharedProcessContext();
+    static WebContext* sharedThreadContext();
+
+    static PassRefPtr<WebContext> create(const WTF::String& injectedBundlePath);
 
     ~WebContext();
+
+    void initializeInjectedBundleClient(const WKContextInjectedBundleClient*);
+    void initializeHistoryClient(const WKContextHistoryClient*);
+
+    ProcessModel processModel() const { return m_processModel; }
+    WebProcessProxy* process() const { return m_process.get(); }
+
+    void processDidFinishLaunching(WebProcessProxy*);
+
+    WebPageProxy* createWebPage(WebPageNamespace*);
+
+    void reviveIfNecessary();
 
     WebPageNamespace* createPageNamespace();
     void pageNamespaceWasDestroyed(WebPageNamespace*);
 
     void setPreferences(WebPreferences*);
     WebPreferences* preferences() const;
-
     void preferencesDidChange();
 
-    ProcessModel processModel() const { return m_processModel; }
+    const WTF::String& injectedBundlePath() const { return m_injectedBundlePath; }
 
+    void postMessageToInjectedBundle(const WTF::String&, APIObject*);
+
+    // InjectedBundle client
+    void didReceiveMessageFromInjectedBundle(const WTF::String&, APIObject*);
+
+    // History client
+    void didNavigateWithNavigationData(WebFrameProxy*, const WebNavigationDataStore&); 
+    void didPerformClientRedirect(WebFrameProxy*, const WTF::String& sourceURLString, const WTF::String& destinationURLString);
+    void didPerformServerRedirect(WebFrameProxy*, const WTF::String& sourceURLString, const WTF::String& destinationURLString);
+    void didUpdateHistoryTitle(WebFrameProxy*, const WTF::String& title, const WTF::String& url);
+    void populateVisitedLinks();
+    
     void getStatistics(WKContextStatistics* statistics);
+    void setAdditionalPluginsDirectory(const WTF::String&);
+
+    PluginInfoStore* pluginInfoStore() { return &m_pluginInfoStore; }
+    WTF::String applicationCacheDirectory();
+    
+    void registerURLSchemeAsEmptyDocument(const WTF::String&);
+    
+    void addVisitedLink(const WTF::String&);
+    void addVisitedLink(WebCore::LinkHash);
+
+    void didReceiveMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
+
+#if PLATFORM(WIN)
+    void setShouldPaintNativeControls(bool);
+#endif
 
 private:
-    WebContext(ProcessModel);
+    WebContext(ProcessModel, const WTF::String& injectedBundlePath);
+
+    virtual Type type() const { return APIType; }
+
+    void ensureWebProcess();
+    bool hasValidProcess() const { return m_process && m_process->isValid(); }
+    void platformSetUpWebProcess();
 
     ProcessModel m_processModel;
+    
+    // FIXME: In the future, this should be one or more WebProcessProxies.
+    RefPtr<WebProcessProxy> m_process;
+
     HashSet<WebPageNamespace*> m_pageNamespaces;
     RefPtr<WebPreferences> m_preferences;
+
+    WTF::String m_injectedBundlePath;
+    WebContextInjectedBundleClient m_injectedBundleClient;
+
+    WebHistoryClient m_historyClient;
+
+    PluginInfoStore m_pluginInfoStore;
+    VisitedLinkProvider m_visitedLinkProvider;
+        
+    HashSet<WTF::String> m_schemesToRegisterAsEmptyDocument;
+
+#if PLATFORM(WIN)
+    bool m_shouldPaintNativeControls;
+#endif
 };
 
 } // namespace WebKit

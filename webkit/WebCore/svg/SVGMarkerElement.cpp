@@ -1,23 +1,23 @@
 /*
-    Copyright (C) 2004, 2005, 2006, 2007, 2008 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-    Copyright (C) Research In Motion Limited 2009-2010. All rights reserved.
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006, 2007, 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ * Copyright (C) Research In Motion Limited 2009-2010. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -38,11 +38,8 @@ namespace WebCore {
 char SVGOrientTypeAttrIdentifier[] = "SVGOrientTypeAttr";
 char SVGOrientAngleAttrIdentifier[] = "SVGOrientAngleAttr";
 
-SVGMarkerElement::SVGMarkerElement(const QualifiedName& tagName, Document* doc)
-    : SVGStyledElement(tagName, doc)
-    , SVGLangSpace()
-    , SVGExternalResourcesRequired()
-    , SVGFitToViewBox()
+SVGMarkerElement::SVGMarkerElement(const QualifiedName& tagName, Document* document)
+    : SVGStyledElement(tagName, document)
     , m_refX(LengthModeWidth)
     , m_refY(LengthModeHeight)
     , m_markerWidth(LengthModeWidth, "3")
@@ -53,8 +50,9 @@ SVGMarkerElement::SVGMarkerElement(const QualifiedName& tagName, Document* doc)
     // Spec: If the markerWidth/markerHeight attribute is not specified, the effect is as if a value of "3" were specified.
 }
 
-SVGMarkerElement::~SVGMarkerElement()
+PassRefPtr<SVGMarkerElement> SVGMarkerElement::create(const QualifiedName& tagName, Document* document)
 {
+    return adoptRef(new SVGMarkerElement(tagName, document));
 }
 
 AffineTransform SVGMarkerElement::viewBoxToViewTransform(float viewWidth, float viewHeight) const
@@ -104,14 +102,27 @@ void SVGMarkerElement::svgAttributeChanged(const QualifiedName& attrName)
 {
     SVGStyledElement::svgAttributeChanged(attrName);
 
-    if (attrName == SVGNames::markerUnitsAttr || attrName == SVGNames::refXAttr ||
-        attrName == SVGNames::refYAttr || attrName == SVGNames::markerWidthAttr ||
-        attrName == SVGNames::markerHeightAttr || attrName == SVGNames::orientAttr ||
-        SVGLangSpace::isKnownAttribute(attrName) ||
-        SVGExternalResourcesRequired::isKnownAttribute(attrName) ||
-        SVGFitToViewBox::isKnownAttribute(attrName) ||
-        SVGStyledElement::isKnownAttribute(attrName))
-        invalidateResourceClients();
+    bool invalidateClients = false;
+    if (attrName == SVGNames::refXAttr
+        || attrName == SVGNames::refYAttr
+        || attrName == SVGNames::markerWidthAttr
+        || attrName == SVGNames::markerHeightAttr) {
+        invalidateClients = true;
+        updateRelativeLengthsInformation();
+    }
+
+    RenderObject* object = renderer();
+    if (!object)
+        return;
+
+    if (invalidateClients
+        || attrName == SVGNames::markerUnitsAttr
+        || attrName == SVGNames::orientAttr
+        || SVGLangSpace::isKnownAttribute(attrName)
+        || SVGExternalResourcesRequired::isKnownAttribute(attrName)
+        || SVGFitToViewBox::isKnownAttribute(attrName)
+        || SVGStyledElement::isKnownAttribute(attrName))
+        object->setNeedsLayout(true);
 }
 
 void SVGMarkerElement::synchronizeProperty(const QualifiedName& attrName)
@@ -157,8 +168,11 @@ void SVGMarkerElement::childrenChanged(bool changedByParser, Node* beforeChange,
 {
     SVGStyledElement::childrenChanged(changedByParser, beforeChange, afterChange, childCountDelta);
 
-    if (!changedByParser)
-        invalidateResourceClients();
+    if (changedByParser)
+        return;
+
+    if (RenderObject* object = renderer())
+        object->setNeedsLayout(true);
 }
 
 void SVGMarkerElement::setOrientToAuto()
@@ -166,7 +180,8 @@ void SVGMarkerElement::setOrientToAuto()
     setOrientTypeBaseValue(SVG_MARKER_ORIENT_AUTO);
     setOrientAngleBaseValue(SVGAngle());
 
-    invalidateResourceClients();
+    if (RenderObject* object = renderer())
+        object->setNeedsLayout(true);
 }
 
 void SVGMarkerElement::setOrientToAngle(const SVGAngle& angle)
@@ -174,12 +189,21 @@ void SVGMarkerElement::setOrientToAngle(const SVGAngle& angle)
     setOrientTypeBaseValue(SVG_MARKER_ORIENT_ANGLE);
     setOrientAngleBaseValue(angle);
 
-    invalidateResourceClients();
+    if (RenderObject* object = renderer())
+        object->setNeedsLayout(true);
 }
 
 RenderObject* SVGMarkerElement::createRenderer(RenderArena* arena, RenderStyle*)
 {
     return new (arena) RenderSVGResourceMarker(this);
+}
+
+bool SVGMarkerElement::selfHasRelativeLengths() const
+{
+    return refX().isRelative()
+        || refY().isRelative()
+        || markerWidth().isRelative()
+        || markerHeight().isRelative();
 }
 
 }

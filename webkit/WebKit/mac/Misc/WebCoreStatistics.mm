@@ -31,12 +31,14 @@
 #import "DOMElementInternal.h"
 #import "WebCache.h"
 #import "WebFrameInternal.h"
-#import <runtime/JSLock.h>
+#import <JavaScriptCore/JSLock.h>
+#import <JavaScriptCore/MemoryStatistics.h>
 #import <WebCore/Console.h>
 #import <WebCore/FontCache.h>
 #import <WebCore/Frame.h>
 #import <WebCore/GCController.h>
 #import <WebCore/GlyphPageTreeNode.h>
+#import <WebCore/GraphicsContext.h>
 #import <WebCore/IconDatabase.h>
 #import <WebCore/JSDOMWindow.h>
 #import <WebCore/PageCache.h>
@@ -193,14 +195,19 @@ using namespace WebCore;
 + (NSDictionary *)memoryStatistics
 {
     WTF::FastMallocStatistics fastMallocStatistics = WTF::fastMallocStatistics();
+    
     JSLock lock(SilenceAssertionsOnly);
-    Heap::Statistics jsHeapStatistics = JSDOMWindow::commonJSGlobalData()->heap.statistics();
+    Heap::Statistics heapMemoryStats = heapStatistics(JSDOMWindow::commonJSGlobalData());
+    GlobalMemoryStatistics globalMemoryStats = globalMemoryStatistics();
+    
     return [NSDictionary dictionaryWithObjectsAndKeys:
                 [NSNumber numberWithInt:fastMallocStatistics.reservedVMBytes], @"FastMallocReservedVMBytes",
                 [NSNumber numberWithInt:fastMallocStatistics.committedVMBytes], @"FastMallocCommittedVMBytes",
                 [NSNumber numberWithInt:fastMallocStatistics.freeListBytes], @"FastMallocFreeListBytes",
-                [NSNumber numberWithInt:jsHeapStatistics.size], @"JavaScriptHeapSize",
-                [NSNumber numberWithInt:jsHeapStatistics.free], @"JavaScriptFreeSize",
+                [NSNumber numberWithInt:heapMemoryStats.size], @"JavaScriptHeapSize",
+                [NSNumber numberWithInt:heapMemoryStats.free], @"JavaScriptFreeSize",
+                [NSNumber numberWithUnsignedInt:(unsigned int)globalMemoryStats.stackBytes], @"JavaScriptStackSize",
+                [NSNumber numberWithUnsignedInt:(unsigned int)globalMemoryStats.JITBytes], @"JavaScriptJITSize",
             nil];
 }
 
@@ -273,6 +280,31 @@ using namespace WebCore;
 - (int)numberOfPages:(float)pageWidthInPixels:(float)pageHeightInPixels
 {
     return PrintContext::numberOfPages(_private->coreFrame, FloatSize(pageWidthInPixels, pageHeightInPixels));
+}
+
+- (NSString *)pageProperty:(const char *)propertyName:(int)pageNumber
+{
+    return PrintContext::pageProperty(_private->coreFrame, propertyName, pageNumber);
+}
+
+- (bool)isPageBoxVisible:(int)pageNumber
+{
+    return PrintContext::isPageBoxVisible(_private->coreFrame, pageNumber);
+}
+
+- (NSString *)pageSizeAndMarginsInPixels:(int)pageNumber:(int)width:(int)height:(int)marginTop:(int)marginRight:(int)marginBottom:(int)marginLeft
+{
+    return PrintContext::pageSizeAndMarginsInPixels(_private->coreFrame, pageNumber, width, height, marginTop, marginRight, marginBottom, marginLeft);
+}
+
+- (void)printToCGContext:(CGContextRef)cgContext:(float)pageWidthInPixels:(float)pageHeightInPixels
+{
+    Frame* coreFrame = _private->coreFrame;
+    if (!coreFrame)
+        return;
+
+    GraphicsContext graphicsContext(cgContext);
+    PrintContext::spoolAllPagesWithBoundaries(coreFrame, graphicsContext, FloatSize(pageWidthInPixels, pageHeightInPixels));
 }
 
 @end

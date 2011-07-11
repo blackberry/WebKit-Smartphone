@@ -22,6 +22,9 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/*
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
+ */
 
 #include "config.h"
 #include "StorageNamespaceImpl.h"
@@ -29,16 +32,16 @@
 #if ENABLE(DOM_STORAGE)
 
 #include "SecurityOriginHash.h"
-#include "StringHash.h"
 #include "StorageAreaImpl.h"
 #include "StorageMap.h"
 #include "StorageSyncManager.h"
 #include <wtf/StdLibExtras.h>
+#include <wtf/text/StringHash.h>
+
 
 namespace WebCore {
 
 typedef HashMap<String, StorageNamespace*> LocalStorageNamespaceMap;
-
 static LocalStorageNamespaceMap& localStorageNamespaceMap()
 {
     DEFINE_STATIC_LOCAL(LocalStorageNamespaceMap, localStorageNamespaceMap, ());
@@ -93,12 +96,12 @@ PassRefPtr<StorageNamespace> StorageNamespaceImpl::copy()
     ASSERT(!m_isShutdown);
     ASSERT(m_storageType == SessionStorage);
 
-    StorageNamespaceImpl* newNamespace = new StorageNamespaceImpl(m_storageType, m_path, m_quota);
+    RefPtr<StorageNamespaceImpl> newNamespace = adoptRef(new StorageNamespaceImpl(m_storageType, m_path, m_quota));
 
     StorageAreaMap::iterator end = m_storageAreaMap.end();
     for (StorageAreaMap::iterator i = m_storageAreaMap.begin(); i != end; ++i)
         newNamespace->m_storageAreaMap.set(i->first, i->second->copy());
-    return adoptRef(newNamespace);
+    return newNamespace.release();
 }
 
 PassRefPtr<StorageArea> StorageNamespaceImpl::storageArea(PassRefPtr<SecurityOrigin> prpOrigin)
@@ -108,7 +111,7 @@ PassRefPtr<StorageArea> StorageNamespaceImpl::storageArea(PassRefPtr<SecurityOri
 
     RefPtr<SecurityOrigin> origin = prpOrigin;
     RefPtr<StorageAreaImpl> storageArea;
-    if (storageArea = m_storageAreaMap.get(origin))
+    if ((storageArea = m_storageAreaMap.get(origin)))
         return storageArea.release();
 
     storageArea = StorageAreaImpl::create(m_storageType, origin, m_syncManager, m_quota);

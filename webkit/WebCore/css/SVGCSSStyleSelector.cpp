@@ -153,7 +153,7 @@ void CSSStyleSelector::applySVGProperty(int id, CSSValue* value)
                 }
             } else {
                 svgstyle->setBaselineShift(BS_LENGTH);
-                svgstyle->setBaselineShiftValue(primitiveValue);
+                svgstyle->setBaselineShiftValue(SVGLength::fromCSSPrimitiveValue(primitiveValue));
             }
 
             break;
@@ -161,7 +161,8 @@ void CSSStyleSelector::applySVGProperty(int id, CSSValue* value)
         case CSSPropertyKerning:
         {
             HANDLE_INHERIT_AND_INITIAL(kerning, Kerning);
-            svgstyle->setKerning(primitiveValue);
+            if (primitiveValue)
+                svgstyle->setKerning(SVGLength::fromCSSPrimitiveValue(primitiveValue));
             break;
         }
         case CSSPropertyDominantBaseline:
@@ -247,21 +248,36 @@ void CSSStyleSelector::applySVGProperty(int id, CSSValue* value)
         {
             HANDLE_INHERIT_AND_INITIAL(strokeWidth, StrokeWidth)
             if (primitiveValue)
-                svgstyle->setStrokeWidth(primitiveValue);
+                svgstyle->setStrokeWidth(SVGLength::fromCSSPrimitiveValue(primitiveValue));
             break;
         }
         case CSSPropertyStrokeDasharray:
         {
             HANDLE_INHERIT_AND_INITIAL(strokeDashArray, StrokeDashArray)
-            if (value->isValueList())
-                svgstyle->setStrokeDashArray(static_cast<CSSValueList*>(value));
+            if (!value->isValueList())
+                break;
+
+            CSSValueList* dashes = static_cast<CSSValueList*>(value);
+
+            Vector<SVGLength> array;
+            size_t length = dashes->length();
+            for (size_t i = 0; i < length; ++i) {
+                CSSValue* currValue = dashes->itemWithoutBoundsCheck(i);
+                if (!currValue->isPrimitiveValue())
+                    continue;
+
+                CSSPrimitiveValue* dash = static_cast<CSSPrimitiveValue*>(dashes->itemWithoutBoundsCheck(i));
+                array.append(SVGLength::fromCSSPrimitiveValue(dash));
+            }
+
+            svgstyle->setStrokeDashArray(array);
             break;
         }
         case CSSPropertyStrokeDashoffset:
         {
             HANDLE_INHERIT_AND_INITIAL(strokeDashOffset, StrokeDashOffset)
             if (primitiveValue)
-                svgstyle->setStrokeDashOffset(primitiveValue);
+                svgstyle->setStrokeDashOffset(SVGLength::fromCSSPrimitiveValue(primitiveValue));
             break;
         }
         case CSSPropertyFillOpacity:
@@ -535,8 +551,13 @@ void CSSStyleSelector::applySVGProperty(int id, CSSValue* value)
                 return;
 
             CSSValueList *list = static_cast<CSSValueList*>(value);
-            ASSERT(list->length() == 1);
-            ShadowValue* item = static_cast<ShadowValue*>(list->itemWithoutBoundsCheck(0));
+            if (!list->length())
+                return;
+
+            CSSValue* firstValue = list->itemWithoutBoundsCheck(0);
+            if (!firstValue->isShadowValue())
+                return;
+            ShadowValue* item = static_cast<ShadowValue*>(firstValue);
             int x = item->x->computeLengthInt(style(), m_rootElementStyle);
             int y = item->y->computeLengthInt(style(), m_rootElementStyle);
             int blur = item->blur ? item->blur->computeLengthInt(style(), m_rootElementStyle) : 0;
@@ -551,6 +572,14 @@ void CSSStyleSelector::applySVGProperty(int id, CSSValue* value)
             ShadowData* shadowData = new ShadowData(x, y, blur, 0, Normal, color.isValid() ? color : Color::transparent);
             svgstyle->setShadow(shadowData);
             return;
+        }
+        case CSSPropertyVectorEffect: {
+            HANDLE_INHERIT_AND_INITIAL(vectorEffect, VectorEffect)
+            if (!primitiveValue)
+                break;
+
+            svgstyle->setVectorEffect(*primitiveValue);
+            break;
         }
         default:
             // If you crash here, it's because you added a css property and are not handling it

@@ -23,7 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-WebInspector.Script = function(sourceID, sourceURL, source, startingLine, errorLine, errorMessage)
+WebInspector.Script = function(sourceID, sourceURL, source, startingLine, errorLine, errorMessage, worldType)
 {
     this.sourceID = sourceID;
     this.sourceURL = sourceURL;
@@ -31,6 +31,7 @@ WebInspector.Script = function(sourceID, sourceURL, source, startingLine, errorL
     this.startingLine = startingLine;
     this.errorLine = errorLine;
     this.errorMessage = errorMessage;
+    this.worldType = worldType;
 
     // if no URL, look for "//@ sourceURL=" decorator
     // note that this sourceURL comment decorator is behavior that FireBug added
@@ -46,16 +47,29 @@ WebInspector.Script = function(sourceID, sourceURL, source, startingLine, errorL
     }
 }
 
+WebInspector.Script.WorldType = {
+    MAIN_WORLD: 0,
+    EXTENSIONS_WORLD: 1
+}
+
+WebInspector.Script.WorldType = {
+    MAIN_WORLD: 0,
+    EXTENSIONS_WORLD: 1
+}
+
 WebInspector.Script.prototype = {
     get linesCount()
     {
         if (!this.source)
             return 0;
+        if (this._linesCount)
+            return this._linesCount;
         this._linesCount = 0;
         var lastIndex = this.source.indexOf("\n");
         while (lastIndex !== -1) {
             lastIndex = this.source.indexOf("\n", lastIndex + 1)
             this._linesCount++;
         }
+        return this._linesCount;
     }
 }

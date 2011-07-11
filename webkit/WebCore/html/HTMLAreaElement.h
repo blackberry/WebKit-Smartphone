@@ -43,20 +43,13 @@ public:
 
     IntRect getRect(RenderObject*) const;
     Path getPath(RenderObject*) const;
-    
-    // Convenience method to get the parent map's image.
+
+    // The parent map's image.
     HTMLImageElement* imageElement() const;
     
-    KURL href() const;
-
-    bool noHref() const;
-    void setNoHref(bool);
-
 private:
     HTMLAreaElement(const QualifiedName&, Document*);
 
-    virtual HTMLTagStatus endTagRequirement() const { return TagStatusForbidden; }
-    virtual int tagPriority() const { return 0; }
     virtual void parseMappedAttribute(Attribute*);
     virtual bool supportsFocus() const;
     virtual String target() const;

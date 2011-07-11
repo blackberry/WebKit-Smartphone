@@ -28,6 +28,7 @@
 
 namespace WebCore {
 
+struct CompositionLineThrough;
 struct CompositionUnderline;
 
 const unsigned short cNoTruncation = USHRT_MAX;
@@ -64,6 +65,9 @@ public:
     void offsetRun(int d) { m_start += d; }
 
     unsigned short truncation() { return m_truncation; }
+
+    bool hasHyphen() const { return m_hasEllipsisBoxOrHyphen; }
+    void setHasHyphen(bool hasHyphen) { m_hasEllipsisBoxOrHyphen = hasHyphen; }
     static inline bool compareByStart(const InlineTextBox* first, const InlineTextBox* second) { return first->start() < second->start(); }
 
 private:
@@ -71,12 +75,14 @@ private:
     virtual int selectionHeight();
 
 public:
+    virtual IntRect calculateBoundaries() const { return IntRect(x(), y(), width(), height()); }
+
     virtual IntRect selectionRect(int absx, int absy, int startPos, int endPos);
     bool isSelected(int startPos, int endPos) const;
-    void selectionStartEnd(int& sPos, int& ePos);
+    virtual void selectionStartEnd(int& sPos, int& ePos);
 
-private:
-    virtual void paint(RenderObject::PaintInfo&, int tx, int ty);
+protected:
+    virtual void paint(PaintInfo&, int tx, int ty);
     virtual bool nodeAtPoint(const HitTestRequest&, HitTestResult&, int x, int y, int tx, int ty);
 
 public:
@@ -100,7 +106,7 @@ public:
     void setSpaceAdd(int add) { m_width -= m_toAdd; m_toAdd = add; m_width += m_toAdd; }
 
 private:
-    virtual bool isInlineTextBox() { return true; }    
+    virtual bool isInlineTextBox() const { return true; }    
 
 public:
     virtual int caretMinOffset() const;
@@ -117,6 +123,9 @@ public:
 
     bool containsCaretOffset(int offset) const; // false for offset after line break
 
+    // Needs to be public, so the static paintTextWithShadows() function can use it.
+    static FloatSize applyShadowToGraphicsContext(GraphicsContext*, const ShadowData*, const FloatRect& textRect, bool stroked, bool opaque);
+
 private:
     InlineTextBox* m_prevTextBox; // The previous box that also uses our RenderObject
     InlineTextBox* m_nextTextBox; // The next box that also uses our RenderObject
@@ -131,16 +140,19 @@ protected:
     void paintCompositionBackground(GraphicsContext*, int tx, int ty, RenderStyle*, const Font&, int startPos, int endPos);
     void paintDocumentMarkers(GraphicsContext*, int tx, int ty, RenderStyle*, const Font&, bool background);
     void paintCompositionUnderline(GraphicsContext*, int tx, int ty, const CompositionUnderline&);
+    void paintCompositionLineThrough(GraphicsContext*, int tx, int ty, const CompositionLineThrough&);
 #if PLATFORM(MAC)
     void paintCustomHighlight(int tx, int ty, const AtomicString& type);
 #endif
 
 private:
+    void computeLineStartAndWidth(unsigned lineStartOffset, unsigned lineEndOffset, unsigned& start, unsigned& width);
     void paintDecoration(GraphicsContext*, int tx, int ty, int decoration, const ShadowData*);
     void paintSelection(GraphicsContext*, int tx, int ty, RenderStyle*, const Font&);
     void paintSpellingOrGrammarMarker(GraphicsContext*, int tx, int ty, const DocumentMarker&, RenderStyle*, const Font&, bool grammar);
     void paintTextMatchMarker(GraphicsContext*, int tx, int ty, const DocumentMarker&, RenderStyle*, const Font&);
     void computeRectForReplacementMarker(int tx, int ty, const DocumentMarker&, RenderStyle*, const Font&);
+    void paintAttributeText(GraphicsContext*, int tx, int ty, const DocumentMarker&, RenderStyle*, const Font&);
 
 #if PLATFORM(OLYMPIA)
     void paintCaretMarker(GraphicsContext*, int tx, int ty, const DocumentMarker&, RenderStyle*, const Font&);

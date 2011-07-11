@@ -25,16 +25,17 @@
 
 #include "WebView.h"
 
-#include "DrawingAreaProxyUpdateChunk.h"
+#include "ChunkedUpdateDrawingAreaProxy.h"
 #include "RunLoop.h"
+#include "WebEditCommandProxy.h"
 #include "WebEventFactory.h"
 #include "WebPageNamespace.h"
 #include "WebPageProxy.h"
 #include <Commctrl.h>
 #include <WebCore/IntRect.h>
-#include <WebCore/PlatformString.h>
 #include <WebCore/WebCoreInstanceHandle.h>
 #include <WebCore/WindowMessageBroadcaster.h>
+#include <wtf/text/WTFString.h>
 
 using namespace WebCore;
 
@@ -76,11 +77,18 @@ LRESULT WebView::wndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     bool handled = true;
 
     switch (message) {
+        case WM_DESTROY:
+            m_isBeingDestroyed = true;
+            close();
+            break;
         case WM_ERASEBKGND:
             lResult = 1;
             break;
         case WM_PAINT:
             lResult = onPaintEvent(hWnd, message, wParam, lParam, handled);
+            break;
+        case WM_PRINTCLIENT:
+            lResult = onPrintClientEvent(hWnd, message, wParam, lParam, handled);
             break;
         case WM_MOUSEMOVE:
         case WM_LBUTTONDOWN:
@@ -125,6 +133,9 @@ LRESULT WebView::wndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WM_SHOWWINDOW:
             lResult = onShowWindowEvent(hWnd, message, wParam, lParam, handled);
             break;
+        case WM_SETCURSOR:
+            lResult = onSetCursor(hWnd, message, wParam, lParam, handled);
+            break;
         default:
             handled = false;
             break;
@@ -166,13 +177,15 @@ WebView::WebView(RECT rect, WebPageNamespace* pageNamespace, HWND hostWindow)
     , m_hostWindow(hostWindow)
     , m_topLevelParentWindow(0)
     , m_toolTipWindow(0)
+    , m_lastCursorSet(0)
     , m_trackingMouseLeave(false)
+    , m_isBeingDestroyed(false)
 {
     registerWebViewWindowClass();
 
     m_page = pageNamespace->createWebPage();
     m_page->setPageClient(this);
-    m_page->initializeWebPage(IntRect(rect).size(), new DrawingAreaProxyUpdateChunk(this));
+    m_page->initializeWebPage(IntRect(rect).size(), ChunkedUpdateDrawingAreaProxy::create(this));
 
     m_window = ::CreateWindowEx(0, kWebKit2WebViewWindowClassName, 0, WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
         rect.top, rect.left, rect.right - rect.left, rect.bottom - rect.top, m_hostWindow ? m_hostWindow : HWND_MESSAGE, 0, instanceHandle(), this);
@@ -193,6 +206,28 @@ WebView::~WebView()
     // Tooltip window needs to be explicitly destroyed since it isn't a WS_CHILD.
     if (::IsWindow(m_toolTipWindow))
         ::DestroyWindow(m_toolTipWindow);
+}
+
+void WebView::setHostWindow(HWND hostWindow)
+{
+    if (m_window) {
+        // If the host window hasn't changed, bail.
+        if (GetParent(m_window) == hostWindow)
+            return;
+        if (hostWindow)
+            SetParent(m_window, hostWindow);
+        else if (!m_isBeingDestroyed) {
+            // Turn the WebView into a message-only window so it will no longer be a child of the
+            // old host window and will be hidden from screen. We only do this when
+            // isBeingDestroyed() is false because doing this while handling WM_DESTROY can leave
+            // m_window in a weird state (see <http://webkit.org/b/29337>).
+            SetParent(m_window, HWND_MESSAGE);
+        }
+    }
+
+    m_hostWindow = hostWindow;
+    
+    windowAncestryDidChange();
 }
 
 static HWND findTopLevelParentWindow(HWND window)
@@ -316,6 +351,19 @@ LRESULT WebView::onPaintEvent(HWND hWnd, UINT message, WPARAM, LPARAM, bool& han
     return 0;
 }
 
+LRESULT WebView::onPrintClientEvent(HWND hWnd, UINT, WPARAM wParam, LPARAM, bool& handled)
+{
+    HDC hdc = reinterpret_cast<HDC>(wParam);
+    RECT winRect;
+    ::GetClientRect(hWnd, &winRect);
+    IntRect rect = winRect;
+
+    m_page->drawingArea()->paint(rect, hdc);
+
+    handled = true;
+    return 0;
+}
+
 LRESULT WebView::onSizeEvent(HWND, UINT, WPARAM, LPARAM lParam, bool& handled)
 {
     int width = LOWORD(lParam);
@@ -378,6 +426,12 @@ LRESULT WebView::onShowWindowEvent(HWND hWnd, UINT message, WPARAM wParam, LPARA
         handled = true;
     }
 
+    return 0;
+}
+
+LRESULT WebView::onSetCursor(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam, bool& handled)
+{
+    handled = ::SetCursor(m_lastCursorSet);
     return 0;
 }
 
@@ -466,6 +520,12 @@ void WebView::stopTrackingMouseLeave()
     ::TrackMouseEvent(&trackMouseEvent);
 }
 
+void WebView::close()
+{
+    setHostWindow(0);
+    m_page->close();
+}
+
 // PageClient
 
 void WebView::processDidExit()
@@ -499,6 +559,34 @@ void WebView::toolTipChanged(const String&, const String& newToolTip)
 
     ::SendMessage(m_toolTipWindow, TTM_ACTIVATE, !newToolTip.isEmpty(), 0);
 }
+
+void WebView::setCursor(const WebCore::Cursor& cursor)
+{
+    HCURSOR platformCursor = cursor.platformCursor()->nativeCursor();
+    if (!platformCursor)
+        return;
+
+    m_lastCursorSet = platformCursor;
+    ::SetCursor(platformCursor);
+}
+
+void WebView::registerEditCommand(PassRefPtr<WebEditCommandProxy>, UndoOrRedo)
+{
+}
+
+void WebView::clearAllEditCommands()
+{
+}
+
+#if USE(ACCELERATED_COMPOSITING)
+void WebView::pageDidEnterAcceleratedCompositing()
+{
+}
+
+void WebView::pageDidLeaveAcceleratedCompositing()
+{
+}
+#endif // USE(ACCELERATED_COMPOSITING)
 
 // WebCore::WindowMessageListener
 

@@ -34,13 +34,11 @@
 
 namespace JSC {
 
-    enum SourceBOMPresence { SourceHasNoBOMs, SourceCouldHaveBOMs };
-
     class SourceProvider : public RefCounted<SourceProvider> {
     public:
-        SourceProvider(const UString& url, SourceBOMPresence hasBOMs = SourceCouldHaveBOMs)
+        SourceProvider(const UString& url)
             : m_url(url)
-            , m_hasBOMs(hasBOMs)
+            , m_validated(false)
         {
         }
         virtual ~SourceProvider() { }
@@ -52,11 +50,12 @@ namespace JSC {
         const UString& url() { return m_url; }
         intptr_t asID() { return reinterpret_cast<intptr_t>(this); }
 
-        SourceBOMPresence hasBOMs() const { return m_hasBOMs; }
+        bool isValid() const { return m_validated; }
+        void setValid() { m_validated = true; }
 
     private:
         UString m_url;
-        SourceBOMPresence m_hasBOMs;
+        bool m_validated;
     };
 
     class UStringSourceProvider : public SourceProvider {
@@ -66,9 +65,12 @@ namespace JSC {
             return adoptRef(new UStringSourceProvider(source, url));
         }
 
-        UString getRange(int start, int end) const { return m_source.substr(start, end - start); }
-        const UChar* data() const { return m_source.data(); }
-        int length() const { return m_source.size(); }
+        UString getRange(int start, int end) const
+        {
+            return m_source.substringSharingImpl(start, end - start);
+        }
+        const UChar* data() const { return m_source.characters(); }
+        int length() const { return m_source.length(); }
 
     private:
         UStringSourceProvider(const UString& source, const UString& url)

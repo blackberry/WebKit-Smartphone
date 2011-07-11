@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2006 Eric Seidel (eric@webkit.org)
  * Copyright (C) 2008, 2009, 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,8 +30,10 @@
 #define EmptyClients_h
 
 #include "ChromeClient.h"
-#include "ContextMenuClient.h"
 #include "Console.h"
+#include "ContextMenuClient.h"
+#include "DeviceMotionClient.h"
+#include "DeviceOrientationClient.h"
 #include "DocumentLoader.h"
 #include "DragClient.h"
 #include "EditCommand.h"
@@ -38,9 +41,12 @@
 #include "FloatRect.h"
 #include "FocusDirection.h"
 #include "FrameLoaderClient.h"
+#include "FrameNetworkingContext.h"
 #include "InspectorClient.h"
 #include "PluginHalterClient.h"
+#include "PopupMenu.h"
 #include "ResourceError.h"
+#include "SearchPopupMenu.h"
 
 /*
  This file holds empty Client stubs for use by WebCore.
@@ -56,6 +62,27 @@
 */
 
 namespace WebCore {
+
+class SharedGraphicsContext3D;
+
+class EmptyPopupMenu : public PopupMenu {
+public:
+    virtual void show(const IntRect&, FrameView*, int) {}
+    virtual void hide() {}
+    virtual void updateFromElement() {}
+    virtual void disconnectClient() {}
+};
+
+class EmptySearchPopupMenu : public SearchPopupMenu {
+public:
+    virtual PopupMenu* popupMenu() { return m_popup.get(); }
+    virtual void saveRecentSearches(const AtomicString&, const Vector<String>&) {}
+    virtual void loadRecentSearches(const AtomicString&, Vector<String>&) {}
+    virtual bool enabled() { return false; }
+
+private:
+    RefPtr<EmptyPopupMenu> m_popup;
+};
 
 class EmptyChromeClient : public ChromeClient {
 public:
@@ -111,6 +138,10 @@ public:
     virtual bool runJavaScriptPrompt(Frame*, const String&, const String&, String&) { return false; }
     virtual bool shouldInterruptJavaScript() { return false; }
 
+    virtual bool selectItemWritingDirectionIsNatural() { return false; }
+    virtual PassRefPtr<PopupMenu> createPopupMenu(PopupMenuClient*) const { return adoptRef(new EmptyPopupMenu()); }
+    virtual PassRefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient*) const { return adoptRef(new EmptySearchPopupMenu()); }
+
     virtual void setStatusbarText(const String&) { }
 
     virtual bool tabsToLinks() const { return false; }
@@ -140,6 +171,7 @@ public:
 
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
     virtual void reachedMaxAppCacheSize(int64_t) { }
+    virtual void reachedApplicationCacheOriginQuota(SecurityOrigin*) { }
 #endif
 
 #if ENABLE(NOTIFICATIONS)
@@ -156,7 +188,7 @@ public:
 
     virtual PassOwnPtr<HTMLParserQuirks> createHTMLParserQuirks() { return 0; }
 
-    virtual bool setCursor(PlatformCursorHandle) { return false; }
+    virtual void setCursor(const Cursor&) { }
 
     virtual void scrollRectIntoView(const IntRect&, const ScrollView*) const {}
 
@@ -164,11 +196,14 @@ public:
     virtual void cancelGeolocationPermissionRequestForFrame(Frame*, Geolocation*) {}
 
 #if USE(ACCELERATED_COMPOSITING)
-    virtual void attachRootGraphicsLayer(Frame*, GraphicsLayer*) {};
-    virtual void setNeedsOneShotDrawingSynchronization() {};
-    virtual void scheduleCompositingLayerSync() {};
+    virtual void attachRootGraphicsLayer(Frame*, GraphicsLayer*) {}
+    virtual void setNeedsOneShotDrawingSynchronization() {}
+    virtual void scheduleCompositingLayerSync() {}
 #endif
 
+#if PLATFORM(WIN)
+    virtual void setLastSetCursorToCurrentCursor() { }
+#endif
 #if ENABLE(TOUCH_EVENTS)
     virtual void needTouchEvents(bool) { }
 #endif
@@ -286,6 +321,7 @@ public:
 
     virtual bool canHandleRequest(const ResourceRequest&) const { return false; }
     virtual bool canShowMIMEType(const String&) const { return false; }
+    virtual bool canShowMIMETypeAsHTML(const String&) const { return false; }
     virtual bool representationExistsForURLScheme(const String&) const { return false; }
     virtual String generatedMIMETypeForURLScheme(const String&) const { return ""; }
 
@@ -321,6 +357,8 @@ public:
     virtual PassRefPtr<Widget> createJavaAppletWidget(const IntSize&, HTMLAppletElement*, const KURL&, const Vector<String>&, const Vector<String>&) { return 0; }
 #if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
     virtual PassRefPtr<Widget> createMediaPlayerProxyPlugin(const IntSize&, HTMLMediaElement*, const KURL&, const Vector<String>&, const Vector<String>&, const String&) { return 0; }
+    virtual void hideMediaPlayerProxyPlugin(Widget*) { }
+    virtual void showMediaPlayerProxyPlugin(Widget*) { }
 #endif
 
     virtual ObjectContentType objectContentType(const KURL&, const String&) { return ObjectContentType(); }
@@ -346,6 +384,7 @@ public:
     virtual bool shouldCacheResponse(DocumentLoader*, unsigned long, const ResourceResponse&, const unsigned char*, unsigned long long) { return true; }
 #endif
 
+    virtual PassRefPtr<FrameNetworkingContext> createNetworkingContext() { return PassRefPtr<FrameNetworkingContext>(); }
 };
 
 class EmptyEditorClient : public EditorClient, public Noncopyable {
@@ -408,13 +447,12 @@ public:
     virtual void textWillBeDeletedInTextField(Element*) { }
     virtual void textDidChangeInTextArea(Element*) { }
 
-    // Note: This code is under review for upstreaming.
-    virtual bool focusedElementsAreRichlyEditable() { return false; }
-
 #if PLATFORM(MAC)
     virtual void markedTextAbandoned(Frame*) { }
 
     virtual NSString* userVisibleString(NSURL*) { return 0; }
+    virtual DocumentFragment* documentFragmentFromAttributedString(NSAttributedString*, Vector<ArchiveResource*>&) { return 0; };
+    virtual void setInsertionPasteboard(NSPasteboard*) { };
 #ifdef BUILDING_ON_TIGER
     virtual NSArray* pasteboardTypesForSelection(Frame*) { return 0; }
 #endif
@@ -445,11 +483,16 @@ public:
 #if PLATFORM(MAC) && !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
     virtual void checkTextOfParagraph(const UChar*, int, uint64_t, Vector<TextCheckingResult>&) { };
 #endif
+#if PLATFORM(MAC) && !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+    virtual void showCorrectionPanel(const FloatRect&, const String&, const String&, Editor*) { }
+    virtual void dismissCorrectionPanel(bool) { }
+#endif
     virtual void updateSpellingUIWithGrammarString(const String&, const GrammarDetail&) { }
     virtual void updateSpellingUIWithMisspelledWord(const String&) { }
     virtual void showSpellingUI(bool) { }
     virtual bool spellingUIIsShowing() { return false; }
     virtual void getGuessesForWord(const String&, Vector<String>&) { }
+    virtual void willSetInputMethodState() { }
     virtual void setInputMethodState(bool) { }
 
 
@@ -505,9 +548,25 @@ public:
 
     virtual void populateSetting(const String&, String*) { }
     virtual void storeSetting(const String&, const String&) { }
+    virtual bool sendMessageToFrontend(const String&) { return false; }
+};
+
+class EmptyDeviceMotionClient : public DeviceMotionClient {
+public:
+    virtual void setController(DeviceMotionController*) { }
+    virtual void startUpdating() { }
+    virtual void stopUpdating() { }
+    virtual DeviceMotionData* currentDeviceMotion() const { return 0; }
+};
+
+class EmptyDeviceOrientationClient : public DeviceOrientationClient {
+public:
+    virtual void setController(DeviceOrientationController*) { }
+    virtual void startUpdating() { }
+    virtual void stopUpdating() { }
+    virtual DeviceOrientation* lastOrientation() const { return 0; }
 };
 
 }
 
 #endif // EmptyClients_h
-

@@ -81,10 +81,10 @@ void Pasteboard::setSelectionMode(bool selectionMode)
 
 void Pasteboard::writeSelection(Range* selectedRange, bool canSmartCopyOrDelete, Frame* frame)
 {
-    String html = createMarkup(selectedRange, 0, AnnotateForInterchange);
+    String html = createMarkup(selectedRange, 0, AnnotateForInterchange, false, AbsoluteURLs);
     ExceptionCode ec = 0;
     KURL url = selectedRange->startContainer(ec)->document()->url();
-    String plainText = frame->selectedText();
+    String plainText = frame->editor()->selectedText();
 #if OS(WINDOWS)
     replaceNewlinesWithWindowsStyleNewlines(plainText);
 #endif
@@ -129,6 +129,10 @@ void Pasteboard::writeImage(Node* node, const KURL&, const String& title)
         return;
     Image* image = cachedImage->image();
     ASSERT(image);
+    
+    NativeImagePtr bitmap = image->nativeImageForCurrentFrame();
+    if (!bitmap)
+        return;
 
     // If the image is wrapped in a link, |url| points to the target of the
     // link.  This isn't useful to us, so get the actual image URL.
@@ -145,7 +149,6 @@ void Pasteboard::writeImage(Node* node, const KURL&, const String& title)
     }
     KURL url = urlString.isEmpty() ? KURL() : node->document()->completeURL(deprecatedParseURL(urlString));
 
-    NativeImagePtr bitmap = image->nativeImageForCurrentFrame();
     ChromiumBridge::clipboardWriteImage(bitmap, url, title);
 }
 

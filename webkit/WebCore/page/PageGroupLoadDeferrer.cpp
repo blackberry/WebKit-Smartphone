@@ -21,6 +21,8 @@
 #include "config.h"
 #include "PageGroupLoadDeferrer.h"
 
+#include "AsyncScriptRunner.h"
+#include "DocumentParser.h"
 #include "Frame.h"
 
 #if PLATFORM(OLYMPIA)
@@ -60,9 +62,13 @@ PageGroupLoadDeferrer::PageGroupLoadDeferrer(Page* page, bool deferSelf)
 
         // This code is not logically part of load deferring, but we do not want JS code executed beneath modal
         // windows or sheets, which is exactly when PageGroupLoadDeferrer is used.
+        // NOTE: if PageGroupLoadDeferrer is ever used for tasks other than showing a modal window or sheet,
+        // the constructor will need to take a ActiveDOMObject::ReasonForSuspension.
         for (Frame* frame = m_deferredFrames[i].get(); frame; frame = frame->tree()->traverseNext()) {
-            frame->document()->suspendActiveDOMObjects();
-            frame->document()->suspendExecuteScriptSoonTimer();
+            frame->document()->suspendActiveDOMObjects(ActiveDOMObject::WillShowDialog);
+            frame->document()->asyncScriptRunner()->suspend();
+            if (DocumentParser* parser = frame->document()->parser())
+                parser->suspendScheduledTasks();
         }
 
         if (Page* page = m_deferredFrames[i]->page())
@@ -78,7 +84,9 @@ PageGroupLoadDeferrer::~PageGroupLoadDeferrer()
 
             for (Frame* frame = page->mainFrame(); frame; frame = frame->tree()->traverseNext()) {
                 frame->document()->resumeActiveDOMObjects();
-                frame->document()->resumeExecuteScriptSoonTimer();
+                frame->document()->asyncScriptRunner()->resume();
+                if (DocumentParser* parser = frame->document()->parser())
+                    parser->resumeScheduledTasks();
             }
         }
     }

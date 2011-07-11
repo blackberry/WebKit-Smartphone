@@ -82,7 +82,6 @@ class Land(AbstractSequencedCommand):
         steps.EnsureBuildersAreGreen,
         steps.UpdateChangeLogsWithReviewer,
         steps.ValidateReviewer,
-        steps.EnsureBuildersAreGreen,
         steps.Build,
         steps.RunTests,
         steps.Commit,
@@ -94,8 +93,21 @@ If a bug id is provided, or one can be found in the ChangeLog land will update t
 
     def _prepare_state(self, options, args, tool):
         return {
-            "bug_id": (args and args[0]) or tool.checkout().bug_id_for_this_commit(options.git_commit, options.squash),
+            "bug_id": (args and args[0]) or tool.checkout().bug_id_for_this_commit(options.git_commit),
         }
+
+
+class LandCowboy(AbstractSequencedCommand):
+    name = "land-cowboy"
+    help_text = "Prepares a ChangeLog and lands the current working directory diff."
+    steps = [
+        steps.PrepareChangeLog,
+        steps.EditChangeLog,
+        steps.ConfirmDiff,
+        steps.Build,
+        steps.RunTests,
+        steps.Commit,
+    ]
 
 
 class AbstractPatchProcessingCommand(AbstractDeclarativeCommand):
@@ -182,6 +194,18 @@ class BuildAttachment(AbstractPatchSequencingCommand, ProcessAttachmentsMixin):
     ]
 
 
+class PostAttachmentToRietveld(AbstractPatchSequencingCommand, ProcessAttachmentsMixin):
+    name = "post-attachment-to-rietveld"
+    help_text = "Uploads a bugzilla attachment to rietveld"
+    arguments_names = "ATTACHMENTID"
+    main_steps = [
+        steps.CleanWorkingDirectory,
+        steps.Update,
+        steps.ApplyPatch,
+        steps.PostCodeReview,
+    ]
+
+
 class AbstractPatchApplyingCommand(AbstractPatchSequencingCommand):
     prepare_steps = [
         steps.EnsureLocalCommitIfNeeded,
@@ -218,7 +242,6 @@ class AbstractPatchLandingCommand(AbstractPatchSequencingCommand):
         steps.Update,
         steps.ApplyPatch,
         steps.ValidateReviewer,
-        steps.EnsureBuildersAreGreen,
         steps.Build,
         steps.RunTests,
         steps.Commit,

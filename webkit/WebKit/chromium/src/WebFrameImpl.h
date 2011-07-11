@@ -56,6 +56,7 @@ class WebDataSourceImpl;
 class WebInputElement;
 class WebFrameClient;
 class WebPasswordAutocompleteListener;
+class WebPluginContainerImpl;
 class WebView;
 class WebViewImpl;
 
@@ -64,7 +65,7 @@ class WebFrameImpl : public WebFrame, public RefCounted<WebFrameImpl> {
 public:
     // WebFrame methods:
     virtual WebString name() const;
-    virtual void clearName();
+    virtual void setName(const WebString&);
     virtual WebURL url() const;
     virtual WebURL favIconURL() const;
     virtual WebURL openSearchDescriptionURL() const;
@@ -149,6 +150,13 @@ public:
     virtual float printPage(int pageToPrint, WebCanvas*);
     virtual float getPrintPageShrink(int page);
     virtual void printEnd();
+    virtual bool isPageBoxVisible(int pageIndex);
+    virtual void pageSizeAndMarginsInPixels(int pageIndex,
+                                            WebSize& pageSize,
+                                            int& marginTop,
+                                            int& marginRight,
+                                            int& marginBottom,
+                                            int& marginLeft);
     virtual bool find(
         int identifier, const WebString& searchText, const WebFindOptions&,
         bool wrapWithinFrame, WebRect* selectionRect);
@@ -161,15 +169,20 @@ public:
     virtual void resetMatchCount();
     virtual bool registerPasswordListener(
         WebInputElement, WebPasswordAutocompleteListener*);
+    virtual void notifiyPasswordListenerOfAutocomplete(
+        const WebInputElement&);
 
     virtual WebString contentAsText(size_t maxChars) const;
     virtual WebString contentAsMarkup() const;
     virtual WebString renderTreeAsText() const;
     virtual WebString counterValueForElementById(const WebString& id) const;
+    virtual WebString markerTextForListItem(const WebElement&) const;
     virtual int pageNumberForElementById(const WebString& id,
                                          float pageWidthInPixels,
                                          float pageHeightInPixels) const;
     virtual WebRect selectionBoundsRect() const;
+
+    virtual bool selectionStartHasSpellingMarkerFor(int from, int length) const;
 
     static PassRefPtr<WebFrameImpl> create(WebFrameClient* client);
     ~WebFrameImpl();
@@ -187,6 +200,10 @@ public:
 
     static WebFrameImpl* fromFrame(WebCore::Frame* frame);
     static WebFrameImpl* fromFrameOwnerElement(WebCore::Element* element);
+
+    // If the frame hosts a PluginDocument, this method returns the WebPluginContainerImpl
+    // that hosts the plugin.
+    static WebPluginContainerImpl* pluginContainerFromFrame(WebCore::Frame*);
 
     WebViewImpl* viewImpl() const;
 
@@ -222,7 +239,7 @@ public:
     // user name input element, or 0 if none available.
     // Note that the returned listener is owner by the WebFrameImpl and should not
     // be kept around as it is deleted when the page goes away.
-    WebPasswordAutocompleteListener* getPasswordListener(WebCore::HTMLInputElement*);
+    WebPasswordAutocompleteListener* getPasswordListener(const WebCore::HTMLInputElement*);
 
     WebFrameClient* client() const { return m_client; }
     void setClient(WebFrameClient* client) { m_client = client; }
@@ -271,7 +288,7 @@ private:
     // It is not necessary if the frame is invisible, for example, or if this
     // is a repeat search that already returned nothing last time the same prefix
     // was searched.
-    bool shouldScopeMatches(const WebCore::String& searchText);
+    bool shouldScopeMatches(const WTF::String& searchText);
 
     // Queue up a deferred call to scopeStringMatches.
     void scopeStringMatchesSoon(
@@ -322,7 +339,7 @@ private:
     // short-circuiting searches in the following scenarios: When a frame has
     // been searched and returned 0 results, we don't need to search that frame
     // again if the user is just adding to the search (making it more specific).
-    WebCore::String m_lastSearchString;
+    WTF::String m_lastSearchString;
 
     // Keeps track of how many matches this frame has found so far, so that we
     // don't loose count between scoping efforts, and is also used (in conjunction

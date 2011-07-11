@@ -2,6 +2,7 @@
  * This file is part of the DOM implementation for WebCore.
  *
  * Copyright (C) 2006 Apple Computer, Inc.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -24,9 +25,11 @@
 #define DocumentMarker_h
 
 #include "PlatformString.h"
+#include <wtf/Forward.h>
+
+#include "AttributeTextStyle.h"
 
 namespace WebCore {
-    class String;
 
 // A range of a node within a document that is "marked", such as the range of a misspelled word.
 // It optionally includes a description that could be displayed in the user interface.
@@ -39,7 +42,9 @@ struct DocumentMarker {
         Spelling,
         Grammar,
         TextMatch,
-        Replacement
+        Replacement,
+        RejectedCorrection,
+        AttributeText
 #if PLATFORM(OLYMPIA)
         , Caret
 #endif
@@ -50,6 +55,19 @@ struct DocumentMarker {
     unsigned endOffset;
     String description;
     bool activeMatch;
+
+    AttributeTextStyle attributeTextStyle;
+
+    bool typesMatch(const DocumentMarker& o) const
+    {
+        if (type != o.type)
+            return false;
+
+        if (type == AttributeText)
+            return attributeTextStyle == o.attributeTextStyle;
+
+        return true;
+    }
 
     bool operator==(const DocumentMarker& o) const
     {

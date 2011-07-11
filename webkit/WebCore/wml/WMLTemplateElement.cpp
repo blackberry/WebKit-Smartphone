@@ -43,6 +43,11 @@ WMLTemplateElement::~WMLTemplateElement()
 {
 }
 
+PassRefPtr<WMLTemplateElement> WMLTemplateElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new WMLTemplateElement(tagName, document));
+}
+
 void WMLTemplateElement::parseMappedAttribute(Attribute* attr)
 {
     WMLIntrinsicEventType eventType = WMLIntrinsicEventUnknown;
@@ -98,7 +103,7 @@ void WMLTemplateElement::registerTemplatesInDocument(Document* doc)
         return;
 
     // Only one template element should be allowed in a document
-    // Calling setTemplateElement() twice on a WMLCardElement, will result in a tokenizer error.
+    // Calling setTemplateElement() twice on a WMLCardElement, will result in a parser error.
     for (unsigned i = 0; i < length; ++i) {
         WMLTemplateElement* temp = static_cast<WMLTemplateElement*>(nodeList->item(i));
 

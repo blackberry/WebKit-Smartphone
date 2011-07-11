@@ -48,12 +48,15 @@ MainWindow::MainWindow(const QString& url)
 void MainWindow::buildUI()
 {
     QToolBar* bar = addToolBar("Navigation");
-#if defined(Q_WS_S60)
+#if defined(Q_OS_SYMBIAN)
     bar->setIconSize(QSize(16, 16));
 #endif
+    QAction* reloadAction = page()->action(QWebPage::Reload);
+    connect(reloadAction, SIGNAL(triggered()), this, SLOT(changeLocation()));
+
     bar->addAction(page()->action(QWebPage::Back));
     bar->addAction(page()->action(QWebPage::Forward));
-    bar->addAction(page()->action(QWebPage::Reload));
+    bar->addAction(reloadAction);
     bar->addAction(page()->action(QWebPage::Stop));
 
     urlEdit = new LocationEdit(this);
@@ -62,7 +65,7 @@ void MainWindow::buildUI()
     QCompleter* completer = new QCompleter(this);
     urlEdit->setCompleter(completer);
     completer->setModel(&urlModel);
-#if defined(Q_WS_S60)
+#if defined(Q_OS_SYMBIAN)
     addToolBarBreak();
     addToolBar("Location")->addWidget(urlEdit);
 #else
@@ -142,6 +145,13 @@ void MainWindow::load(const QUrl& url)
 void MainWindow::changeLocation()
 {
     QString string = urlEdit->text();
+    QUrl mainFrameURL = page()->mainFrame()->url();
+
+    if (mainFrameURL.isValid() && string == mainFrameURL.toString()) {
+        page()->triggerAction(QWebPage::Reload);
+        return;
+    }
+
     load(string);
 }
 
@@ -161,3 +171,8 @@ void MainWindow::openFile()
     }
 }
 
+void MainWindow::openLocation()
+{
+    urlEdit->selectAll();
+    urlEdit->setFocus();
+}

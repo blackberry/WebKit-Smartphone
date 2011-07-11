@@ -33,6 +33,7 @@
 #import "LayoutTestController.h"
 #import <WebKit/WebKit.h>
 #import <WebKit/WebTypesInternal.h>
+#import <WebKit/WebDataSourcePrivate.h>
 #import <wtf/Assertions.h>
 
 using namespace std;
@@ -131,6 +132,10 @@ using namespace std;
         printf("%s\n", [string UTF8String]);
     }
 
+    if (!done && !gLayoutTestController->deferMainResourceDataLoad()) {
+        [dataSource _setDeferMainResourceDataLoad:false];
+    }
+
     if (!done && gLayoutTestController->willSendRequestReturnsNull())
         return nil;
 
@@ -166,8 +171,13 @@ using namespace std;
 
 - (void)webView:(WebView *)wv resource:(id)identifier didReceiveAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge fromDataSource:(WebDataSource *)dataSource
 {
-    if (!gLayoutTestController->handlesAuthenticationChallenges())
+    if (!gLayoutTestController->handlesAuthenticationChallenges()) {
+        NSString *string = [NSString stringWithFormat:@"%@ - didReceiveAuthenticationChallenge - Simulating cancelled authentication sheet", identifier];
+        printf("%s\n", [string UTF8String]);
+
+        [[challenge sender] continueWithoutCredentialForAuthenticationChallenge:challenge];
         return;
+    }
     
     const char* user = gLayoutTestController->authenticationUsername().c_str();
     NSString *nsUser = [NSString stringWithFormat:@"%s", user ? user : ""];

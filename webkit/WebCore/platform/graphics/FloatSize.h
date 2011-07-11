@@ -88,6 +88,12 @@ public:
            m_height < other.m_height ? m_height : other.m_height);
     }
 
+    float diagonalLength() const;
+    float diagonalLengthSquared() const
+    {
+        return m_width * m_width + m_height * m_height;
+    }
+
 #if PLATFORM(OLYMPIA)
     String toString() const
     {

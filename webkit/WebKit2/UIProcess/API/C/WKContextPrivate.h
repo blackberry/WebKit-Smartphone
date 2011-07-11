@@ -42,6 +42,12 @@ typedef struct WKContextStatistics WKContextStatistics;
 
 WK_EXPORT void WKContextGetStatistics(WKContextRef context, WKContextStatistics* statistics);
 
+WK_EXPORT WKContextRef WKContextGetSharedThreadContext();
+
+WK_EXPORT void _WKContextSetAdditionalPluginsDirectory(WKContextRef context, WKStringRef pluginsDirectory);
+
+WK_EXPORT void _WKContextRegisterURLSchemeAsEmptyDocument(WKContextRef context, WKStringRef urlScheme);
+
 #ifdef __cplusplus
 }
 #endif

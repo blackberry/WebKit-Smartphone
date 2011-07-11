@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2009 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -54,6 +54,7 @@
 #include "SVGFEColorMatrixElement.cpp"
 #include "SVGFEComponentTransferElement.cpp"
 #include "SVGFECompositeElement.cpp"
+#include "SVGFEConvolveMatrixElement.cpp"
 #include "SVGFEDiffuseLightingElement.cpp"
 #include "SVGFEDisplacementMapElement.cpp"
 #include "SVGFEDistantLightElement.cpp"
@@ -106,7 +107,14 @@
 #include "SVGNumberList.cpp"
 #include "SVGPaint.cpp"
 #include "SVGParserUtilities.cpp"
+#include "SVGPathBlender.cpp"
+#include "SVGPathBuilder.cpp"
+#include "SVGPathByteStreamBuilder.cpp"
+#include "SVGPathByteStreamSource.cpp"
 #include "SVGPathElement.cpp"
+#include "SVGPathParser.cpp"
+#include "SVGPathParserFactory.cpp"
+#include "SVGPathSeg.cpp"
 #include "SVGPathSegArc.cpp"
 #include "SVGPathSegClosePath.cpp"
 #include "SVGPathSegCurvetoCubic.cpp"
@@ -117,7 +125,12 @@
 #include "SVGPathSegLinetoHorizontal.cpp"
 #include "SVGPathSegLinetoVertical.cpp"
 #include "SVGPathSegList.cpp"
+#include "SVGPathSegListBuilder.cpp"
+#include "SVGPathSegListSource.cpp"
 #include "SVGPathSegMoveto.cpp"
+#include "SVGPathStringBuilder.cpp"
+#include "SVGPathStringSource.cpp"
+#include "SVGPathTraversalStateBuilder.cpp"
 #include "SVGPatternElement.cpp"
 #include "SVGPointList.cpp"
 #include "SVGPolyElement.cpp"

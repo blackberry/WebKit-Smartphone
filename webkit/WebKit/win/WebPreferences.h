@@ -420,7 +420,13 @@ public:
     virtual HRESULT STDMETHODCALLTYPE setShowRepaintCounter(BOOL);
     virtual HRESULT STDMETHODCALLTYPE showRepaintCounter(BOOL*);
 
-   // WebPreferences
+    virtual HRESULT STDMETHODCALLTYPE setDNSPrefetchingEnabled(BOOL);
+    virtual HRESULT STDMETHODCALLTYPE isDNSPrefetchingEnabled(BOOL*);
+
+    virtual HRESULT STDMETHODCALLTYPE setMemoryInfoEnabled(BOOL);
+    virtual HRESULT STDMETHODCALLTYPE memoryInfoEnabled(BOOL*);
+
+    // WebPreferences
 
     // This method accesses a different preference key than developerExtrasEnabled.
     // See <rdar://5343767> for the justification.

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2004, 2006 Apple Computer, Inc.  All rights reserved.
+ * Copyright (C) 2010 Patrick Gansterer <paroga@paroga.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,17 +26,18 @@
 
 #include "config.h"
 #include "ResourceHandle.h"
-#include "ResourceHandleClient.h"
-#include "ResourceHandleInternal.h"
-#include "ResourceHandleWin.h"
 
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "Document.h"
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "Page.h"
 #include "ResourceError.h"
+#include "ResourceHandleClient.h"
+#include "ResourceHandleInternal.h"
+#include "ResourceHandleWin.h"
 #include "Timer.h"
+#include "WebCoreInstanceHandle.h"
 #include <wtf/text/CString.h>
 #include <windows.h>
 #include <wininet.h>
@@ -61,6 +63,20 @@ static const ResourceHandleEventHandler messageHandlers[] = {
     &ResourceHandle::onRequestRedirected,
     &ResourceHandle::onRequestComplete
 };
+
+static String queryHTTPHeader(HINTERNET requestHandle, DWORD infoLevel)
+{
+    DWORD bufferSize = 0;
+    HttpQueryInfoW(requestHandle, infoLevel, 0, &bufferSize, 0);
+
+    Vector<UChar> characters(bufferSize / sizeof(UChar));
+
+    if (!HttpQueryInfoW(requestHandle, infoLevel, characters.data(), &bufferSize, 0))
+        return String();
+
+    characters.removeLast(); // Remove NullTermination.
+    return String::adopt(characters);
+}
 
 static int addToOutstandingJobs(ResourceHandle* job)
 {
@@ -113,13 +129,56 @@ static void initializeOffScreenResourceHandleWindow()
     memset(&wcex, 0, sizeof(WNDCLASSEX));
     wcex.cbSize = sizeof(WNDCLASSEX);
     wcex.lpfnWndProc    = ResourceHandleWndProc;
-    wcex.hInstance      = Page::instanceHandle();
+    wcex.hInstance      = WebCore::instanceHandle();
     wcex.lpszClassName  = kResourceHandleWindowClassName;
     RegisterClassEx(&wcex);
 
     transferJobWindowHandle = CreateWindow(kResourceHandleWindowClassName, 0, 0, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0,
-        HWND_MESSAGE, 0, Page::instanceHandle(), 0);
+        HWND_MESSAGE, 0, WebCore::instanceHandle(), 0);
 }
+
+
+class WebCoreSynchronousLoader : public ResourceHandleClient, public Noncopyable {
+public:
+    WebCoreSynchronousLoader(ResourceError&, ResourceResponse&, Vector<char>&, const String& userAgent);
+
+    virtual void didReceiveResponse(ResourceHandle*, const ResourceResponse&);
+    virtual void didReceiveData(ResourceHandle*, const char*, int, int lengthReceived);
+    virtual void didFinishLoading(ResourceHandle*);
+    virtual void didFail(ResourceHandle*, const ResourceError&);
+
+private:
+    ResourceError& m_error;
+    ResourceResponse& m_response;
+    Vector<char>& m_data;
+};
+
+WebCoreSynchronousLoader::WebCoreSynchronousLoader(ResourceError& error, ResourceResponse& response, Vector<char>& data, const String& userAgent)
+    : m_error(error)
+    , m_response(response)
+    , m_data(data)
+{
+}
+
+void WebCoreSynchronousLoader::didReceiveResponse(ResourceHandle*, const ResourceResponse& response)
+{
+    m_response = response;
+}
+
+void WebCoreSynchronousLoader::didReceiveData(ResourceHandle*, const char* data, int length, int)
+{
+    m_data.append(data, length);
+}
+
+void WebCoreSynchronousLoader::didFinishLoading(ResourceHandle*)
+{
+}
+
+void WebCoreSynchronousLoader::didFail(ResourceHandle*, const ResourceError& error)
+{
+    m_error = error;
+}
+
 
 ResourceHandleInternal::~ResourceHandleInternal()
 {
@@ -144,9 +203,9 @@ void ResourceHandle::onHandleCreated(LPARAM lParam)
             return;
         }
 
-        if (method() == "POST") {
+        if (request().httpMethod() == "POST") {
             // FIXME: Too late to set referrer properly.
-            String urlStr = url().path();
+            String urlStr = request().url().path();
             int fragmentIndex = urlStr.find('#');
             if (fragmentIndex != -1)
                 urlStr = urlStr.left(fragmentIndex);
@@ -166,7 +225,7 @@ void ResourceHandle::onHandleCreated(LPARAM lParam)
             }
         }
     } else if (!d->m_secondaryHandle) {
-        assert(method() == "POST");
+        assert(request().httpMethod() == "POST");
         d->m_secondaryHandle = HINTERNET(lParam);
         
         // Need to actually send the request now.
@@ -175,18 +234,18 @@ void ResourceHandle::onHandleCreated(LPARAM lParam)
         headers += d->m_postReferrer;
         headers += "\n";
         const CString& headersLatin1 = headers.latin1();
-        String formData = postData()->flattenToString();
+        String formData = request().httpBody()->flattenToString();
         INTERNET_BUFFERSA buffers;
         memset(&buffers, 0, sizeof(buffers));
         buffers.dwStructSize = sizeof(INTERNET_BUFFERSA);
-        buffers.lpcszHeader = headersLatin1;
+        buffers.lpcszHeader = headersLatin1.data();
         buffers.dwHeadersLength = headers.length();
         buffers.dwBufferTotal = formData.length();
         
         d->m_bytesRemainingToWrite = formData.length();
         d->m_formDataString = (char*)malloc(formData.length());
         d->m_formDataLength = formData.length();
-        strncpy(d->m_formDataString, formData.latin1(), formData.length());
+        strncpy(d->m_formDataString, formData.latin1().data(), formData.length());
         d->m_writing = true;
         HttpSendRequestExA(d->m_secondaryHandle, &buffers, 0, 0, (DWORD_PTR)d->m_jobId);
         // FIXME: add proper error handling
@@ -223,8 +282,7 @@ void ResourceHandle::onRequestComplete(LPARAM lParam)
         return;
     }
 
-    HINTERNET handle = (method() == "POST") ? d->m_secondaryHandle : d->m_resourceHandle;
-    BOOL ok = FALSE;
+    HINTERNET handle = (request().httpMethod() == "POST") ? d->m_secondaryHandle : d->m_resourceHandle;
 
     static const int bufferSize = 32768;
     char buffer[bufferSize];
@@ -233,11 +291,31 @@ void ResourceHandle::onRequestComplete(LPARAM lParam)
     buffers.lpvBuffer = buffer;
     buffers.dwBufferLength = bufferSize;
 
-    bool receivedAnyData = false;
+    BOOL ok = FALSE;
     while ((ok = InternetReadFileExA(handle, &buffers, IRF_NO_WAIT, (DWORD_PTR)this)) && buffers.dwBufferLength) {
         if (!hasReceivedResponse()) {
             setHasReceivedResponse();
             ResourceResponse response;
+            response.setURL(firstRequest().url());
+
+            String httpStatusText = queryHTTPHeader(d->m_requestHandle, HTTP_QUERY_STATUS_TEXT);
+            if (!httpStatusText.isNull())
+                response.setHTTPStatusText(httpStatusText);
+
+            String httpStatusCode = queryHTTPHeader(d->m_requestHandle, HTTP_QUERY_STATUS_CODE);
+            if (!httpStatusCode.isNull())
+                response.setHTTPStatusCode(httpStatusCode.toInt());
+
+            String httpContentLength = queryHTTPHeader(d->m_requestHandle, HTTP_QUERY_CONTENT_LENGTH);
+            if (!httpContentLength.isNull())
+                response.setExpectedContentLength(httpContentLength.toInt());
+
+            String httpContentType = queryHTTPHeader(d->m_requestHandle, HTTP_QUERY_CONTENT_TYPE);
+            if (!httpContentType.isNull()) {
+                response.setMimeType(extractMIMETypeFromMediaType(httpContentType));
+                response.setTextEncodingName(extractCharsetFromMediaType(httpContentType));
+            }
+
             client()->didReceiveResponse(this, response);
         }
         client()->didReceiveData(this, buffer, buffers.dwBufferLength, 0);
@@ -260,7 +338,11 @@ void ResourceHandle::onRequestComplete(LPARAM lParam)
                 InternetGetLastResponseInfo(&platformData.error, platformData.errorString, &errorStringChars);
             }
         }
-        _RPTF1(_CRT_WARN, "Load error: %i\n", error);
+#ifdef RESOURCE_LOADER_DEBUG
+        char buf[64];
+        _snprintf(buf, sizeof(buf), "Load error: %i\n", error);
+        OutputDebugStringA(buf);
+#endif 
     }
     
     if (d->m_secondaryHandle)
@@ -309,8 +391,8 @@ static void __stdcall transferJobStatusCallback(HINTERNET internetHandle,
         // need to block the redirect at this point so the application can
         // decide whether or not to follow the redirect)
         msg = requestRedirectedMessage;
-        lParam = (LPARAM) new StringImpl((const UChar*) statusInformation,
-                                         statusInformationLength);
+        lParam = (LPARAM) StringImpl::create((const UChar*) statusInformation,
+                                             statusInformationLength).releaseRef();
         break;
     case INTERNET_STATUS_USER_INPUT_REQUIRED:
         // FIXME: prompt the user if necessary
@@ -324,30 +406,16 @@ static void __stdcall transferJobStatusCallback(HINTERNET internetHandle,
     PostMessage(transferJobWindowHandle, msg, (WPARAM) jobId, lParam);
 }
 
-bool ResourceHandle::start(Frame* frame)
+bool ResourceHandle::start(NetworkingContext* context)
 {
     ref();
-    if (url().isLocalFile()) {
-        String path = url().path();
-        // windows does not enjoy a leading slash on paths
-        if (path[0] == '/')
-            path = path.substring(1);
-        // FIXME: This is wrong. Need to use wide version of this call.
-        d->m_fileHandle = CreateFileA(path.utf8().data(), GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-
-        // FIXME: perhaps this error should be reported asynchronously for
-        // consistency.
-        if (d->m_fileHandle == INVALID_HANDLE_VALUE) {
-            delete this;
-            return false;
-        }
-
+    if (request().url().isLocalFile()) {
         d->m_fileLoadTimer.startOneShot(0.0);
         return true;
     } else {
         static HINTERNET internetHandle = 0;
         if (!internetHandle) {
-            String userAgentStr = frame->loader()->userAgent() + String("", 1);
+            String userAgentStr = context->userAgent() + String("", 1);
             LPCWSTR userAgent = reinterpret_cast<const WCHAR*>(userAgentStr.characters());
             // leak the Internet for now
             internetHandle = InternetOpen(userAgent, INTERNET_OPEN_TYPE_PRECONFIG, 0, 0, INTERNET_FLAG_ASYNC);
@@ -370,18 +438,18 @@ bool ResourceHandle::start(Frame* frame)
         // For form posting, we can't use InternetOpenURL.  We have to use
         // InternetConnect followed by HttpSendRequest.
         HINTERNET urlHandle;
-        String referrer = frame->loader()->referrer();
-        if (method() == "POST") {
+        String referrer = context->referrer();
+        if (request().httpMethod() == "POST") {
             d->m_postReferrer = referrer;
-            String host = url().host();
+            String host = request().url().host();
             urlHandle = InternetConnectA(internetHandle, host.latin1().data(),
-                                         url().port(),
+                                         request().url().port(),
                                          NULL, // no username
                                          NULL, // no password
                                          INTERNET_SERVICE_HTTP,
                                          flags, (DWORD_PTR)d->m_jobId);
         } else {
-            String urlStr = url().string();
+            String urlStr = request().url().string();
             int fragmentIndex = urlStr.find('#');
             if (fragmentIndex != -1)
                 urlStr = urlStr.left(fragmentIndex);
@@ -404,9 +472,29 @@ bool ResourceHandle::start(Frame* frame)
     }
 }
 
-void ResourceHandle::fileLoadTimer(Timer<ResourceHandle>* timer)
+void ResourceHandle::fileLoadTimer(Timer<ResourceHandle>*)
 {
+    RefPtr<ResourceHandle> protector(this);
+    deref(); // balances ref in start
+
+    String fileName = firstRequest().url().fileSystemPath();
+    HANDLE fileHandle = CreateFileW(fileName.charactersWithNullTermination(), GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+
+    if (fileHandle == INVALID_HANDLE_VALUE) {
+        client()->didFail(this, ResourceError());
+        return;
+    }
+
     ResourceResponse response;
+
+    int dotPos = fileName.reverseFind('.');
+    int slashPos = fileName.reverseFind('/');
+
+    if (slashPos < dotPos && dotPos != -1) {
+        String ext = fileName.substring(dotPos + 1);
+        response.setMimeType(MIMETypeRegistry::getMIMETypeForExtension(ext));
+    }
+
     client()->didReceiveResponse(this, response);
 
     bool result = false;
@@ -415,16 +503,13 @@ void ResourceHandle::fileLoadTimer(Timer<ResourceHandle>* timer)
     do {
         const int bufferSize = 8192;
         char buffer[bufferSize];
-        result = ReadFile(d->m_fileHandle, &buffer, bufferSize, &bytesRead, NULL); 
+        result = ReadFile(fileHandle, &buffer, bufferSize, &bytesRead, 0);
         if (result && bytesRead)
             client()->didReceiveData(this, buffer, bytesRead, 0);
-        // Check for end of file. 
+        // Check for end of file.
     } while (result && bytesRead);
 
-    // FIXME: handle errors better
-
-    CloseHandle(d->m_fileHandle);
-    d->m_fileHandle = INVALID_HANDLE_VALUE;
+    CloseHandle(fileHandle);
 
     client()->didFinishLoading(this);
 }
@@ -444,6 +529,16 @@ void ResourceHandle::cancel()
         client()->didFail(this, ResourceError());
 }
 
+void ResourceHandle::loadResourceSynchronously(const ResourceRequest& request, StoredCredentials storedCredentials, ResourceError& error, ResourceResponse& response, Vector<char>& data, Frame* frame)
+{
+    UNUSED_PARAM(storedCredentials);
+
+    WebCoreSynchronousLoader syncLoader(error, response, data, request.httpUserAgent());
+    ResourceHandle handle(request, &syncLoader, true, false);
+
+    handle.start(frame);
+}
+
 void ResourceHandle::setHasReceivedResponse(bool b)
 {
     d->m_hasReceivedResponse = b;
@@ -452,6 +547,38 @@ void ResourceHandle::setHasReceivedResponse(bool b)
 bool ResourceHandle::hasReceivedResponse() const
 {
     return d->m_hasReceivedResponse;
+}
+
+bool ResourceHandle::willLoadFromCache(ResourceRequest&, Frame*)
+{
+    notImplemented();
+    return false;
+}
+
+void prefetchDNS(const String&)
+{
+    notImplemented();
+}
+
+PassRefPtr<SharedBuffer> ResourceHandle::bufferedData()
+{
+    ASSERT_NOT_REACHED();
+    return 0;
+}
+
+bool ResourceHandle::supportsBufferedData()
+{
+    return false;
+}
+
+bool ResourceHandle::loadsBlocked()
+{
+    return false;
+}
+
+void ResourceHandle::platformSetDefersLoading(bool)
+{
+    notImplemented();
 }
 
 } // namespace WebCore

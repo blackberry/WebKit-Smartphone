@@ -28,14 +28,13 @@
 #ifndef DatabaseAuthorizer_h
 #define DatabaseAuthorizer_h
 
-#include "StringHash.h"
+#include "PlatformString.h"
+#include <wtf/Forward.h>
 #include <wtf/HashSet.h>
-#include <wtf/PassRefPtr.h>
-#include <wtf/Threading.h>
+#include <wtf/ThreadSafeShared.h>
+#include <wtf/text/StringHash.h>
 
 namespace WebCore {
-
-class String;
 
 extern const int SQLAuthAllow;
 extern const int SQLAuthIgnore;
@@ -43,7 +42,7 @@ extern const int SQLAuthDeny;
 
 class DatabaseAuthorizer : public ThreadSafeShared<DatabaseAuthorizer> {
 public:
-    static PassRefPtr<DatabaseAuthorizer> create() { return adoptRef(new DatabaseAuthorizer); }
+    static PassRefPtr<DatabaseAuthorizer> create(const String& databaseInfoTableName);
 
     int createTable(const String& tableName);
     int createTempTable(const String& tableName);
@@ -90,19 +89,25 @@ public:
     void setReadOnly();
 
     void reset();
+    void resetDeletes();
 
     bool lastActionWasInsert() const { return m_lastActionWasInsert; }
     bool lastActionChangedDatabase() const { return m_lastActionChangedDatabase; }
+    bool hadDeletes() const { return m_hadDeletes; }
 
 private:
-    DatabaseAuthorizer();
+    DatabaseAuthorizer(const String& databaseInfoTableName);
     void addWhitelistedFunctions();
-    int denyBasedOnTableName(const String&);
+    int denyBasedOnTableName(const String&) const;
+    int updateDeletesBasedOnTableName(const String&);
 
     bool m_securityEnabled : 1;
     bool m_lastActionWasInsert : 1;
     bool m_lastActionChangedDatabase : 1;
     bool m_readOnly : 1;
+    bool m_hadDeletes : 1;
+
+    const String m_databaseInfoTableName;
 
     HashSet<String, CaseFoldingHash> m_whitelistedFunctions;
 };

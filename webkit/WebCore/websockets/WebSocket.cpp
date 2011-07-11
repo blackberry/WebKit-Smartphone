@@ -78,8 +78,6 @@ static String encodeProtocolString(const String& protocol)
     return builder.toString();
 }
 
-#if USE(V8)
-
 static bool webSocketsAvailable = false;
 
 void WebSocket::setIsAvailable(bool available)
@@ -91,8 +89,6 @@ bool WebSocket::isAvailable()
 {
     return webSocketsAvailable;
 }
-
-#endif
 
 WebSocket::WebSocket(ScriptExecutionContext* context)
     : ActiveDOMObject(context, this)
@@ -150,8 +146,8 @@ void WebSocket::connect(const KURL& url, const String& protocol, ExceptionCode& 
         return;
     }
 
-//    m_channel = ThreadableWebSocketChannel::create(scriptExecutionContext(), this, m_url, m_protocol);
-//    m_channel->connect();
+    m_channel = ThreadableWebSocketChannel::create(scriptExecutionContext(), this, m_url, m_protocol);
+    m_channel->connect();
     ActiveDOMObject::setPendingActivity(this);
 }
 
@@ -220,7 +216,7 @@ bool WebSocket::canSuspend() const
     return !m_channel;
 }
 
-void WebSocket::suspend()
+void WebSocket::suspend(ReasonForSuspension)
 {
     if (m_channel)
         m_channel->suspend();

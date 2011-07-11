@@ -27,9 +27,9 @@
 #include "TextCodecLatin1.h"
 
 #include "PlatformString.h"
-#include "StringBuffer.h"
 #include <stdio.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/StringBuffer.h>
 #include <wtf/PassOwnPtr.h>
 
 namespace WebCore {
@@ -79,7 +79,6 @@ void TextCodecLatin1::registerEncodingNames(EncodingNameRegistrar registrar)
     registrar("ibm-1252", "windows-1252");
     registrar("ibm-1252_P100-2000", "windows-1252");
 
-    registrar("8859-1", "ISO-8859-1");
     registrar("CP819", "ISO-8859-1");
     registrar("IBM819", "ISO-8859-1");
     registrar("csISOLatin1", "ISO-8859-1");
@@ -165,7 +164,7 @@ String TextCodecLatin1::decode(const char* bytes, size_t length, bool, bool, boo
             // Wait until we're at a properly aligned address, then read full CPU words.
             if (!(reinterpret_cast<ptrdiff_t>(src) & (sizeof(uintptr_t) - 1))) {
                 while (src < alignedEnd) {
-                    uintptr_t chunk = *reinterpret_cast<const uintptr_t*>(src);
+                    uintptr_t chunk = *reinterpret_cast_ptr<const uintptr_t*>(src);
 
                     if (chunk & NonASCIIMask<sizeof(uintptr_t)>::value())
                         goto useLookupTable;

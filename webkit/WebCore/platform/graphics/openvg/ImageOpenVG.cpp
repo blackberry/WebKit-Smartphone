@@ -269,7 +269,7 @@ PassRefPtr<Image> Image::loadPlatformResource(char const* name)
         context->restore();
     }
 
-    return imageBuffer->image();
+    return imageBuffer->copyImage();
 }
 
 }

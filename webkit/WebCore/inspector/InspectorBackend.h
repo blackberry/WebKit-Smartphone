@@ -37,12 +37,9 @@
 
 namespace WebCore {
 
-class CachedResource;
-class Database;
+class InspectorApplicationCacheAgent;
 class InspectorDOMAgent;
 class InspectorFrontend;
-class Node;
-class Storage;
 
 class InspectorBackend : public RefCounted<InspectorBackend>
 {
@@ -55,101 +52,30 @@ public:
     ~InspectorBackend();
 
     InspectorController* inspectorController() { return m_inspectorController; }
+    InspectorDOMAgent* inspectorDOMAgent() { return m_inspectorController->domAgent(); }
+#if ENABLE(OFFLINE_WEB_APPLICATIONS)
+    InspectorApplicationCacheAgent* inspectorApplicationCacheAgent() { return m_inspectorController->applicationCacheAgent(); }
+#endif
     void disconnectController() { m_inspectorController = 0; }
-
-    void saveFrontendSettings(const String&);
-
-    void storeLastActivePanel(const String& panelName);
-
-    void enableSearchingForNode();
-    void disableSearchingForNode();
-
-    void enableResourceTracking(bool always);
-    void disableResourceTracking(bool always);
-    void getResourceContent(long callId, unsigned long identifier);
-    void reloadPage();
-
-    void startTimelineProfiler();
-    void stopTimelineProfiler();
 
 #if ENABLE(JAVASCRIPT_DEBUGGER)
     void enableDebugger(bool always);
-    void disableDebugger(bool always);
-
-    void setBreakpoint(const String& sourceID, unsigned lineNumber, bool enabled, const String& condition);
-    void removeBreakpoint(const String& sourceID, unsigned lineNumber);
-    void activateBreakpoints();
-    void deactivateBreakpoints();
-
-    void pauseInDebugger();
-    void resumeDebugger();
-
-    void setPauseOnExceptionsState(long pauseState);
-
-    void stepOverStatementInDebugger();
-    void stepIntoStatementInDebugger();
-    void stepOutOfFunctionInDebugger();
-
-    void enableProfiler(bool always);
-    void disableProfiler(bool always);
-
-    void startProfiling();
-    void stopProfiling();
-
-    void getProfileHeaders(long callId);
-    void getProfile(long callId, unsigned uid);
 #endif
 
     void setInjectedScriptSource(const String& source);
-    void dispatchOnInjectedScript(long callId, long injectedScriptId, const String& methodName, const String& arguments, bool async);
-    void addScriptToEvaluateOnLoad(const String& source);
-    void removeAllScriptsToEvaluateOnLoad();
-
-    void getChildNodes(long callId, long nodeId);
-    void setAttribute(long callId, long elementId, const String& name, const String& value);
-    void removeAttribute(long callId, long elementId, const String& name);
-    void setTextNodeValue(long callId, long nodeId, const String& value);
-    void getEventListenersForNode(long callId, long nodeId);
-    void copyNode(long nodeId);
-    void removeNode(long callId, long nodeId);
-    void changeTagName(long callId, long nodeId, const AtomicString& tagName, bool expanded);
-
-    void getStyles(long callId, long nodeId, bool authOnly);
-    void getAllStyles(long callId);
-    void getInlineStyle(long callId, long nodeId);
-    void getComputedStyle(long callId, long nodeId);
-    void applyStyleText(long callId, long styleId, const String& styleText, const String& propertyName);
-    void setStyleText(long callId, long styleId, const String& cssText);
-    void setStyleProperty(long callId, long styleId, const String& name, const String& value);
-    void toggleStyleEnabled(long callId, long styleId, const String& propertyName, bool disabled);
-    void setRuleSelector(long callId, long ruleId, const String& selector, long selectedNodeId);
-    void addRule(long callId, const String& selector, long selectedNodeId);
-
-    void highlightDOMNode(long nodeId);
-    void hideDOMNodeHighlight();
-
-    void getCookies(long callId);
-    void deleteCookie(const String& cookieName, const String& domain);
+    void dispatchOnInjectedScript(long injectedScriptId, const String& methodName, const String& arguments, RefPtr<InspectorValue>* result, bool* hadException);
 
     // Generic code called from custom implementations.
     void releaseWrapperObjectGroup(long injectedScriptId, const String& objectGroup);
-    void didEvaluateForTestInFrontend(long callId, const String& jsonResult);
 
 #if ENABLE(DATABASE)
-    void getDatabaseTableNames(long callId, long databaseId);
-#endif
-
-#if ENABLE(DOM_STORAGE)
-    void getDOMStorageEntries(long callId, long storageId);
-    void setDOMStorageItem(long callId, long storageId, const String& key, const String& value);
-    void removeDOMStorageItem(long callId, long storageId, const String& key);
+    void getDatabaseTableNames(long databaseId, RefPtr<InspectorArray>* names);
+    void executeSQL(long databaseId, const String& query, bool* success, long* transactionId);
 #endif
 
 private:
     InspectorBackend(InspectorController* inspectorController);
-    InspectorDOMAgent* inspectorDOMAgent();
-    InspectorFrontend* inspectorFrontend();
-    Node* nodeForId(long nodeId);
+    InspectorFrontend* frontend();
 
     InspectorController* m_inspectorController;
 };

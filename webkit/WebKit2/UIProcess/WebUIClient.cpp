@@ -26,6 +26,10 @@
 #include "WebUIClient.h"
 
 #include "WKAPICast.h"
+#include "WebPageProxy.h"
+#include <WebCore/IntSize.h>
+#include <string.h>
+#include <wtf/text/WTFString.h>
 
 using namespace WebCore;
 
@@ -36,7 +40,7 @@ WebUIClient::WebUIClient()
     initialize(0);
 }
 
-void WebUIClient::initialize(WKPageUIClient* client)
+void WebUIClient::initialize(const WKPageUIClient* client)
 {
     if (client && !client->version)
         m_pageUIClient = *client;
@@ -44,12 +48,12 @@ void WebUIClient::initialize(WKPageUIClient* client)
         memset(&m_pageUIClient, 0, sizeof(m_pageUIClient));
 }
 
-WebPageProxy* WebUIClient::createNewPage(WebPageProxy* page)
+PassRefPtr<WebPageProxy> WebUIClient::createNewPage(WebPageProxy* page)
 {
     if (!m_pageUIClient.createNewPage)
         return 0;
     
-    return toWK(m_pageUIClient.createNewPage(toRef(page), m_pageUIClient.clientInfo));
+    return adoptRef(toWK(m_pageUIClient.createNewPage(toRef(page), m_pageUIClient.clientInfo)));
 } 
 
 void WebUIClient::showPage(WebPageProxy* page)
@@ -68,13 +72,51 @@ void WebUIClient::close(WebPageProxy* page)
     m_pageUIClient.close(toRef(page), m_pageUIClient.clientInfo);
 }
 
-void WebUIClient::runJavaScriptAlert(WebPageProxy* page, StringImpl* alertText, WebFrameProxy* frame)
+void WebUIClient::runJavaScriptAlert(WebPageProxy* page, const String& message, WebFrameProxy* frame)
 {
     if (!m_pageUIClient.runJavaScriptAlert)
         return;
     
-    m_pageUIClient.runJavaScriptAlert(toRef(page), toRef(alertText), toRef(frame), m_pageUIClient.clientInfo);
+    m_pageUIClient.runJavaScriptAlert(toRef(page), toRef(message.impl()), toRef(frame), m_pageUIClient.clientInfo);
 }
 
+bool WebUIClient::runJavaScriptConfirm(WebPageProxy* page, const String& message, WebFrameProxy* frame)
+{
+    if (!m_pageUIClient.runJavaScriptConfirm)
+        return false;
+
+    return m_pageUIClient.runJavaScriptConfirm(toRef(page), toRef(message.impl()), toRef(frame), m_pageUIClient.clientInfo);
+}
+
+String WebUIClient::runJavaScriptPrompt(WebPageProxy* page, const String& message, const String& defaultValue, WebFrameProxy* frame)
+{
+    if (!m_pageUIClient.runJavaScriptPrompt)
+        return String();
+
+    WebString* string = toWK(m_pageUIClient.runJavaScriptPrompt(toRef(page), toRef(message.impl()), toRef(defaultValue.impl()), toRef(frame), m_pageUIClient.clientInfo));
+    if (!string)
+        return String();
+
+    String result = string->string();
+    string->deref();
+
+    return result;
+}
+
+void WebUIClient::setStatusText(WebPageProxy* page, const String& text)
+{
+    if (!m_pageUIClient.setStatusText)
+        return;
+
+    m_pageUIClient.setStatusText(toRef(page), toRef(text.impl()), m_pageUIClient.clientInfo);
+}
+
+void WebUIClient::contentsSizeChanged(WebPageProxy* page, const IntSize& size, WebFrameProxy* frame)
+{
+    if (!m_pageUIClient.contentsSizeChanged)
+        return;
+
+    m_pageUIClient.contentsSizeChanged(toRef(page), size.width(), size.height(), toRef(frame), m_pageUIClient.clientInfo);
+}
 
 } // namespace WebKit

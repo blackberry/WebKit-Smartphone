@@ -33,7 +33,21 @@
 namespace WebProcessMessage {
 
 enum Kind {
-    Create
+    SetVisitedLinkTable,
+    VisitedLinkStateChanged,
+    AllVisitedLinkStateChanged,
+    
+    LoadInjectedBundle,
+    SetApplicationCacheDirectory,
+    SetShouldTrackVisitedLinks,
+    Create,
+    RegisterURLSchemeAsEmptyDocument,
+#if PLATFORM(MAC)
+    SetupAcceleratedCompositingPort,
+#endif
+#if PLATFORM(WIN)
+    SetShouldPaintNativeControls,
+#endif
 };
 
 }

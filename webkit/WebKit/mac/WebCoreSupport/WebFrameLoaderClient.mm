@@ -47,6 +47,7 @@
 #import "WebFormDelegate.h"
 #import "WebFrameInternal.h"
 #import "WebFrameLoadDelegate.h"
+#import "WebFrameNetworkingContext.h"
 #import "WebFrameViewInternal.h"
 #import "WebHTMLRepresentationPrivate.h"
 #import "WebHTMLViewInternal.h"
@@ -84,6 +85,7 @@
 #import <WebCore/FormState.h>
 #import <WebCore/Frame.h>
 #import <WebCore/FrameLoader.h>
+#import <WebCore/FrameLoaderStateMachine.h>
 #import <WebCore/FrameLoaderTypes.h>
 #import <WebCore/FrameTree.h>
 #import <WebCore/FrameView.h>
@@ -92,6 +94,9 @@
 #import <WebCore/HTMLFrameElement.h>
 #import <WebCore/HTMLFrameOwnerElement.h>
 #import <WebCore/HTMLHeadElement.h>
+#if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
+#import <WebCore/HTMLMediaElement.h>
+#endif
 #import <WebCore/HTMLNames.h>
 #import <WebCore/HTMLPlugInElement.h>
 #import <WebCore/HistoryItem.h>
@@ -102,7 +107,7 @@
 #import <WebCore/MouseEvent.h>
 #import <WebCore/Page.h>
 #import <WebCore/PlatformString.h>
-#import <WebCore/PluginWidget.h>
+#import <WebCore/PluginViewBase.h>
 #import <WebCore/ResourceError.h>
 #import <WebCore/ResourceHandle.h>
 #import <WebCore/ResourceLoader.h>
@@ -123,7 +128,7 @@
 #import "WebJavaPlugIn.h"
 #endif
 
-#if USE(PLUGIN_HOST_PROCESS)
+#if USE(PLUGIN_HOST_PROCESS) && ENABLE(NETSCAPE_PLUGIN_API)
 #import "NetscapePluginHostManager.h"
 #import "WebHostedNetscapePluginView.h"
 #endif
@@ -237,8 +242,6 @@ bool WebFrameLoaderClient::hasHTMLView() const
 void WebFrameLoaderClient::forceLayout()
 {
     NSView <WebDocumentView> *view = [m_webFrame->_private->webFrameView documentView];
-    if ([view isKindOfClass:[WebHTMLView class]])
-        [(WebHTMLView *)view setNeedsToApplyStyles:YES];
     [view setNeedsLayout:YES];
     [view layout];
 }
@@ -702,7 +705,7 @@ Frame* WebFrameLoaderClient::dispatchCreatePage()
                                                           windowFeatures:features];
     [features release];
     
-#if USE(PLUGIN_HOST_PROCESS)
+#if USE(PLUGIN_HOST_PROCESS) && ENABLE(NETSCAPE_PLUGIN_API)
     if (newWebView)
         WebKit::NetscapePluginHostManager::shared().didCreateWindow();
 #endif
@@ -1015,6 +1018,11 @@ bool WebFrameLoaderClient::canShowMIMEType(const String& MIMEType) const
     return [getWebView(m_webFrame.get()) _canShowMIMEType:MIMEType];
 }
 
+bool WebFrameLoaderClient::canShowMIMETypeAsHTML(const String& MIMEType) const
+{
+    return [WebView canShowMIMETypeAsHTML:MIMEType];
+}
+
 bool WebFrameLoaderClient::representationExistsForURLScheme(const String& URLScheme) const
 {
     return [WebView _representationExistsForURLScheme:URLScheme];
@@ -1177,7 +1185,7 @@ void WebFrameLoaderClient::transitionToCommittedForNewPage()
     if (usesDocumentViews) {
         // FIXME (Viewless): I assume we want the equivalent of this optimization for viewless mode too.
         bool willProduceHTMLView = [m_webFrame->_private->webFrameView _viewClassForMIMEType:[dataSource _responseMIMEType]] == [WebHTMLView class];
-        bool canSkipCreation = core(m_webFrame.get())->loader()->committingFirstRealLoad() && willProduceHTMLView;
+        bool canSkipCreation = core(m_webFrame.get())->loader()->stateMachine()->committingFirstRealLoad() && willProduceHTMLView;
         if (canSkipCreation) {
             [[m_webFrame->_private->webFrameView documentView] setDataSource:dataSource];
             return;
@@ -1501,6 +1509,20 @@ static NSView *pluginView(WebFrame *frame, WebPluginPackage *pluginPackage,
     return view;
 }
 
+class PluginWidget : public PluginViewBase {
+public:
+    PluginWidget(NSView *view = 0)
+        : PluginViewBase(view)
+    {
+    }
+    
+private:
+    virtual void invalidateRect(const IntRect& rect)
+    {
+        [platformWidget() setNeedsDisplayInRect:rect];
+    }
+};
+
 #if ENABLE(NETSCAPE_PLUGIN_API)
 
 class NetscapePluginWidget : public PluginWidget {
@@ -1510,6 +1532,13 @@ public:
     {
     }
     
+#if USE(ACCELERATED_COMPOSITING)
+    virtual PlatformLayer* platformLayer() const
+    {
+        return [(WebBaseNetscapePluginView *)platformWidget() pluginLayer];
+    }
+#endif
+
     virtual void handleEvent(Event* event)
     {
         Frame* frame = Frame::frameForWidget(this);
@@ -1527,13 +1556,13 @@ public:
     
 };
 
-#endif // ENABLE(NETSCAPE_PLUGIN_API)
-
 #if USE(PLUGIN_HOST_PROCESS)
 #define NETSCAPE_PLUGIN_VIEW WebHostedNetscapePluginView
 #else
 #define NETSCAPE_PLUGIN_VIEW WebNetscapePluginView
 #endif
+
+#endif // ENABLE(NETSCAPE_PLUGIN_API)
 
 PassRefPtr<Widget> WebFrameLoaderClient::createPlugin(const IntSize& size, HTMLPlugInElement* element, const KURL& url,
     const Vector<String>& paramNames, const Vector<String>& paramValues, const String& mimeType, bool loadManually)
@@ -1551,8 +1580,20 @@ PassRefPtr<Widget> WebFrameLoaderClient::createPlugin(const IntSize& size, HTMLP
     NSURL *baseURL = document->baseURL();
     NSURL *pluginURL = url;
     
+    // <rdar://problem/8366089>: AppleConnect has a bug where it does not
+    // understand the parameter names specified in the <object> element that
+    // embeds its plug-in. This site-specific hack works around the issue by
+    // converting the parameter names to lowercase before passing them to the
+    // plug-in.
+    Frame* frame = core(m_webFrame.get());
+    NSMutableArray *attributeKeys = kit(paramNames);
+    if (frame && frame->settings()->needsSiteSpecificQuirks() && equalIgnoringCase(mimeType, "application/x-snkp")) {
+        for (NSUInteger i = 0; i < [attributeKeys count]; ++i)
+            [attributeKeys replaceObjectAtIndex:i withObject:[[attributeKeys objectAtIndex:i] lowercaseString]];
+    }
+    
     if ([[webView UIDelegate] respondsToSelector:selector]) {
-        NSMutableDictionary *attributes = [[NSMutableDictionary alloc] initWithObjects:kit(paramValues) forKeys:kit(paramNames)];
+        NSMutableDictionary *attributes = [[NSMutableDictionary alloc] initWithObjects:kit(paramValues) forKeys:attributeKeys];
         NSDictionary *arguments = [[NSDictionary alloc] initWithObjectsAndKeys:
             attributes, WebPlugInAttributesKey,
             [NSNumber numberWithInt:loadManually ? WebPlugInModeFull : WebPlugInModeEmbed], WebPlugInModeKey,
@@ -1582,12 +1623,6 @@ PassRefPtr<Widget> WebFrameLoaderClient::createPlugin(const IntSize& size, HTMLP
     }
     
     NSString *extension = [[pluginURL path] pathExtension];
-#if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
-    // don't allow proxy plug-in selection by file extension
-    if (element->hasTagName(videoTag) || element->hasTagName(audioTag))
-        extension = @"";
-#endif
-
     if (!pluginPackage && [extension length] != 0) {
         pluginPackage = [webView _pluginForExtension:extension];
         if (pluginPackage) {
@@ -1601,7 +1636,7 @@ PassRefPtr<Widget> WebFrameLoaderClient::createPlugin(const IntSize& size, HTMLP
 
     if (pluginPackage) {
         if ([pluginPackage isKindOfClass:[WebPluginPackage class]])
-            view = pluginView(m_webFrame.get(), (WebPluginPackage *)pluginPackage, kit(paramNames), kit(paramValues), baseURL, kit(element), loadManually);
+            view = pluginView(m_webFrame.get(), (WebPluginPackage *)pluginPackage, attributeKeys, kit(paramValues), baseURL, kit(element), loadManually);
             
 #if ENABLE(NETSCAPE_PLUGIN_API)
         else if ([pluginPackage isKindOfClass:[WebNetscapePluginPackage class]]) {
@@ -1611,7 +1646,7 @@ PassRefPtr<Widget> WebFrameLoaderClient::createPlugin(const IntSize& size, HTMLP
                 URL:pluginURL
                 baseURL:baseURL
                 MIMEType:MIMEType
-                attributeKeys:kit(paramNames)
+                attributeKeys:attributeKeys
                 attributeValues:kit(paramValues)
                 loadManually:loadManually
                 element:element] autorelease];
@@ -1631,8 +1666,10 @@ PassRefPtr<Widget> WebFrameLoaderClient::createPlugin(const IntSize& size, HTMLP
             KURL pluginPageURL = document->completeURL(deprecatedParseURL(parameterValue(paramNames, paramValues, "pluginspage")));
             if (!pluginPageURL.protocolInHTTPFamily())
                 pluginPageURL = KURL();
+            NSString *pluginName = pluginPackage ? (NSString *)[pluginPackage pluginInfo].name : nil;
+
             NSError *error = [[NSError alloc] _initWithPluginErrorCode:errorCode
-                                                            contentURL:pluginURL pluginPageURL:pluginPageURL pluginName:[pluginPackage name] MIMEType:MIMEType];
+                                                            contentURL:pluginURL pluginPageURL:pluginPageURL pluginName:pluginName MIMEType:MIMEType];
             CallResourceLoadDelegate(implementations->plugInFailedWithErrorFunc, [m_webFrame.get() webView],
                                      @selector(webView:plugInFailedWithError:dataSource:), error, [m_webFrame.get() _dataSource]);
             [error release];
@@ -1721,7 +1758,8 @@ PassRefPtr<Widget> WebFrameLoaderClient::createJavaAppletWidget(const IntSize& s
     if (!view) {
         WebResourceDelegateImplementationCache* implementations = WebViewGetResourceLoadDelegateImplementations(getWebView(m_webFrame.get()));
         if (implementations->plugInFailedWithErrorFunc) {
-            NSError *error = [[NSError alloc] _initWithPluginErrorCode:WebKitErrorJavaUnavailable contentURL:nil pluginPageURL:nil pluginName:[pluginPackage name] MIMEType:MIMEType];
+            NSString *pluginName = pluginPackage ? (NSString *)[pluginPackage pluginInfo].name : nil;
+            NSError *error = [[NSError alloc] _initWithPluginErrorCode:WebKitErrorJavaUnavailable contentURL:nil pluginPageURL:nil pluginName:pluginName MIMEType:MIMEType];
             CallResourceLoadDelegate(implementations->plugInFailedWithErrorFunc, [m_webFrame.get() webView],
                                      @selector(webView:plugInFailedWithError:dataSource:), error, [m_webFrame.get() _dataSource]);
             [error release];
@@ -1738,6 +1776,83 @@ PassRefPtr<Widget> WebFrameLoaderClient::createJavaAppletWidget(const IntSize& s
     return 0;
 #endif // ENABLE(JAVA_BRIDGE)
 }
+
+#if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
+PassRefPtr<Widget> WebFrameLoaderClient::createMediaPlayerProxyPlugin(const IntSize& size, HTMLMediaElement* element, const KURL& url,
+    const Vector<String>& paramNames, const Vector<String>& paramValues, const String& mimeType)
+{
+    BEGIN_BLOCK_OBJC_EXCEPTIONS;
+
+    ASSERT(paramNames.size() == paramValues.size());
+    ASSERT(mimeType);
+
+    int errorCode = 0;
+    WebView *webView = getWebView(m_webFrame.get());
+    NSURL *URL = url;
+
+    SEL selector = @selector(webView:plugInViewWithArguments:);
+
+    if ([[webView UIDelegate] respondsToSelector:selector]) {
+        NSMutableDictionary *attributes = [[NSMutableDictionary alloc] initWithObjects:kit(paramValues) forKeys:kit(paramNames)];
+        NSDictionary *arguments = [[NSDictionary alloc] initWithObjectsAndKeys:
+            attributes, WebPlugInAttributesKey,
+            [NSNumber numberWithInt:WebPlugInModeEmbed], WebPlugInModeKey,
+            [NSNumber numberWithBool:YES], WebPlugInShouldLoadMainResourceKey,
+            kit(element), WebPlugInContainingElementKey,
+            URL, WebPlugInBaseURLKey, // URL might be nil, so add it last
+            nil];
+
+        NSView *view = CallUIDelegate(webView, selector, arguments);
+
+        [attributes release];
+        [arguments release];
+
+        if (view)
+            return adoptRef(new PluginWidget(view));
+    }
+
+    WebBasePluginPackage *pluginPackage = [webView _videoProxyPluginForMIMEType:mimeType];
+    Document* document = core(m_webFrame.get())->document();
+    NSURL *baseURL = document->baseURL();
+    NSView *view = nil;
+
+    if (pluginPackage) {
+        if ([pluginPackage isKindOfClass:[WebPluginPackage class]])
+            view = pluginView(m_webFrame.get(), (WebPluginPackage *)pluginPackage, kit(paramNames), kit(paramValues), baseURL, kit(element), false);
+    } else
+        errorCode = WebKitErrorCannotFindPlugIn;
+
+    if (!errorCode && !view)
+        errorCode = WebKitErrorCannotLoadPlugIn;
+
+    if (errorCode) {
+        NSError *error = [[NSError alloc] _initWithPluginErrorCode:errorCode
+            contentURL:URL pluginPageURL:nil pluginName:[pluginPackage name] MIMEType:mimeType];
+        WebNullPluginView *nullView = [[[WebNullPluginView alloc] initWithFrame:NSMakeRect(0, 0, size.width(), size.height())
+            error:error DOMElement:kit(element)] autorelease];
+        view = nullView;
+        [error release];
+    }
+    
+    ASSERT(view);
+    return adoptRef(new PluginWidget(view));
+
+    END_BLOCK_OBJC_EXCEPTIONS;
+
+    return 0;
+}
+
+void WebFrameLoaderClient::hideMediaPlayerProxyPlugin(Widget* widget)
+{
+    [WebPluginController pluginViewHidden:widget->platformWidget()];
+}
+
+void WebFrameLoaderClient::showMediaPlayerProxyPlugin(Widget* widget)
+{
+    [WebPluginController addPlugInView:widget->platformWidget()];
+}
+
+#endif  // ENABLE(PLUGIN_PROXY_FOR_VIDEO)
 
 String WebFrameLoaderClient::overrideMediaType() const
 {
@@ -1793,6 +1908,11 @@ void WebFrameLoaderClient::didPerformFirstNavigation() const
     WebPreferences *preferences = [[m_webFrame.get() webView] preferences];
     if ([preferences automaticallyDetectsCacheModel] && [preferences cacheModel] < WebCacheModelDocumentBrowser)
         [preferences setCacheModel:WebCacheModelDocumentBrowser];
+}
+
+PassRefPtr<FrameNetworkingContext> WebFrameLoaderClient::createNetworkingContext()
+{
+    return WebFrameNetworkingContext::create(core(m_webFrame.get()));
 }
 
 #if ENABLE(JAVA_BRIDGE)

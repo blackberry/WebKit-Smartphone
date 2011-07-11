@@ -56,6 +56,19 @@ public:
 
     static void setIndexedDBEnabled(bool isEnabled) { isIndexedDBEnabled = isEnabled; }
     static bool indexedDBEnabled() { return isIndexedDBEnabled; }
+    static bool iDBCursorEnabled() { return isIndexedDBEnabled; }
+    static bool iDBDatabaseEnabled() { return isIndexedDBEnabled; }
+    static bool iDBDatabaseErrorEnabled() { return isIndexedDBEnabled; }
+    static bool iDBDatabaseExceptionEnabled() { return isIndexedDBEnabled; }
+    static bool iDBErrorEventEnabled() { return isIndexedDBEnabled; }
+    static bool iDBEventEnabled() { return isIndexedDBEnabled; }
+    static bool iDBFactoryEnabled() { return isIndexedDBEnabled; }
+    static bool iDBIndexEnabled() { return isIndexedDBEnabled; }
+    static bool iDBKeyRangeEnabled() { return isIndexedDBEnabled; }
+    static bool iDBObjectStoreEnabled() { return isIndexedDBEnabled; }
+    static bool iDBRequestEnabled() { return isIndexedDBEnabled; }
+    static bool iDBSuccessEventEnabled() { return isIndexedDBEnabled; }
+    static bool iDBTransactionEnabled() { return isIndexedDBEnabled; }
 
 #if ENABLE(VIDEO)
     static bool audioEnabled();
@@ -63,6 +76,7 @@ public:
     static bool htmlAudioElementEnabled();
     static bool htmlVideoElementEnabled();
     static bool mediaErrorEnabled();
+    static bool timeRangesEnabled();
 #endif
 
 #if ENABLE(SHARED_WORKERS)
@@ -87,7 +101,7 @@ public:
     static bool uint16ArrayEnabled() { return isWebGLEnabled; }
     static bool int32ArrayEnabled() { return isWebGLEnabled; }
     static bool uint32ArrayEnabled() { return isWebGLEnabled; }
-    static bool floatArrayEnabled() { return isWebGLEnabled; }
+    static bool float32ArrayEnabled() { return isWebGLEnabled; }
     static bool webGLRenderingContextEnabled() { return isWebGLEnabled; }
     static bool webGLArrayBufferEnabled() { return isWebGLEnabled; }
     static bool webGLByteArrayEnabled() { return isWebGLEnabled; }
@@ -112,6 +126,33 @@ public:
     static bool ontouchcancelEnabled() { return isTouchEnabled; }
 #endif
 
+    static void setDeviceMotionEnabled(bool isEnabled) { isDeviceMotionEnabled = isEnabled; }
+    static bool deviceMotionEnabled() { return isDeviceMotionEnabled; }
+    static bool deviceMotionEventEnabled() { return isDeviceMotionEnabled; }
+    static bool ondevicemotionEnabled() { return isDeviceMotionEnabled; }
+    
+    static void setDeviceOrientationEnabled(bool isEnabled) { isDeviceOrientationEnabled = isEnabled; }
+    static bool deviceOrientationEnabled() { return isDeviceOrientationEnabled; }
+    static bool deviceOrientationEventEnabled() { return isDeviceOrientationEnabled; }
+    static bool ondeviceorientationEnabled() { return isDeviceOrientationEnabled; }
+
+    static void setSpeechInputEnabled(bool isEnabled) { isSpeechInputEnabled = isEnabled; }
+    static bool speechInputEnabled() { return isSpeechInputEnabled; }
+    static bool speechEnabled() { return isSpeechInputEnabled; }
+
+#if ENABLE(XHR_RESPONSE_BLOB)
+    static bool xhrResponseBlobEnabled() { return isXHRResponseBlobEnabled; }
+    static void setXHRResponseBlobEnabled(bool isEnabled) { isXHRResponseBlobEnabled = isEnabled; }
+    static bool responseBlobEnabled() { return isXHRResponseBlobEnabled; }
+    static bool asBlobEnabled()  { return isXHRResponseBlobEnabled; }
+#endif
+
+#if ENABLE(FILE_SYSTEM)
+    static bool fileSystemEnabled() { return isFileSystemEnabled; }
+    static void setFileSystemEnabled(bool isEnabled) { isFileSystemEnabled = isEnabled; }
+    static bool requestFileSystemEnabled() { return isFileSystemEnabled; }
+#endif
+
 private:
     // Never instantiate.
     RuntimeEnabledFeatures() { }
@@ -125,6 +166,16 @@ private:
     static bool isWebGLEnabled;
     static bool isPushStateEnabled;
     static bool isTouchEnabled;
+    static bool isDeviceMotionEnabled;
+    static bool isDeviceOrientationEnabled;
+    static bool isSpeechInputEnabled;
+#if ENABLE(XHR_RESPONSE_BLOB)
+    static bool isXHRResponseBlobEnabled;
+#endif
+
+#if ENABLE(FILE_SYSTEM)
+    static bool isFileSystemEnabled;
+#endif
 };
 
 } // namespace WebCore

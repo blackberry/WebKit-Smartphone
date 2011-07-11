@@ -60,6 +60,9 @@ FormDataIODevice::FormDataIODevice(FormData* data)
     , m_currentDelta(0)
 {
     setOpenMode(FormDataIODevice::ReadOnly);
+
+    if (!m_formElements.isEmpty() && m_formElements[0].m_type == FormDataElement::encodedFile)
+        openFileForCurrentElement();
 }
 
 FormDataIODevice::~FormDataIODevice()
@@ -78,6 +81,11 @@ void FormDataIODevice::moveToNextElement()
     if (m_formElements.isEmpty() || m_formElements[0].m_type == FormDataElement::data)
         return;
 
+    openFileForCurrentElement();
+}
+
+void FormDataIODevice::openFileForCurrentElement()
+{
     if (!m_currentFile)
         m_currentFile = new QFile;
 
@@ -142,7 +150,7 @@ QNetworkReplyHandler::QNetworkReplyHandler(ResourceHandle* handle, LoadMode load
     , m_shouldForwardData(false)
     , m_redirectionTries(gMaxRecursionLimit)
 {
-    const ResourceRequest &r = m_resourceHandle->request();
+    const ResourceRequest &r = m_resourceHandle->firstRequest();
 
     if (r.httpMethod() == "GET")
         m_method = QNetworkAccessManager::GetOperation;
@@ -152,18 +160,22 @@ QNetworkReplyHandler::QNetworkReplyHandler(ResourceHandle* handle, LoadMode load
         m_method = QNetworkAccessManager::PostOperation;
     else if (r.httpMethod() == "PUT")
         m_method = QNetworkAccessManager::PutOperation;
-#if QT_VERSION >= 0x040600
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
     else if (r.httpMethod() == "DELETE")
         m_method = QNetworkAccessManager::DeleteOperation;
 #endif
-#if QT_VERSION >= 0x040700
+#if QT_VERSION >= QT_VERSION_CHECK(4, 7, 0)
     else if (r.httpMethod() == "OPTIONS")
         m_method = QNetworkAccessManager::CustomOperation;
 #endif
     else
         m_method = QNetworkAccessManager::UnknownOperation;
 
-    m_request = r.toNetworkRequest(m_resourceHandle->getInternal()->m_frame);
+    QObject* originatingObject = 0;
+    if (m_resourceHandle->getInternal()->m_context)
+        originatingObject = m_resourceHandle->getInternal()->m_context->originatingObject();
+
+    m_request = r.toNetworkRequest(originatingObject);
 
     if (m_loadMode == LoadNormal)
         start();
@@ -286,22 +298,17 @@ void QNetworkReplyHandler::sendResponseIfNeeded()
     if (!client)
         return;
 
-    WebCore::String contentType = m_reply->header(QNetworkRequest::ContentTypeHeader).toString();
-    WebCore::String encoding = extractCharsetFromMediaType(contentType);
-    WebCore::String mimeType = extractMIMETypeFromMediaType(contentType);
+    WTF::String contentType = m_reply->header(QNetworkRequest::ContentTypeHeader).toString();
+    WTF::String encoding = extractCharsetFromMediaType(contentType);
+    WTF::String mimeType = extractMIMETypeFromMediaType(contentType);
 
     if (mimeType.isEmpty()) {
         // let's try to guess from the extension
-        QString extension = m_reply->url().path();
-        int index = extension.lastIndexOf(QLatin1Char('.'));
-        if (index > 0) {
-            extension = extension.mid(index + 1);
-            mimeType = MIMETypeRegistry::getMIMETypeForExtension(extension);
-        }
+        mimeType = MIMETypeRegistry::getMIMETypeForPath(m_reply->url().path());
     }
 
     KURL url(m_reply->url());
-    ResourceResponse response(url, mimeType,
+    ResourceResponse response(url, mimeType.lower(),
                               m_reply->header(QNetworkRequest::ContentLengthHeader).toLongLong(),
                               encoding, String());
 
@@ -350,10 +357,10 @@ void QNetworkReplyHandler::sendResponseIfNeeded()
         }
         m_redirected = true;
 
-        ResourceRequest newRequest = m_resourceHandle->request();
+        ResourceRequest newRequest = m_resourceHandle->firstRequest();
         newRequest.setURL(newUrl);
 
-        if (((statusCode >= 301 && statusCode <= 303) || statusCode == 307) && m_method == QNetworkAccessManager::PostOperation) {
+        if (((statusCode >= 301 && statusCode <= 303) || statusCode == 307) && newRequest.httpMethod() == "POST") {
             m_method = QNetworkAccessManager::GetOperation;
             newRequest.setHTTPMethod("GET");
         }
@@ -366,7 +373,11 @@ void QNetworkReplyHandler::sendResponseIfNeeded()
         if (!m_resourceHandle) // network error did cancel the request
             return;
 
-        m_request = newRequest.toNetworkRequest(m_resourceHandle->getInternal()->m_frame);
+        QObject* originatingObject = 0;
+        if (m_resourceHandle->getInternal()->m_context)
+            originatingObject = m_resourceHandle->getInternal()->m_context->originatingObject();
+
+        m_request = newRequest.toNetworkRequest(originatingObject);
         return;
     }
 
@@ -418,7 +429,12 @@ void QNetworkReplyHandler::start()
 
     ResourceHandleInternal* d = m_resourceHandle->getInternal();
 
-    QNetworkAccessManager* manager = d->m_frame->page()->networkAccessManager();
+    QNetworkAccessManager* manager = 0;
+    if (d->m_context)
+        manager = d->m_context->networkAccessManager();
+
+    if (!manager)
+        return;
 
     const QUrl url = m_request.url();
     const QString scheme = url.scheme();
@@ -434,7 +450,7 @@ void QNetworkReplyHandler::start()
             m_reply = manager->get(m_request);
             break;
         case QNetworkAccessManager::PostOperation: {
-            FormDataIODevice* postDevice = new FormDataIODevice(d->m_request.httpBody()); 
+            FormDataIODevice* postDevice = new FormDataIODevice(d->m_firstRequest.httpBody()); 
             m_reply = manager->post(m_request, postDevice);
             postDevice->setParent(m_reply);
             break;
@@ -443,20 +459,20 @@ void QNetworkReplyHandler::start()
             m_reply = manager->head(m_request);
             break;
         case QNetworkAccessManager::PutOperation: {
-            FormDataIODevice* putDevice = new FormDataIODevice(d->m_request.httpBody()); 
+            FormDataIODevice* putDevice = new FormDataIODevice(d->m_firstRequest.httpBody()); 
             m_reply = manager->put(m_request, putDevice);
             putDevice->setParent(m_reply);
             break;
         }
-#if QT_VERSION >= 0x040600
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
         case QNetworkAccessManager::DeleteOperation: {
             m_reply = manager->deleteResource(m_request);
             break;
         }
 #endif
-#if QT_VERSION >= 0x040700
+#if QT_VERSION >= QT_VERSION_CHECK(4, 7, 0)
         case QNetworkAccessManager::CustomOperation:
-            m_reply = manager->sendCustomRequest(m_request, m_resourceHandle->request().httpMethod().latin1().data());
+            m_reply = manager->sendCustomRequest(m_request, m_resourceHandle->firstRequest().httpMethod().latin1().data());
             break;
 #endif
         case QNetworkAccessManager::UnknownOperation: {
@@ -486,7 +502,7 @@ void QNetworkReplyHandler::start()
     connect(m_reply, SIGNAL(readyRead()),
             this, SLOT(forwardData()), SIGNAL_CONN);
 
-    if (m_resourceHandle->request().reportUploadProgress()) {
+    if (m_resourceHandle->firstRequest().reportUploadProgress()) {
         connect(m_reply, SIGNAL(uploadProgress(qint64, qint64)),
                 this, SLOT(uploadProgress(qint64, qint64)), SIGNAL_CONN);
     }

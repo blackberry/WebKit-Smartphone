@@ -24,7 +24,9 @@
 #include "GraphicsContext.h"
 #include "Frame.h"
 #include "FrameView.h"
+#include "RenderLayer.h"
 #include "RenderView.h"
+#include <wtf/text/CString.h>
 
 using namespace WebCore;
 
@@ -115,7 +117,7 @@ void PrintContext::computePageRectsWithPageSizeInternal(const FloatSize& pageSiz
     } while (printedPagesHeight < docHeight);
 }
 
-void PrintContext::begin(float width)
+void PrintContext::begin(float width, float height)
 {
     ASSERT(!m_isPrinting);
     m_isPrinting = true;
@@ -134,11 +136,11 @@ void PrintContext::begin(float width)
     const float PrintingMaximumShrinkFactor = 2.0f;
 
     float minLayoutWidth = width * PrintingMinimumShrinkFactor;
-    float maxLayoutWidth = width * PrintingMaximumShrinkFactor;
+    float minLayoutHeight = height * PrintingMinimumShrinkFactor;
 
     // FIXME: This will modify the rendering of the on-screen frame.
     // Could lead to flicker during printing.
-    m_frame->setPrinting(true, minLayoutWidth, maxLayoutWidth, true);
+    m_frame->setPrinting(true, FloatSize(minLayoutWidth, minLayoutHeight), PrintingMaximumShrinkFactor / PrintingMinimumShrinkFactor, Frame::AdjustViewSize);
 }
 
 void PrintContext::spoolPage(GraphicsContext& ctx, int pageNumber, float width)
@@ -158,7 +160,7 @@ void PrintContext::end()
 {
     ASSERT(m_isPrinting);
     m_isPrinting = false;
-    m_frame->setPrinting(false, 0, 0, true);
+    m_frame->setPrinting(false, FloatSize(), 0, Frame::AdjustViewSize);
 }
 
 static RenderBoxModelObject* enclosingBoxModelObject(RenderObject* object)
@@ -184,8 +186,10 @@ int PrintContext::pageNumberForElement(Element* element, const FloatSize& pageSi
     Frame* frame = element->document()->frame();
     FloatRect pageRect(FloatPoint(0, 0), pageSizeInPixels);
     PrintContext printContext(frame);
-    printContext.begin(pageRect.width());
-    printContext.computePageRectsWithPageSize(pageSizeInPixels, false);
+    printContext.begin(pageRect.width(), pageRect.height());
+    FloatSize scaledPageSize = pageSizeInPixels;
+    scaledPageSize.scale(frame->view()->contentsSize().width() / pageRect.width());
+    printContext.computePageRectsWithPageSize(scaledPageSize, false);
 
     int top = box->offsetTop();
     int left = box->offsetLeft();
@@ -198,15 +202,104 @@ int PrintContext::pageNumberForElement(Element* element, const FloatSize& pageSi
     return -1;
 }
 
+String PrintContext::pageProperty(Frame* frame, const char* propertyName, int pageNumber)
+{
+    Document* document = frame->document();
+    PrintContext printContext(frame);
+    printContext.begin(800); // Any width is OK here.
+    document->updateLayout();
+    RefPtr<RenderStyle> style = document->styleForPage(pageNumber);
+
+    // Implement formatters for properties we care about.
+    if (!strcmp(propertyName, "margin-left")) {
+        if (style->marginLeft().isAuto())
+            return String("auto");
+        return String::format("%d", style->marginLeft().rawValue());
+    }
+    if (!strcmp(propertyName, "line-height"))
+        return String::format("%d", style->lineHeight().rawValue());
+    if (!strcmp(propertyName, "font-size"))
+        return String::format("%d", style->fontDescription().computedPixelSize());
+    if (!strcmp(propertyName, "font-family"))
+        return String::format("%s", style->fontDescription().family().family().string().utf8().data());
+    if (!strcmp(propertyName, "size"))
+        return String::format("%d %d", style->pageSize().width().rawValue(), style->pageSize().height().rawValue());
+
+    return String::format("pageProperty() unimplemented for: %s", propertyName);
+}
+
+bool PrintContext::isPageBoxVisible(Frame* frame, int pageNumber)
+{
+    return frame->document()->isPageBoxVisible(pageNumber);
+}
+
+String PrintContext::pageSizeAndMarginsInPixels(Frame* frame, int pageNumber, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft)
+{
+    IntSize pageSize(width, height);
+    frame->document()->pageSizeAndMarginsInPixels(pageNumber, pageSize, marginTop, marginRight, marginBottom, marginLeft);
+    return String::format("(%d, %d) %d %d %d %d", pageSize.width(), pageSize.height(), marginTop, marginRight, marginBottom, marginLeft);
+}
+
 int PrintContext::numberOfPages(Frame* frame, const FloatSize& pageSizeInPixels)
 {
     frame->document()->updateLayout();
 
     FloatRect pageRect(FloatPoint(0, 0), pageSizeInPixels);
     PrintContext printContext(frame);
-    printContext.begin(pageRect.width());
-    printContext.computePageRectsWithPageSize(pageSizeInPixels, false);
+    printContext.begin(pageRect.width(), pageRect.height());
+    // Account for shrink-to-fit.
+    FloatSize scaledPageSize = pageSizeInPixels;
+    scaledPageSize.scale(frame->view()->contentsSize().width() / pageRect.width());
+    printContext.computePageRectsWithPageSize(scaledPageSize, false);
     return printContext.pageCount();
+}
+
+void PrintContext::spoolAllPagesWithBoundaries(Frame* frame, GraphicsContext& graphicsContext, const FloatSize& pageSizeInPixels)
+{
+    if (!frame->document() || !frame->view() || !frame->document()->renderer())
+        return;
+
+    frame->document()->updateLayout();
+
+    PrintContext printContext(frame);
+    printContext.begin(pageSizeInPixels.width(), pageSizeInPixels.height());
+
+    float pageHeight;
+    printContext.computePageRects(FloatRect(FloatPoint(0, 0), pageSizeInPixels), 0, 0, 1, pageHeight);
+
+    const float pageWidth = pageSizeInPixels.width();
+    const Vector<IntRect>& pageRects = printContext.pageRects();
+    int totalHeight = pageRects.size() * (pageSizeInPixels.height() + 1) - 1;
+
+    // Fill the whole background by white.
+    graphicsContext.setFillColor(Color(255, 255, 255), DeviceColorSpace);
+    graphicsContext.fillRect(FloatRect(0, 0, pageWidth, totalHeight));
+
+    graphicsContext.save();
+    graphicsContext.translate(0, totalHeight);
+    graphicsContext.scale(FloatSize(1, -1));
+
+    int currentHeight = 0;
+    for (size_t pageIndex = 0; pageIndex < pageRects.size(); pageIndex++) {
+        // Draw a line for a page boundary if this isn't the first page.
+        if (pageIndex > 0) {
+            graphicsContext.save();
+            graphicsContext.setStrokeColor(Color(0, 0, 255), DeviceColorSpace);
+            graphicsContext.setFillColor(Color(0, 0, 255), DeviceColorSpace);
+            graphicsContext.drawLine(IntPoint(0, currentHeight),
+                                     IntPoint(pageWidth, currentHeight));
+            graphicsContext.restore();
+        }
+
+        graphicsContext.save();
+        graphicsContext.translate(0, currentHeight);
+        printContext.spoolPage(graphicsContext, pageIndex, pageWidth);
+        graphicsContext.restore();
+
+        currentHeight += pageSizeInPixels.height() + 1;
+    }
+
+    graphicsContext.restore();
 }
 
 }

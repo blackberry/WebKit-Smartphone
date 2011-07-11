@@ -98,7 +98,7 @@ public:
         return adoptRef(new WKCACFRootLayer(renderer));
     }
 
-    virtual void setNeedsRender() { m_renderer->renderSoon(); }
+    virtual void setNeedsRender() { m_renderer->layerTreeDidChange(); }
 
     // Overload this to avoid calling setNeedsDisplay on the layer, which would override the contents
     // we have placed on the root layer.
@@ -333,6 +333,12 @@ void WKCACFLayerRenderer::setRootChildLayer(WKCACFLayer* layer)
     }
 }
    
+void WKCACFLayerRenderer::layerTreeDidChange()
+{
+    WKCACFContextFlusher::shared().addContext(m_context.get());
+    renderSoon();
+}
+
 void WKCACFLayerRenderer::setNeedsDisplay()
 {
     ASSERT(m_rootLayer);
@@ -402,10 +408,7 @@ bool WKCACFLayerRenderer::createRenderer()
 
     m_d3dDevice = device;
 
-    D3DXMATRIXA16 projection;
-    D3DXMatrixOrthoOffCenterRH(&projection, rect.left, rect.right, rect.top, rect.bottom, -1.0f, 1.0f);
-
-    m_d3dDevice->SetTransform(D3DTS_PROJECTION, &projection);
+    initD3DGeometry();
 
     m_renderer = CARenderOGLNew(&kCARenderDX9Callbacks, m_d3dDevice.get(), 0);
 

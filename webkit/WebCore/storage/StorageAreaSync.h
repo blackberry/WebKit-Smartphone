@@ -1,5 +1,9 @@
 /*
+<<<<<<< HEAD
+ * Copyright (C) 2008, 2009, 2010 Apple Inc. All Rights Reserved.
+=======
  * Copyright (C) 2008, 2009 Apple Inc. All Rights Reserved.
+>>>>>>> 00258b8... This turns single-threaded database change back, because of the previous
  * Copyright (C) Research In Motion Limited 2009. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,11 +33,10 @@
 
 #if ENABLE(DOM_STORAGE)
 
-#include "PlatformString.h"
 #include "SQLiteDatabase.h"
-#include "StringHash.h"
 #include "Timer.h"
 #include <wtf/HashMap.h>
+#include <wtf/text/StringHash.h>
 
 namespace WebCore {
 
@@ -43,7 +46,7 @@ namespace WebCore {
 
     class StorageAreaSync : public RefCounted<StorageAreaSync> {
     public:
-        static PassRefPtr<StorageAreaSync> create(PassRefPtr<StorageSyncManager> storageSyncManager, PassRefPtr<StorageAreaImpl> storageArea, String databaseIdentifier);
+        static PassRefPtr<StorageAreaSync> create(PassRefPtr<StorageSyncManager>, PassRefPtr<StorageAreaImpl>, const String& databaseIdentifier);
         ~StorageAreaSync();
 
         void scheduleFinalSync();
@@ -53,7 +56,7 @@ namespace WebCore {
         void scheduleClear();
 
     private:
-        StorageAreaSync(PassRefPtr<StorageSyncManager> storageSyncManager, PassRefPtr<StorageAreaImpl> storageArea, String databaseIdentifier);
+        StorageAreaSync(PassRefPtr<StorageSyncManager>, PassRefPtr<StorageAreaImpl>, const String& databaseIdentifier);
 
         void dispatchStorageEvent(const String& key, const String& oldValue, const String& newValue, Frame* sourceFrame);
 
@@ -74,35 +77,31 @@ namespace WebCore {
         // Called from the background thread
         void performImport();
         void performSync();
+        void deleteEmptyDatabase();
 
     private:
+        enum OpenDatabaseParamType {
+          CreateIfNonExistent,
+          SkipIfNonExistent
+        };
+
         void syncTimerFired(Timer<StorageAreaSync>*);
+        void openDatabase(OpenDatabaseParamType openingStrategy);
         void sync(bool clearItems, const HashMap<String, String>& items);
 
         const String m_databaseIdentifier;
 
+        Mutex m_syncLock;
         HashMap<String, String> m_itemsPendingSync;
         bool m_clearItemsWhileSyncing;
         bool m_syncScheduled;
         bool m_syncInProgress;
+        bool m_databaseOpenFailed;
 
-        void scheduleImport();
-        void markImported();
-        void markImportedWithoutLockingMutex();
-#if ENABLE(SINGLE_THREADED)
-        bool isBackgroundThread() const { return true; }
-        struct StorageMutexLocker {
-            // Do nothing here
-            StorageMutexLocker(Mutex&) {}
-        };
-#else
-        typedef MutexLocker StorageMutexLocker;
-        bool m_importComplete;
-        mutable ThreadCondition m_importCondition;
-        bool isBackgroundThread() const { return !isMainThread(); }
-#endif
-        Mutex m_syncLock;
         mutable Mutex m_importLock;
+        mutable ThreadCondition m_importCondition;
+        mutable bool m_importComplete;
+        void markImported();
     };
 
 } // namespace WebCore

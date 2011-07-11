@@ -34,16 +34,27 @@
 #include "Frame.h"
 #include "FrameLoaderClientQt.h"
 #include "FrameView.h"
+#if USE(JSC)
 #include "GCController.h"
+#elif USE(V8)
+#include "V8GCController.h"
+#include "V8Proxy.h"
+#endif
+#include "Geolocation.h"
+#include "GeolocationServiceMock.h"
+#include "Geoposition.h"
+#include "HistoryItem.h"
 #include "HTMLInputElement.h"
 #include "InspectorController.h"
 #include "NotificationPresenterClientQt.h"
 #include "Page.h"
 #include "PageGroup.h"
 #include "PluginDatabase.h"
+#include "PositionError.h"
 #include "PrintContext.h"
 #include "RenderListItem.h"
 #include "RenderTreeAsText.h"
+#include "ScriptController.h"
 #include "SecurityOrigin.h"
 #include "Settings.h"
 #if ENABLE(SVG)
@@ -51,14 +62,20 @@
 #endif
 #include "TextIterator.h"
 #include "WorkerThread.h"
+#include <wtf/CurrentTime.h>
 
 #include "qwebelement.h"
 #include "qwebframe.h"
 #include "qwebframe_p.h"
+#include "qwebhistory.h"
+#include "qwebhistory_p.h"
 #include "qwebpage.h"
 #include "qwebpage_p.h"
+#include "qwebscriptworld.h"
 
 using namespace WebCore;
+
+QMap<int, QWebScriptWorld*> m_worldMap;
 
 DumpRenderTreeSupportQt::DumpRenderTreeSupportQt()
 {
@@ -250,6 +267,32 @@ int DumpRenderTreeSupportQt::numberOfActiveAnimations(QWebFrame *frame)
     return controller->numberOfActiveAnimations();
 }
 
+void DumpRenderTreeSupportQt::suspendAnimations(QWebFrame *frame)
+{
+    Frame* coreFrame = QWebFramePrivate::core(frame);
+    if (!coreFrame)
+        return;
+
+    AnimationController* controller = coreFrame->animation();
+    if (!controller)
+        return;
+
+    controller->suspendAnimations(coreFrame->document());
+}
+
+void DumpRenderTreeSupportQt::resumeAnimations(QWebFrame *frame)
+{
+    Frame* coreFrame = QWebFramePrivate::core(frame);
+    if (!coreFrame)
+        return;
+
+    AnimationController* controller = coreFrame->animation();
+    if (!controller)
+        return;
+
+    controller->resumeAnimations(coreFrame->document());
+}
+
 void DumpRenderTreeSupportQt::clearFrameName(QWebFrame* frame)
 {
     Frame* coreFrame = QWebFramePrivate::core(frame);
@@ -258,17 +301,31 @@ void DumpRenderTreeSupportQt::clearFrameName(QWebFrame* frame)
 
 int DumpRenderTreeSupportQt::javaScriptObjectsCount()
 {
+#if USE(JSC)
     return JSDOMWindowBase::commonJSGlobalData()->heap.globalObjectCount();
+#elif USE(V8)
+    // FIXME: Find a way to do this using V8.
+    return 1;
+#endif
 }
 
 void DumpRenderTreeSupportQt::garbageCollectorCollect()
 {
+#if USE(JSC)
     gcController().garbageCollectNow();
+#elif USE(V8)
+    v8::V8::LowMemoryNotification();
+#endif
 }
 
 void DumpRenderTreeSupportQt::garbageCollectorCollectOnAlternateThread(bool waitUntilDone)
 {
+#if USE(JSC)
     gcController().garbageCollectOnAlternateThreadForDebugging(waitUntilDone);
+#elif USE(V8)
+    // FIXME: Find a way to do this using V8.
+    garbageCollectorCollect();
+#endif
 }
 
 // Returns the value of counter in the element specified by \a id.
@@ -309,7 +366,9 @@ void DumpRenderTreeSupportQt::suspendActiveDOMObjects(QWebFrame* frame)
 {
     Frame* coreFrame = QWebFramePrivate::core(frame);
     if (coreFrame->document())
-        coreFrame->document()->suspendActiveDOMObjects();
+        // FIXME: This function should be changed take a ReasonForSuspension parameter 
+        // https://bugs.webkit.org/show_bug.cgi?id=45732
+        coreFrame->document()->suspendActiveDOMObjects(ActiveDOMObject::JavaScriptDebuggerPaused);
 }
 
 // Resume active DOM objects in this frame.
@@ -318,13 +377,6 @@ void DumpRenderTreeSupportQt::resumeActiveDOMObjects(QWebFrame* frame)
     Frame* coreFrame = QWebFramePrivate::core(frame);
     if (coreFrame->document())
         coreFrame->document()->resumeActiveDOMObjects();
-}
-
-void DumpRenderTreeSupportQt::evaluateScriptInIsolatedWorld(QWebFrame* frame, int worldId, const QString& script)
-{
-    Frame* coreFrame = QWebFramePrivate::core(frame);
-    if (coreFrame)
-        JSC::JSValue result = coreFrame->script()->executeScriptInWorld(mainThreadNormalWorld(), script, true).jsValue();
 }
 
 void DumpRenderTreeSupportQt::whiteListAccessFromOrigin(const QString& sourceOrigin, const QString& destinationProtocol, const QString& destinationHost, bool allowDestinationSubdomains)
@@ -357,7 +409,7 @@ void DumpRenderTreeSupportQt::setMediaType(QWebFrame* frame, const QString& type
     WebCore::Frame* coreFrame = QWebFramePrivate::core(frame);
     WebCore::FrameView* view = coreFrame->view();
     view->setMediaType(type);
-    coreFrame->document()->updateStyleSelector();
+    coreFrame->document()->styleSelectorChanged(RecalcStyleImmediately);
     view->layout();
 }
 
@@ -388,6 +440,20 @@ QString DumpRenderTreeSupportQt::markerTextForListItem(const QWebElement& listIt
     return WebCore::markerTextForListItem(listItem.m_element);
 }
 
+static QString convertToPropertyName(const QString& name)
+{
+    QStringList parts = name.split('-');
+    QString camelCaseName;
+    for (int j = 0; j < parts.count(); ++j) {
+        QString part = parts.at(j);
+        if (j)
+            camelCaseName.append(part.replace(0, 1, part.left(1).toUpper()));
+        else
+            camelCaseName.append(part);
+    }
+    return camelCaseName;
+}
+
 QVariantMap DumpRenderTreeSupportQt::computedStyleIncludingVisitedInfo(const QWebElement& element)
 {
     QVariantMap res;
@@ -400,7 +466,7 @@ QVariantMap DumpRenderTreeSupportQt::computedStyleIncludingVisitedInfo(const QWe
     for (int i = 0; i < style->length(); i++) {
         QString name = style->item(i);
         QString value = (static_cast<WebCore::CSSStyleDeclaration*>(style.get()))->getPropertyValue(name);
-        res[name] = QVariant(value);
+        res[convertToPropertyName(name)] = QVariant(value);
     }
     return res;
 }
@@ -434,7 +500,7 @@ QVariantList DumpRenderTreeSupportQt::firstRectForCharacterRange(QWebPage* page,
     WebCore::Frame* frame = page->handle()->page->focusController()->focusedOrMainFrame();
     QVariantList rect;
 
-    if ((location + length < location) && (location + length != 0))
+    if ((location + length < location) && (location + length))
         length = 0;
 
     Element* selectionRoot = frame->selection()->rootEditableElement();
@@ -444,7 +510,7 @@ QVariantList DumpRenderTreeSupportQt::firstRectForCharacterRange(QWebPage* page,
     if (!range)
         return QVariantList();
 
-    QRect resultRect = frame->firstRectForRange(range.get());
+    QRect resultRect = frame->editor()->firstRectForRange(range.get());
     rect << resultRect.x() << resultRect.y() << resultRect.width() << resultRect.height();
     return rect;
 }
@@ -473,18 +539,22 @@ bool DumpRenderTreeSupportQt::elementDoesAutoCompleteForElementWithId(QWebFrame*
 
 void DumpRenderTreeSupportQt::setEditingBehavior(QWebPage* page, const QString& editingBehavior)
 {
-    WebCore::EditingBehavior coreEditingBehavior;
+    WebCore::EditingBehaviorType coreEditingBehavior;
 
     if (editingBehavior == "win")
         coreEditingBehavior = EditingWindowsBehavior;
     else if (editingBehavior == "mac")
         coreEditingBehavior = EditingMacBehavior;
+    else {
+        ASSERT_NOT_REACHED();
+        return;
+    }
 
     Page* corePage = QWebPagePrivate::core(page);
     if (!corePage)
         return;
 
-    corePage->settings()->setEditingBehavior(coreEditingBehavior);
+    corePage->settings()->setEditingBehaviorType(coreEditingBehavior);
 }
 
 void DumpRenderTreeSupportQt::dumpFrameLoader(bool b)
@@ -502,6 +572,11 @@ void DumpRenderTreeSupportQt::dumpResourceLoadCallbacksPath(const QString& path)
     FrameLoaderClientQt::dumpResourceLoadCallbacksPath = path;
 }
 
+void DumpRenderTreeSupportQt::dumpResourceResponseMIMETypes(bool b)
+{
+    FrameLoaderClientQt::dumpResourceResponseMIMETypes = b;
+}
+
 void DumpRenderTreeSupportQt::setWillSendRequestReturnsNullOnRedirect(bool b)
 {
     FrameLoaderClientQt::sendRequestReturnsNullOnRedirect = b;
@@ -515,6 +590,17 @@ void DumpRenderTreeSupportQt::setWillSendRequestReturnsNull(bool b)
 void DumpRenderTreeSupportQt::setWillSendRequestClearHeaders(const QStringList& headers)
 {
     FrameLoaderClientQt::sendRequestClearHeaders = headers;
+}
+
+void DumpRenderTreeSupportQt::setDeferMainResourceDataLoad(bool b)
+{
+    FrameLoaderClientQt::deferMainResourceDataLoad = b;
+}
+
+void DumpRenderTreeSupportQt::setCustomPolicyDelegate(bool enabled, bool permissive)
+{
+    FrameLoaderClientQt::policyDelegateEnabled = enabled;
+    FrameLoaderClientQt::policyDelegatePermissive = permissive;
 }
 
 void DumpRenderTreeSupportQt::dumpEditingCallbacks(bool b)
@@ -533,6 +619,142 @@ void DumpRenderTreeSupportQt::dumpNotification(bool b)
     NotificationPresenterClientQt::dumpNotification = b;
 #endif
 }
+
+QString DumpRenderTreeSupportQt::viewportAsText(QWebPage* page, const QSize& availableSize)
+{
+    WebCore::ViewportArguments args = page->mainFrame()->d->viewportArguments;
+    WebCore::ViewportConfiguration conf = WebCore::findConfigurationForViewportData(args,
+        /* desktop-width */ 980,
+        /* device-width  */ 320,
+        /* device-height */ 480,
+        /* device-dpi    */ 160,
+        availableSize);
+
+    QString res;
+    res = res.sprintf("viewport size %dx%d scale %f with limits [%f, %f]\n",
+            conf.layoutViewport.width(),
+            conf.layoutViewport.height(),
+            conf.initialScale,
+            conf.minimumScale,
+            conf.maximumScale);
+
+    return res;
+}
+
+void DumpRenderTreeSupportQt::setMockGeolocationPosition(double latitude, double longitude, double accuracy)
+{
+#if ENABLE(GEOLOCATION)
+    RefPtr<Geoposition> geoposition = Geoposition::create(Coordinates::create(latitude, longitude, false, 0, accuracy, true, 0, false, 0, false, 0), currentTime() * 1000.0);
+    GeolocationServiceMock::setPosition(geoposition);
+#endif
+}
+
+void DumpRenderTreeSupportQt::setMockGeolocationError(int errorCode, const QString& message)
+{
+#if ENABLE(GEOLOCATION)
+    RefPtr<PositionError> positionError = PositionError::create(static_cast<PositionError::ErrorCode>(errorCode), message);
+    GeolocationServiceMock::setError(positionError);
+#endif
+}
+
+bool DumpRenderTreeSupportQt::isTargetItem(const QWebHistoryItem& historyItem)
+{
+    QWebHistoryItem it = historyItem;
+    if (QWebHistoryItemPrivate::core(&it)->isTargetItem())
+        return true;
+    return false;
+}
+
+QString DumpRenderTreeSupportQt::historyItemTarget(const QWebHistoryItem& historyItem)
+{
+    QWebHistoryItem it = historyItem;
+    return (QWebHistoryItemPrivate::core(&it)->target());
+}
+
+QMap<QString, QWebHistoryItem> DumpRenderTreeSupportQt::getChildHistoryItems(const QWebHistoryItem& historyItem)
+{
+    QWebHistoryItem it = historyItem;
+    HistoryItem* item = QWebHistoryItemPrivate::core(&it);
+    const WebCore::HistoryItemVector& children = item->children();
+
+    unsigned size = children.size();
+    QMap<QString, QWebHistoryItem> kids;
+    for (unsigned i = 0; i < size; ++i) {
+        QWebHistoryItem kid(new QWebHistoryItemPrivate(children[i].get()));
+        kids.insert(DumpRenderTreeSupportQt::historyItemTarget(kid), kid);
+    }
+    return kids;
+}
+
+bool DumpRenderTreeSupportQt::shouldClose(QWebFrame* frame)
+{
+    WebCore::Frame* coreFrame = QWebFramePrivate::core(frame);
+    return coreFrame->loader()->shouldClose();
+}
+
+void DumpRenderTreeSupportQt::clearScriptWorlds()
+{
+    m_worldMap.clear();
+}
+
+void DumpRenderTreeSupportQt::evaluateScriptInIsolatedWorld(QWebFrame* frame, int worldID, const QString& script)
+{
+    QWebScriptWorld* scriptWorld;
+    if (!worldID) {
+        scriptWorld = new QWebScriptWorld();
+    } else if (!m_worldMap.contains(worldID)) {
+        scriptWorld = new QWebScriptWorld();
+        m_worldMap.insert(worldID, scriptWorld);
+    } else
+        scriptWorld = m_worldMap.value(worldID);
+
+    WebCore::Frame* coreFrame = QWebFramePrivate::core(frame);
+
+    ScriptController* proxy = coreFrame->script();
+
+    if (!proxy)
+        return;
+#if USE(JSC)
+    proxy->executeScriptInWorld(scriptWorld->world(), script, true);
+#elif USE(V8)
+    ScriptSourceCode source(script);
+    Vector<ScriptSourceCode> sources;
+    sources.append(source);
+    proxy->evaluateInIsolatedWorld(0, sources, true);
+#endif
+}
+
+bool DumpRenderTreeSupportQt::isPageBoxVisible(QWebFrame* frame, int pageIndex)
+{
+    WebCore::Frame* coreFrame = QWebFramePrivate::core(frame);
+    return coreFrame->document()->isPageBoxVisible(pageIndex);
+}
+
+QString DumpRenderTreeSupportQt::pageSizeAndMarginsInPixels(QWebFrame* frame, int pageIndex, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft)
+{
+    WebCore::Frame* coreFrame = QWebFramePrivate::core(frame);
+    return PrintContext::pageSizeAndMarginsInPixels(coreFrame, pageIndex, width, height,
+                                                    marginTop, marginRight, marginBottom, marginLeft);
+}
+
+QString DumpRenderTreeSupportQt::pageProperty(QWebFrame* frame, const QString& propertyName, int pageNumber)
+{
+    WebCore::Frame* coreFrame = QWebFramePrivate::core(frame);
+    return PrintContext::pageProperty(coreFrame, propertyName.toUtf8().constData(), pageNumber);
+}
+
+void DumpRenderTreeSupportQt::addUserStyleSheet(QWebPage* page, const QString& sourceCode)
+{
+    page->handle()->page->group().addUserStyleSheetToWorld(mainThreadNormalWorld(), sourceCode, QUrl(), 0, 0, WebCore::InjectInAllFrames);
+}
+
+void DumpRenderTreeSupportQt::simulateDesktopNotificationClick(const QString& title)
+{
+#if ENABLE(NOTIFICATIONS)
+    NotificationPresenterClientQt::notificationPresenter()->notificationClicked(title);
+#endif
+}
+
 // Provide a backward compatibility with previously exported private symbols as of QtWebKit 4.6 release
 
 void QWEBKIT_EXPORT qt_resumeActiveDOMObjects(QWebFrame* frame)

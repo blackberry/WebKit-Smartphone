@@ -1,0 +1,33 @@
+<html>
+<head>
+<meta name="viewport" content="height=device-width, width=0"/>
+<style>
+body { margin: 0; padding: 0; }
+#test-container { background-color: red; height: 320px; width: 100%; }
+#square { background-color: green; height: 320px; width: 450px; }
+</style>
+<script src="resources/meta-viewport-utilities.js"></script>
+<script>
+function updateOrientation() {
+    var body = document.body;
+    var width = parseInt(getComputedStyle(body).width, 10);
+    var deviceWidth = getDeviceWidth();
+    var square = document.getElementById("square");
+
+    logStart(square);
+    log(square, "device-width: " + deviceWidth);
+    log(square, "actual width: " + width);
+    logResultAndNotifyDone(square, width === deviceWidth);
+}
+
+window.onorientationchange = updateOrientation;
+window.onload = updateOrientation;
+window.onresize = updateOrientation;
+</script>
+<body>
+<!-- This tests that the width of the viewport is the width in portrait orientation when the width property == 0. This test FAILED if you see any red on this page for any orientation. -->
+<div id="test-container">
+    <div id="square"></div>
+</div>
+</body>
+</html>

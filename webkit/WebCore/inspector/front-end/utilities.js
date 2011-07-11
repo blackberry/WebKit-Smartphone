@@ -26,18 +26,6 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-Object.proxyType = function(objectProxy)
-{
-    if (objectProxy === null)
-        return "null";
-
-    var type = typeof objectProxy;
-    if (type !== "object" && type !== "function")
-        return type;
-
-    return objectProxy.type;
-}
-
 Object.properties = function(obj)
 {
     var properties = [];
@@ -55,7 +43,14 @@ Function.prototype.bind = function(thisObject)
 {
     var func = this;
     var args = Array.prototype.slice.call(arguments, 1);
-    return function() { return func.apply(thisObject, args.concat(Array.prototype.slice.call(arguments, 0))) };
+    function bound()
+    {
+        return func.apply(thisObject, args.concat(Array.prototype.slice.call(arguments, 0)));
+    }
+    bound.toString = function() {
+        return "bound: " + func;
+    };
+    return bound;
 }
 
 Node.prototype.rangeOfWord = function(offset, stopCharacters, stayWithinNode, direction)
@@ -181,8 +176,9 @@ Element.prototype.removeStyleClass = function(className)
     if (index === -1)
         return;
 
-    var newClassName = " " + this.className + " ";
-    this.className = newClassName.replace(" " + className + " ", " ");
+    this.className = this.className.split(" ").filter(function(s) {
+        return s && s !== className;
+    }).join(" ");
 }
 
 Element.prototype.removeMatchingStyleClasses = function(classNameRegex)
@@ -266,7 +262,8 @@ Element.prototype.query = function(query)
 
 Element.prototype.removeChildren = function()
 {
-    this.innerHTML = "";
+    if (this.firstChild)
+        this.textContent = "";
 }
 
 Element.prototype.isInsertionCaretInside = function()
@@ -320,6 +317,63 @@ Element.prototype.offsetRelativeToWindow = function(targetWindow)
 
     return elementOffset;
 }
+
+KeyboardEvent.prototype.__defineGetter__("data", function()
+{
+    // Emulate "data" attribute from DOM 3 TextInput event.
+    // See http://www.w3.org/TR/DOM-Level-3-Events/#events-Events-TextEvent-data
+    switch (this.type) {
+        case "keypress":
+            if (!this.ctrlKey && !this.metaKey)
+                return String.fromCharCode(this.charCode);
+            else
+                return "";
+        case "keydown":
+        case "keyup":
+            if (!this.ctrlKey && !this.metaKey && !this.altKey)
+                return String.fromCharCode(this.which);
+            else
+                return "";
+    }
+});
+
+Text.prototype.select = function(start, end)
+{
+    start = start || 0;
+    end = end || this.textContent.length;
+
+    if (start < 0)
+        start = end + start;
+
+    var selection = window.getSelection();
+    selection.removeAllRanges();
+    var range = document.createRange();
+    range.setStart(this, start);
+    range.setEnd(this, end);
+    selection.addRange(range);
+    return this;
+}
+
+Element.prototype.__defineGetter__("selectionLeftOffset", function() {
+    // Calculate selection offset relative to the current element.
+
+    var selection = window.getSelection();
+    if (!selection.containsNode(this, true))
+        return null;
+
+    var leftOffset = selection.anchorOffset;
+    var node = selection.anchorNode;
+
+    while (node !== this) {
+        while (node.previousSibling) {
+            node = node.previousSibling;
+            leftOffset += node.textContent.length;
+        }
+        node = node.parentNode;
+    }
+
+    return leftOffset;
+});
 
 Node.prototype.isWhitespace = isNodeWhitespace;
 Node.prototype.displayName = nodeDisplayName;
@@ -574,6 +628,11 @@ function parentNode(node)
     return node.parentNode;
 }
 
+Number.millisToString = function(ms, formatterFunction, higherResolution)
+{
+    return Number.secondsToString(ms / 1000, formatterFunction, higherResolution);
+}
+
 Number.secondsToString = function(seconds, formatterFunction, higherResolution)
 {
     if (!formatterFunction)
@@ -665,13 +724,13 @@ Array.prototype.keySet = function()
     return keys;
 }
 
-function insertionIndexForObjectInListSortedByFunction(anObject, aList, aFunction)
+Array.convert = function(list)
 {
-    // indexOf returns (-lowerBound - 1). Taking (-result - 1) works out to lowerBound.
-    return (-indexOfObjectInListSortedByFunction(anObject, aList, aFunction) - 1);
+    // Cast array-like object to an array.
+    return Array.prototype.slice.call(list);
 }
 
-function indexOfObjectInListSortedByFunction(anObject, aList, aFunction)
+function insertionIndexForObjectInListSortedByFunction(anObject, aList, aFunction)
 {
     var first = 0;
     var last = aList.length - 1;
@@ -695,9 +754,7 @@ function indexOfObjectInListSortedByFunction(anObject, aList, aFunction)
         }
     }
 
-    // By returning 1 less than the negative lower search bound, we can reuse this function
-    // for both indexOf and insertionIndexFor, with some simple arithmetic.
-    return (-first - 1);
+    return first;
 }
 
 String.sprintf = function(format)
@@ -770,7 +827,7 @@ String.tokenizeFormatString = function(format)
 String.standardFormatters = {
     d: function(substitution)
     {
-        if (typeof substitution == "object" && Object.proxyType(substitution) === "number")
+        if (typeof substitution == "object" && WebInspector.RemoteObject.type(substitution) === "number")
             substitution = substitution.description;
         substitution = parseInt(substitution);
         return !isNaN(substitution) ? substitution : 0;
@@ -778,7 +835,7 @@ String.standardFormatters = {
 
     f: function(substitution, token)
     {
-        if (typeof substitution == "object" && Object.proxyType(substitution) === "number")
+        if (typeof substitution == "object" && WebInspector.RemoteObject.type(substitution) === "number")
             substitution = substitution.description;
         substitution = parseFloat(substitution);
         if (substitution && token.precision > -1)
@@ -788,7 +845,7 @@ String.standardFormatters = {
 
     s: function(substitution)
     {
-        if (typeof substitution == "object" && Object.proxyType(substitution) !== "null")
+        if (typeof substitution == "object" && WebInspector.RemoteObject.type(substitution) !== "null")
             substitution = substitution.description;
         return substitution;
     },

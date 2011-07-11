@@ -32,9 +32,15 @@
 #include "WebAccessibilityObject.h"
 
 #include "AccessibilityObject.h"
+#include "CSSPrimitiveValueMappings.h"
+#include "Document.h"
 #include "EventHandler.h"
 #include "FrameView.h"
+#include "Node.h"
 #include "PlatformKeyboardEvent.h"
+#include "RenderStyle.h"
+#include "WebDocument.h"
+#include "WebNode.h"
 #include "WebPoint.h"
 #include "WebRect.h"
 #include "WebString.h"
@@ -93,6 +99,15 @@ bool WebAccessibilityObject::canSetValueAttribute() const
 
     m_private->updateBackingStore();
     return m_private->canSetValueAttribute();
+}
+
+bool WebAccessibilityObject::isValid() const
+{
+    if (!m_private)
+        return false;
+
+    m_private->updateBackingStore();
+    return m_private->axObjectID();
 }
 
 unsigned WebAccessibilityObject::childCount() const
@@ -176,6 +191,15 @@ WebAccessibilityObject WebAccessibilityObject::previousSibling() const
     return WebAccessibilityObject(m_private->previousSibling());
 }
 
+bool WebAccessibilityObject::canSetSelectedAttribute() const
+{
+    if (!m_private)
+        return 0;
+
+    m_private->updateBackingStore();
+    return m_private->canSetSelectedAttribute();
+}
+
 bool WebAccessibilityObject::isAnchor() const
 {
     if (!m_private)
@@ -192,6 +216,15 @@ bool WebAccessibilityObject::isChecked() const
 
     m_private->updateBackingStore();
     return m_private->isChecked();
+}
+
+bool WebAccessibilityObject::isCollapsed() const
+{
+    if (!m_private)
+        return 0;
+
+    m_private->updateBackingStore();
+    return m_private->isCollapsed();
 }
 
 
@@ -229,6 +262,15 @@ bool WebAccessibilityObject::isIndeterminate() const
 
     m_private->updateBackingStore();
     return m_private->isIndeterminate();
+}
+
+bool WebAccessibilityObject::isLinked() const
+{
+    if (!m_private)
+        return 0;
+
+    m_private->updateBackingStore();
+    return m_private->isLinked();
 }
 
 bool WebAccessibilityObject::isMultiSelectable() const
@@ -274,6 +316,24 @@ bool WebAccessibilityObject::isReadOnly() const
 
     m_private->updateBackingStore();
     return m_private->isReadOnly();
+}
+
+bool WebAccessibilityObject::isSelected() const
+{
+    if (!m_private)
+        return 0;
+
+    m_private->updateBackingStore();
+    return m_private->isSelected();
+}
+
+bool WebAccessibilityObject::isVisible() const
+{
+    if (!m_private)
+        return 0;
+
+    m_private->updateBackingStore();
+    return m_private->isVisible();
 }
 
 bool WebAccessibilityObject::isVisited() const
@@ -399,6 +459,65 @@ WebString WebAccessibilityObject::title() const
 
     m_private->updateBackingStore();
     return m_private->title();
+}
+
+
+WebNode WebAccessibilityObject::node() const
+{
+    if (!m_private)
+        return WebNode();
+
+    m_private->updateBackingStore();
+
+    Node* node = m_private->node();
+    if (!node)
+        return WebNode();
+
+    return WebNode(node);
+}
+
+WebDocument WebAccessibilityObject::document() const
+{
+    if (!m_private)
+        return WebDocument();
+
+    m_private->updateBackingStore();
+
+    Document* document = m_private->document();
+    if (!document)
+        return WebDocument();
+
+    return WebDocument(document);
+}
+
+bool WebAccessibilityObject::hasComputedStyle() const
+{
+    Document* document = m_private->document();
+    if (document)
+        document->updateStyleIfNeeded();
+
+    Node* node = m_private->node();
+    if (!node)
+        return false;
+
+    return node->computedStyle();
+}
+
+WebString WebAccessibilityObject::computedStyleDisplay() const
+{
+    Document* document = m_private->document();
+    if (document)
+        document->updateStyleIfNeeded();
+
+    Node* node = m_private->node();
+    if (!node)
+        return WebString();
+
+    RenderStyle* renderStyle = node->computedStyle();
+    if (!renderStyle)
+        return WebString();
+
+    return WebString(CSSPrimitiveValue::create(renderStyle->display())->getStringValue());
 }
 
 WebAccessibilityObject::WebAccessibilityObject(const WTF::PassRefPtr<WebCore::AccessibilityObject>& object)

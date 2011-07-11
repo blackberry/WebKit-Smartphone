@@ -7,15 +7,55 @@ build/
 autoinstall.cache.d
 WebKitTools/Scripts/webkitpy/thirdparty/autoinstalled
 
+# Ignore common tool auto-generated files.
+.gdb_history
+tags
+*~
+
 # Ignore Chromium projects auto-generated from .gyp files:
+JavaScriptCore/JavaScriptCore.gyp/*.Makefile
+JavaScriptCore/JavaScriptCore.gyp/*.mk
+JavaScriptCore/JavaScriptCore.gyp/*.sln
+JavaScriptCore/JavaScriptCore.gyp/*.vcproj*
 JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.xcodeproj
+WebCore/WebCore.gyp/*.Makefile
+WebCore/WebCore.gyp/*.mk
+WebCore/WebCore.gyp/*.rules
+WebCore/WebCore.gyp/*.sln
+WebCore/WebCore.gyp/*.tmp
+WebCore/WebCore.gyp/*.vcproj*
 WebCore/WebCore.gyp/WebCore.xcodeproj
+WebKit/chromium/*.Makefile
+WebKit/chromium/*.mk
+WebKit/chromium/*.sln
+WebKit/chromium/*.vcproj*
 WebKit/chromium/WebKit.xcodeproj
 WebKitTools/DumpRenderTree/DumpRenderTree.gyp/DumpRenderTree.xcodeproj
 
 # Ignore status files that manage Chromium dependencies.
 WebKit/chromium/.gclient
 WebKit/chromium/.gclient_entries
+
+# Ignore Chromium dependencies
+WebKit/chromium/base/
+WebKit/chromium/gfx/
+WebKit/chromium/googleurl/
+WebKit/chromium/net/
+WebKit/chromium/sdch/
+WebKit/chromium/skia/
+WebKit/chromium/testing/
+WebKit/chromium/third_party/
+WebKit/chromium/tools/
+WebKit/chromium/v8/
+WebKit/chromium/xcodebuild/
+WebKit/chromium/.gclient
+WebKit/chromium/.gclient_entries
+WebKit/chromium/app/
+WebKit/chromium/chromium_deps/
+WebKit/chromium/gpu/
+WebKit/chromium/media/
+WebKit/chromium/webkit/
+WebKit/chromium/printing/
 
 # Ignore compiled java tests:
 LayoutTests/java/*.class
@@ -24,12 +64,24 @@ LayoutTests/java/*.class
 # a few files into the source tree.
 /aclocal.m4
 /autom4te.cache
-/autotools
+/autotools/compile
+/autotools/config.guess
+/autotools/config.sub
+/autotools/depcomp
+/autotools/gtk-doc.m4
+/autotools/install-sh
+/autotools/libtool.m4
+/autotools/ltmain.sh
+/autotools/ltoptions.m4
+/autotools/ltsugar.m4
+/autotools/ltversion.m4
+/autotools/lt~obsolete.m4
+/autotools/missing
 /autotoolsconfig.h.in
 /configure
 /GNUmakefile.in
 /WebKit/gtk/docs/GNUmakefile.in
+/WebKit/gtk/po/*.pot
 /gtk-doc.make
 /INSTALL
 /README
-*~

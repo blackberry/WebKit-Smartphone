@@ -26,15 +26,10 @@
 #include "WKURL.h"
 
 #include "WKAPICast.h"
-#include <WebCore/StringImpl.h>
 
-WKURLRef WKURLRetain(WKURLRef URLRef)
-{
-    toWK(URLRef)->ref();
-    return URLRef;
-}
+using namespace WebKit;
 
-void WKURLRelease(WKURLRef URLRef)
+WKTypeID WKURLGetTypeID()
 {
-    toWK(URLRef)->deref();
+    return toRef(WebURL::APIType);
 }

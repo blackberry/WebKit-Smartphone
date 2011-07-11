@@ -1,0 +1,4 @@
+This tests that the escape keyboard key, triggered by the BlackBerry Escape (back) button, is passed to a content-editable element. This test PASSED if you see a PASS message below. Otherwise, it FAILED.
+
+PASS keyCode is 27.
+

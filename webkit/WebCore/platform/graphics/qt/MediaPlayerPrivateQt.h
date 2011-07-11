@@ -50,10 +50,13 @@ public:
     bool hasAudio() const;
 
     void load(const String &url);
+    void commitLoad(const String& url);
+    void resumeLoad();
     void cancelLoad();
 
     void play();
     void pause();
+    void prepareToPlay();
 
     bool paused() const;
     bool seeking() const;
@@ -67,6 +70,8 @@ public:
 
     bool supportsMuting() const;
     void setMuted(bool);
+
+    void setPreload(MediaPlayer::Preload);
 
     MediaPlayer::NetworkState networkState() const;
     MediaPlayer::ReadyState readyState() const;
@@ -94,6 +99,7 @@ public:
     virtual PlatformLayer* platformLayer() const;
 #endif
 
+    virtual PlatformMedia platformMedia() const;
 private slots:
     void mediaStatusChanged(QMediaPlayer::MediaStatus);
     void handleError(QMediaPlayer::Error);
@@ -103,6 +109,7 @@ private slots:
     void seekTimeout();
     void positionChanged(qint64);
     void durationChanged(qint64);
+    void bufferStatusChanged(int);
     void volumeChanged(int);
     void mutedChanged(bool);
     void repaint();
@@ -127,6 +134,10 @@ private:
     bool m_isSeeking;
     bool m_composited;
     qint64 m_queuedSeek;
+    MediaPlayer::Preload m_preload;
+    bool m_delayingLoad;
+    String m_mediaUrl;
+
 };
 }
 

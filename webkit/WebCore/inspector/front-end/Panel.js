@@ -26,11 +26,15 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-WebInspector.Panel = function()
+WebInspector.Panel = function(name)
 {
     WebInspector.View.call(this);
 
     this.element.addStyleClass("panel");
+    this.element.addStyleClass(name);
+    this._panelName = name;
+
+    WebInspector.applicationSettings.installSetting(this._sidebarWidthSettingName(), this._panelName + "-sidebar-width", undefined);
 }
 
 // Should by in sync with style declarations.
@@ -52,8 +56,7 @@ WebInspector.Panel.prototype = {
         this._toolbarItem.className = "toolbar-item toggleable";
         this._toolbarItem.panel = this;
 
-        if ("toolbarItemClass" in this)
-            this._toolbarItem.addStyleClass(this.toolbarItemClass);
+        this._toolbarItem.addStyleClass(this._panelName);
 
         var iconElement = document.createElement("div");
         iconElement.className = "toolbar-icon";
@@ -67,6 +70,11 @@ WebInspector.Panel.prototype = {
         }
 
         return this._toolbarItem;
+    },
+
+    get name()
+    {
+        return this._panelName;
     },
 
     show: function()
@@ -86,7 +94,7 @@ WebInspector.Panel.prototype = {
 
         WebInspector.currentFocusElement = this.defaultFocusedElement;
 
-        this.updateSidebarWidth();
+        this.restoreSidebarWidth();
         this._restoreScrollPositions();
     },
 
@@ -113,7 +121,7 @@ WebInspector.Panel.prototype = {
             document.getElementById("main-panels").appendChild(this.element);
     },
 
-    searchCanceled: function(startingNewSearch)
+    searchCanceled: function()
     {
         if (this._searchResults) {
             for (var i = 0; i < this._searchResults.length; ++i) {
@@ -235,11 +243,9 @@ WebInspector.Panel.prototype = {
         var currentView = this._searchResults[this._currentSearchResultIndex];
 
         if (currentView.showingLastSearchResult()) {
-            if (this.searchIteratesOverViews()) {
-                if (++this._currentSearchResultIndex >= this._searchResults.length)
-                    this._currentSearchResultIndex = 0;
-                currentView = this._searchResults[this._currentSearchResultIndex];
-            }
+            if (++this._currentSearchResultIndex >= this._searchResults.length)
+                this._currentSearchResultIndex = 0;
+            currentView = this._searchResults[this._currentSearchResultIndex];
             showFirstResult = true;
         }
 
@@ -270,11 +276,9 @@ WebInspector.Panel.prototype = {
         var currentView = this._searchResults[this._currentSearchResultIndex];
 
         if (currentView.showingFirstSearchResult()) {
-            if (this.searchIteratesOverViews()) {
-                if (--this._currentSearchResultIndex < 0)
-                    this._currentSearchResultIndex = (this._searchResults.length - 1);
-                currentView = this._searchResults[this._currentSearchResultIndex];
-            }
+            if (--this._currentSearchResultIndex < 0)
+                this._currentSearchResultIndex = (this._searchResults.length - 1);
+            currentView = this._searchResults[this._currentSearchResultIndex];
             showLastResult = true;
         }
 
@@ -291,7 +295,7 @@ WebInspector.Panel.prototype = {
 
     createSidebar: function(parentElement, resizerParentElement)
     {
-        if (this.hasSidebar)
+        if (this.sidebarElement)
             return;
 
         if (!parentElement)
@@ -299,8 +303,6 @@ WebInspector.Panel.prototype = {
 
         if (!resizerParentElement)
             resizerParentElement = parentElement;
-
-        this.hasSidebar = true;
 
         this.sidebarElement = document.createElement("div");
         this.sidebarElement.className = "sidebar";
@@ -316,6 +318,12 @@ WebInspector.Panel.prototype = {
         this.sidebarElement.appendChild(this.sidebarTreeElement);
 
         this.sidebarTree = new TreeOutline(this.sidebarTreeElement);
+        this.sidebarTree.panel = this;
+    },
+
+    _sidebarWidthSettingName: function()
+    {
+        return this._panelName + "SidebarWidth";
     },
 
     _startSidebarDragging: function(event)
@@ -333,11 +341,12 @@ WebInspector.Panel.prototype = {
     _endSidebarDragging: function(event)
     {
         WebInspector.elementDragEnd(event);
+        this.saveSidebarWidth();
     },
 
     updateSidebarWidth: function(width)
     {
-        if (!this.hasSidebar)
+        if (!this.sidebarElement)
             return;
 
         if (this.sidebarElement.offsetWidth <= 0) {
@@ -366,6 +375,19 @@ WebInspector.Panel.prototype = {
         this.sidebarResizeElement.style.left = (width - 3) + "px";
     },
 
+    restoreSidebarWidth: function()
+    {
+        var sidebarWidth = WebInspector.applicationSettings[this._sidebarWidthSettingName()];
+        this.updateSidebarWidth(sidebarWidth);
+    },
+
+    saveSidebarWidth: function()
+    {
+        if (!this.sidebarElement)
+            return;
+        WebInspector.applicationSettings[this._sidebarWidthSettingName()] = this.sidebarElement.offsetWidth;
+    },
+
     updateMainViewWidth: function(width)
     {
         // Should be implemented by ancestors.
@@ -384,11 +406,6 @@ WebInspector.Panel.prototype = {
     },
 
     showSourceLine: function(url, line)
-    {
-        return false;
-    },
-
-    searchIteratesOverViews: function()
     {
         return false;
     },

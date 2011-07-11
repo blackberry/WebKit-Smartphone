@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004, 2005, 2006 Apple Computer, Inc.
+ * Copyright (C) 2004, 2005, 2006, 2010 Apple Inc. All rights reserved.
  *           (C) 2006 Alexey Proskuryakov (ap@nypop.com)
  *
  * This library is free software; you can redistribute it and/or
@@ -32,11 +32,21 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-HTMLIsIndexElement::HTMLIsIndexElement(const QualifiedName& tagName, Document *doc, HTMLFormElement *f)
-    : HTMLInputElement(tagName, doc, f)
+HTMLIsIndexElement::HTMLIsIndexElement(const QualifiedName& tagName, Document* document, HTMLFormElement* form)
+    : HTMLInputElement(tagName, document, form)
 {
     ASSERT(hasTagName(isindexTag));
     setDefaultName(isindexTag.localName());
+}
+
+PassRefPtr<HTMLIsIndexElement> HTMLIsIndexElement::create(Document* document, HTMLFormElement* form)
+{
+    return adoptRef(new HTMLIsIndexElement(isindexTag, document, form));
+}
+
+PassRefPtr<HTMLIsIndexElement> HTMLIsIndexElement::create(const QualifiedName& tagName, Document* document, HTMLFormElement* form)
+{
+    return adoptRef(new HTMLIsIndexElement(tagName, document, form));
 }
 
 void HTMLIsIndexElement::parseMappedAttribute(Attribute* attr)
@@ -49,16 +59,6 @@ void HTMLIsIndexElement::parseMappedAttribute(Attribute* attr)
         // don't call HTMLInputElement::parseMappedAttribute here, as it would
         // accept attributes this element does not support
         HTMLFormControlElement::parseMappedAttribute(attr);
-}
-
-String HTMLIsIndexElement::prompt() const
-{
-    return getAttribute(promptAttr);
-}
-
-void HTMLIsIndexElement::setPrompt(const String &value)
-{
-    setAttribute(promptAttr, value);
 }
 
 } // namespace

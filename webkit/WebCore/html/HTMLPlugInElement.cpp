@@ -24,6 +24,8 @@
 #include "HTMLPlugInElement.h"
 
 #include "Attribute.h"
+#include "Chrome.h"
+#include "ChromeClient.h"
 #include "CSSPropertyNames.h"
 #include "Document.h"
 #include "Frame.h"
@@ -31,6 +33,7 @@
 #include "FrameTree.h"
 #include "HTMLNames.h"
 #include "Page.h"
+#include "RenderEmbeddedObject.h"
 #include "RenderWidget.h"
 #include "ScriptController.h"
 #include "Settings.h"
@@ -48,6 +51,7 @@ HTMLPlugInElement::HTMLPlugInElement(const QualifiedName& tagName, Document* doc
     : HTMLFrameOwnerElement(tagName, doc)
 #if ENABLE(NETSCAPE_PLUGIN_API)
     , m_NPObject(0)
+    , m_isCapturingMouseEvents(false)
 #endif
 {
 }
@@ -67,6 +71,13 @@ HTMLPlugInElement::~HTMLPlugInElement()
 void HTMLPlugInElement::detach()
 {
     m_instance.clear();
+
+    if (m_isCapturingMouseEvents) {
+        if (Frame* frame = document()->frame())
+            frame->eventHandler()->setCapturingMouseEventsNode(0);
+        m_isCapturingMouseEvents = false;
+    }
+
     HTMLFrameOwnerElement::detach();
 }
 
@@ -81,31 +92,19 @@ PassScriptInstance HTMLPlugInElement::getInstance() const
     if (m_instance)
         return m_instance;
 
-    RenderWidget* renderWidget = renderWidgetForJSBindings();
-    if (renderWidget && renderWidget->widget())
-        m_instance = frame->script()->createScriptInstanceForWidget(renderWidget->widget());
+    if (Widget* widget = pluginWidget())
+        m_instance = frame->script()->createScriptInstanceForWidget(widget);
 
     return m_instance;
 }
 
-String HTMLPlugInElement::height() const
+Widget* HTMLPlugInElement::pluginWidget() const
 {
-    return getAttribute(heightAttr);
-}
+    RenderWidget* renderWidget = renderWidgetForJSBindings();
+    if (!renderWidget)
+        return 0;
 
-void HTMLPlugInElement::setHeight(const String& value)
-{
-    setAttribute(heightAttr, value);
-}
-
-String HTMLPlugInElement::width() const
-{
-    return getAttribute(widthAttr);
-}
-
-void HTMLPlugInElement::setWidth(const String& value)
-{
-    setAttribute(widthAttr, value);
+    return renderWidget->widget();
 }
 
 bool HTMLPlugInElement::mapToEntry(const QualifiedName& attrName, MappedAttributeEntry& result) const
@@ -144,11 +143,6 @@ void HTMLPlugInElement::parseMappedAttribute(Attribute* attr)
         HTMLFrameOwnerElement::parseMappedAttribute(attr);
 }
 
-bool HTMLPlugInElement::checkDTD(const Node* newChild)
-{
-    return newChild->hasTagName(paramTag) || HTMLFrameOwnerElement::checkDTD(newChild);
-}
-
 void HTMLPlugInElement::defaultEventHandler(Event* event)
 {
     // Firefox seems to use a fake event listener to dispatch events to plug-in (tested with mouse events only).
@@ -158,6 +152,11 @@ void HTMLPlugInElement::defaultEventHandler(Event* event)
     // FIXME: Mouse down and scroll events are passed down to plug-in via custom code in EventHandler; these code paths should be united.
 
     RenderObject* r = renderer();
+    if (r && r->isEmbeddedObject() && toRenderEmbeddedObject(r)->showsMissingPluginIndicator()) {
+        toRenderEmbeddedObject(r)->handleMissingPluginIndicatorEvent(event);
+        return;
+    }
+
     if (!r || !r->isWidget())
         return;
     Widget* widget = toRenderWidget(r)->widget();
@@ -177,10 +176,5 @@ NPObject* HTMLPlugInElement::getNPObject()
 }
 
 #endif /* ENABLE(NETSCAPE_PLUGIN_API) */
-
-void HTMLPlugInElement::updateWidgetCallback(Node* n)
-{
-    static_cast<HTMLPlugInElement*>(n)->updateWidget();
-}
 
 }

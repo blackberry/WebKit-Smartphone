@@ -1,10 +1,10 @@
 /*
  * Copyright (c) 2006, Google Inc. All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
- * 
+ *
  *     * Redistributions of source code must retain the above copyright
  * notice, this list of conditions and the following disclaimer.
  *     * Redistributions in binary form must reproduce the above
@@ -14,7 +14,7 @@
  *     * Neither the name of Google Inc. nor the names of its
  * contributors may be used to endorse or promote products derived from
  * this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -34,6 +34,7 @@
 #include "AffineTransform.h"
 #include "Color.h"
 #include "FloatRect.h"
+#include "GLES2Canvas.h"
 #include "Gradient.h"
 #include "GraphicsContextPlatformPrivate.h"
 #include "GraphicsContextPrivate.h"
@@ -53,6 +54,7 @@
 #include <math.h>
 #include <wtf/Assertions.h>
 #include <wtf/MathExtras.h>
+#include <wtf/UnusedParam.h>
 
 using namespace std;
 
@@ -63,7 +65,7 @@ namespace {
 inline int fastMod(int value, int max)
 {
     int sign = SkExtractSign(value);
-    
+
     value = SkApplySign(value, sign);
     if (value >= max)
         value %= max;
@@ -243,6 +245,9 @@ void GraphicsContext::savePlatformState()
     if (paintingDisabled())
         return;
 
+    if (platformContext()->useGPU())
+        platformContext()->gpuCanvas()->save();
+
     // Save our private State.
     platformContext()->save();
 }
@@ -251,6 +256,9 @@ void GraphicsContext::restorePlatformState()
 {
     if (paintingDisabled())
         return;
+
+    if (platformContext()->useGPU())
+        platformContext()->gpuCanvas()->restore();
 
     // Restore our private State.
     platformContext()->restore();
@@ -290,6 +298,7 @@ void GraphicsContext::addInnerRoundedRectClip(const IntRect& rect, int thickness
     if (!isRectSkiaSafe(getCTM(), r))
         return;
 
+    platformContext()->prepareForSoftwareDraw();
     SkPath path;
     path.addOval(r, SkPath::kCW_Direction);
     // only perform the inset if we won't invert r
@@ -329,6 +338,14 @@ void GraphicsContext::clearRect(const FloatRect& rect)
     if (paintingDisabled())
         return;
 
+    if (platformContext()->useGPU()) {
+        platformContext()->prepareForHardwareDraw();
+        platformContext()->gpuCanvas()->clearRect(rect);
+        return;
+    }
+
+    platformContext()->prepareForSoftwareDraw();
+
     SkRect r = rect;
     if (!isRectSkiaSafe(getCTM(), r))
         ClipRectToCanvas(*platformContext()->canvas(), r, &r);
@@ -348,6 +365,7 @@ void GraphicsContext::clip(const FloatRect& rect)
     if (!isRectSkiaSafe(getCTM(), r))
         return;
 
+    platformContext()->prepareForSoftwareDraw();
     platformContext()->canvas()->clipRect(r);
 }
 
@@ -360,6 +378,7 @@ void GraphicsContext::clip(const Path& path)
     if (!isPathSkiaSafe(getCTM(), p))
         return;
 
+    platformContext()->prepareForSoftwareDraw();
     platformContext()->clipPathAntiAliased(p);
 }
 
@@ -372,7 +391,7 @@ void GraphicsContext::canvasClip(const Path& path)
     if (!isPathSkiaSafe(getCTM(), p))
         return;
 
-    platformContext()->canvas()->clipPath(p);
+    platformContext()->canvasClipPath(p);
 }
 
 void GraphicsContext::clipOut(const IntRect& rect)
@@ -426,21 +445,14 @@ void GraphicsContext::clipPath(WindRule clipRule)
     platformContext()->clipPathAntiAliased(path);
 }
 
-void GraphicsContext::clipToImageBuffer(const FloatRect& rect,
-                                        const ImageBuffer* imageBuffer)
-{
-    if (paintingDisabled())
-        return;
-
-#if OS(LINUX) || OS(WINDOWS)
-    platformContext()->beginLayerClippedToImage(rect, imageBuffer);
-#endif
-}
-
 void GraphicsContext::concatCTM(const AffineTransform& affine)
 {
     if (paintingDisabled())
         return;
+
+    if (platformContext()->useGPU())
+        platformContext()->gpuCanvas()->concatCTM(affine);
+
     platformContext()->canvas()->concat(affine);
 }
 
@@ -453,6 +465,8 @@ void GraphicsContext::drawConvexPolygon(size_t numPoints,
 
     if (numPoints <= 1)
         return;
+
+    platformContext()->prepareForSoftwareDraw();
 
     SkPath path;
 
@@ -478,6 +492,17 @@ void GraphicsContext::drawConvexPolygon(size_t numPoints,
     }
 }
 
+void GraphicsContext::clipConvexPolygon(size_t numPoints, const FloatPoint* points, bool antialiased)
+{
+    if (paintingDisabled())
+        return;
+
+    if (numPoints <= 1)
+        return;
+
+    // FIXME: IMPLEMENT!!
+}
+
 // This method is only used to draw the little circles used in lists.
 void GraphicsContext::drawEllipse(const IntRect& elipseRect)
 {
@@ -488,6 +513,7 @@ void GraphicsContext::drawEllipse(const IntRect& elipseRect)
     if (!isRectSkiaSafe(getCTM(), rect))
         return;
 
+    platformContext()->prepareForSoftwareDraw();
     SkPaint paint;
     platformContext()->setupPaintForFilling(&paint);
     platformContext()->canvas()->drawOval(rect, paint);
@@ -513,6 +539,7 @@ void GraphicsContext::drawFocusRing(const Vector<IntRect>& rects, int /* width *
     if (!rectCount)
         return;
 
+    platformContext()->prepareForSoftwareDraw();
     SkRegion focusRingRegion;
     const SkScalar focusRingOutset = WebCoreFloatToSkScalar(0.5);
     for (unsigned i = 0; i < rectCount; i++) {
@@ -546,6 +573,8 @@ void GraphicsContext::drawLine(const IntPoint& point1, const IntPoint& point2)
     SkPaint paint;
     if (!isPointSkiaSafe(getCTM(), point1) || !isPointSkiaSafe(getCTM(), point2))
         return;
+
+    platformContext()->prepareForSoftwareDraw();
 
     FloatPoint p1 = point1;
     FloatPoint p2 = point2;
@@ -586,12 +615,12 @@ void GraphicsContext::drawLine(const IntPoint& point1, const IntPoint& point2)
     platformContext()->canvas()->drawPoints(SkCanvas::kLines_PointMode, 2, pts, paint);
 }
 
-void GraphicsContext::drawLineForMisspellingOrBadGrammar(const IntPoint& pt,
-                                                         int width,
-                                                         bool grammar)
+void GraphicsContext::drawLineForTextChecking(const IntPoint& pt, int width, TextCheckingLineStyle style)
 {
     if (paintingDisabled())
         return;
+
+    platformContext()->prepareForSoftwareDraw();
 
     // Create the pattern we'll use to draw the underline.
     static SkBitmap* misspellBitmap = 0;
@@ -673,6 +702,8 @@ void GraphicsContext::drawLineForText(const IntPoint& pt,
     if (width <= 0)
         return;
 
+    platformContext()->prepareForSoftwareDraw();
+
     int thickness = SkMax32(static_cast<int>(strokeThickness()), 1);
     SkRect r;
     r.fLeft = SkIntToScalar(pt.x());
@@ -693,6 +724,8 @@ void GraphicsContext::drawRect(const IntRect& rect)
     if (paintingDisabled())
         return;
 
+    platformContext()->prepareForSoftwareDraw();
+
     SkRect r = rect;
     if (!isRectSkiaSafe(getCTM(), r)) {
         // See the fillRect below.
@@ -710,6 +743,8 @@ void GraphicsContext::fillPath()
     SkPath path = platformContext()->currentPathInLocalCoordinates();
     if (!isPathSkiaSafe(getCTM(), path))
       return;
+
+    platformContext()->prepareForSoftwareDraw();
 
     const GraphicsContextState& state = m_common->state;
     path.setFillType(state.fillRule == RULE_EVENODD ?
@@ -732,15 +767,35 @@ void GraphicsContext::fillRect(const FloatRect& rect)
         ClipRectToCanvas(*platformContext()->canvas(), r, &r);
     }
 
+    if (platformContext()->useGPU() && platformContext()->canAccelerate()) {
+        platformContext()->prepareForHardwareDraw();
+        platformContext()->gpuCanvas()->fillRect(rect);
+        return;
+    }
+
+    platformContext()->save();
+
+    platformContext()->prepareForSoftwareDraw();
+
     SkPaint paint;
     platformContext()->setupPaintForFilling(&paint);
     platformContext()->canvas()->drawRect(r, paint);
+
+    platformContext()->restore();
 }
 
 void GraphicsContext::fillRect(const FloatRect& rect, const Color& color, ColorSpace colorSpace)
 {
     if (paintingDisabled())
         return;
+
+    if (platformContext()->useGPU() && platformContext()->canAccelerate()) {
+        platformContext()->prepareForHardwareDraw();
+        platformContext()->gpuCanvas()->fillRect(rect, color, colorSpace);
+        return;
+    }
+
+    platformContext()->prepareForSoftwareDraw();
 
     SkRect r = rect;
     if (!isRectSkiaSafe(getCTM(), r)) {
@@ -773,6 +828,8 @@ void GraphicsContext::fillRoundedRect(const IntRect& rect,
 {
     if (paintingDisabled())
         return;
+
+    platformContext()->prepareForSoftwareDraw();
 
     SkRect r = rect;
     if (!isRectSkiaSafe(getCTM(), r))
@@ -857,6 +914,10 @@ void GraphicsContext::scale(const FloatSize& size)
 {
     if (paintingDisabled())
         return;
+
+    if (platformContext()->useGPU())
+        platformContext()->gpuCanvas()->scale(size);
+
     platformContext()->canvas()->scale(WebCoreFloatToSkScalar(size.width()),
         WebCoreFloatToSkScalar(size.height()));
 }
@@ -865,6 +926,10 @@ void GraphicsContext::setAlpha(float alpha)
 {
     if (paintingDisabled())
         return;
+
+    if (platformContext()->useGPU())
+        platformContext()->gpuCanvas()->setAlpha(alpha);
+
     platformContext()->setAlpha(alpha);
 }
 
@@ -872,12 +937,16 @@ void GraphicsContext::setCompositeOperation(CompositeOperator op)
 {
     if (paintingDisabled())
         return;
+
+    if (platformContext()->useGPU())
+        platformContext()->gpuCanvas()->setCompositeOperation(op);
+
     platformContext()->setXfermodeMode(WebCoreCompositeToSkiaComposite(op));
 }
 
-void GraphicsContext::setImageInterpolationQuality(InterpolationQuality)
+void GraphicsContext::setImageInterpolationQuality(InterpolationQuality q)
 {
-    notImplemented();
+    platformContext()->setInterpolationQuality(q);
 }
 
 void GraphicsContext::setLineCap(LineCap cap)
@@ -958,6 +1027,10 @@ void GraphicsContext::setPlatformFillColor(const Color& color, ColorSpace colorS
 {
     if (paintingDisabled())
         return;
+
+    if (platformContext()->useGPU())
+        platformContext()->gpuCanvas()->setFillColor(color, colorSpace);
+
     platformContext()->setFillColor(color.rgb());
 }
 
@@ -977,8 +1050,8 @@ void GraphicsContext::setPlatformFillPattern(Pattern* pattern)
     platformContext()->setFillShader(pattern->platformPattern(getCTM()));
 }
 
-void GraphicsContext::setPlatformShadow(const IntSize& size,
-                                        int blurInt,
+void GraphicsContext::setPlatformShadow(const FloatSize& size,
+                                        float blurFloat,
                                         const Color& color,
                                         ColorSpace colorSpace)
 {
@@ -986,14 +1059,14 @@ void GraphicsContext::setPlatformShadow(const IntSize& size,
         return;
 
     // Detect when there's no effective shadow and clear the looper.
-    if (!size.width() && !size.height() && !blurInt) {
+    if (!size.width() && !size.height() && !blurFloat) {
         platformContext()->setDrawLooper(0);
         return;
     }
 
     double width = size.width();
     double height = size.height();
-    double blur = blurInt;
+    double blur = blurFloat;
 
     // TODO(tc): This still does not address the issue that shadows
     // within canvas elements should ignore transforms.
@@ -1087,6 +1160,8 @@ void GraphicsContext::strokeArc(const IntRect& r, int startAngle, int angleSpan)
     if (paintingDisabled())
         return;
 
+    platformContext()->prepareForSoftwareDraw();
+
     SkPaint paint;
     SkRect oval = r;
     if (strokeStyle() == NoStroke) {
@@ -1118,6 +1193,8 @@ void GraphicsContext::strokePath()
     if (!isPathSkiaSafe(getCTM(), path))
         return;
 
+    platformContext()->prepareForSoftwareDraw();
+
     SkPaint paint;
     platformContext()->setupPaintForStroking(&paint, 0, 0);
     platformContext()->canvas()->drawPath(path, paint);
@@ -1131,6 +1208,8 @@ void GraphicsContext::strokeRect(const FloatRect& rect, float lineWidth)
     if (!isRectSkiaSafe(getCTM(), rect))
         return;
 
+    platformContext()->prepareForSoftwareDraw();
+
     SkPaint paint;
     platformContext()->setupPaintForStroking(&paint, 0, 0);
     paint.setStrokeWidth(WebCoreFloatToSkScalar(lineWidth));
@@ -1142,6 +1221,9 @@ void GraphicsContext::rotate(float angleInRadians)
     if (paintingDisabled())
         return;
 
+    if (platformContext()->useGPU())
+        platformContext()->gpuCanvas()->rotate(angleInRadians);
+
     platformContext()->canvas()->rotate(WebCoreFloatToSkScalar(
         angleInRadians * (180.0f / 3.14159265f)));
 }
@@ -1151,8 +1233,26 @@ void GraphicsContext::translate(float w, float h)
     if (paintingDisabled())
         return;
 
+    if (platformContext()->useGPU())
+        platformContext()->gpuCanvas()->translate(w, h);
+
     platformContext()->canvas()->translate(WebCoreFloatToSkScalar(w),
                                            WebCoreFloatToSkScalar(h));
+}
+
+void GraphicsContext::syncSoftwareCanvas()
+{
+    platformContext()->syncSoftwareCanvas();
+}
+
+void GraphicsContext::setSharedGraphicsContext3D(SharedGraphicsContext3D* context, DrawingBuffer* framebuffer, const IntSize& size)
+{
+    platformContext()->setSharedGraphicsContext3D(context, framebuffer, size);
+}
+
+void GraphicsContext::markDirtyRect(const IntRect& rect)
+{
+    platformContext()->markDirtyRect(rect);
 }
 
 }  // namespace WebCore

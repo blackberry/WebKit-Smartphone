@@ -51,7 +51,7 @@ except ImportError:
 
 
 class User(object):
-    # FIXME: These are @classmethods because scm.py and bugzilla.py don't have a Tool object (thus no User instance).
+    # FIXME: These are @classmethods because bugzilla.py doesn't have a Tool object (thus no User instance).
     @classmethod
     def prompt(cls, message, repeat=1, raw_input=raw_input):
         response = None
@@ -76,6 +76,19 @@ class User(object):
         # Note: Not thread safe: http://bugs.python.org/issue2320
         subprocess.call(args + files)
 
+    def edit_changelog(self, files):
+        edit_application = os.environ.get("CHANGE_LOG_EDIT_APPLICATION")
+        if edit_application and sys.platform == "darwin":
+            # On Mac we support editing ChangeLogs using an application.
+            args = shlex.split(edit_application)
+            print "Using editor in the CHANGE_LOG_EDIT_APPLICATION environment variable."
+            print "Please quit the editor application when done editing."
+            if edit_application.find("Xcode.app"):
+                print "Instead of using Xcode.app, consider using EDITOR=\"xed --wait\"."
+            subprocess.call(["open", "-W", "-n", "-a"] + args + files)
+            return
+        self.edit(files)
+
     def page(self, message):
         pager = os.environ.get("PAGER") or "less"
         try:
@@ -91,5 +104,14 @@ class User(object):
         response = raw_input("%s [Y/n]: " % message)
         return not response or response.lower() == "y"
 
+    def can_open_url(self):
+        try:
+            webbrowser.get()
+            return True
+        except webbrowser.Error, e:
+            return False
+
     def open_url(self, url):
+        if not self.can_open_url():
+            _log.warn("Failed to open %s" % url)
         webbrowser.open(url)

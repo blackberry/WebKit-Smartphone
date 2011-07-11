@@ -33,6 +33,7 @@
 #include "Frame.h"
 #include "FrameLoaderClient.h"
 #include "FrameView.h"
+#include "HistoryItem.h"
 #include "Logging.h"
 #include "PageTransitionEvent.h"
 #include <wtf/text/CString.h>
@@ -106,6 +107,10 @@ void CachedFrameBase::restore()
         m_childFrames[i]->open();
 
     m_document->enqueuePageshowEvent(PageshowEventPersisted);
+    
+    HistoryItem* historyItem = frame->loader()->history()->currentItem();
+    m_document->enqueuePopstateEvent(historyItem && historyItem->stateObject() ? historyItem->stateObject() : SerializedScriptValue::nullValue());
+    
 #if ENABLE(TOUCH_EVENTS)
     if (m_document->hasListenerType(Document::TOUCH_LISTENER))
         m_document->page()->chrome()->client()->needTouchEvents(true);
@@ -123,15 +128,16 @@ CachedFrame::CachedFrame(Frame* frame)
     ASSERT(m_view);
 
     // Active DOM objects must be suspended before we cached the frame script data
-    m_document->suspendActiveDOMObjects();
-    m_cachedFrameScriptData.set(new ScriptCachedFrameData(frame));
+    m_document->suspendActiveDOMObjects(ActiveDOMObject::DocumentWillBecomeInactive);
+    m_cachedFrameScriptData = adoptPtr(new ScriptCachedFrameData(frame));
     
     // Custom scrollbar renderers will get reattached when the document comes out of the page cache
     m_view->detachCustomScrollbars();
 
-    m_document->documentWillBecomeInactive(); 
+    m_document->documentWillBecomeInactive();
     frame->clearTimers();
     m_document->setInPageCache(true);
+    frame->loader()->stopLoading(UnloadEventPolicyUnloadAndPageHide);
     
     frame->loader()->client()->savePlatformDataToCachedFrame(this);
 
@@ -231,9 +237,9 @@ void CachedFrame::destroy()
     clear();
 }
 
-void CachedFrame::setCachedFramePlatformData(CachedFramePlatformData* data)
+void CachedFrame::setCachedFramePlatformData(PassOwnPtr<CachedFramePlatformData> data)
 {
-    m_cachedFramePlatformData.set(data);
+    m_cachedFramePlatformData = data;
 }
 
 CachedFramePlatformData* CachedFrame::cachedFramePlatformData()

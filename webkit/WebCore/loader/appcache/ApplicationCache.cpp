@@ -32,6 +32,7 @@
 #include "ApplicationCacheResource.h"
 #include "ApplicationCacheStorage.h"
 #include "ResourceRequest.h"
+#include <wtf/text/CString.h>
 #include <stdio.h>
 
 namespace WebCore {
@@ -135,7 +136,7 @@ ApplicationCacheResource* ApplicationCache::resourceForRequest(const ResourceReq
 {
     // We only care about HTTP/HTTPS GET requests.
     if (!requestIsHTTPOrHTTPSGet(request))
-        return false;
+        return 0;
 
     KURL url(request.url());
     if (url.hasFragmentIdentifier())

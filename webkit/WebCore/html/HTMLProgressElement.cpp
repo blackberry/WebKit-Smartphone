@@ -24,10 +24,11 @@
 
 #include "Attribute.h"
 #include "EventNames.h"
+#include "ExceptionCode.h"
 #include "FormDataList.h"
 #include "HTMLFormElement.h"
 #include "HTMLNames.h"
-#include "HTMLParser.h"
+#include "HTMLParserIdioms.h"
 #include "RenderProgress.h"
 #include <wtf/StdLibExtras.h>
 
@@ -36,7 +37,7 @@ namespace WebCore {
 using namespace HTMLNames;
 
 HTMLProgressElement::HTMLProgressElement(const QualifiedName& tagName, Document* document, HTMLFormElement* form)
-    : HTMLFormControlElement(tagName, document, form, CreateHTMLElement)
+    : HTMLFormControlElement(tagName, document, form)
 {
     ASSERT(hasTagName(progressTag));
 }
@@ -67,6 +68,13 @@ void HTMLProgressElement::parseMappedAttribute(Attribute* attribute)
             renderer()->updateFromElement();
     } else
         HTMLFormControlElement::parseMappedAttribute(attribute);
+}
+
+void HTMLProgressElement::attach()
+{
+    HTMLFormControlElement::attach();
+    if (renderer())
+        renderer()->updateFromElement();
 }
 
 double HTMLProgressElement::value() const

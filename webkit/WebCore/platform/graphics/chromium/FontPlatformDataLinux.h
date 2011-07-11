@@ -32,9 +32,10 @@
 #define FontPlatformDataLinux_h
 
 #include "FontRenderStyle.h"
-#include "StringImpl.h"
+#include <wtf/Forward.h>
 #include <wtf/RefPtr.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/StringImpl.h>
 #include <SkPaint.h>
 
 class SkTypeface;
@@ -45,7 +46,6 @@ struct HB_FaceRec_;
 namespace WebCore {
 
 class FontDescription;
-class String;
 
 // -----------------------------------------------------------------------------
 // FontPlatformData is the handle which WebKit has on a specific face. A face

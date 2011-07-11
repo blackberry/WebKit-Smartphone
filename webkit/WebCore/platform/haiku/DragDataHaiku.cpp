@@ -27,7 +27,6 @@
 #include "config.h"
 #include "DragData.h"
 
-#include "ClipboardHaiku.h"
 #include "Document.h"
 #include "DocumentFragment.h"
 #include "NotImplemented.h"
@@ -76,23 +75,18 @@ Color DragData::asColor() const
     return Color();
 }
 
-WTF::PassRefPtr<Clipboard> DragData::createClipboard(ClipboardAccessPolicy policy) const
-{
-    return ClipboardHaiku::create(policy, true);
-}
-
 bool DragData::containsCompatibleContent() const
 {
     return containsColor() || containsURL() || containsPlainText();
 }
 
-bool DragData::containsURL() const
+bool DragData::containsURL(FilenameConversionPolicy filenamePolicy) const
 {
     notImplemented();
     return false;
 }
 
-String DragData::asURL(String* title) const
+String DragData::asURL(FilenameConversionPolicy filenamePolicy, String* title) const
 {
     notImplemented();
     return String();

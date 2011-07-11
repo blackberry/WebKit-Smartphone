@@ -84,7 +84,7 @@ void InputElement::dispatchBlurEvent(InputElement* inputElement, Element* elemen
     if (inputElement->isPasswordField())
         document->setUseSecureKeyboardEntryWhenActive(false);
 
-    frame->textFieldDidEndEditing(element);
+    frame->editor()->textFieldDidEndEditing(element);
 }
 
 void InputElement::updateFocusAppearance(InputElementData& data, InputElement* inputElement, Element* element, bool restorePreviousSelection)
@@ -99,7 +99,7 @@ void InputElement::updateFocusAppearance(InputElementData& data, InputElement* i
 
     Document* document = element->document();
     if (document && document->frame())
-        document->frame()->revealSelection();
+        document->frame()->selection()->revealSelection();
 }
 
 void InputElement::updateSelectionRange(InputElement* inputElement, Element* element, int start, int end)
@@ -123,7 +123,7 @@ void InputElement::aboutToUnload(InputElement* inputElement, Element* element)
     if (!frame)
         return;
 
-    frame->textFieldDidEndEditing(element);
+    frame->editor()->textFieldDidEndEditing(element);
 }
 
 void InputElement::setValueFromRenderer(InputElementData& data, InputElement* inputElement, Element* element, const String& value)
@@ -145,20 +145,7 @@ void InputElement::setValueFromRenderer(InputElementData& data, InputElement* in
     notifyFormStateChanged(element);
 }
 
-String InputElement::sanitizeValue(const InputElement* inputElement, const String& proposedValue)
-{
-#if ENABLE(WCSS)
-    InputElementData data = const_cast<InputElement*>(inputElement)->data();
-    if (!isConformToInputMask(data, proposedValue)) {
-        if (isConformToInputMask(data, data.value()))
-            return data.value();
-        return String();
-    }
-#endif
-    return InputElement::sanitizeUserInputValue(inputElement, proposedValue, s_maximumLength);
-}
-
-String InputElement::sanitizeUserInputValue(const InputElement* inputElement, const String& proposedValue, int maxLength)
+static String replaceEOLAndLimitLength(const InputElement* inputElement, const String& proposedValue, int maxLength)
 {
     if (!inputElement->isTextField())
         return proposedValue;
@@ -177,6 +164,24 @@ String InputElement::sanitizeUserInputValue(const InputElement* inputElement, co
         }
     }
     return string.left(newLength);
+}
+
+String InputElement::sanitizeValueForTextField(const InputElement* inputElement, const String& proposedValue)
+{
+#if ENABLE(WCSS)
+    InputElementData data = const_cast<InputElement*>(inputElement)->data();
+    if (!isConformToInputMask(data, proposedValue)) {
+        if (isConformToInputMask(data, data.value()))
+            return data.value();
+        return String();
+    }
+#endif
+    return replaceEOLAndLimitLength(inputElement, proposedValue, s_maximumLength);
+}
+
+String InputElement::sanitizeUserInputValue(const InputElement* inputElement, const String& proposedValue, int maxLength)
+{
+    return replaceEOLAndLimitLength(inputElement, proposedValue, maxLength);
 }
 
 void InputElement::handleBeforeTextInsertedEvent(InputElementData& data, InputElement* inputElement, Element* element, Event* event)
@@ -199,7 +204,7 @@ void InputElement::handleBeforeTextInsertedEvent(InputElementData& data, InputEl
 
     // Selected characters will be removed by the next text event.
     unsigned baseLength = oldLength - selectionLength;
-    unsigned maxLength = static_cast<unsigned>(data.maxLength()); // maxLength() can never be negative.
+    unsigned maxLength = static_cast<unsigned>(inputElement->supportsMaxLength() ? data.maxLength() : s_maximumLength); // maxLength() can never be negative.
     unsigned appendableLength = maxLength > baseLength ? maxLength - baseLength : 0;
 
     // Truncate the inserted text to avoid violating the maxLength and other constraints.
@@ -245,7 +250,7 @@ void InputElement::parseMaxLengthAttribute(InputElementData& data, InputElement*
 void InputElement::updateValueIfNeeded(InputElementData& data, InputElement* inputElement)
 {
     String oldValue = data.value();
-    String newValue = sanitizeValue(inputElement, oldValue);
+    String newValue = inputElement->sanitizeValue(oldValue);
     if (newValue != oldValue)
         inputElement->setValue(newValue);
 }

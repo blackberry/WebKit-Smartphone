@@ -148,17 +148,12 @@ bool AccessibilityObject::press() const
     return true;
 }
     
-String AccessibilityObject::language(Node* node) const
-{
-    const AtomicString& lang = getAttribute(node, langAttr);
-    if (lang.isEmpty())
-        return AccessibilityObject::language();
-    
-    return lang;
-}
-    
 String AccessibilityObject::language() const
 {
+    const AtomicString& lang = getAttribute(langAttr);
+    if (!lang.isEmpty())
+        return lang;
+
     AccessibilityObject* parent = parentObject();
     
     // as a last resort, fall back to the content language specified in the meta tag
@@ -166,7 +161,7 @@ String AccessibilityObject::language() const
         Document* doc = document();
         if (doc)
             return doc->contentLanguage();
-        return String();
+        return nullAtom;
     }
     
     return parent->language();
@@ -378,7 +373,8 @@ VisiblePositionRange AccessibilityObject::styleRangeForPosition(const VisiblePos
 // NOTE: Consider providing this utility method as AX API
 VisiblePositionRange AccessibilityObject::visiblePositionRangeForRange(const PlainTextRange& range) const
 {
-    if (range.start + range.length > text().length())
+    unsigned textLength = getLengthForTextRange();
+    if (range.start + range.length > textLength)
         return VisiblePositionRange();
 
     VisiblePosition startPosition = visiblePositionForIndex(range.start);
@@ -403,16 +399,13 @@ static bool replacedNodeNeedsCharacter(Node* replacedNode)
 }
 
 // Finds a RenderListItem parent give a node.
-RenderListItem* AccessibilityObject::renderListItemContainerForNode(Node* node) const
+static RenderListItem* renderListItemContainerForNode(Node* node)
 {
-    for (Node* stringNode = node; stringNode; stringNode = stringNode->parent()) {
-        RenderObject* renderObject = stringNode->renderer();
-        if (!renderObject || !renderObject->isListItem())
-            continue;
-        
-        return toRenderListItem(renderObject);
+    for (; node; node = node->parent()) {
+        RenderBoxModelObject* renderer = node->renderBoxModelObject();
+        if (renderer && renderer->isListItem())
+            return toRenderListItem(renderer);
     }
-    
     return 0;
 }
     
@@ -844,15 +837,16 @@ const String& AccessibilityObject::actionVerb() const
     }
 }
  
-const AtomicString& AccessibilityObject::getAttribute(Node* node, const QualifiedName& attribute)
+const AtomicString& AccessibilityObject::getAttribute(const QualifiedName& attribute) const
 {
-    if (!node)
+    Node* elementNode = node();
+    if (!elementNode)
         return nullAtom;
     
-    if (!node->isElementNode())
+    if (!elementNode->isElementNode())
         return nullAtom;
     
-    Element* element = static_cast<Element*>(node);
+    Element* element = static_cast<Element*>(elementNode);
     return element->getAttribute(attribute);
 }
     
@@ -902,7 +896,7 @@ static ARIARoleMap* createARIARoleMap()
         { "img", ImageRole },
         { "link", WebCoreLinkRole },
         { "list", ListRole },        
-        { "listitem", GroupRole },        
+        { "listitem", ListItemRole },        
         { "listbox", ListBoxRole },
         { "log", ApplicationLogRole },
         // "option" isn't here because it may map to different roles depending on the parent element's role
@@ -917,7 +911,7 @@ static ARIARoleMap* createARIARoleMap()
         { "note", DocumentNoteRole },
         { "navigation", LandmarkNavigationRole },
         { "option", ListBoxOptionRole },
-        { "presentation", IgnoredRole },
+        { "presentation", PresentationalRole },
         { "progressbar", ProgressIndicatorRole },
         { "radio", RadioButtonRole },
         { "radiogroup", RadioGroupRole },
@@ -957,6 +951,15 @@ AccessibilityRole AccessibilityObject::ariaRoleToWebCoreRole(const String& value
     return roleMap->get(value);
 }
 
+const AtomicString& AccessibilityObject::placeholderValue() const
+{
+    const AtomicString& placeholder = getAttribute(placeholderAttr);
+    if (!placeholder.isEmpty())
+        return placeholder;
+    
+    return nullAtom;
+}
+    
 bool AccessibilityObject::isInsideARIALiveRegion() const
 {
     if (supportsARIALiveRegion())
@@ -980,6 +983,19 @@ bool AccessibilityObject::supportsARIALiveRegion() const
     const AtomicString& liveRegion = ariaLiveRegionStatus();
     return equalIgnoringCase(liveRegion, "polite") || equalIgnoringCase(liveRegion, "assertive");
 }
+    
+AccessibilityButtonState AccessibilityObject::checkboxOrRadioValue() const
+{
+    // If this is a real checkbox or radio button, AccessibilityRenderObject will handle.
+    // If it's an ARIA checkbox or radio, the aria-checked attribute should be used.
 
+    const AtomicString& result = getAttribute(aria_checkedAttr);
+    if (equalIgnoringCase(result, "true"))
+        return ButtonStateOn;
+    if (equalIgnoringCase(result, "mixed"))
+        return ButtonStateMixed;
+    
+    return ButtonStateOff;
+}
     
 } // namespace WebCore

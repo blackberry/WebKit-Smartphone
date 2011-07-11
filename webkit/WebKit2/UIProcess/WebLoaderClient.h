@@ -27,10 +27,7 @@
 #define WebLoaderClient_h
 
 #include "WKPage.h"
-
-namespace WebCore {
-    class StringImpl;
-}
+#include <wtf/Forward.h>
 
 namespace WebKit {
 
@@ -40,24 +37,28 @@ class WebFrameProxy;
 class WebLoaderClient {
 public:
     WebLoaderClient();
-    void initialize(WKPageLoaderClient*);
+    void initialize(const WKPageLoaderClient*);
 
     void didStartProvisionalLoadForFrame(WebPageProxy*, WebFrameProxy*);
     void didReceiveServerRedirectForProvisionalLoadForFrame(WebPageProxy*, WebFrameProxy*);
     void didFailProvisionalLoadWithErrorForFrame(WebPageProxy*, WebFrameProxy*);
     void didCommitLoadForFrame(WebPageProxy*, WebFrameProxy*);
+    void didFinishDocumentLoadForFrame(WebPageProxy*, WebFrameProxy*);
     void didFinishLoadForFrame(WebPageProxy*, WebFrameProxy*);
     void didFailLoadWithErrorForFrame(WebPageProxy*, WebFrameProxy*);
-    void didReceiveTitleForFrame(WebPageProxy*, WebCore::StringImpl*, WebFrameProxy*);
+    void didReceiveTitleForFrame(WebPageProxy*, WTF::StringImpl*, WebFrameProxy*);
     void didFirstLayoutForFrame(WebPageProxy*, WebFrameProxy*);
     void didFirstVisuallyNonEmptyLayoutForFrame(WebPageProxy*, WebFrameProxy*);
     void didStartProgress(WebPageProxy*);
-    void didChangeProgress(WebPageProxy*, double);
+    void didChangeProgress(WebPageProxy*);
     void didFinishProgress(WebPageProxy*);
 
-    // FIXME: These two methods should not be part of this client. 
+    // FIXME: These three functions should not be part of this client.
     void didBecomeUnresponsive(WebPageProxy*);
     void didBecomeResponsive(WebPageProxy*);
+    void processDidExit(WebPageProxy*);
+
+    void didChangeBackForwardList(WebPageProxy*);
 
 private:
     WKPageLoaderClient m_pageLoaderClient;

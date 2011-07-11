@@ -22,14 +22,17 @@
 #define CSSComputedStyleDeclaration_h
 
 #include "CSSStyleDeclaration.h"
-#include "Node.h"
+#include "PlatformString.h"
 #include "RenderStyleConstants.h"
+#include <wtf/RefPtr.h>
 
 namespace WebCore {
 
 class Color;
 class CSSMutableStyleDeclaration;
 class CSSPrimitiveValue;
+class Node;
+class RenderStyle;
 class ShadowData;
 
 enum EUpdateLayout { DoNotUpdateLayout = false, UpdateLayout = true };
@@ -55,6 +58,7 @@ public:
 
     PassRefPtr<CSSValue> getPropertyCSSValue(int propertyID, EUpdateLayout) const;
     PassRefPtr<CSSValue> getFontSizeCSSValuePreferringKeyword() const;
+    bool useFixedFontDefaultSize() const;
 #if ENABLE(SVG)
     PassRefPtr<CSSValue> getSVGPropertyCSSValue(int propertyID, EUpdateLayout) const;
 #endif

@@ -829,7 +829,7 @@ HTMLElement* outermostEnclosingList(Node* node, Node* rootList)
 
 bool canMergeLists(Element* firstList, Element* secondList)
 {
-    if (!firstList || !secondList)
+    if (!firstList || !secondList || !firstList->isHTMLElement() || !secondList->isHTMLElement())
         return false;
 
     return firstList->hasTagName(secondList->tagQName())// make sure the list types match (ol vs. ul)
@@ -869,32 +869,60 @@ bool isTableCell(const Node* node)
 
 bool isEmptyTableCell(const Node* node)
 {
-    return node && node->renderer() && (node->renderer()->isTableCell() || (node->renderer()->isBR() && node->parentNode()->renderer() && node->parentNode()->renderer()->isTableCell()));     
+    // Returns true IFF the passed in node is one of:
+    //   .) a table cell with no children,
+    //   .) a table cell with a single BR child, and which has no other child renderers, including :before and :after renderers
+    //   .) the BR child of such a table cell
+
+    // Find rendered node
+    while (node && !node->renderer())
+        node = node->parent();
+    if (!node)
+        return false;
+
+    // Make sure the rendered node is a table cell or <br>.
+    // If it's a <br>, then the parent node has to be a table cell.
+    RenderObject* renderer = node->renderer();
+    if (renderer->isBR()) {
+        renderer = renderer->parent();
+        if (!renderer)
+            return false;
+    }
+    if (!renderer->isTableCell())
+        return false;
+
+    // Check that the table cell contains no child renderers except for perhaps a single <br>.
+    RenderObject* childRenderer = renderer->firstChild();
+    if (!childRenderer)
+        return true;
+    if (!childRenderer->isBR())
+        return false;
+    return !childRenderer->nextSibling();
 }
 
 PassRefPtr<HTMLElement> createDefaultParagraphElement(Document* document)
 {
-    return new HTMLDivElement(divTag, document);
+    return HTMLDivElement::create(document);
 }
 
 PassRefPtr<HTMLElement> createBreakElement(Document* document)
 {
-    return new HTMLBRElement(brTag, document);
+    return HTMLBRElement::create(document);
 }
 
 PassRefPtr<HTMLElement> createOrderedListElement(Document* document)
 {
-    return new HTMLOListElement(olTag, document);
+    return HTMLOListElement::create(document);
 }
 
 PassRefPtr<HTMLElement> createUnorderedListElement(Document* document)
 {
-    return new HTMLUListElement(ulTag, document);
+    return HTMLUListElement::create(document);
 }
 
 PassRefPtr<HTMLElement> createListItemElement(Document* document)
 {
-    return new HTMLLIElement(liTag, document);
+    return HTMLLIElement::create(document);
 }
 
 PassRefPtr<HTMLElement> createHTMLElement(Document* document, const QualifiedName& name)
@@ -1105,9 +1133,15 @@ bool isNodeVisiblyContainedWithin(Node* node, const Range* selectedRange)
     if (selectedRange->compareNode(node, ec) == Range::NODE_INSIDE)
         return true;
 
-    // If the node starts and ends at where selectedRange starts and ends, the node is contained within
-    return visiblePositionBeforeNode(node) == selectedRange->startPosition()
-        && visiblePositionAfterNode(node) == selectedRange->endPosition();
+    bool startIsVisuallySame = visiblePositionBeforeNode(node) == selectedRange->startPosition();
+    if (startIsVisuallySame && comparePositions(Position(node->parentNode(), node->nodeIndex()+1), selectedRange->endPosition()) < 0)
+        return true;
+
+    bool endIsVisuallySame = visiblePositionAfterNode(node) == selectedRange->endPosition();
+    if (endIsVisuallySame && comparePositions(selectedRange->startPosition(), Position(node->parentNode(), node->nodeIndex())) < 0)
+        return true;
+
+    return startIsVisuallySame && endIsVisuallySame;
 }
 
 bool isRenderedAsNonInlineTableImageOrHR(const Node* node)

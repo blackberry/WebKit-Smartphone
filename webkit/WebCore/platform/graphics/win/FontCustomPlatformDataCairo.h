@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2007 Apple Computer, Inc.
+ * Copyright (C) 2010 Brent Fulgham <bfulgham@webkit.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -21,6 +22,7 @@
 #ifndef FontCustomPlatformDataCairo_h
 #define FontCustomPlatformDataCairo_h
 
+#include <wtf/Forward.h>
 #include <wtf/Noncopyable.h>
 
 #include <cairo.h>
@@ -30,19 +32,21 @@ namespace WebCore {
 class FontPlatformData;
 class SharedBuffer;
 
-struct FontCustomPlatformDataCairo : Noncopyable {
-    FontCustomPlatformDataCairo(cairo_font_face_t* fontFace)
+struct FontCustomPlatformData : Noncopyable {
+    FontCustomPlatformData(cairo_font_face_t* fontFace)
         : m_fontFace(fontFace)
     {
     }
-    ~FontCustomPlatformDataCairo();
+    ~FontCustomPlatformData();
 
     FontPlatformData fontPlatformData(int size, bool bold, bool italic);
+
+    static bool supportsFormat(const String&);
 
     cairo_font_face_t* m_fontFace;
 };
 
-FontCustomPlatformDataCairo* createFontCustomPlatformData(SharedBuffer*);
+FontCustomPlatformData* createFontCustomPlatformData(SharedBuffer*);
 
 }
 

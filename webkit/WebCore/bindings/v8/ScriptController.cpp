@@ -34,6 +34,8 @@
 
 #include "PlatformBridge.h"
 #include "Document.h"
+#include "ScriptCallStack.h"
+#include "ScriptableDocumentParser.h"
 #include "DOMWindow.h"
 #include "Event.h"
 #include "EventListener.h"
@@ -52,6 +54,7 @@
 #include "V8BindingState.h"
 #include "V8DOMWindow.h"
 #include "V8Event.h"
+#include "V8HiddenPropertyName.h"
 #include "V8HTMLEmbedElement.h"
 #include "V8IsolatedContext.h"
 #include "V8NPObject.h"
@@ -60,6 +63,10 @@
 #include "XSSAuditor.h"
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/CString.h>
+
+#if PLATFORM(QT)
+#include <QScriptEngine>
+#endif
 
 namespace WebCore {
 
@@ -157,7 +164,7 @@ void ScriptController::updatePlatformScriptObjects()
     notImplemented();
 }
 
-bool ScriptController::processingUserGesture(DOMWrapperWorld*) const
+bool ScriptController::processingUserGesture()
 {
     Frame* activeFrame = V8Proxy::retrieveFrameForEnteredContext();
     // No script is running, so it is user-initiated unless the gesture stack
@@ -178,39 +185,34 @@ bool ScriptController::processingUserGesture(DOMWrapperWorld*) const
     v8::Context::Scope scope(v8Context);
 
     v8::Handle<v8::Object> global = v8Context->Global();
-    v8::Handle<v8::Value> jsEvent = global->Get(v8::String::NewSymbol("event"));
+    v8::Handle<v8::String> eventSymbol = V8HiddenPropertyName::event();
+    v8::Handle<v8::Value> jsEvent = global->GetHiddenValue(eventSymbol);
     Event* event = V8DOMWrapper::isValidDOMObject(jsEvent) ? V8Event::toNative(v8::Handle<v8::Object>::Cast(jsEvent)) : 0;
 
-    // Based on code from kjs_bindings.cpp.
+    // Based on code from JSC's ScriptController::processingUserGesture.
     // Note: This is more liberal than Firefox's implementation.
     if (event) {
-        if (!UserGestureIndicator::processingUserGesture())
-            return false;
-
-        const AtomicString& type = event->type();
-        bool eventOk =
-            // mouse events
-            type == eventNames().clickEvent || type == eventNames().mousedownEvent || type == eventNames().mouseupEvent || type == eventNames().dblclickEvent
-            // keyboard events
-            || type == eventNames().keydownEvent || type == eventNames().keypressEvent || type == eventNames().keyupEvent
-            // other accepted events
-            || type == eventNames().selectEvent || type == eventNames().changeEvent || type == eventNames().focusEvent || type == eventNames().blurEvent || type == eventNames().submitEvent;
-
-        if (eventOk)
-            return true;
-    } else if (m_sourceURL && m_sourceURL->isNull() && !activeProxy->timerCallback()) {
+        // Event::fromUserGesture will return false when UserGestureIndicator::processingUserGesture() returns false.
+        return event->fromUserGesture();
+    }
+    // FIXME: We check the javascript anchor navigation from the last entered
+    // frame becuase it should only be initiated on the last entered frame in
+    // which execution began if it does happen.    
+    const String* sourceURL = activeFrame->script()->sourceURL();
+    if (sourceURL && sourceURL->isNull() && !activeProxy->timerCallback()) {
         // This is the <a href="javascript:window.open('...')> case -> we let it through.
         return true;
     }
 
     // This is the <script>window.open(...)</script> case or a timer callback -> block it.
-    return false;
+    // Based on JSC version, use returned value of UserGestureIndicator::processingUserGesture for all other situations. 
+    return UserGestureIndicator::processingUserGesture();
 }
 
 bool ScriptController::anyPageIsProcessingUserGesture() const
 {
     // FIXME: is this right?
-    return processingUserGesture();
+    return ScriptController::processingUserGesture();
 }
 
 void ScriptController::evaluateInIsolatedWorld(unsigned worldID, const Vector<ScriptSourceCode>& sources)
@@ -258,9 +260,20 @@ ScriptValue ScriptController::evaluate(const ScriptSourceCode& sourceCode, Shoul
     return ScriptValue(object);
 }
 
-void ScriptController::setEventHandlerLineNumber(int lineNumber)
+int ScriptController::eventHandlerLineNumber() const
 {
-    m_proxy->setEventHandlerLineNumber(lineNumber);
+    ScriptableDocumentParser* parser = m_frame->document()->scriptableDocumentParser();
+    if (parser)
+        return parser->lineNumber();
+    return 0;
+}
+
+int ScriptController::eventHandlerColumnNumber() const
+{
+    ScriptableDocumentParser* parser = m_frame->document()->scriptableDocumentParser();
+    if (parser)
+        return parser->columnNumber();
+    return 0;
 }
 
 void ScriptController::finishedWithEvent(Event* event)
@@ -289,13 +302,19 @@ void ScriptController::bindToWindowObject(Frame* frame, const String& key, NPObj
 void ScriptController::collectGarbage()
 {
     v8::HandleScope handleScope;
-    v8::Handle<v8::Context> v8Context = V8Proxy::mainWorldContext(m_proxy->frame());
+
+    v8::Persistent<v8::Context> v8Context = v8::Context::New();
     if (v8Context.IsEmpty())
         return;
-
-    v8::Context::Scope scope(v8Context);
-
-    m_proxy->evaluate(ScriptSourceCode("if (window.gc) void(gc());"), 0);
+    {
+        v8::Context::Scope scope(v8Context);
+        v8::Local<v8::String> source = v8::String::New("if (gc) gc();");
+        v8::Local<v8::String> name = v8::String::New("gc");
+        v8::Handle<v8::Script> script = v8::Script::Compile(source, name);
+        if (!script.IsEmpty())
+            script->Run();
+    }
+    v8Context.Dispose();
 }
 
 void ScriptController::lowMemoryNotification()
@@ -444,6 +463,13 @@ void ScriptController::clearWindowShell(bool)
     m_proxy->clearForNavigation();
 }
 
+#if ENABLE(INSPECTOR)
+void ScriptController::setCaptureCallStackForUncaughtExceptions(bool)
+{
+    v8::V8::SetCaptureStackTraceForUncaughtExceptions(true, ScriptCallStack::maxCallStackSizeToCapture);
+}
+#endif
+
 void ScriptController::attachDebugger(void*)
 {
     notImplemented();
@@ -452,6 +478,16 @@ void ScriptController::attachDebugger(void*)
 void ScriptController::updateDocument()
 {
     m_proxy->windowShell()->updateDocument();
+}
+
+void ScriptController::namedItemAdded(HTMLDocument* doc, const AtomicString& name)
+{
+    m_proxy->windowShell()->namedItemAdded(doc, name);
+}
+
+void ScriptController::namedItemRemoved(HTMLDocument* doc, const AtomicString& name)
+{
+    m_proxy->windowShell()->namedItemRemoved(doc, name);
 }
 
 } // namespace WebCore

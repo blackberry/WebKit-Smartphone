@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2008, 2009 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -26,6 +25,8 @@
 
 #include "Attribute.h"
 #include "FormData.h"
+#include "FormDataBuilder.h"
+#include "FormSubmission.h"
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "HTMLNames.h"
@@ -49,6 +50,11 @@ WMLGoElement::WMLGoElement(const QualifiedName& tagName, Document* doc)
 {
 }
  
+PassRefPtr<WMLGoElement> WMLGoElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new WMLGoElement(tagName, document));
+}
+
 void WMLGoElement::registerPostfieldElement(WMLPostfieldElement* postfield)
 {
     ASSERT(m_postfieldElements.find(postfield) == WTF::notFound);
@@ -65,11 +71,11 @@ void WMLGoElement::deregisterPostfieldElement(WMLPostfieldElement* postfield)
 void WMLGoElement::parseMappedAttribute(Attribute* attr)
 {
     if (attr->name() == HTMLNames::methodAttr)
-        m_formDataBuilder.parseMethodType(attr->value());
+        m_formAttributes.parseMethodType(attr->value());
     else if (attr->name() == HTMLNames::enctypeAttr)
-        m_formDataBuilder.parseEncodingType(parseValueSubstitutingVariableReferences(attr->value()));
+        m_formAttributes.parseEncodingType(parseValueSubstitutingVariableReferences(attr->value()));
     else if (attr->name() == HTMLNames::accept_charsetAttr)
-        m_formDataBuilder.setAcceptCharset(parseValueForbiddingVariableReferences(attr->value()));
+        m_formAttributes.setAcceptCharset(parseValueForbiddingVariableReferences(attr->value()));
     else
         WMLTaskElement::parseMappedAttribute(attr);
 }
@@ -121,16 +127,13 @@ void WMLGoElement::executeTask()
 
     // Prepare loading the destination url
     ResourceRequest request(url);
-#if PLATFORM(OLYMPIA)
-    request.setTargetType(loader->isLoadingMainFrame() ? ResourceRequest::TargetIsMainFrame : ResourceRequest::TargetIsSubframe);
-#endif
 
     if (getAttribute(sendrefererAttr) == "true")
         request.setHTTPReferrer(loader->outgoingReferrer());
 
     String cacheControl = getAttribute(cache_controlAttr);
 
-    if (m_formDataBuilder.isPostMethod())
+    if (m_formAttributes.method() == FormSubmission::PostMethod)
         preparePOSTRequest(request, inSameDeck, cacheControl);
     else
         prepareGETRequest(request, url);
@@ -157,14 +160,14 @@ void WMLGoElement::preparePOSTRequest(ResourceRequest& request, bool inSameDeck,
 
     RefPtr<FormData> data;
 
-    if (m_formDataBuilder.isMultiPartForm()) { // multipart/form-data
-        Vector<char> boundary = m_formDataBuilder.generateUniqueBoundaryString();
+    if (m_formAttributes.isMultiPartForm()) { // multipart/form-data
+        Vector<char> boundary = FormDataBuilder::generateUniqueBoundaryString();
         data = createFormData(boundary.data());
-        request.setHTTPContentType(m_formDataBuilder.encodingType() + "; boundary=" + boundary.data());
+        request.setHTTPContentType(m_formAttributes.encodingType() + "; boundary=" + boundary.data());
     } else {
         // text/plain or application/x-www-form-urlencoded
         data = createFormData(CString());
-        request.setHTTPContentType(m_formDataBuilder.encodingType());
+        request.setHTTPContentType(m_formAttributes.encodingType());
     }
 
     request.setHTTPBody(data.get());
@@ -175,7 +178,7 @@ void WMLGoElement::prepareGETRequest(ResourceRequest& request, const KURL& url)
     request.setHTTPMethod("GET");
 
     // Eventually display error message?
-    if (m_formDataBuilder.isMultiPartForm())
+    if (m_formAttributes.isMultiPartForm())
         return;
 
     RefPtr<FormData> data = createFormData(CString());
@@ -191,7 +194,7 @@ PassRefPtr<FormData> WMLGoElement::createFormData(const CString& boundary)
     CString value;
 
     Vector<char> encodedData;
-    TextEncoding encoding = m_formDataBuilder.dataEncoding(document()).encodingForFormSubmission();
+    TextEncoding encoding = FormDataBuilder::encodingFromAcceptCharset(m_formAttributes.acceptCharset(), document()).encodingForFormSubmission();
 
     Vector<WMLPostfieldElement*>::iterator it = m_postfieldElements.begin();
     Vector<WMLPostfieldElement*>::iterator end = m_postfieldElements.end();
@@ -200,10 +203,10 @@ PassRefPtr<FormData> WMLGoElement::createFormData(const CString& boundary)
     for (; it != end; ++it) {
         (*it)->encodeData(encoding, key, value);
 
-        if (m_formDataBuilder.isMultiPartForm()) {
+        if (m_formAttributes.isMultiPartForm()) {
             Vector<char> header;
-            m_formDataBuilder.beginMultiPartHeader(header, boundary, key);
-            m_formDataBuilder.finishMultiPartHeader(header);
+            FormDataBuilder::beginMultiPartHeader(header, boundary, key);
+            FormDataBuilder::finishMultiPartHeader(header);
             result->appendData(header.data(), header.size());
 
             if (size_t dataSize = value.length())
@@ -211,11 +214,11 @@ PassRefPtr<FormData> WMLGoElement::createFormData(const CString& boundary)
 
             result->appendData("\r\n", 2);
         } else
-            m_formDataBuilder.addKeyValuePairAsFormData(encodedData, key, value);
+            FormDataBuilder::addKeyValuePairAsFormData(encodedData, key, value);
     }
 
-    if (m_formDataBuilder.isMultiPartForm())
-        m_formDataBuilder.addBoundaryToMultiPartHeader(encodedData, boundary, true);
+    if (m_formAttributes.isMultiPartForm())
+        FormDataBuilder::addBoundaryToMultiPartHeader(encodedData, boundary, true);
 
     result->appendData(encodedData.data(), encodedData.size());
     return result;

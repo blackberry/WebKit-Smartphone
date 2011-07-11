@@ -26,8 +26,10 @@
 
 #include "Cache.h"
 #include "CachedMetadata.h"
+#include "CachedResourceClient.h"
+#include "CachedResourceClientWalker.h"
 #include "CachedResourceHandle.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "Frame.h"
 #include "FrameLoaderClient.h"
 #include "KURL.h"
@@ -76,7 +78,7 @@ CachedResource::CachedResource(const String& url, Type type)
     , m_prevInAllResourcesList(0)
     , m_nextInLiveResourcesList(0)
     , m_prevInLiveResourcesList(0)
-    , m_docLoader(0)
+    , m_cachedResourceLoader(0)
     , m_resourceToRevalidate(0)
     , m_proxyResource(0)
 {
@@ -97,15 +99,25 @@ CachedResource::~CachedResource()
     cachedResourceLeakCounter.decrement();
 #endif
 
-    if (m_docLoader)
-        m_docLoader->removeCachedResource(this);
+    if (m_cachedResourceLoader)
+        m_cachedResourceLoader->removeCachedResource(this);
 }
-    
-void CachedResource::load(DocLoader* docLoader, bool incremental, SecurityCheckPolicy securityCheck, bool sendResourceLoadCallbacks)
+
+void CachedResource::load(CachedResourceLoader* cachedResourceLoader, bool incremental, SecurityCheckPolicy securityCheck, bool sendResourceLoadCallbacks)
 {
     m_sendResourceLoadCallbacks = sendResourceLoadCallbacks;
-    cache()->loader()->load(docLoader, this, incremental, securityCheck, sendResourceLoadCallbacks);
+    cache()->loader()->load(cachedResourceLoader, this, incremental, securityCheck, sendResourceLoadCallbacks);
     m_loading = true;
+}
+
+void CachedResource::data(PassRefPtr<SharedBuffer>, bool allDataReceived)
+{
+    if (!allDataReceived)
+        return;
+    
+    CachedResourceClientWalker w(m_clients);
+    while (CachedResourceClient* c = w.next())
+        c->notifyFinished(this);
 }
 
 void CachedResource::finish()
@@ -204,6 +216,12 @@ void CachedResource::addClient(CachedResourceClient* client)
     didAddClient(client);
 }
 
+void CachedResource::didAddClient(CachedResourceClient* c)
+{
+    if (!isLoading())
+        c->notifyFinished(this);
+}
+
 void CachedResource::addClientToSet(CachedResourceClient* client)
 {
     ASSERT(!isPurgeable());
@@ -216,10 +234,9 @@ void CachedResource::addClientToSet(CachedResourceClient* client)
         else
             m_preloadResult = PreloadReferenced;
     }
-    bool shouldAddToLiveResourcesSize = !hasClients() && inCache();
-    m_clients.add(client);
-    if (shouldAddToLiveResourcesSize)
+    if (!hasClients() && inCache())
         cache()->addToLiveResourcesSize(this);
+    m_clients.add(client);
 }
 
 void CachedResource::removeClient(CachedResourceClient* client)
@@ -468,9 +485,9 @@ bool CachedResource::makePurgeable(bool purgeable)
             return false;
         
         if (m_data->hasPurgeableBuffer()) {
-            m_purgeableData.set(m_data->releasePurgeableBuffer());
+            m_purgeableData = m_data->releasePurgeableBuffer();
         } else {
-            m_purgeableData.set(PurgeableBuffer::create(m_data->data(), m_data->size()));
+            m_purgeableData = PurgeableBuffer::create(m_data->data(), m_data->size());
             if (!m_purgeableData)
                 return false;
         }

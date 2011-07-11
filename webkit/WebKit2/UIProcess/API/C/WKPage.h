@@ -26,22 +26,42 @@
 #ifndef WKPage_h
 #define WKPage_h
 
-#include <CoreFoundation/CoreFoundation.h>
 #include <WebKit2/WKBase.h>
 
 #ifndef __cplusplus
 #include <stdbool.h>
 #endif
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+enum {
+    kWKFrameNavigationTypeLinkClicked = 0,
+    kWKFrameNavigationTypeFormSubmitted = 1,
+    kWKFrameNavigationTypeBackForward = 2,
+    kWKFrameNavigationTypeReload = 3,
+    kWKFrameNavigationTypeFormResubmitted = 4,
+    kWKFrameNavigationTypeOther = 5
+};
+typedef uint32_t WKFrameNavigationType;
+
+enum {
+    kWKEventModifiersShiftKey = 1 << 0,
+    kWKEventModifiersControlKey = 1 << 1,
+    kWKEventModifiersAltKey = 1 << 2,
+    kWKEventModifiersMetaKey = 1 << 3
+};
+typedef uint32_t WKEventModifiers;
 
 // FrameLoad Client
 typedef void (*WKPageDidStartProvisionalLoadForFrameCallback)(WKPageRef page, WKFrameRef frame, const void *clientInfo);
 typedef void (*WKPageDidReceiveServerRedirectForProvisionalLoadForFrameCallback)(WKPageRef page, WKFrameRef frame, const void *clientInfo);
 typedef void (*WKPageDidFailProvisionalLoadWithErrorForFrameCallback)(WKPageRef page, WKFrameRef frame, const void *clientInfo); // FIXME: Add WKErrorRef.
 typedef void (*WKPageDidCommitLoadForFrameCallback)(WKPageRef page, WKFrameRef frame, const void *clientInfo);
+typedef void (*WKPageDidFinishDocumentLoadForFrameCallback)(WKPageRef page, WKFrameRef frame, const void *clientInfo);
 typedef void (*WKPageDidFinishLoadForFrameCallback)(WKPageRef page, WKFrameRef frame, const void *clientInfo);
 typedef void (*WKPageDidFailLoadWithErrorForFrameCallback)(WKPageRef page, WKFrameRef frame, const void *clientInfo); // FIXME: Add WKErrorRef.
 typedef void (*WKPageDidReceiveTitleForFrameCallback)(WKPageRef page, WKStringRef title, WKFrameRef frame, const void *clientInfo);
@@ -50,13 +70,16 @@ typedef void (*WKPageDidFirstVisuallyNonEmptyLayoutForFrame)(WKPageRef page, WKF
 
 // Progress Client
 typedef void (*WKPageDidStartProgressCallback)(WKPageRef page, const void *clientInfo);
-typedef void (*WKPageDidChangeProgressCallback)(WKPageRef page, double value, const void *clientInfo);
+typedef void (*WKPageDidChangeProgressCallback)(WKPageRef page, const void *clientInfo);
 typedef void (*WKPageDidFinishProgressCallback)(WKPageRef page, const void *clientInfo);
 
 // WebPageNamespace Client
-// FIXME: These two methods should not be part of this client.
+// FIXME: These three functions should not be part of this client.
 typedef void (*WKPageDidBecomeUnresponsiveCallback)(WKPageRef page, const void *clientInfo);
 typedef void (*WKPageDidBecomeResponsiveCallback)(WKPageRef page, const void *clientInfo);
+typedef void (*WKPageProcessDidExitCallback)(WKPageRef page, const void *clientInfo);
+
+typedef void (*WKPageDidChangeBackForwardListCallback)(WKPageRef page, const void *clientInfo);
 
 struct WKPageLoaderClient {
     int                                                                 version;
@@ -65,6 +88,7 @@ struct WKPageLoaderClient {
     WKPageDidReceiveServerRedirectForProvisionalLoadForFrameCallback    didReceiveServerRedirectForProvisionalLoadForFrame;
     WKPageDidFailProvisionalLoadWithErrorForFrameCallback               didFailProvisionalLoadWithErrorForFrame;
     WKPageDidCommitLoadForFrameCallback                                 didCommitLoadForFrame;
+    WKPageDidFinishDocumentLoadForFrameCallback                         didFinishDocumentLoadForFrame;
     WKPageDidFinishLoadForFrameCallback                                 didFinishLoadForFrame;
     WKPageDidFailLoadWithErrorForFrameCallback                          didFailLoadWithErrorForFrame;
     WKPageDidReceiveTitleForFrameCallback                               didReceiveTitleForFrame;
@@ -76,15 +100,18 @@ struct WKPageLoaderClient {
     WKPageDidChangeProgressCallback                                     didChangeProgress;
     WKPageDidFinishProgressCallback                                     didFinishProgress;
 
-    // FIXME: These two methods should not be part of this client.
+    // FIXME: These three functions should not be part of this client.
     WKPageDidBecomeUnresponsiveCallback                                 didBecomeUnresponsive;
     WKPageDidBecomeResponsiveCallback                                   didBecomeResponsive;
+    WKPageProcessDidExitCallback                                        processDidExit;
+
+    WKPageDidChangeBackForwardListCallback                              didChangeBackForwardList;
 };
 typedef struct WKPageLoaderClient WKPageLoaderClient;
 
 // Policy Client.
-typedef void (*WKPageDecidePolicyForNavigationActionCallback)(WKPageRef page, uint32_t navigationType, WKURLRef url, WKFrameRef frame, WKFramePolicyListenerRef listener, const void *clientInfo);
-typedef void (*WKPageDecidePolicyForNewWindowActionCallback)(WKPageRef page, uint32_t navigationType, WKURLRef url, WKFrameRef frame, WKFramePolicyListenerRef listener, const void *clientInfo);
+typedef void (*WKPageDecidePolicyForNavigationActionCallback)(WKPageRef page, WKFrameNavigationType navigationType, WKEventModifiers modifiers, WKURLRef url, WKFrameRef frame, WKFramePolicyListenerRef listener, const void *clientInfo);
+typedef void (*WKPageDecidePolicyForNewWindowActionCallback)(WKPageRef page, WKFrameNavigationType navigationType, WKEventModifiers modifiers, WKURLRef url, WKFrameRef frame, WKFramePolicyListenerRef listener, const void *clientInfo);
 typedef void (*WKPageDecidePolicyForMIMETypeCallback)(WKPageRef page, WKStringRef MIMEType, WKURLRef url, WKFrameRef frame, WKFramePolicyListenerRef listener, const void *clientInfo);
 
 struct WKPagePolicyClient {
@@ -96,11 +123,25 @@ struct WKPagePolicyClient {
 };
 typedef struct WKPagePolicyClient WKPagePolicyClient;
 
+// Form Client.
+typedef void (*WKPageWillSubmitFormCallback)(WKPageRef page, WKFrameRef frame, WKFrameRef sourceFrame, WKDictionaryRef values, WKTypeRef userData, WKFormSubmissionListenerRef listener, const void* clientInfo);
+
+struct WKPageFormClient {
+    int                                                                 version;
+    const void *                                                        clientInfo;
+    WKPageWillSubmitFormCallback                                        willSubmitForm;
+};
+typedef struct WKPageFormClient WKPageFormClient;
+
 // UI Client
 typedef WKPageRef (*WKPageCreateNewPageCallback)(WKPageRef page, const void *clientInfo);
 typedef void (*WKPageShowPageCallback)(WKPageRef page, const void *clientInfo);
 typedef void (*WKPageCloseCallback)(WKPageRef page, const void *clientInfo);
 typedef void (*WKPageRunJavaScriptAlertCallback)(WKPageRef page, WKStringRef alertText, WKFrameRef frame, const void *clientInfo);
+typedef bool (*WKPageRunJavaScriptConfirmCallback)(WKPageRef page, WKStringRef message, WKFrameRef frame, const void *clientInfo);
+typedef WKStringRef (*WKPageRunJavaScriptPromptCallback)(WKPageRef page, WKStringRef message, WKStringRef defaultValue, WKFrameRef frame, const void *clientInfo);
+typedef void (*WKPageSetStatusTextCallback)(WKPageRef page, WKStringRef text, const void *clientInfo);
+typedef void (*WKPageContentsSizeChangedCallback)(WKPageRef page, int width, int height, WKFrameRef frame, const void *clientInfo);
 
 struct WKPageUIClient {
     int                                                                 version;
@@ -109,31 +150,23 @@ struct WKPageUIClient {
     WKPageShowPageCallback                                              showPage;
     WKPageCloseCallback                                                 close;
     WKPageRunJavaScriptAlertCallback                                    runJavaScriptAlert;
+    WKPageRunJavaScriptConfirmCallback                                  runJavaScriptConfirm;
+    WKPageRunJavaScriptPromptCallback                                   runJavaScriptPrompt;
+    WKPageSetStatusTextCallback                                         setStatusText;
+    WKPageContentsSizeChangedCallback                                   contentsSizeChanged;
 };
 typedef struct WKPageUIClient WKPageUIClient;
 
-// History Client
-typedef void (*WKPageDidNavigateWithNavigationDataCallback)(WKPageRef page, WKNavigationDataRef navigationData, WKFrameRef frame, const void *clientInfo);
-typedef void (*WKPageDidPerformClientRedirectCallback)(WKPageRef page, WKURLRef sourceURL, WKURLRef destinationURL, WKFrameRef frame, const void *clientInfo);
-typedef void (*WKPageDidPerformServerRedirectCallback)(WKPageRef page, WKURLRef sourceURL, WKURLRef destinationURL, WKFrameRef frame, const void *clientInfo);
-typedef void (*WKPageDidUpdateHistoryTitleCallback)(WKPageRef page, WKStringRef title, WKURLRef URL, WKFrameRef frame, const void *clientInfo);
-
-struct WKPageHistoryClient {
-    int                                                                 version;
-    const void *                                                        clientInfo;
-    WKPageDidNavigateWithNavigationDataCallback                         didNavigateWithNavigationData;
-    WKPageDidPerformClientRedirectCallback                              didPerformClientRedirect;
-    WKPageDidPerformServerRedirectCallback                              didPerformServerRedirect;
-    WKPageDidUpdateHistoryTitleCallback                                 didUpdateHistoryTitle;
-};
-typedef struct WKPageHistoryClient WKPageHistoryClient;
-
+WK_EXPORT WKTypeID WKPageGetTypeID();
 
 WK_EXPORT WKPageNamespaceRef WKPageGetPageNamespace(WKPageRef page);
 
 WK_EXPORT void WKPageLoadURL(WKPageRef page, WKURLRef url);
+WK_EXPORT void WKPageLoadURLRequest(WKPageRef page, WKURLRequestRef urlRequest);
+
 WK_EXPORT void WKPageStopLoading(WKPageRef page);
 WK_EXPORT void WKPageReload(WKPageRef page);
+WK_EXPORT void WKPageReloadFromOrigin(WKPageRef page);
 
 WK_EXPORT bool WKPageTryClose(WKPageRef page);
 WK_EXPORT void WKPageClose(WKPageRef page);
@@ -143,29 +176,45 @@ WK_EXPORT void WKPageGoForward(WKPageRef page);
 WK_EXPORT bool WKPageCanGoForward(WKPageRef page);
 WK_EXPORT void WKPageGoBack(WKPageRef page);
 WK_EXPORT bool WKPageCanGoBack(WKPageRef page);
+WK_EXPORT void WKPageGoToBackForwardListItem(WKPageRef page, WKBackForwardListItemRef item);
+WK_EXPORT WKBackForwardListRef WKPageGetBackForwardList(WKPageRef page);
 
-WK_EXPORT WKStringRef WKPageGetTitle(WKPageRef page);
+WK_EXPORT WKStringRef WKPageCopyTitle(WKPageRef page);
 
 WK_EXPORT WKFrameRef WKPageGetMainFrame(WKPageRef page);
+WK_EXPORT double WKPageGetEstimatedProgress(WKPageRef page);
+
+WK_EXPORT void WKPageSetCustomUserAgent(WKPageRef page, WKStringRef userAgent);
 
 WK_EXPORT void WKPageTerminate(WKPageRef page);
 
-WK_EXPORT void WKPageSetPageLoaderClient(WKPageRef page, WKPageLoaderClient * client);
-WK_EXPORT void WKPageSetPagePolicyClient(WKPageRef page, WKPagePolicyClient * client);
-WK_EXPORT void WKPageSetPageUIClient(WKPageRef page, WKPageUIClient * client);
-WK_EXPORT void WKPageSetPageHistoryClient(WKPageRef page, WKPageHistoryClient * client);
+WK_EXPORT WKDataRef WKPageCopySessionState(WKPageRef page);
+WK_EXPORT void WKPageRestoreFromSessionState(WKPageRef page, WKDataRef sessionStateData);
 
-typedef void (*WKPageRunJavaScriptFunction)(WKStringRef, void*);
-typedef void (*WKPageRunJavaScriptDisposeFunction)(void*);
-WK_EXPORT void WKPageRunJavaScriptInMainFrame(WKPageRef page, WKStringRef script, void *context, WKPageRunJavaScriptFunction function, WKPageRunJavaScriptDisposeFunction disposeFunction);
-#if __BLOCKS__
-typedef void (^WKPageRunJavaScriptBlock)(WKStringRef);
+WK_EXPORT double WKPageGetTextZoomFactor(WKPageRef page);
+WK_EXPORT void WKPageSetTextZoomFactor(WKPageRef page, double zoomFactor);
+WK_EXPORT double WKPageGetPageZoomFactor(WKPageRef page);
+WK_EXPORT void WKPageSetPageZoomFactor(WKPageRef page, double zoomFactor);
+WK_EXPORT void WKPageSetPageAndTextZoomFactors(WKPageRef page, double pageZoomFactor, double textZoomFactor);
+
+WK_EXPORT void WKPageSetPageLoaderClient(WKPageRef page, const WKPageLoaderClient* client);
+WK_EXPORT void WKPageSetPagePolicyClient(WKPageRef page, const WKPagePolicyClient* client);
+WK_EXPORT void WKPageSetPageFormClient(WKPageRef page, const WKPageFormClient* client);
+WK_EXPORT void WKPageSetPageUIClient(WKPageRef page, const WKPageUIClient* client);
+
+typedef void (*WKPageRunJavaScriptFunction)(WKStringRef, WKErrorRef, void*);
+WK_EXPORT void WKPageRunJavaScriptInMainFrame(WKPageRef page, WKStringRef script, void *context, WKPageRunJavaScriptFunction function);
+#ifdef __BLOCKS__
+typedef void (^WKPageRunJavaScriptBlock)(WKStringRef, WKErrorRef);
 WK_EXPORT void WKPageRunJavaScriptInMainFrame_b(WKPageRef page, WKStringRef script, WKPageRunJavaScriptBlock block);
 #endif
 
-
-WK_EXPORT WKPageRef WKPageRetain(WKPageRef page);
-WK_EXPORT void WKPageRelease(WKPageRef page);
+typedef void (*WKPageGetSourceForFrameFunction)(WKStringRef, WKErrorRef, void*);
+WK_EXPORT void WKPageGetSourceForFrame(WKPageRef page, WKFrameRef frame, void *context, WKPageGetSourceForFrameFunction function);
+#ifdef __BLOCKS__
+typedef void (^WKPageGetSourceForFrameBlock)(WKStringRef, WKErrorRef);
+WK_EXPORT void WKPageGetSourceForFrame_b(WKPageRef page, WKFrameRef frame, WKPageGetSourceForFrameBlock block);
+#endif
 
 #ifdef __cplusplus
 }

@@ -1,0 +1,167 @@
+layer at (0,0) size 800x1449
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x1449
+  RenderBlock {HTML} at (0,0) size 800x1449
+    RenderBody {BODY} at (8,8) size 784x1433
+      RenderBlock {P} at (0,0) size 784x21
+        RenderText {#text} at (0,1) size 159x19
+          text run at (0,1) width 159: "IFRAME inside TFOOT"
+      RenderTable {TABLE} at (0,37) size 784x430 [border: (1px outset #808080)]
+        RenderTableSection {THEAD} at (1,1) size 782x110
+          RenderTableRow {TR} at (0,2) size 782x106
+            RenderTableCell {TD} at (2,32) size 41x46 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+            RenderTableCell {TD} at (45,2) size 691x106 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderInline {SPAN} at (0,0) size 609x96
+                RenderText {#text} at (2,5) size 609x96
+                  text run at (2,5) width 609: "THEAD blah blah blah blah blah blah"
+                  text run at (2,56) width 135: "THEAD"
+              RenderText {#text} at (0,0) size 0x0
+            RenderTableCell {TD} at (738,32) size 42x46 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+        RenderTableSection {TFOOT} at (1,221) size 782x208
+          RenderTableRow {TR} at (0,2) size 782x204
+            RenderTableCell {TD} at (2,81) size 41x46 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+            RenderTableCell {TD} at (45,2) size 691x204 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderPartObject {IFRAME} at (12,12) size 155x180 [border: (5px solid #FF0000)]
+                layer at (0,0) size 125x150
+                  RenderView at (0,0) size 125x150
+                layer at (0,0) size 125x150
+                  RenderBlock {HTML} at (0,0) size 125x150
+                    RenderBody {BODY} at (8,8) size 109x134
+              RenderText {#text} at (0,0) size 0x0
+            RenderTableCell {TD} at (738,81) size 42x46 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+        RenderTableSection {TBODY} at (1,111) size 782x110
+          RenderTableRow {TR} at (0,2) size 782x106
+            RenderTableCell {TD} at (2,32) size 41x46 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+            RenderTableCell {TD} at (45,2) size 691x106 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderInline {SPAN} at (0,0) size 611x96
+                RenderText {#text} at (2,5) size 611x96
+                  text run at (2,5) width 611: "TBODY blah blah blah blah blah blah"
+                  text run at (2,56) width 138: "TBODY"
+              RenderText {#text} at (0,0) size 0x0
+            RenderTableCell {TD} at (738,32) size 42x46 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+      RenderBlock {P} at (0,483) size 784x21
+        RenderText {#text} at (0,1) size 163x19
+          text run at (0,1) width 163: "IFRAME inside TBODY"
+      RenderTable {TABLE} at (0,520) size 784x430 [border: (1px outset #808080)]
+        RenderTableSection {THEAD} at (1,1) size 782x110
+          RenderTableRow {TR} at (0,2) size 782x106
+            RenderTableCell {TD} at (2,32) size 41x46 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+            RenderTableCell {TD} at (45,2) size 691x106 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderInline {SPAN} at (0,0) size 609x96
+                RenderText {#text} at (2,5) size 609x96
+                  text run at (2,5) width 609: "THEAD blah blah blah blah blah blah"
+                  text run at (2,56) width 135: "THEAD"
+              RenderText {#text} at (0,0) size 0x0
+            RenderTableCell {TD} at (738,32) size 42x46 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+        RenderTableSection {TFOOT} at (1,319) size 782x110
+          RenderTableRow {TR} at (0,2) size 782x106
+            RenderTableCell {TD} at (2,32) size 41x46 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+            RenderTableCell {TD} at (45,2) size 691x106 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderInline {SPAN} at (0,0) size 601x96
+                RenderText {#text} at (2,5) size 601x96
+                  text run at (2,5) width 601: "TFOOT blah blah blah blah blah blah"
+                  text run at (2,56) width 128: "TFOOT"
+              RenderText {#text} at (0,0) size 0x0
+            RenderTableCell {TD} at (738,32) size 42x46 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+        RenderTableSection {TBODY} at (1,111) size 782x208
+          RenderTableRow {TR} at (0,2) size 782x204
+            RenderTableCell {TD} at (2,81) size 41x46 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+            RenderTableCell {TD} at (45,2) size 691x204 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderPartObject {IFRAME} at (12,12) size 155x180 [border: (5px solid #FF0000)]
+                layer at (0,0) size 125x150
+                  RenderView at (0,0) size 125x150
+                layer at (0,0) size 125x150
+                  RenderBlock {HTML} at (0,0) size 125x150
+                    RenderBody {BODY} at (8,8) size 109x134
+              RenderText {#text} at (0,0) size 0x0
+            RenderTableCell {TD} at (738,81) size 42x46 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+      RenderBlock {P} at (0,966) size 784x21
+        RenderText {#text} at (0,1) size 162x19
+          text run at (0,1) width 162: "IFRAME inside THEAD"
+      RenderTable {TABLE} at (0,1003) size 784x430 [border: (1px outset #808080)]
+        RenderTableSection {THEAD} at (1,1) size 782x208
+          RenderTableRow {TR} at (0,2) size 782x204
+            RenderTableCell {TD} at (2,81) size 41x46 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+            RenderTableCell {TD} at (45,2) size 691x204 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderPartObject {IFRAME} at (12,12) size 155x180 [border: (5px solid #FF0000)]
+                layer at (0,0) size 125x150
+                  RenderView at (0,0) size 125x150
+                layer at (0,0) size 125x150
+                  RenderBlock {HTML} at (0,0) size 125x150
+                    RenderBody {BODY} at (8,8) size 109x134
+              RenderText {#text} at (0,0) size 0x0
+            RenderTableCell {TD} at (738,81) size 42x46 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+        RenderTableSection {TFOOT} at (1,319) size 782x110
+          RenderTableRow {TR} at (0,2) size 782x106
+            RenderTableCell {TD} at (2,32) size 41x46 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+            RenderTableCell {TD} at (45,2) size 691x106 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderInline {SPAN} at (0,0) size 601x96
+                RenderText {#text} at (2,5) size 601x96
+                  text run at (2,5) width 601: "TFOOT blah blah blah blah blah blah"
+                  text run at (2,56) width 128: "TFOOT"
+              RenderText {#text} at (0,0) size 0x0
+            RenderTableCell {TD} at (738,32) size 42x46 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+        RenderTableSection {TBODY} at (1,209) size 782x110
+          RenderTableRow {TR} at (0,2) size 782x106
+            RenderTableCell {TD} at (2,32) size 41x46 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"
+            RenderTableCell {TD} at (45,2) size 691x106 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderInline {SPAN} at (0,0) size 611x96
+                RenderText {#text} at (2,5) size 611x96
+                  text run at (2,5) width 611: "TBODY blah blah blah blah blah blah"
+                  text run at (2,56) width 138: "TBODY"
+              RenderText {#text} at (0,0) size 0x0
+            RenderTableCell {TD} at (738,32) size 42x46 [border: (1px inset #808080)] [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (2,3) size 26x40
+                text run at (2,3) width 12: "A"
+                text run at (2,24) width 26: "Cell"

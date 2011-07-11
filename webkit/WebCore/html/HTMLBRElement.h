@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Simon Hausmann <hausmann@kde.org>
- * Copyright (C) 2003, 2006, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2003, 2006, 2009, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -28,15 +28,13 @@
 
 namespace WebCore {
 
-class String;
-
 class HTMLBRElement : public HTMLElement {
 public:
-    HTMLBRElement(const QualifiedName&, Document*);
+    static PassRefPtr<HTMLBRElement> create(Document*);
+    static PassRefPtr<HTMLBRElement> create(const QualifiedName&, Document*);
 
 private:
-    virtual HTMLTagStatus endTagRequirement() const { return TagStatusForbidden; }
-    virtual int tagPriority() const { return 0; }
+    HTMLBRElement(const QualifiedName&, Document*);
 
     virtual bool mapToEntry(const QualifiedName&, MappedAttributeEntry&) const;
     virtual void parseMappedAttribute(Attribute*);
@@ -44,6 +42,6 @@ private:
     virtual RenderObject* createRenderer(RenderArena*, RenderStyle*);
 };
 
-} //namespace
+} // namespace
 
 #endif

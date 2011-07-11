@@ -460,7 +460,7 @@ void JIT::emitRightShiftSlowCase(Instruction* currentInstruction, Vector<SlowCas
                     failures.append(branch32(LessThan, regT0, Imm32(0)));
             } else if (shift)
                 rshift32(Imm32(shift & 0x1f), regT0);
-            emitStoreInt32(dst, regT0, dst == op1 || dst == op2);
+            emitStoreInt32(dst, regT0, false);
             emitJumpSlowToHot(jump(), OPCODE_LENGTH(op_rshift));
             failures.link(this);
         }
@@ -480,7 +480,7 @@ void JIT::emitRightShiftSlowCase(Instruction* currentInstruction, Vector<SlowCas
                     urshift32(regT2, regT0);
                 else
                     rshift32(regT2, regT0);
-                emitStoreInt32(dst, regT0, dst == op1 || dst == op2);
+                emitStoreInt32(dst, regT0, false);
                 emitJumpSlowToHot(jump(), OPCODE_LENGTH(op_rshift));
                 notDouble.link(this);
                 notInt.link(this);
@@ -1363,14 +1363,14 @@ void JIT::emit_op_mod(Instruction* currentInstruction)
     unsigned op1 = currentInstruction[2].u.operand;
     unsigned op2 = currentInstruction[3].u.operand;
 
-#if ENABLE(JIT_OPTIMIZE_MOD)
+#if ENABLE(JIT_USE_SOFT_MODULO)
     emitLoad2(op1, regT1, regT0, op2, regT3, regT2);
     addSlowCase(branch32(NotEqual, regT1, Imm32(JSValue::Int32Tag)));
     addSlowCase(branch32(NotEqual, regT3, Imm32(JSValue::Int32Tag)));
 
     addSlowCase(branch32(Equal, regT2, Imm32(0)));
 
-    emitNakedCall(m_globalData->jitStubs.ctiSoftModulo());
+    emitNakedCall(m_globalData->jitStubs->ctiSoftModulo());
 
     emitStoreInt32(dst, regT0, (op1 == dst || op2 == dst));
 #else
@@ -1383,7 +1383,9 @@ void JIT::emit_op_mod(Instruction* currentInstruction)
 
 void JIT::emitSlow_op_mod(Instruction* currentInstruction, Vector<SlowCaseEntry>::iterator& iter)
 {
-#if ENABLE(JIT_OPTIMIZE_MOD)
+    UNUSED_PARAM(currentInstruction);
+    UNUSED_PARAM(iter);
+#if ENABLE(JIT_USE_SOFT_MODULO)
     unsigned result = currentInstruction[1].u.operand;
     unsigned op1 = currentInstruction[2].u.operand;
     unsigned op2 = currentInstruction[3].u.operand;

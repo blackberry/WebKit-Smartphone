@@ -63,13 +63,18 @@ public:
     virtual void resize(const WebSize&);
     virtual void layout();
     virtual void paint(WebCanvas* canvas, const WebRect& rect);
+    virtual void themeChanged();
+    virtual void composite(bool finish);
     virtual bool handleInputEvent(const WebInputEvent&);
     virtual void mouseCaptureLost();
     virtual void setFocus(bool enable);
-    virtual bool handleCompositionEvent(
-        WebCompositionCommand command, int cursorPosition,
-        int targetStart, int targetEnd, const WebString& text);
-    virtual bool queryCompositionStatus(bool* enabled, WebRect* caretRect);
+    virtual bool setComposition(
+        const WebString& text,
+        const WebVector<WebCompositionUnderline>& underlines,
+        int selectionStart, int selectionEnd);
+    virtual bool confirmComposition();
+    virtual WebTextInputType textInputType();
+    virtual WebRect caretOrSelectionBounds();
     virtual void setTextDirection(WebTextDirection direction);
     virtual bool isAcceleratedCompositingActive() const { return false; }
 
@@ -107,6 +112,7 @@ public:
     virtual PlatformPageClient platformPageClient() const { return 0; }
     virtual void scrollRectIntoView(const WebCore::IntRect&, const WebCore::ScrollView*) const;
     virtual void scrollbarsModeDidChange() const;
+    virtual void setCursor(const WebCore::Cursor&);
 
     // WebCore::FramelessScrollViewClient methods:
     virtual void popupClosed(WebCore::FramelessScrollView*);

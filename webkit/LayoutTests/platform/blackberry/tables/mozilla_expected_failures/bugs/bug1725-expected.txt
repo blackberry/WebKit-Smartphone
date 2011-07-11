@@ -1,0 +1,68 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderTable {TABLE} at (0,0) size 600x337 [bgcolor=#FFC0CB]
+        RenderTableSection {TBODY} at (0,0) size 600x337
+          RenderTableRow {TR} at (0,0) size 600x21
+            RenderTableCell {TD} at (0,0) size 600x21 [bgcolor=#FFFF00] [r=0 c=0 rs=1 cs=3]
+              RenderText {#text} at (0,1) size 8x19
+                text run at (0,1) width 8: "1"
+          RenderTableRow {TR} at (0,21) size 600x21
+            RenderTableCell {TD} at (0,21) size 600x21 [bgcolor=#FF0000] [r=1 c=0 rs=1 cs=3]
+              RenderText {#text} at (0,1) size 8x19
+                text run at (0,1) width 8: "2"
+          RenderTableRow {TR} at (0,42) size 600x0
+            RenderTableCell {TD} at (0,42) size 155x21 [bgcolor=#00FFFF] [r=2 c=0 rs=40 cs=1]
+              RenderText {#text} at (0,1) size 8x19
+                text run at (0,1) width 8: "3"
+          RenderTableRow {TR} at (0,42) size 600x43
+            RenderTableCell {TD} at (155,42) size 445x43 [bgcolor=#FFA500] [r=3 c=1 rs=1 cs=1]
+              RenderTable {TABLE} at (0,0) size 440x43
+                RenderTableSection {TBODY} at (0,0) size 440x43
+                  RenderTableRow {TR} at (0,2) size 440x39
+                    RenderTableCell {TD} at (2,2) size 217x39 [r=0 c=0 rs=1 cs=1]
+                      RenderButton {INPUT} at (3,3) size 112x31 [bgcolor=#C0C0C0] [border: (2px outset #C0C0C0)]
+                        RenderBlock (anonymous) at (8,5) size 96x21
+                          RenderText at (0,1) size 96x19
+                            text run at (0,1) width 96: "Submit Criteria"
+                    RenderTableCell {TD} at (221,10) size 217x23 [r=0 c=1 rs=1 cs=1]
+                      RenderText {#text} at (1,2) size 8x19
+                        text run at (1,2) width 8: "4"
+          RenderTableRow {TR} at (0,85) size 600x21
+            RenderTableCell {TD} at (155,85) size 445x21 [bgcolor=#FF0000] [r=4 c=1 rs=1 cs=1]
+              RenderText {#text} at (0,1) size 8x19
+                text run at (0,1) width 8: "5"
+          RenderTableRow {TR} at (0,106) size 600x42
+            RenderTableCell {TD} at (155,106) size 445x42 [bgcolor=#FFFF00] [r=5 c=1 rs=1 cs=1]
+              RenderText {#text} at (0,1) size 427x40
+                text run at (0,1) width 257: "If you have entered your feature criteria, "
+                text run at (257,1) width 170: "press the \"Submit Criteria\""
+                text run at (0,22) width 87: "button above."
+          RenderTableRow {TR} at (0,148) size 600x21
+            RenderTableCell {TD} at (155,148) size 445x21 [bgcolor=#D3D3D3] [r=6 c=1 rs=1 cs=1]
+              RenderText {#text} at (0,1) size 8x19
+                text run at (0,1) width 8: "6"
+          RenderTableRow {TR} at (0,169) size 600x63
+            RenderTableCell {TD} at (155,169) size 445x63 [r=7 c=1 rs=1 cs=1]
+              RenderText {#text} at (0,1) size 439x61
+                text run at (0,1) width 262: "If you want to do a radius search instead, "
+                text run at (262,1) width 165: "press the \"Radius Search\""
+                text run at (0,22) width 49: "button. "
+                text run at (49,22) width 279: "This will allow you to select a starting point "
+                text run at (328,22) width 111: "and enter a radius"
+                text run at (0,43) width 157: "with new feature criteria."
+          RenderTableRow {TR} at (0,232) size 600x21
+            RenderTableCell {TD} at (155,232) size 445x21 [r=8 c=1 rs=1 cs=1]
+              RenderText {#text} at (0,1) size 4x19
+                text run at (0,1) width 4: " "
+          RenderTableRow {TR} at (0,253) size 600x84
+            RenderTableCell {TD} at (155,253) size 445x84 [r=9 c=1 rs=1 cs=1]
+              RenderText {#text} at (0,1) size 436x82
+                text run at (0,1) width 436: "All information provided is deemed reliable but is not guaranteed and"
+                text run at (0,22) width 65: "should be "
+                text run at (65,22) width 370: "independently verified. The price shown may represent the"
+                text run at (0,43) width 117: "top or bottom of a "
+                text run at (117,43) width 319: "price range listing and not necessarily a fixed price"
+                text run at (0,64) width 33: "offer."

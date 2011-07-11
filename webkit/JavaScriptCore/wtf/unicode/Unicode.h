@@ -34,7 +34,7 @@
 #elif USE(WINCE_UNICODE)
 #include <wtf/unicode/wince/UnicodeWince.h>
 #elif USE(OLYMPIA_UNICODE)
-#include <wtf/unicode/olympia/UnicodeOlympia.h>
+#include <wtf/unicode/blackberry/UnicodeBlackBerry.h>
 #else
 #error "Unknown Unicode implementation"
 #endif

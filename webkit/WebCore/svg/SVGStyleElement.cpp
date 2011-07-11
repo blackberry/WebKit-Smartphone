@@ -1,24 +1,24 @@
 /*
-    Copyright (C) 2004, 2005 Nikolas Zimmermann <wildfox@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-    Copyright (C) 2006 Apple Computer, Inc.
-    Copyright (C) 2009 Cameron McCormack <cam@mcc.id.au>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ * Copyright (C) 2006 Apple Inc. All rights reserved.
+ * Copyright (C) 2009 Cameron McCormack <cam@mcc.id.au>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -34,13 +34,21 @@
 
 namespace WebCore {
 
-using namespace SVGNames;
-
-SVGStyleElement::SVGStyleElement(const QualifiedName& tagName, Document* doc, bool createdByParser)
-     : SVGElement(tagName, doc)
-     , SVGLangSpace()
-     , m_createdByParser(createdByParser)
+inline SVGStyleElement::SVGStyleElement(const QualifiedName& tagName, Document* document, bool createdByParser)
+    : SVGElement(tagName, document)
+    , StyleElement(document, createdByParser)
 {
+}
+
+SVGStyleElement::~SVGStyleElement()
+{
+    if (m_sheet)
+        m_sheet->clearOwnerNode();
+}
+
+PassRefPtr<SVGStyleElement> SVGStyleElement::create(const QualifiedName& tagName, Document* document, bool createdByParser)
+{
+    return adoptRef(new SVGStyleElement(tagName, document, createdByParser));
 }
 
 const AtomicString& SVGStyleElement::type() const
@@ -90,45 +98,28 @@ void SVGStyleElement::parseMappedAttribute(Attribute* attr)
 
 void SVGStyleElement::finishParsingChildren()
 {
-    StyleElement::sheet(this);
-    m_createdByParser = false;
+    StyleElement::finishParsingChildren(this);
     SVGElement::finishParsingChildren();
 }
 
 void SVGStyleElement::insertedIntoDocument()
 {
     SVGElement::insertedIntoDocument();
-    document()->addStyleSheetCandidateNode(this, m_createdByParser);
-    if (!m_createdByParser)
-        StyleElement::insertedIntoDocument(document(), this);
+    StyleElement::insertedIntoDocument(document(), this);
 }
 
 void SVGStyleElement::removedFromDocument()
 {
     SVGElement::removedFromDocument();
-    if (document()->renderer())
-        document()->removeStyleSheetCandidateNode(this);
-    StyleElement::removedFromDocument(document());
+    StyleElement::removedFromDocument(document(), this);
 }
 
 void SVGStyleElement::childrenChanged(bool changedByParser, Node* beforeChange, Node* afterChange, int childCountDelta)
 {
+    StyleElement::childrenChanged(this);
     SVGElement::childrenChanged(changedByParser, beforeChange, afterChange, childCountDelta);
-    StyleElement::process(this);
-}
-
-StyleSheet* SVGStyleElement::sheet()
-{
-    return StyleElement::sheet(this);
-}
-
-bool SVGStyleElement::sheetLoaded()
-{
-    document()->removePendingSheet();
-    return true;
 }
 
 }
 
-// vim:ts=4:noet
 #endif // ENABLE(SVG)

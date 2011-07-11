@@ -26,6 +26,7 @@
 
 #include "config.h"
 #include "AccessibilityUIElement.h"
+#include "GOwnPtr.h"
 #include "GRefPtr.h"
 
 #include <JavaScriptCore/JSStringRef.h>
@@ -112,6 +113,12 @@ AccessibilityUIElement AccessibilityUIElement::elementAtPoint(int x, int y)
     return 0;
 }
 
+AccessibilityUIElement AccessibilityUIElement::linkedUIElementAtIndex(unsigned index)
+{
+    // FIXME: implement
+    return 0;
+}
+
 AccessibilityUIElement AccessibilityUIElement::getChildAtIndex(unsigned index)
 {
     Vector<AccessibilityUIElement> children;
@@ -192,7 +199,10 @@ JSStringRef AccessibilityUIElement::role()
     if (!role)
         return JSStringCreateWithCharacters(0, 0);
 
-    return JSStringCreateWithUTF8CString(atk_role_get_name(role));
+    const gchar* roleName = atk_role_get_name(role);
+    GOwnPtr<gchar> axRole(g_strdup_printf("AXRole: %s", roleName));
+
+    return JSStringCreateWithUTF8CString(axRole.get());
 }
 
 JSStringRef AccessibilityUIElement::subrole()
@@ -212,7 +222,9 @@ JSStringRef AccessibilityUIElement::title()
     if (!name)
         return JSStringCreateWithCharacters(0, 0);
 
-    return JSStringCreateWithUTF8CString(name);
+    GOwnPtr<gchar> axTitle(g_strdup_printf("AXTitle: %s", name));
+
+    return JSStringCreateWithUTF8CString(axTitle.get());
 }
 
 JSStringRef AccessibilityUIElement::description()
@@ -222,7 +234,9 @@ JSStringRef AccessibilityUIElement::description()
     if (!description)
         return JSStringCreateWithCharacters(0, 0);
 
-    return JSStringCreateWithUTF8CString(description);
+    GOwnPtr<gchar> axDesc(g_strdup_printf("AXDescription: %s", description));
+
+    return JSStringCreateWithUTF8CString(axDesc.get());
 }
 
 JSStringRef AccessibilityUIElement::stringValue()
@@ -380,7 +394,7 @@ bool AccessibilityUIElement::isSelected() const
     if (!ATK_IS_OBJECT(m_element))
         return false;
 
-    GRefPtr<AtkStateSet> stateSet = adoptGRef(atk_object_ref_state_set(ATK_OBJECT(m_element)));
+    PlatformRefPtr<AtkStateSet> stateSet = adoptPlatformRef(atk_object_ref_state_set(ATK_OBJECT(m_element)));
     gboolean isSelected = atk_state_set_contains_state(stateSet.get(), ATK_STATE_SELECTED);
 
     return isSelected;
@@ -484,6 +498,18 @@ JSStringRef AccessibilityUIElement::stringForRange(unsigned, unsigned)
     // FIXME: implement
     return JSStringCreateWithCharacters(0, 0);
 } 
+
+JSStringRef AccessibilityUIElement::attributedStringForRange(unsigned, unsigned)
+{
+    // FIXME: implement
+    return JSStringCreateWithCharacters(0, 0);
+}
+
+bool AccessibilityUIElement::attributedStringRangeIsMisspelled(unsigned location, unsigned length)
+{
+    // FIXME: implement
+    return false;
+}
 
 AccessibilityUIElement AccessibilityUIElement::cellForColumnAndRow(unsigned column, unsigned row)
 {
@@ -636,6 +662,12 @@ bool AccessibilityUIElement::isOffScreen() const
 }
 
 bool AccessibilityUIElement::isCollapsed() const
+{
+    // FIXME: implement
+    return false;
+}
+
+bool AccessibilityUIElement::isIgnored() const
 {
     // FIXME: implement
     return false;

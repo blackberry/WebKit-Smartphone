@@ -39,10 +39,11 @@ public:
     RenderObjectChildList* children() { return &m_children; }
 
     // <marker> uses these methods to only allow drawing children during a special marker draw time
-    void setDrawsContents(bool);
-    bool drawsContents() const;
+    void setDrawsContents(bool drawsContents) { m_drawsContents = drawsContents; }
+    bool drawsContents() const { return m_drawsContents; }
 
     virtual void paint(PaintInfo&, int parentX, int parentY);
+    virtual void setNeedsBoundariesUpdate() { m_needsBoundariesUpdate = true; }
 
 protected:
     virtual RenderObjectChildList* virtualChildren() { return children(); }
@@ -55,25 +56,30 @@ protected:
 
     virtual void addFocusRingRects(Vector<IntRect>&, int tx, int ty);
 
-    virtual FloatRect objectBoundingBox() const;
-    virtual FloatRect strokeBoundingBox() const;
-    virtual FloatRect repaintRectInLocalCoordinates() const;
+    virtual FloatRect objectBoundingBox() const { return m_objectBoundingBox; }
+    virtual FloatRect strokeBoundingBox() const { return m_strokeBoundingBox; }
+    virtual FloatRect repaintRectInLocalCoordinates() const { return m_repaintBoundingBox; }
 
     virtual bool nodeAtFloatPoint(const HitTestRequest&, HitTestResult&, const FloatPoint& pointInParent, HitTestAction);
 
     // Allow RenderSVGTransformableContainer to hook in at the right time in layout()
-    virtual void calculateLocalTransform() { }
+    virtual bool calculateLocalTransform() { return false; }
 
     // Allow RenderSVGViewportContainer to hook in at the right times in layout(), paint() and nodeAtFloatPoint()
     virtual void calcViewport() { }
     virtual void applyViewportClip(PaintInfo&) { }
     virtual bool pointIsInsideViewportClip(const FloatPoint& /*pointInParent*/) { return true; }
 
-    bool selfWillPaint() const;
+    bool selfWillPaint();
+    void updateCachedBoundaries();
 
 private:
     RenderObjectChildList m_children;
+    FloatRect m_objectBoundingBox;
+    FloatRect m_strokeBoundingBox;
+    FloatRect m_repaintBoundingBox;
     bool m_drawsContents : 1;
+    bool m_needsBoundariesUpdate : 1;
 };
   
 inline RenderSVGContainer* toRenderSVGContainer(RenderObject* object)
@@ -97,5 +103,3 @@ void toRenderSVGContainer(const RenderSVGContainer*);
 
 #endif // ENABLE(SVG)
 #endif // RenderSVGContainer_h
-
-// vim:ts=4:noet

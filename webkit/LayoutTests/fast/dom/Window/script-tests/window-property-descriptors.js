@@ -19,14 +19,6 @@ var __skip__ = {
     "textInputController" : 1,
     // Ignore these properties because they do not exist in all implementations. They will be tested separately
     "WebGLRenderingContext" : 1,
-    "WebGLArrayBuffer" : 1,
-    "WebGLByteArray" : 1,
-    "WebGLFloatArray" : 1,
-    "WebGLIntArray" : 1,
-    "WebGLShortArray" : 1,
-    "WebGLUnsignedByteArray" : 1,
-    "WebGLUnsignedIntArray" : 1,
-    "WebGLUnsignedShortArray" : 1,
     "ArrayBuffer" : 1,
     "Int8Array" : 1,
     "Uint8Array" : 1,
@@ -34,7 +26,7 @@ var __skip__ = {
     "Uint16Array" : 1,
     "Int32Array" : 1,
     "Uint32Array" : 1,
-    "FloatArray" : 1,
+    "Float32Array" : 1,
     "FileError" : 1,
     "FileReader" : 1,
     "ondeviceorientation" : 1,
@@ -63,7 +55,11 @@ for (var name in protoPropertySet)
     protoPropertyNames.push(name);
 protoPropertyNames.sort();
 
-for (var i = 0; i < protoPropertyNames.length; ++i)
+for (var i = 0; i < protoPropertyNames.length; ++i) {
+    // Ignore these properties because they do not exist in all implementations.
+    if (protoPropertyNames[i] == "createBlobURL" || protoPropertyNames[i] == "revokeBlobURL")
+        continue;
     shouldBeUndefined("Object.getOwnPropertyDescriptor(window, '" + protoPropertyNames[i] + "')");
+}
 
 var successfullyParsed = true;

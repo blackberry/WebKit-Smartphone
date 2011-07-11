@@ -2,6 +2,7 @@
  * Copyright (C) 2007 Eric Seidel <eric@webkit.org>
  * Copyright (C) 2008 Alp Toker <alp@nuanti.com>
  * Copyright (C) 2009 Jan Alonzo <jmalonzo@gmail.com>
+ * Copyright (C) 2010 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,23 +36,22 @@
 #include "EventSender.h"
 #include "GCController.h"
 #include "LayoutTestController.h"
+#include "PixelDumpSupport.h"
 #include "WorkQueue.h"
 #include "WorkQueueItem.h"
-
+#include <JavaScriptCore/JavaScript.h>
+#include <cassert>
+#include <cstdlib>
+#include <cstring>
+#include <getopt.h>
 #include <gtk/gtk.h>
 #include <webkit/webkit.h>
-#include <JavaScriptCore/JavaScript.h>
-
 #include <wtf/Assertions.h>
 
 #if PLATFORM(X11)
 #include <fontconfig/fontconfig.h>
 #endif
 
-#include <cassert>
-#include <getopt.h>
-#include <stdlib.h>
-#include <string.h>
 
 using namespace std;
 
@@ -77,7 +77,7 @@ static int dumpPixels;
 static int dumpTree = 1;
 
 AccessibilityController* axController = 0;
-LayoutTestController* gLayoutTestController = 0;
+RefPtr<LayoutTestController> gLayoutTestController;
 static GCController* gcController = 0;
 static WebKitWebView* webView;
 static GtkWidget* window;
@@ -96,30 +96,21 @@ static WebKitWebHistoryItem* prevTestBFItem = NULL;
 
 const unsigned historyItemIndent = 8;
 
-static gchar* autocorrectURL(const gchar* url)
-{
-    if (strncmp("http://", url, 7) != 0 && strncmp("https://", url, 8) != 0) {
-        GString* string = g_string_new("file://");
-        g_string_append(string, url);
-        return g_string_free(string, FALSE);
-    }
+static void runTest(const string& testPathOrURL);
 
-    return g_strdup(url);
+static bool shouldLogFrameLoadDelegates(const string& pathOrURL)
+{
+    return pathOrURL.find("loading/") != string::npos;
 }
 
-static bool shouldLogFrameLoadDelegates(const char* pathOrURL)
+static bool shouldOpenWebInspector(const string& pathOrURL)
 {
-    return strstr(pathOrURL, "loading/");
+    return pathOrURL.find("inspector/") != string::npos;
 }
 
-static bool shouldOpenWebInspector(const char* pathOrURL)
+static bool shouldEnableDeveloperExtras(const string& pathOrURL)
 {
-    return strstr(pathOrURL, "inspector/");
-}
-
-static bool shouldEnableDeveloperExtras(const char* pathOrURL)
-{
-    return shouldOpenWebInspector(pathOrURL) || strstr(pathOrURL, "inspector-enabled/");
+    return shouldOpenWebInspector(pathOrURL) || pathOrURL.find("inspector-enabled/") != string::npos;
 }
 
 void dumpFrameScrollPosition(WebKitWebFrame* frame)
@@ -139,10 +130,12 @@ static void appendString(gchar*& target, gchar* string)
     g_free(oldString);
 }
 
-#if PLATFORM(X11)
 static void initializeFonts()
 {
+#if PLATFORM(X11)
     static int numFonts = -1;
+
+    FcInit();
 
     // Some tests may add or remove fonts via the @font-face rule.
     // If that happens, font config should be re-created to suppress any unwanted change.
@@ -171,8 +164,8 @@ static void initializeFonts()
 
     appFontSet = FcConfigGetFonts(config, FcSetApplication);
     numFonts = appFontSet->nfont;
-}
 #endif
+}
 
 static gchar* dumpFramesAsText(WebKitWebFrame* frame)
 {
@@ -368,6 +361,50 @@ static void resetDefaultsToConsistentValues()
     setlocale(LC_ALL, "");
 }
 
+static bool useLongRunningServerMode(int argc, char *argv[])
+{
+    // This assumes you've already called getopt_long
+    return (argc == optind+1 && !strcmp(argv[optind], "-"));
+}
+
+static void runTestingServerLoop()
+{
+    // When DumpRenderTree runs in server mode, we just wait around for file names
+    // to be passed to us and read each in turn, passing the results back to the client
+    char filenameBuffer[2048];
+    while (fgets(filenameBuffer, sizeof(filenameBuffer), stdin)) {
+        char* newLineCharacter = strchr(filenameBuffer, '\n');
+        if (newLineCharacter)
+            *newLineCharacter = '\0';
+
+        if (!strlen(filenameBuffer))
+            continue;
+
+        runTest(filenameBuffer);
+    }
+}
+
+static void initializeGlobalsFromCommandLineOptions(int argc, char *argv[])
+{
+    struct option options[] = {
+        {"notree", no_argument, &dumpTree, false},
+        {"pixel-tests", no_argument, &dumpPixels, true},
+        {"tree", no_argument, &dumpTree, true},
+        {NULL, 0, NULL, 0}
+    };
+    
+    int option;
+    while ((option = getopt_long(argc, (char * const *)argv, "", options, NULL)) != -1) {
+        switch (option) {
+        case '?': // unknown or ambiguous option
+        case ':': // missing argument
+            exit(1);
+            break;
+        }
+    }
+}
+
+
 void dump()
 {
     invalidateAnyPreviousWaitToDumpWatchdog();
@@ -388,8 +425,18 @@ void dump()
 
         if (gLayoutTestController->dumpAsText())
             result = dumpFramesAsText(mainFrame);
-        else
+        else {
+            // Widget resizing is done asynchronously in GTK+. We pump the main
+            // loop here, to flush any pending resize requests. This prevents
+            // timing issues which affect the size of elements in the output.
+            // We only enable this workaround for tests that print the render tree
+            // because this seems to break some dumpAsText tests: see bug 39988
+            // After fixing that test, we should apply this approach to all dumps.
+            while (gtk_events_pending())
+                gtk_main_iteration();
+
             result = webkit_web_frame_dump_render_tree(mainFrame);
+        }
 
         if (!result) {
             const char* errorMessage;
@@ -420,11 +467,11 @@ void dump()
         }
     }
 
-    if (dumpPixels) {
-        if (!gLayoutTestController->dumpAsText() && !gLayoutTestController->dumpDOMAsWebArchive() && !gLayoutTestController->dumpSourceAsWebArchive()) {
-            // FIXME: Add support for dumping pixels
-        }
-    }
+    if (dumpPixels
+     && gLayoutTestController->generatePixelResults()
+     && !gLayoutTestController->dumpDOMAsWebArchive()
+     && !gLayoutTestController->dumpSourceAsWebArchive())
+        dumpWebViewAsPixelsAndCompareWithExpected(gLayoutTestController->expectedPixelHash());
 
     // FIXME: call displayWebView here when we support --paint
 
@@ -464,39 +511,45 @@ static void runTest(const string& testPathOrURL)
     ASSERT(!testPathOrURL.empty());
 
     // Look for "'" as a separator between the path or URL, and the pixel dump hash that follows.
-    string pathOrURL(testPathOrURL);
+    string testURL(testPathOrURL);
     string expectedPixelHash;
-
-    size_t separatorPos = pathOrURL.find("'");
+    size_t separatorPos = testURL.find("'");
     if (separatorPos != string::npos) {
-        pathOrURL = string(testPathOrURL, 0, separatorPos);
+        testURL = string(testPathOrURL, 0, separatorPos);
         expectedPixelHash = string(testPathOrURL, separatorPos + 1);
     }
 
-    gchar* url = autocorrectURL(pathOrURL.c_str());
-    const string testURL(url);
+    // Convert the path into a full file URL if it does not look
+    // like an HTTP/S URL (doesn't start with http:// or https://).
+    if (testURL.find("http://") && testURL.find("https://")) {
+        GFile* testFile = g_file_new_for_path(testURL.c_str());
+        gchar* testURLCString = g_file_get_uri(testFile);
+        testURL = testURLCString;
+        g_free(testURLCString);
+        g_object_unref(testFile);
+    }
 
     resetDefaultsToConsistentValues();
 
-    gLayoutTestController = new LayoutTestController(testURL, expectedPixelHash);
+    gLayoutTestController = LayoutTestController::create(testURL, expectedPixelHash);
     topLoadingFrame = 0;
     done = false;
 
     gLayoutTestController->setIconDatabaseEnabled(false);
 
-    if (shouldLogFrameLoadDelegates(pathOrURL.c_str()))
+    if (shouldLogFrameLoadDelegates(testURL))
         gLayoutTestController->setDumpFrameLoadCallbacks(true);
 
-    if (shouldEnableDeveloperExtras(pathOrURL.c_str())) {
+    if (shouldEnableDeveloperExtras(testURL)) {
         gLayoutTestController->setDeveloperExtrasEnabled(true);
-        if (shouldOpenWebInspector(pathOrURL.c_str()))
+        if (shouldOpenWebInspector(testURL))
             gLayoutTestController->showWebInspector();
     }
 
     WorkQueue::shared()->clear();
     WorkQueue::shared()->setFrozen(false);
 
-    bool isSVGW3CTest = (gLayoutTestController->testPathOrURL().find("svg/W3C-SVG-1.1") != string::npos);
+    bool isSVGW3CTest = (testURL.find("svg/W3C-SVG-1.1") != string::npos);
     GtkAllocation size;
     size.x = size.y = 0;
     size.width = isSVGW3CTest ? 480 : LayoutTestController::maxViewWidth;
@@ -511,22 +564,19 @@ static void runTest(const string& testPathOrURL)
     if (prevTestBFItem)
         g_object_ref(prevTestBFItem);
 
-#if PLATFORM(X11)
     initializeFonts();
-#endif
 
     // Focus the web view before loading the test to avoid focusing problems
     gtk_widget_grab_focus(GTK_WIDGET(webView));
-    webkit_web_view_open(webView, url);
-
-    g_free(url);
-    url = NULL;
+    webkit_web_view_open(webView, testURL.c_str());
 
     gtk_main();
 
     // If developer extras enabled Web Inspector may have been open by the test.
-    if (shouldEnableDeveloperExtras(pathOrURL.c_str()))
+    if (shouldEnableDeveloperExtras(testURL)) {
         gLayoutTestController->closeWebInspector();
+        gLayoutTestController->setDeveloperExtrasEnabled(false);
+    }
 
     // Also check if we still have opened webViews and free them.
     if (gLayoutTestController->closeRemainingWindowsWhenComplete() || webViewList) {
@@ -541,8 +591,7 @@ static void runTest(const string& testPathOrURL)
     // A blank load seems to be necessary to reset state after certain tests.
     webkit_web_view_open(webView, "about:blank");
 
-    gLayoutTestController->deref();
-    gLayoutTestController = 0;
+    gLayoutTestController.clear();
 
     // terminate the (possibly empty) pixels block after all the state reset
     sendPixelResultsEOF();
@@ -663,7 +712,7 @@ static void webViewWindowObjectCleared(WebKitWebView* view, WebKitWebFrame* fram
     ASSERT(!exception);
 
     JSStringRef eventSenderStr = JSStringCreateWithUTF8CString("eventSender");
-    JSValueRef eventSender = makeEventSender(context);
+    JSValueRef eventSender = makeEventSender(context, !webkit_web_frame_get_parent(frame));
     JSObjectSetProperty(context, windowObject, eventSenderStr, eventSender, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete, 0);
     JSStringRelease(eventSenderStr);
 }
@@ -883,6 +932,10 @@ static WebKitWebView* createWebView()
                      "signal::document-load-finished", webViewDocumentLoadFinished, 0,
                      "signal::geolocation-policy-decision-requested", geolocationPolicyDecisionRequested, 0,
                      "signal::onload-event", webViewOnloadEvent, 0,
+                     "signal::drag-begin", dragBeginCallback, 0,
+                     "signal::drag-end", dragEndCallback, 0,
+                     "signal::drag-failed", dragFailedCallback, 0,
+
                      NULL);
 
     g_signal_connect(view,
@@ -934,26 +987,8 @@ int main(int argc, char* argv[])
     // We squelch all debug messages sent to the logger.
     g_log_set_default_handler(logHandler, 0);
 
-#if PLATFORM(X11)
-    FcInit();
+    initializeGlobalsFromCommandLineOptions(argc, argv);
     initializeFonts();
-#endif
-
-    struct option options[] = {
-        {"notree", no_argument, &dumpTree, false},
-        {"pixel-tests", no_argument, &dumpPixels, true},
-        {"tree", no_argument, &dumpTree, true},
-        {NULL, 0, NULL, 0}
-    };
-
-    int option;
-    while ((option = getopt_long(argc, (char* const*)argv, "", options, NULL)) != -1)
-        switch (option) {
-            case '?':   // unknown or ambiguous option
-            case ':':   // missing argument
-                exit(1);
-                break;
-        }
 
     window = gtk_window_new(GTK_WINDOW_POPUP);
     container = GTK_WIDGET(gtk_scrolled_window_new(NULL, NULL));
@@ -973,19 +1008,9 @@ int main(int argc, char* argv[])
     gcController = new GCController();
     axController = new AccessibilityController();
 
-    if (argc == optind+1 && strcmp(argv[optind], "-") == 0) {
-        char filenameBuffer[2048];
+    if (useLongRunningServerMode(argc, argv)) {
         printSeparators = true;
-        while (fgets(filenameBuffer, sizeof(filenameBuffer), stdin)) {
-            char* newLineCharacter = strchr(filenameBuffer, '\n');
-            if (newLineCharacter)
-                *newLineCharacter = '\0';
-
-            if (strlen(filenameBuffer) == 0)
-                continue;
-
-            runTest(filenameBuffer);
-        }
+        runTestingServerLoop();
     } else {
         printSeparators = (optind < argc-1 || (dumpPixels && dumpTree));
         for (int i = optind; i != argc; ++i)

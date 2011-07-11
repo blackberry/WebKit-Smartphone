@@ -1,22 +1,22 @@
 /*
-    Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -25,16 +25,14 @@
 
 #include "Attribute.h"
 #include "RenderPath.h"
+#include "RenderSVGResource.h"
 #include "SVGLength.h"
 #include "SVGNames.h"
 
 namespace WebCore {
 
-SVGRectElement::SVGRectElement(const QualifiedName& tagName, Document *doc)
-    : SVGStyledTransformableElement(tagName, doc)
-    , SVGTests()
-    , SVGLangSpace()
-    , SVGExternalResourcesRequired()
+inline SVGRectElement::SVGRectElement(const QualifiedName& tagName, Document* document)
+    : SVGStyledTransformableElement(tagName, document)
     , m_x(LengthModeWidth)
     , m_y(LengthModeHeight)
     , m_width(LengthModeWidth)
@@ -44,8 +42,9 @@ SVGRectElement::SVGRectElement(const QualifiedName& tagName, Document *doc)
 {
 }
 
-SVGRectElement::~SVGRectElement()
+PassRefPtr<SVGRectElement> SVGRectElement::create(const QualifiedName& tagName, Document* document)
 {
+    return adoptRef(new SVGRectElement(tagName, document));
 }
 
 void SVGRectElement::parseMappedAttribute(Attribute* attr)
@@ -85,31 +84,36 @@ void SVGRectElement::svgAttributeChanged(const QualifiedName& attrName)
 {
     SVGStyledTransformableElement::svgAttributeChanged(attrName);
 
+    bool isLengthAttribute = attrName == SVGNames::xAttr
+                          || attrName == SVGNames::yAttr
+                          || attrName == SVGNames::widthAttr
+                          || attrName == SVGNames::heightAttr
+                          || attrName == SVGNames::rxAttr
+                          || attrName == SVGNames::ryAttr;
+
+    if (isLengthAttribute)
+        updateRelativeLengthsInformation();
+
     RenderPath* renderer = static_cast<RenderPath*>(this->renderer());
     if (!renderer)
         return;
 
     if (SVGStyledTransformableElement::isKnownAttribute(attrName)) {
         renderer->setNeedsTransformUpdate();
-        renderer->setNeedsLayout(true);
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
         return;
     }
 
-    if (attrName == SVGNames::xAttr
-        || attrName == SVGNames::yAttr
-        || attrName == SVGNames::widthAttr
-        || attrName == SVGNames::heightAttr
-        || attrName == SVGNames::rxAttr
-        || attrName == SVGNames::ryAttr) {
+    if (isLengthAttribute) {
         renderer->setNeedsPathUpdate();
-        renderer->setNeedsLayout(true);
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
         return;
     }
 
     if (SVGTests::isKnownAttribute(attrName)
         || SVGLangSpace::isKnownAttribute(attrName)
         || SVGExternalResourcesRequired::isKnownAttribute(attrName))
-        renderer->setNeedsLayout(true);
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
 }
 
 void SVGRectElement::synchronizeProperty(const QualifiedName& attrName)
@@ -158,11 +162,14 @@ Path SVGRectElement::toPathData() const
     return Path::createRectangle(rect);
 }
 
-bool SVGRectElement::hasRelativeValues() const
+bool SVGRectElement::selfHasRelativeLengths() const
 {
-    return (x().isRelative() || width().isRelative() ||
-            y().isRelative() || height().isRelative() ||
-            rx().isRelative() || ry().isRelative());
+    return x().isRelative()
+        || y().isRelative()
+        || width().isRelative()
+        || height().isRelative()
+        || rx().isRelative()
+        || ry().isRelative();
 }
 
 }

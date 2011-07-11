@@ -29,8 +29,6 @@
 
 #if ENABLE(DOM_STORAGE)
 
-#include "Timer.h"
-#include <wtf/Deque.h>
 #include <wtf/HashSet.h>
 #include <wtf/MessageQueue.h>
 #include <wtf/PassOwnPtr.h>
@@ -58,20 +56,12 @@ namespace WebCore {
     private:
         LocalStorageThread();
 
-#if ENABLE(SINGLE_THREADED)
-        void clearQueue();
-        void timerFired(Timer<LocalStorageThread>*);
-
-        Deque<LocalStorageTask*> m_queue;
-        Timer<LocalStorageThread> m_timer;
-#else
         // Called on background thread.
         static void* threadEntryPointCallback(void*);
         void* threadEntryPoint();
 
         ThreadIdentifier m_threadID;
         MessageQueue<LocalStorageTask> m_queue;
-#endif
     };
 
 } // namespace WebCore

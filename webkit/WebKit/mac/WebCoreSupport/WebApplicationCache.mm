@@ -32,11 +32,31 @@ using namespace WebCore;
 
 @implementation WebApplicationCache
 
-+ (void)setMaximumSize:(unsigned long long)size
++ (long long)maximumSize
+{
+    return cacheStorage().maximumSize();
+}
+
++ (void)setMaximumSize:(long long)size
+{
+    [WebApplicationCache deleteAllApplicationCaches];
+    cacheStorage().setMaximumSize(size);
+}
+
++ (long long)defaultOriginQuota
+{
+    return cacheStorage().defaultOriginQuota();
+}
+
++ (void)setDefaultOriginQuota:(long long)size
+{
+    cacheStorage().setDefaultOriginQuota(size);
+}
+
++ (void)deleteAllApplicationCaches
 {
     cacheStorage().empty();
     cacheStorage().vacuumDatabaseFile();
-    cacheStorage().setMaximumSize(size);
 }
 
 @end

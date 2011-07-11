@@ -11,6 +11,20 @@ use Cwd;
 
 use IDLParser;
 
+# FIXME: copied from CodeGeneratorJS.pm - should be imported and not copied
+sub IsSVGTypeNeedingContextParameter
+{
+    my $implClassName = shift;
+
+    return 0 unless $implClassName =~ /SVG/;
+    return 0 if $implClassName =~ /Element/;
+    my @noContextNeeded = ("SVGPaint", "SVGColor", "SVGDocument", "SVGZoomEvent");
+    foreach (@noContextNeeded) {
+        return 0 if $implClassName eq $_;
+    }
+    return 1;
+}
+
 my $verbose = 0;
 
 my $outputDirectory;
@@ -69,6 +83,18 @@ foreach my $idlFile (@ARGV) {
 
         next if (!($name eq "DOMWindow") && (@{$class->parents} > 0 || $class->extendedAttributes->{"LegacyParent"}));
         next if ($name eq "VoidCallback" || $name eq "AbstractWorker");
+
+        # Callbacks have no converter functions
+        next if $class->extendedAttributes->{"Callback"};
+
+        # FIXME: SVGAnimated* classes use templated base classes.  Should figure out how to generate appropriate converter functions, but for now just skip them
+        next if $name =~ /^SVGAnimated/;
+
+        # FIXME: POD types need different converters.  Should figure out how to generate these, but for now just skip them
+        next if $class->extendedAttributes->{"PODType"};
+
+        # FIXME: many SVG classes need a context parameter.  Should figure out how to get it, but for now just skip them
+        next if IsSVGTypeNeedingContextParameter($class->name);
 
         print "Generating $outputBase bindings code for IDL interface \"" . $class->name . "\"...\n" if $verbose;
 

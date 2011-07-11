@@ -1,0 +1,23 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x272
+  RenderBlock {HTML} at (0,0) size 800x272
+    RenderBody {BODY} at (8,8) size 784x256
+      RenderTable {TABLE} at (0,0) size 705x256 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 703x254
+          RenderTableRow {TR} at (0,2) size 703x250
+            RenderTableCell {TD} at (2,2) size 699x250 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+              RenderInline {A} at (0,0) size 108x36 [color=#0000EE]
+                RenderText {#text} at (2,4) size 108x36
+                  text run at (2,4) width 108: "Xandros"
+              RenderText {#text} at (110,4) size 664x241
+                text run at (110,4) width 8: " "
+                text run at (118,4) width 545: "in the news. text text text text text text text"
+                text run at (2,45) width 280: "text text text text text "
+                text run at (282,45) width 384: "text text text text text text text"
+                text run at (2,86) width 448: "text text text text text text text text "
+                text run at (450,86) width 216: "text text text text"
+                text run at (2,127) width 616: "text text text text text text text text text text text "
+                text run at (618,127) width 48: "text"
+                text run at (2,168) width 664: "text text text text text text text text text text text text"
+                text run at (2,209) width 56: "text."

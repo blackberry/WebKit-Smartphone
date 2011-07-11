@@ -72,8 +72,8 @@ namespace WebCore {
 
         bool paintingDisabled;
         
-        IntSize shadowSize;
-        unsigned shadowBlur;
+        FloatSize shadowOffset;
+        float shadowBlur;
         Color shadowColor;
 
         bool shadowsIgnoreTransforms;

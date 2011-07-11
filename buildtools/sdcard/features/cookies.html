@@ -1,0 +1,176 @@
+<html>
+<body>
+
+<div id=console>
+</div>
+
+<script>
+
+function clearAllCookies()
+{
+    var cookieString;
+    var c = 0;
+    while (cookieString = document.cookie) {
+        document.cookie = cookieString + ";path=/;expires=01 Jan 1980 00:00:00 GMT;"
+        document.cookie = cookieString + ";expires=01 Jan 1970 00:00:00 GMT;"
+        c += 1;
+        if (c > 1) {
+            document.write(cookieString + "<br>");
+        }
+        if (c > 3) {
+            testFailed("Unable to clear cookies")
+            break;
+        }
+    }
+}
+
+function debug(msg)
+{
+    var span = document.createElement("span");
+    document.getElementById("console").appendChild(span); // insert it first so XHTML knows the namespace
+    span.innerHTML = msg + '<br />';
+}
+
+function escapeHTML(text)
+{
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+}
+
+var pass = 0
+var fail = 0
+
+function testPassed(msg)
+{
+    debug('<span><span class="pass">PASS</span> ' + escapeHTML(msg) + '</span>');
+    pass++
+}
+
+function testFailed(msg)
+{
+    debug('<span><span class="fail">FAIL</span> ' + escapeHTML(msg) + '</span>');
+    fail++
+}
+
+function setAndCheck(cookiesToSet, result)
+{
+    clearAllCookies();
+    document.cookie = cookiesToSet;
+    cookie = document.cookie;
+    if (cookie == result)
+        testPassed("cookie is '" + cookie + "'.");
+    else
+        testFailed("cookie is '" + cookie + "'. Expected '" + result + "'. Set: " + cookiesToSet);    
+}
+
+
+// The Bugzilla issue
+setAndCheck("Bugzilla_login=13; path=/; expires=Fri, 01-Jan-2038 00:00:00 GMT; HttpOnly, Bugzilla_logincookie=1i7i77wZrI; path=/; expires=Fri, 01-Jan-2038 00:00:00 GMT; HttpOnly", "Bugzilla_login=13,Bugzilla_logincookie=1i7i77wZrI")
+
+// invalid and empty cookies
+//setAndCheck(";", "");
+setAndCheck(" ", "");
+setAndCheck(";path=/", "");
+    
+// nameless
+setAndCheck("b; path=/;", "b");
+setAndCheck("=b", "b");
+
+// basic
+setAndCheck("a=", "a=");
+setAndCheck(" a=", "a=");
+setAndCheck("a= ", "a=");
+setAndCheck(" a= ", "a=");
+setAndCheck(" a= ;", "a=");
+setAndCheck("a =", "a=");
+setAndCheck("a = ", "a=");
+
+// basic with value
+setAndCheck("a=b", "a=b");
+setAndCheck(" a=b", "a=b");
+setAndCheck("a=b ", "a=b");
+setAndCheck(" a=b ", "a=b");
+setAndCheck(" a=b ;", "a=b");
+setAndCheck("a =b", "a=b");
+setAndCheck("a = b", "a=b");
+setAndCheck("a = b ", "a=b");
+
+// special values
+setAndCheck("a=\",\"", "a=\",\"");
+
+// IE and Safari: "
+// Firefox and Opera: ";"
+setAndCheck("a=\";\"", "a=\"");
+
+setAndCheck("a=\" \"", "a=\" \"");
+
+setAndCheck("a=\"\"\"", "a=\"\"\"");
+
+// Handling a value with multiple quoted parts, like FOO="zzz "   "ppp" ;
+// IE and Safari: "zzz "   "ppp";
+// Firefox: "zzz ";
+// Opera: <rejects cookie>
+setAndCheck("a=\"zzz \"   \"ppp\" ",
+            "a=\"zzz \"   \"ppp\"")
+
+// A quote in a value that didn't start quoted.  like FOO=A"B ;
+setAndCheck("a=a\"b",
+            "a=a\"b")
+
+/*
+// These can only be run over https
+// secure
+setAndCheck("a=b;secure", "a=b;secure");
+setAndCheck("a=b;secure ", "a=b;secure");
+setAndCheck("a=b; secure", "a=b;secure");
+setAndCheck("a=b; secure ", "a=b;secure");
+setAndCheck("a=b; Secure ", "a=b;secure");
+setAndCheck("a=b; SeCuRe ", "a=b;secure");
+setAndCheck("a=b; SeCuRe ;", "a=b;secure");
+*/
+
+// httponly
+setAndCheck("a=b;httponly", "");
+
+// path null
+setAndCheck("a=b;path=/", "a=b");
+setAndCheck("a=b; path=/", "a=b");
+setAndCheck("a=b;path=/ ", "a=b");
+setAndCheck("a=b;path =/", "a=b");
+setAndCheck("a=b;path= /", "a=b");
+setAndCheck("a=b;path = /", "a=b");
+setAndCheck("a=b;Path= /", "a=b");
+setAndCheck("a=b;PATH = /", "a=b");
+
+
+// Expiration
+
+// invalid
+setAndCheck("a=b;expires=", "a=b")
+setAndCheck("a=b;expires=foo", "a=b")
+setAndCheck("a=b;expires=foo, bar", "a=b")
+setAndCheck("a=b;expires=foo, dd-mmm-yyyy hh:mm:ss GMT; path=/", "a=b")
+setAndCheck("a=b;expires=foo, 32-Caz-1999 24:01:60 GMT; path=/", "a=b")
+
+
+
+// Multiple cookies
+
+// These are NOT two cookies (thus the whitespace matters)
+setAndCheck("a=b,c=d", "a=b,c=d")
+setAndCheck("a=,c=d", "a=,c=d")
+setAndCheck("a=, c=d", "a=, c=d")
+setAndCheck("a= ,c=d", "a=,c=d")
+setAndCheck("a= , c=d", "a=, c=d")
+
+setAndCheck("a=b\nc=d", "a=b")
+
+// The Expedia issue
+setAndCheck("p1=`tpid=v.1,4`accttype=v.2,3,1,EX01BF1898BA$F0$28$D6$0C$84Hp$38$15$1D$B5Y$1F$E5$3A$24$A4$2C$F2$35f$3C$1D$5EF$40$CAL$DE`gacct=v.1,1,215361776`linfo=v.4,|0|0|255|1|0||||||||4105|0|0||0|0|0|-1|-1`190", "p1=`tpid=v.1,4`accttype=v.2,3,1,EX01BF1898BA$F0$28$D6$0C$84Hp$38$15$1D$B5Y$1F$E5$3A$24$A4$2C$F2$35f$3C$1D$5EF$40$CAL$DE`gacct=v.1,1,215361776`linfo=v.4,|0|0|255|1|0||||||||4105|0|0||0|0|0|-1|-1`190")
+
+
+
+
+testFailed("total:" + fail)
+testPassed("total:" + pass)
+
+</script>

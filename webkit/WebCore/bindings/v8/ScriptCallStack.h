@@ -31,11 +31,11 @@
 #ifndef ScriptCallStack_h
 #define ScriptCallStack_h
 
-#include "ScriptArray.h"
 #include "ScriptCallFrame.h"
 #include "ScriptState.h"
 #include "ScriptValue.h"
 #include <wtf/Noncopyable.h>
+#include <wtf/RefPtr.h>
 
 namespace v8 {
     class Arguments;
@@ -43,9 +43,14 @@ namespace v8 {
 
 namespace WebCore {
 
+class InspectorArray;
+
 class ScriptCallStack : public Noncopyable {
 public:
-    static ScriptCallStack* create(const v8::Arguments&, unsigned skipArgumentCount = 0);
+    static const int maxCallStackSizeToCapture;
+
+    static PassOwnPtr<ScriptCallStack> create(const v8::Arguments&, unsigned skipArgumentCount = 0, int framCountLimit = 1);
+    static PassOwnPtr<ScriptCallStack> create(ScriptState*, v8::Handle<v8::StackTrace>);
     ~ScriptCallStack();
 
     // Returns false if there is no running JavaScript or if fetching the stack failed.
@@ -57,22 +62,21 @@ public:
     //   lineNumber: <1 based line number>
     //   column: <1 based column offset on the line>
     // }
-    static bool stackTrace(int frameLimit, ScriptState* state, ScriptArray& stackTrace);
+    static bool stackTrace(int frameLimit, const RefPtr<InspectorArray>& stackTrace);
 
-    const ScriptCallFrame& at(unsigned) const;
-    // FIXME: implement retrieving and storing call stack trace
-    unsigned size() const { return 1; }
+    const ScriptCallFrame& at(unsigned);
+    unsigned size();
 
     ScriptState* state() const { return m_scriptState; }
     ScriptState* globalState() const { return m_scriptState; }
 
 private:
-    ScriptCallStack(const v8::Arguments& arguments, unsigned skipArgumentCount, String sourceName, int sourceLineNumber, String funcName);
+    ScriptCallStack(ScriptState* scriptState, PassOwnPtr<ScriptCallFrame> topFrame, Vector<OwnPtr<ScriptCallFrame> >& scriptCallFrames);
+    ScriptCallStack(ScriptState* scriptState, v8::Handle<v8::StackTrace> stackTrace);
 
-    static bool callLocation(String* sourceName, int* sourceLineNumber, String* functionName);
-
-    ScriptCallFrame m_lastCaller;
+    OwnPtr<ScriptCallFrame> m_topFrame;
     ScriptState* m_scriptState;
+    Vector<OwnPtr<ScriptCallFrame> > m_scriptCallFrames;
 };
 
 } // namespace WebCore

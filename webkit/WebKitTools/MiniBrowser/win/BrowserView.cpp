@@ -27,6 +27,7 @@
 #include "BrowserView.h"
 
 #include "BrowserWindow.h"
+#include <WebKit2/WKContextPrivate.h>
 #include <WebKit2/WKURLCF.h>
 
 static const unsigned short HIGH_BIT_MASK_SHORT = 0x8000;
@@ -59,6 +60,23 @@ static void runJavaScriptAlert(WKPageRef page, WKStringRef alertText, WKFrameRef
 {
 }
 
+static bool runJavaScriptConfirm(WKPageRef page, WKStringRef message, WKFrameRef frame, const void* clientInfo)
+{
+    return false;
+}
+
+static WKStringRef runJavaScriptPrompt(WKPageRef page, WKStringRef message, WKStringRef defaultValue, WKFrameRef frame, const void* clientInfo)
+{
+    return 0;
+}
+
+static void setStatusText(WKPageRef page, WKStringRef text, const void* clientInfo)
+{
+}
+
+static void contentsSizeChanged(WKPageRef page, int width, int height, WKFrameRef frame, const void *clientInfo)
+{
+}
 
 void BrowserView::create(RECT webViewRect, BrowserWindow* parentWindow)
 {
@@ -66,8 +84,12 @@ void BrowserView::create(RECT webViewRect, BrowserWindow* parentWindow)
 
     bool isShiftKeyDown = ::GetKeyState(VK_SHIFT) & HIGH_BIT_MASK_SHORT;
 
-    //WKContextRef context = WKContextCreateWithProcessModel(isShiftKeyDown ? kWKProcessModelSecondaryThread : kWKProcessModelSecondaryProcess);
-    WKContextRef context = WKContextCreateWithProcessModel(kWKProcessModelSecondaryThread);
+    WKContextRef context;
+    if (isShiftKeyDown)
+        context = WKContextGetSharedThreadContext();
+    else
+        context = WKContextGetSharedProcessContext();
+
     WKPageNamespaceRef pageNamespace = WKPageNamespaceCreate(context);
 
     m_webView = WKViewCreate(webViewRect, pageNamespace, parentWindow->window());
@@ -78,8 +100,13 @@ void BrowserView::create(RECT webViewRect, BrowserWindow* parentWindow)
         createNewPage,
         showPage,
         closePage,
-        runJavaScriptAlert
+        runJavaScriptAlert,
+        runJavaScriptConfirm,
+        runJavaScriptPrompt,
+        setStatusText,
+        contentsSizeChanged
     };
+
     WKPageSetPageUIClient(WKViewGetPage(m_webView), &uiClient);
 }
 
@@ -100,5 +127,5 @@ void BrowserView::goToURL(const std::wstring& urlString)
 
     WKPageRef page = WKViewGetPage(m_webView);
     WKPageLoadURL(page, url);
-    WKURLRelease(url);
+    WKRelease(url);
 }

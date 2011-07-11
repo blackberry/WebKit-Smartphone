@@ -29,8 +29,9 @@
 
 namespace WebCore {
 
-GIFImageDecoder::GIFImageDecoder()
-    : m_alreadyScannedThisDataForFrameCount(true)
+GIFImageDecoder::GIFImageDecoder(bool premultiplyAlpha)
+    : ImageDecoder(premultiplyAlpha)
+    , m_alreadyScannedThisDataForFrameCount(true)
     , m_repetitionCount(cAnimationLoopOnce)
     , m_readOffset(0)
 {
@@ -83,6 +84,8 @@ size_t GIFImageDecoder::frameCount()
         reader.read((const unsigned char*)m_data->data(), m_data->size(), GIFFrameCountQuery, static_cast<unsigned>(-1));
         m_alreadyScannedThisDataForFrameCount = true;
         m_frameBufferCache.resize(reader.images_count);
+        for (int i = 0; i < reader.images_count; ++i)
+            m_frameBufferCache[i].setPremultiplyAlpha(m_premultiplyAlpha);
     }
 
     return m_frameBufferCache.size();
@@ -101,7 +104,7 @@ int GIFImageDecoder::repetitionCount() const
         // Added wrinkle: ImageSource::clear() may destroy the reader, making
         // the result from the reader _less_ authoritative on future calls.  To
         // detect this, the reader returns cLoopCountNotSeen (-2) instead of
-        // cAnimationLoopOnce (-1) when its current incarnation hasn't actually
+        // cAnimationLoopOnce (0) when its current incarnation hasn't actually
         // seen a loop count yet; in this case we return our previously-cached
         // value.
         const int repetitionCount = m_reader->loop_count;
@@ -120,6 +123,12 @@ RGBA32Buffer* GIFImageDecoder::frameBufferAtIndex(size_t index)
     if (frame.status() != RGBA32Buffer::FrameComplete)
         decode(index + 1, GIFFullQuery);
     return &frame;
+}
+
+bool GIFImageDecoder::setFailed()
+{
+    m_reader.clear();
+    return ImageDecoder::setFailed();
 }
 
 void GIFImageDecoder::clearFrameBufferCache(size_t clearBeforeFrame)
@@ -188,8 +197,8 @@ bool GIFImageDecoder::haveDecodedRow(unsigned frameIndex, unsigned char* rowBuff
     // row's X-coordinates.
     int xBegin = upperBoundScaledX(frameReader->x_offset);
     int yBegin = upperBoundScaledY(frameReader->y_offset + rowNumber);
-    int xEnd = lowerBoundScaledX(std::min(xBegin + static_cast<int>(rowEnd - rowBuffer), size().width()) - 1, xBegin + 1) + 1;
-    int yEnd = lowerBoundScaledY(std::min(yBegin + static_cast<int>(repeatCount), size().height()) - 1, yBegin + 1) + 1;
+    int xEnd = lowerBoundScaledX(std::min(static_cast<int>(frameReader->x_offset + (rowEnd - rowBuffer)), size().width()) - 1, xBegin + 1) + 1;
+    int yEnd = lowerBoundScaledY(std::min(static_cast<int>(frameReader->y_offset + rowNumber + repeatCount), size().height()) - 1, yBegin + 1) + 1;
     if (!rowBuffer || (xBegin < 0) || (yBegin < 0) || (xEnd <= xBegin) || (yEnd <= yBegin))
         return true;
 
@@ -303,9 +312,6 @@ void GIFImageDecoder::decode(unsigned haltAtFrame, GIFQuery query)
     // has failed.
     if (!m_reader->read((const unsigned char*)m_data->data() + m_readOffset, m_data->size() - m_readOffset, query, haltAtFrame) && isAllDataReceived())
         setFailed();
-
-    if (failed())
-        m_reader.clear();
 }
 
 bool GIFImageDecoder::initFrameBuffer(unsigned frameIndex)

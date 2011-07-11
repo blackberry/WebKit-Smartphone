@@ -68,7 +68,7 @@ class CommitterValidatorTest(unittest.TestCase):
 
 - If you do not have review rights please read http://webkit.org/coding/contributing.html for instructions on how to use bugzilla flags.
 
-- If you have review rights please correct the error in WebKitTools/Scripts/webkitpy/common/config/committers.py by adding yourself to the file (no review needed).  Due to bug 30084 the commit-queue will require a restart after your change.  Please contact eseidel@chromium.org to request a commit-queue restart.  After restart the commit-queue will correctly respect your review rights."""
+- If you have review rights please correct the error in WebKitTools/Scripts/webkitpy/common/config/committers.py by adding yourself to the file (no review needed).  The commit-queue restarts itself every 2 hours.  After restart the commit-queue will correctly respect your review rights."""
         self.assertEqual(validator._flag_permission_rejection_message("foo@foo.com", "review"), expected_messsage)
 
 
@@ -96,6 +96,11 @@ class BugzillaTest(unittest.TestCase):
                 status="+"
                 setter="two@test.com"
            />
+          <flag name="in-rietveld"
+                id="17933"
+                status="+"
+                setter="three@test.com"
+           />
         </attachment>
 '''
     _expected_example_attachment_parsing = {
@@ -111,6 +116,8 @@ class BugzillaTest(unittest.TestCase):
         'reviewer_email' : 'one@test.com',
         'commit-queue' : '+',
         'committer_email' : 'two@test.com',
+        'in-rietveld': '+',
+        'rietveld_uploader_email': 'three@test.com',
         'attacher_email' : 'christian.plesner.hansen@gmail.com',
     }
 
@@ -191,12 +198,12 @@ removed-because-it-was-really-long
 ZEZpbmlzaExvYWRXaXRoUmVhc29uOnJlYXNvbl07Cit9CisKIEBlbmQKIAogI2VuZGlmCg==
 </data>        
  
-              <flag name="review"
-                    id="27602"
-                    status="?"
-                    setter="mjs@apple.com"
-               /> 
-          </attachment> 
+            <flag name="review"
+                id="27602"
+                status="?"
+                setter="mjs@apple.com"
+            />
+        </attachment>
     </bug>
 </bugzilla>
 """

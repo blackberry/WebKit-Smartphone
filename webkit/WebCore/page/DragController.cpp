@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2007, 2009 Apple Inc. All rights reserved.
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
+ * Copyright (C) 2007, 2009, 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,7 +30,7 @@
 #include "CSSStyleDeclaration.h"
 #include "Clipboard.h"
 #include "ClipboardAccessPolicy.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "Document.h"
 #include "DocumentFragment.h"
 #include "DragActions.h"
@@ -57,12 +56,14 @@
 #include "PlatformKeyboardEvent.h"
 #include "RenderFileUploadControl.h"
 #include "RenderImage.h"
+#include "RenderLayer.h"
 #include "RenderView.h"
 #include "ReplaceSelectionCommand.h"
 #include "ResourceRequest.h"
 #include "SelectionController.h"
 #include "Settings.h"
 #include "Text.h"
+#include "TextEvent.h"
 #include "htmlediting.h"
 #include "markup.h"
 #include <wtf/CurrentTime.h>
@@ -110,9 +111,9 @@ static PassRefPtr<DocumentFragment> documentFragmentFromDragData(DragData* dragD
         if (PassRefPtr<DocumentFragment> fragment = dragData->asFragment(document))
             return fragment;
 
-        if (dragData->containsURL()) {
+        if (dragData->containsURL(DragData::DoNotConvertFilenames)) {
             String title;
-            String url = dragData->asURL(&title);
+            String url = dragData->asURL(DragData::DoNotConvertFilenames, &title);
             if (!url.isEmpty()) {
                 RefPtr<HTMLAnchorElement> anchor = HTMLAnchorElement::create(document);
                 anchor->setHref(url);
@@ -170,7 +171,7 @@ void DragController::dragExited(DragData* dragData)
 
     if (RefPtr<FrameView> v = mainFrame->view()) {
         ClipboardAccessPolicy policy = (!m_documentUnderMouse || m_documentUnderMouse->securityOrigin()->isLocal()) ? ClipboardReadable : ClipboardTypesReadable;
-        RefPtr<Clipboard> clipboard = dragData->createClipboard(policy);
+        RefPtr<Clipboard> clipboard = Clipboard::create(policy, dragData, mainFrame);
         clipboard->setSourceOperation(dragData->draggingSourceOperationMask());
         mainFrame->eventHandler()->cancelDragAndDrop(createMouseEvent(dragData), clipboard.get());
         clipboard->setAccessPolicy(ClipboardNumb);    // invalidate clipboard here for security
@@ -193,7 +194,7 @@ bool DragController::performDrag(DragData* dragData)
         RefPtr<Frame> mainFrame = m_page->mainFrame();
         if (mainFrame->view()) {
             // Sending an event can result in the destruction of the view and part.
-            RefPtr<Clipboard> clipboard = dragData->createClipboard(ClipboardReadable);
+            RefPtr<Clipboard> clipboard = Clipboard::create(ClipboardReadable, dragData, mainFrame.get());
             clipboard->setSourceOperation(dragData->draggingSourceOperationMask());
             mainFrame->eventHandler()->performDragAndDrop(createMouseEvent(dragData), clipboard.get());
             clipboard->setAccessPolicy(ClipboardNumb);    // invalidate clipboard here for security
@@ -213,13 +214,7 @@ bool DragController::performDrag(DragData* dragData)
         return false;
 
     m_client->willPerformDragDestinationAction(DragDestinationActionLoad, dragData);
-#if OS(OLYMPIA)
-    ResourceRequest request(dragData->asURL());
-    request.setTargetType(ResourceRequest::TargetIsMainFrame);
-    m_page->mainFrame()->loader()->load(request, false);
-#else
     m_page->mainFrame()->loader()->load(ResourceRequest(dragData->asURL()), false);
-#endif
     return true;
 }
 
@@ -369,6 +364,15 @@ static bool setSelectionToDragCaret(Frame* frame, VisibleSelection& dragCaret, R
     return !frame->selection()->isNone() && frame->selection()->isContentEditable();
 }
 
+bool DragController::dispatchTextInputEventFor(Frame* innerFrame, DragData* dragData)
+{
+    VisibleSelection dragCaret(m_page->dragCaretController()->selection());
+    String text = dragCaret.isContentRichlyEditable() ? "" : dragData->asPlainText();
+    Node* target = innerFrame->editor()->findEventTargetFrom(dragCaret);
+    ExceptionCode ec = 0;
+    return target->dispatchEvent(TextEvent::createForDrop(innerFrame->domWindow(), text), ec);
+}
+
 bool DragController::concludeEditDrag(DragData* dragData)
 {
     ASSERT(dragData);
@@ -382,11 +386,12 @@ bool DragController::concludeEditDrag(DragData* dragData)
     Frame* innerFrame = element->ownerDocument()->frame();
     ASSERT(innerFrame);
 
+    if (!dispatchTextInputEventFor(innerFrame, dragData))
+        return true;
+
     if (dragData->containsColor()) {
         Color color = dragData->asColor();
         if (!color.isValid())
-            return false;
-        if (!innerFrame)
             return false;
         RefPtr<Range> innerRange = innerFrame->selection()->toNormalizedRange();
         RefPtr<CSSStyleDeclaration> style = m_documentUnderMouse->createCSSStyleDeclaration();
@@ -405,7 +410,7 @@ bool DragController::concludeEditDrag(DragData* dragData)
     }
 
     if (HTMLInputElement* fileInput = asFileInput(element)) {
-        if (!fileInput->isEnabledFormControl())
+        if (fileInput->disabled())
             return false;
 
         if (!dragData->containsFiles())
@@ -435,13 +440,13 @@ bool DragController::concludeEditDrag(DragData* dragData)
     // manually controlling drag behaviour
     if (!range)
         return false;
-    DocLoader* loader = range->ownerDocument()->docLoader();
-    loader->setAllowStaleResources(true);
+    CachedResourceLoader* cachedResourceLoader = range->ownerDocument()->cachedResourceLoader();
+    cachedResourceLoader->setAllowStaleResources(true);
     if (dragIsMove(innerFrame->selection()) || dragCaret.isContentRichlyEditable()) {
         bool chosePlainText = false;
         RefPtr<DocumentFragment> fragment = documentFragmentFromDragData(dragData, range, true, chosePlainText);
         if (!fragment || !innerFrame->editor()->shouldInsertFragment(fragment, range, EditorInsertActionDropped)) {
-            loader->setAllowStaleResources(false);
+            cachedResourceLoader->setAllowStaleResources(false);
             return false;
         }
 
@@ -450,7 +455,7 @@ bool DragController::concludeEditDrag(DragData* dragData)
             // NSTextView behavior is to always smart delete on moving a selection,
             // but only to smart insert if the selection granularity is word granularity.
             bool smartDelete = innerFrame->editor()->smartInsertDeleteEnabled();
-            bool smartInsert = smartDelete && innerFrame->selectionGranularity() == WordGranularity && dragData->canSmartReplace();
+            bool smartInsert = smartDelete && innerFrame->selection()->granularity() == WordGranularity && dragData->canSmartReplace();
             applyCommand(MoveSelectionCommand::create(fragment, dragCaret.base(), smartInsert, smartDelete));
         } else {
             if (setSelectionToDragCaret(innerFrame, dragCaret, range, point))
@@ -459,7 +464,7 @@ bool DragController::concludeEditDrag(DragData* dragData)
     } else {
         String text = dragData->asPlainText();
         if (text.isEmpty() || !innerFrame->editor()->shouldInsertText(text, range.get(), EditorInsertActionDropped)) {
-            loader->setAllowStaleResources(false);
+            cachedResourceLoader->setAllowStaleResources(false);
             return false;
         }
 
@@ -467,7 +472,7 @@ bool DragController::concludeEditDrag(DragData* dragData)
         if (setSelectionToDragCaret(innerFrame, dragCaret, range, point))
             applyCommand(ReplaceSelectionCommand::create(m_documentUnderMouse.get(), createFragmentFromText(range.get(), text), true, false, true));
     }
-    loader->setAllowStaleResources(false);
+    cachedResourceLoader->setAllowStaleResources(false);
 
     return true;
 }
@@ -530,7 +535,7 @@ bool DragController::tryDHTMLDrag(DragData* dragData, DragOperation& operation)
         return false;
 
     ClipboardAccessPolicy policy = m_documentUnderMouse->securityOrigin()->isLocal() ? ClipboardReadable : ClipboardTypesReadable;
-    RefPtr<Clipboard> clipboard = dragData->createClipboard(policy);
+    RefPtr<Clipboard> clipboard = Clipboard::create(policy, dragData, mainFrame.get());
     DragOperation srcOpMask = dragData->draggingSourceOperationMask();
     clipboard->setSourceOperation(srcOpMask);
 
@@ -631,7 +636,7 @@ static IntPoint dragLocForDHTMLDrag(const IntPoint& mouseDraggedPoint, const Int
 
 static IntPoint dragLocForSelectionDrag(Frame* src)
 {
-    IntRect draggingRect = enclosingIntRect(src->selectionBounds());
+    IntRect draggingRect = enclosingIntRect(src->selection()->bounds());
     int xpos = draggingRect.right();
     xpos = draggingRect.x() < xpos ? draggingRect.x() : xpos;
     int ypos = draggingRect.bottom();
@@ -736,7 +741,7 @@ bool DragController::startDrag(Frame* src, Clipboard* clipboard, DragOperation s
     } else if (isSelected && (m_dragSourceAction & DragSourceActionSelection)) {
         if (!clipboard->hasData()) {
             if (isNodeInTextFormControl(src->selection()->start().node()))
-                clipboard->writePlainText(src->selectedText());
+                clipboard->writePlainText(src->editor()->selectedText());
             else {
                 RefPtr<Range> selectionRange = src->selection()->toNormalizedRange();
                 ASSERT(selectionRange);

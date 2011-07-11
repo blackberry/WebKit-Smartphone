@@ -33,6 +33,7 @@
 #import "EditingDelegate.h"
 #import "MockGeolocationProvider.h"
 #import "PolicyDelegate.h"
+#import "UIDelegate.h"
 #import "WorkQueue.h"
 #import "WorkQueueItem.h"
 #import <Foundation/Foundation.h>
@@ -44,8 +45,11 @@
 #import <WebKit/WebApplicationCache.h>
 #import <WebKit/WebBackForwardList.h>
 #import <WebKit/WebCoreStatistics.h>
+#import <WebKit/WebDOMOperationsPrivate.h>
 #import <WebKit/WebDataSource.h>
 #import <WebKit/WebDatabaseManagerPrivate.h>
+#import <WebKit/WebDeviceOrientation.h>
+#import <WebKit/WebDeviceOrientationProviderMock.h>
 #import <WebKit/WebFrame.h>
 #import <WebKit/WebFrameViewPrivate.h>
 #import <WebKit/WebGeolocationPosition.h>
@@ -59,6 +63,7 @@
 #import <WebKit/WebKitErrors.h>
 #import <WebKit/WebPreferences.h>
 #import <WebKit/WebPreferencesPrivate.h>
+#import <WebKit/WebQuotaManager.h>
 #import <WebKit/WebScriptWorld.h>
 #import <WebKit/WebSecurityOriginPrivate.h>
 #import <WebKit/WebTypesInternal.h>
@@ -120,6 +125,11 @@ void LayoutTestController::addDisallowedURL(JSStringRef url)
 bool LayoutTestController::callShouldCloseOnWebView()
 {
     return [[mainFrame webView] shouldClose];
+}
+
+void LayoutTestController::clearAllApplicationCaches()
+{
+    [WebApplicationCache deleteAllApplicationCaches];
 }
 
 void LayoutTestController::clearAllDatabases()
@@ -196,8 +206,12 @@ JSRetainPtr<JSStringRef> LayoutTestController::layerTreeAsText() const
 
 JSRetainPtr<JSStringRef> LayoutTestController::markerTextForListItem(JSContextRef context, JSValueRef nodeObject) const
 {
-    // FIXME: Implement me.
-    return JSRetainPtr<JSStringRef>();
+    DOMElement *element = [DOMElement _DOMElementFromJSContext:context value:nodeObject];
+    if (!element)
+        return JSRetainPtr<JSStringRef>();
+
+    JSRetainPtr<JSStringRef> markerText(Adopt, JSStringCreateWithCFString((CFStringRef)[element _markerTextForListItem]));
+    return markerText;
 }
 
 int LayoutTestController::pageNumberForElementById(JSStringRef id, float pageWidthInPixels, float pageHeightInPixels)
@@ -210,6 +224,23 @@ int LayoutTestController::pageNumberForElementById(JSStringRef id, float pageWid
         return -1;
 
     return [mainFrame pageNumberForElement:element:pageWidthInPixels:pageHeightInPixels];
+}
+
+JSRetainPtr<JSStringRef> LayoutTestController::pageProperty(const char* propertyName, int pageNumber) const
+{
+    JSRetainPtr<JSStringRef> propertyValue(Adopt, JSStringCreateWithCFString((CFStringRef)[mainFrame pageProperty:propertyName:pageNumber]));
+    return propertyValue;
+}
+
+bool LayoutTestController::isPageBoxVisible(int pageNumber) const
+{
+    return [mainFrame isPageBoxVisible:pageNumber];
+}
+
+JSRetainPtr<JSStringRef> LayoutTestController::pageSizeAndMarginsInPixels(int pageNumber, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft) const
+{
+    JSRetainPtr<JSStringRef> propertyValue(Adopt, JSStringCreateWithCFString((CFStringRef)[mainFrame pageSizeAndMarginsInPixels:pageNumber:width:height:marginTop:marginRight:marginBottom:marginLeft]));
+    return propertyValue;
 }
 
 int LayoutTestController::numberOfPages(float pageWidthInPixels, float pageHeightInPixels)
@@ -271,6 +302,13 @@ void LayoutTestController::setAppCacheMaximumSize(unsigned long long size)
     [WebApplicationCache setMaximumSize:size];
 }
 
+void LayoutTestController::setApplicationCacheOriginQuota(unsigned long long quota)
+{
+    WebSecurityOrigin *origin = [[WebSecurityOrigin alloc] initWithURL:[NSURL URLWithString:@"http://127.0.0.1:8000"]];
+    [[origin applicationCacheQuotaManager] setQuota:quota];
+    [origin release];
+}
+
 void LayoutTestController::setAuthorAndUserStylesEnabled(bool flag)
 {
     [[[mainFrame webView] preferences] setAuthorAndUserStylesEnabled:flag];
@@ -288,7 +326,7 @@ void LayoutTestController::setCustomPolicyDelegate(bool setDelegate, bool permis
 void LayoutTestController::setDatabaseQuota(unsigned long long quota)
 {    
     WebSecurityOrigin *origin = [[WebSecurityOrigin alloc] initWithURL:[NSURL URLWithString:@"file:///"]];
-    [origin setQuota:quota];
+    [[origin databaseQuotaManager] setQuota:quota];
     [origin release];
 }
 
@@ -296,6 +334,15 @@ void LayoutTestController::setDomainRelaxationForbiddenForURLScheme(bool forbidd
 {
     RetainPtr<CFStringRef> schemeCFString(AdoptCF, JSStringCopyCFString(kCFAllocatorDefault, scheme));
     [WebView _setDomainRelaxationForbidden:forbidden forURLScheme:(NSString *)schemeCFString.get()];
+}
+
+void LayoutTestController::setMockDeviceOrientation(bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma)
+{
+    // DumpRenderTree configured the WebView to use WebDeviceOrientationProviderMock.
+    id<WebDeviceOrientationProvider> provider = [[mainFrame webView] _deviceOrientationProvider];
+    WebDeviceOrientationProviderMock* mockProvider = static_cast<WebDeviceOrientationProviderMock*>(provider);
+    WebDeviceOrientation* orientation = [[WebDeviceOrientation alloc] initWithCanProvideAlpha:canProvideAlpha alpha:alpha canProvideBeta:canProvideBeta beta:beta canProvideGamma:canProvideGamma gamma:gamma];
+    [mockProvider setOrientation:orientation];
 }
 
 void LayoutTestController::setMockGeolocationPosition(double latitude, double longitude, double accuracy)
@@ -311,6 +358,18 @@ void LayoutTestController::setMockGeolocationError(int code, JSStringRef message
     NSString *messageNS = (NSString *)messageCF.get();
     NSError *error = [NSError errorWithDomain:WebKitErrorDomain code:code userInfo:[NSDictionary dictionaryWithObject:messageNS forKey:NSLocalizedDescriptionKey]];
     [[MockGeolocationProvider shared] setError:error];
+}
+
+void LayoutTestController::setGeolocationPermission(bool allow)
+{
+    setGeolocationPermissionCommon(allow);
+    [[[mainFrame webView] UIDelegate] didSetMockGeolocationPermission];
+}
+
+void LayoutTestController::setMockSpeechInputResult(JSStringRef result)
+{
+    // FIXME: Implement for speech input layout tests.
+    // See https://bugs.webkit.org/show_bug.cgi?id=39485.
 }
 
 void LayoutTestController::setIconDatabaseEnabled(bool iconDatabaseEnabled)
@@ -413,6 +472,11 @@ void LayoutTestController::setUserStyleSheetLocation(JSStringRef path)
     [[WebPreferences standardPreferences] setUserStyleSheetLocation:url];
 }
 
+void LayoutTestController::setViewModeMediaFeature(JSStringRef mode)
+{
+    // FIXME: implement
+}
+
 void LayoutTestController::disableImageLoading()
 {
     [[WebPreferences standardPreferences] setLoadsImagesAutomatically:NO];
@@ -487,9 +551,9 @@ int LayoutTestController::windowCount()
     return CFArrayGetCount(openWindowsRef);
 }
 
-bool LayoutTestController::elementDoesAutoCompleteForElementWithId(JSStringRef id)
+bool LayoutTestController::elementDoesAutoCompleteForElementWithId(JSStringRef jsString)
 {
-    RetainPtr<CFStringRef> idCF(AdoptCF, JSStringCopyCFString(kCFAllocatorDefault, id));
+    RetainPtr<CFStringRef> idCF(AdoptCF, JSStringCopyCFString(kCFAllocatorDefault, jsString));
     NSString *idNS = (NSString *)idCF.get();
     
     DOMElement *element = [[mainFrame DOMDocument] getElementById:idNS];
@@ -520,7 +584,7 @@ void LayoutTestController::setCacheModel(int cacheModel)
 bool LayoutTestController::isCommandEnabled(JSStringRef name)
 {
     RetainPtr<CFStringRef> nameCF(AdoptCF, JSStringCopyCFString(kCFAllocatorDefault, name));
-    NSString *nameNS = reinterpret_cast<const NSString *>(nameCF.get());
+    NSString *nameNS = (NSString *)nameCF.get();
 
     // Accept command strings with capital letters for first letter without trailing colon.
     if (![nameNS hasSuffix:@":"] && [nameNS length]) {
@@ -576,6 +640,16 @@ unsigned LayoutTestController::numberOfActiveAnimations() const
     return [mainFrame _numberOfActiveAnimations];
 }
 
+void LayoutTestController::suspendAnimations() const
+{
+    return [mainFrame _suspendAnimations];
+}
+
+void LayoutTestController::resumeAnimations() const
+{
+    return [mainFrame _resumeAnimations];
+}
+
 void LayoutTestController::waitForPolicyDelegate()
 {
     setWaitToDump(true);
@@ -610,18 +684,18 @@ void LayoutTestController::setScrollbarPolicy(JSStringRef orientation, JSStringR
     // FIXME: implement
 }
 
-void LayoutTestController::addUserScript(JSStringRef source, bool runAtStart)
+void LayoutTestController::addUserScript(JSStringRef source, bool runAtStart, bool allFrames)
 {
     RetainPtr<CFStringRef> sourceCF(AdoptCF, JSStringCopyCFString(kCFAllocatorDefault, source));
     NSString *sourceNS = (NSString *)sourceCF.get();
-    [WebView _addUserScriptToGroup:@"org.webkit.DumpRenderTree" world:[WebScriptWorld world] source:sourceNS url:nil whitelist:nil blacklist:nil injectionTime:(runAtStart ? WebInjectAtDocumentStart : WebInjectAtDocumentEnd)];
+    [WebView _addUserScriptToGroup:@"org.webkit.DumpRenderTree" world:[WebScriptWorld world] source:sourceNS url:nil whitelist:nil blacklist:nil injectionTime:(runAtStart ? WebInjectAtDocumentStart : WebInjectAtDocumentEnd) injectedFrames:(allFrames ? WebInjectInAllFrames : WebInjectInTopFrameOnly)];
 }
 
-void LayoutTestController::addUserStyleSheet(JSStringRef source)
+void LayoutTestController::addUserStyleSheet(JSStringRef source, bool allFrames)
 {
     RetainPtr<CFStringRef> sourceCF(AdoptCF, JSStringCopyCFString(kCFAllocatorDefault, source));
     NSString *sourceNS = (NSString *)sourceCF.get();
-    [WebView _addUserStyleSheetToGroup:@"org.webkit.DumpRenderTree" world:[WebScriptWorld world] source:sourceNS url:nil whitelist:nil blacklist:nil];
+    [WebView _addUserStyleSheetToGroup:@"org.webkit.DumpRenderTree" world:[WebScriptWorld world] source:sourceNS url:nil whitelist:nil blacklist:nil injectedFrames:(allFrames ? WebInjectInAllFrames : WebInjectInTopFrameOnly)];
 }
 
 void LayoutTestController::setDeveloperExtrasEnabled(bool enabled)
@@ -859,4 +933,9 @@ void LayoutTestController::setEditingBehavior(const char* editingBehavior)
     if ([editingBehaviorNS isEqualToString:@"win"])
         [[WebPreferences standardPreferences] setEditingBehavior:WebKitEditingWinBehavior];
     [editingBehaviorNS release];
+}
+
+void LayoutTestController::abortModal()
+{
+    [NSApp abortModal];
 }

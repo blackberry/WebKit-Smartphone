@@ -27,7 +27,6 @@
 #include "config.h"
 #include "EventHandler.h"
 
-#include "ClipboardWin.h"
 #include "Cursor.h"
 #include "FloatPoint.h"
 #include "FocusController.h"
@@ -43,6 +42,12 @@
 #include "SelectionController.h"
 #include "WCDataObject.h"
 #include "NotImplemented.h"
+
+#if OS(WINCE)
+#include "Clipboard.h"
+#else
+#include "ClipboardWin.h"
+#endif
 
 namespace WebCore {
 
@@ -93,7 +98,7 @@ PassRefPtr<Clipboard> EventHandler::createDraggingClipboard() const
 #else
     COMPtr<WCDataObject> dataObject;
     WCDataObject::createInstance(&dataObject);
-    return ClipboardWin::create(true, dataObject.get(), ClipboardWritable);
+    return ClipboardWin::create(true, dataObject.get(), ClipboardWritable, m_frame);
 #endif
 }
 

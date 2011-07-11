@@ -38,7 +38,7 @@
 #define EventSender_h
 
 #include "CppBoundClass.h"
-#include "base/task.h"
+#include "Task.h"
 #include "public/WebDragOperation.h"
 #include "public/WebInputEvent.h"
 #include "public/WebPoint.h"
@@ -66,7 +66,6 @@ public:
     void mouseDown(const CppArgumentList&, CppVariant*);
     void mouseUp(const CppArgumentList&, CppVariant*);
     void mouseMoveTo(const CppArgumentList&, CppVariant*);
-    void mouseWheelTo(const CppArgumentList&, CppVariant*);
     void leapForward(const CppArgumentList&, CppVariant*);
     void keyDown(const CppArgumentList&, CppVariant*);
     void dispatchMessage(const CppArgumentList&, CppVariant*);
@@ -74,6 +73,8 @@ public:
     void textZoomOut(const CppArgumentList&, CppVariant*);
     void zoomPageIn(const CppArgumentList&, CppVariant*);
     void zoomPageOut(const CppArgumentList&, CppVariant*);
+    void mouseScrollBy(const CppArgumentList&, CppVariant*);
+    void continuousMouseScrollBy(const CppArgumentList&, CppVariant*);
     void scheduleAsynchronousClick(const CppArgumentList&, CppVariant*);
     void beginDragWithFiles(const CppArgumentList&, CppVariant*);
     CppVariant dragMode;
@@ -107,6 +108,8 @@ public:
     CppVariant wmSysDeadChar;
 #endif
 
+    TaskList* taskList() { return &m_taskList; }
+
 private:
     // Returns the test shell's webview.
     WebKit::WebView* webview();
@@ -137,7 +140,10 @@ private:
     // Compose a touch event from the current touch points and send it.
     void sendCurrentTouchEvent(const WebKit::WebInputEvent::Type);
 
-    ScopedRunnableMethodFactory<EventSender> m_methodFactory;
+    // Handle a request to send a wheel event.
+    void handleMouseWheel(const CppArgumentList&, CppVariant*, bool continuous);
+
+    TaskList m_taskList;
 
     // Non-owning pointer.  The EventSender is owned by the TestShell.
     TestShell* m_shell;

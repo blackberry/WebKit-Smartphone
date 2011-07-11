@@ -32,6 +32,7 @@
 
 #if ENABLE(JAVASCRIPT_DEBUGGER)
 
+#include "ScriptDebugListener.h"
 #include "PlatformString.h"
 #include "ScriptBreakpoint.h"
 #include "Timer.h"
@@ -62,10 +63,12 @@ public:
     void addListener(ScriptDebugListener*, Page*);
     void removeListener(ScriptDebugListener*, Page*);
 
-    void setBreakpoint(const String& sourceID, unsigned lineNumber, ScriptBreakpoint breakpoint);
+    bool setBreakpoint(const String& sourceID, ScriptBreakpoint breakpoint, unsigned lineNumber, unsigned* actualLineNumber);
     void removeBreakpoint(const String& sourceID, unsigned lineNumber);
     void clearBreakpoints();
     void setBreakpointsActivated(bool activated);
+    void activateBreakpoints() { setBreakpointsActivated(true); }
+    void deactivateBreakpoints() { setBreakpointsActivated(false); }
 
     enum PauseOnExceptionsState {
         DontPauseOnExceptions,
@@ -75,11 +78,14 @@ public:
     PauseOnExceptionsState pauseOnExceptionsState() const { return m_pauseOnExceptionsState; }
     void setPauseOnExceptionsState(PauseOnExceptionsState);
 
-    void pauseProgram();
+    void pause();
+    void breakProgram();
     void continueProgram();
     void stepIntoStatement();
     void stepOverStatement();
     void stepOutOfFunction();
+
+    bool editScriptSource(const String& sourceID, const String& newContent, String& newSourceOrErrorMessage);
 
     void recompileAllJSFunctionsSoon();
     void recompileAllJSFunctions(Timer<ScriptDebugServer>* = 0);
@@ -87,6 +93,8 @@ public:
     JavaScriptCallFrame* currentCallFrame();
 
     void pageCreated(Page*);
+
+    bool isDebuggerAlwaysEnabled();
 
 private:
     typedef HashSet<ScriptDebugListener*> ListenerSet;
@@ -96,8 +104,6 @@ private:
     ~ScriptDebugServer();
 
     bool hasBreakpoint(intptr_t sourceID, unsigned lineNumber) const;
-    bool hasListeners() const { return !m_listeners.isEmpty() || !m_pageListenersMap.isEmpty(); }
-    bool hasGlobalListeners() const { return !m_listeners.isEmpty(); }
     bool hasListenersInterestedInPage(Page*);
 
     void setJavaScriptPaused(const PageGroup&, bool paused);
@@ -109,7 +115,7 @@ private:
     void dispatchFunctionToListeners(const ListenerSet& listeners, JavaScriptExecutionCallback callback);
     void dispatchDidPause(ScriptDebugListener*);
     void dispatchDidContinue(ScriptDebugListener*);
-    void dispatchDidParseSource(const ListenerSet& listeners, const JSC::SourceCode& source);
+    void dispatchDidParseSource(const ListenerSet& listeners, const JSC::SourceCode& source, enum ScriptWorldType);
     void dispatchFailedToParseSource(const ListenerSet& listeners, const JSC::SourceCode& source, int errorLine, const String& errorMessage);
 
     void pauseIfNeeded(Page*);
@@ -127,17 +133,16 @@ private:
 
     void didAddListener(Page*);
     void didRemoveListener(Page*);
-    void didRemoveLastListener();
 
     typedef HashMap<Page*, ListenerSet*> PageListenersMap;
     typedef HashMap<intptr_t, SourceBreakpoints> BreakpointsMap;
 
     PageListenersMap m_pageListenersMap;
-    ListenerSet m_listeners;
     bool m_callingListeners;
     PauseOnExceptionsState m_pauseOnExceptionsState;
     bool m_pauseOnNextStatement;
     bool m_paused;
+    Page* m_pausedPage;
     bool m_doneProcessingDebuggerEvents;
     bool m_breakpointsActivated;
     JavaScriptCallFrame* m_pauseOnCallFrame;

@@ -33,6 +33,7 @@ BEGIN {
         &gitReset
         &gitPopStash
         &gitPushStash
+        &isGitDirectory
         &isGitWorkingDirectoryClean
         &isNewGitCheckout
     );
@@ -41,6 +42,11 @@ BEGIN {
 }
 
 our @EXPORT_OK;
+
+sub isGitDirectory
+{
+    return exitStatus(system("git rev-parse > " . File::Spec->devnull() . " 2>&1")) == 0;
+}
 
 sub isNewGitCheckout
 {

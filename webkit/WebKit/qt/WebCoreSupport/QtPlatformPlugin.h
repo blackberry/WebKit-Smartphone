@@ -21,42 +21,31 @@
 #ifndef QtPlatformPlugin_h
 #define QtPlatformPlugin_h
 
-#include "QtAbstractWebPopup.h"
-#include <QObject>
+#include <QPluginLoader>
 
 class QWebSelectMethod;
 class QWebKitPlatformPlugin;
+class QWebNotificationPresenter;
+class QWebSelectData;
 
 namespace WebCore {
-
-class SelectInputMethodWrapper : public QObject, public QtAbstractWebPopup {
-    Q_OBJECT
-public:
-    SelectInputMethodWrapper(QWebSelectMethod* plugin);
-
-    virtual void show();
-    virtual void hide();
-
-private Q_SLOTS:
-    void selectItem(int index, bool allowMultiplySelections, bool shift);
-    void didHide();
-
-private:
-    QWebSelectMethod* m_plugin;
-};
 
 class QtPlatformPlugin {
 public:
     QtPlatformPlugin() : m_loaded(false), m_plugin(0) {}
     ~QtPlatformPlugin();
 
-    QtAbstractWebPopup* createSelectInputMethod();
+    QWebSelectMethod* createSelectInputMethod();
+    QWebNotificationPresenter* createNotificationPresenter();
+
+    QWebKitPlatformPlugin* plugin();
 
 private:
     bool m_loaded;
     QWebKitPlatformPlugin* m_plugin;
-
-    QWebKitPlatformPlugin* plugin();
+    QPluginLoader m_loader;
+    bool load();
+    bool load(const QString& file);
 };
 
 }

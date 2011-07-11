@@ -29,22 +29,21 @@
 #ifndef InspectorCSSStore_h
 #define InspectorCSSStore_h
 
-#include "StringHash.h"
-
+#include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/RefPtr.h>
+#include <wtf/text/StringHash.h>
 
 namespace WebCore {
 
 class Document;
 class InspectorController;
-class InspectorFrontend;
 class CSSMutableStyleDeclaration;
 class CSSStyleDeclaration;
 class CSSRuleList;
 class CSSStyleRule;
 class CSSStyleSheet;
-class String;
+class StyleBase;
 
 typedef std::pair<String, String> PropertyValueAndPriority;
 typedef std::pair<unsigned, unsigned> SourceRange;
@@ -65,11 +64,12 @@ public:
     InspectorCSSStore(InspectorController* inspectorController);
     ~InspectorCSSStore();
     void reset();
-    SourceRange getStartEndOffsets(CSSStyleRule* rule);
+    HashMap<long, SourceRange> getRuleRanges(CSSStyleSheet*);
     CSSStyleDeclaration* styleForId(long styleId);
+    CSSStyleSheet* styleSheetForId(long styleSheetId);
     CSSStyleRule* ruleForId(long styleRuleId);
     DisabledStyleDeclaration* disabledStyleForId(long styleId, bool createIfAbsent);
-    CSSStyleSheet* inspectorStyleSheet(Document* ownerDocument, bool createIfAbsent, long callId);
+    CSSStyleSheet* inspectorStyleSheet(Document* ownerDocument, bool createIfAbsent);
     void removeDocument(Document*);
 
     long bindRule(CSSStyleRule* rule);
@@ -77,7 +77,7 @@ public:
     long bindStyleSheet(CSSStyleSheet* styleSheet);
 
 private:
-    static unsigned getIndexInStyleRules(CSSStyleRule* rule, CSSRuleList* ruleList);
+    static CSSStyleRule* asCSSStyleRule(StyleBase*);
 
     StyleToIdMap m_styleToId;
     IdToStyleMap m_idToStyle;

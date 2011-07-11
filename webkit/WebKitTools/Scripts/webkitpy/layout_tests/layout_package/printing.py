@@ -123,27 +123,8 @@ def print_options():
             help="show detailed help on controlling print output"),
         optparse.make_option("-v", "--verbose", action="store_true",
             default=False, help="include debug-level logging"),
-
-        # FIXME: we should remove this; it's pretty much obsolete with the
-        # --print trace-everything option.
-        optparse.make_option("--sources", action="store_true",
-            help=("show expected result file path for each test "
-                 "(implies --verbose)")),
     ]
 
-
-def configure_logging(options, meter):
-    """Configures the logging system."""
-    log_fmt = '%(message)s'
-    log_datefmt = '%y%m%d %H:%M:%S'
-    log_level = logging.INFO
-    if options.verbose:
-        log_fmt = ('%(asctime)s %(filename)s:%(lineno)-4d %(levelname)s '
-                   '%(message)s')
-        log_level = logging.DEBUG
-
-    logging.basicConfig(level=log_level, format=log_fmt,
-                        datefmt=log_datefmt, stream=meter)
 
 
 def parse_print_options(print_options, verbose, child_processes,
@@ -196,6 +177,28 @@ def parse_print_options(print_options, verbose, child_processes,
     return switches
 
 
+def _configure_logging(stream, verbose):
+    log_fmt = '%(message)s'
+    log_datefmt = '%y%m%d %H:%M:%S'
+    log_level = logging.INFO
+    if verbose:
+        log_fmt = ('%(asctime)s %(filename)s:%(lineno)-4d %(levelname)s '
+                '%(message)s')
+        log_level = logging.DEBUG
+
+    root = logging.getLogger()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(logging.Formatter(log_fmt, None))
+    root.addHandler(handler)
+    root.setLevel(log_level)
+    return handler
+
+
+def _restore_logging(handler_to_remove):
+    root = logging.getLogger()
+    root.handlers.remove(handler_to_remove)
+
+
 class Printer(object):
     """Class handling all non-debug-logging printing done by run-webkit-tests.
 
@@ -243,12 +246,22 @@ class Printer(object):
 
         self._meter = metered_stream.MeteredStream(options.verbose,
                                                    regular_output)
-        configure_logging(self._options, self._meter)
+        self._logging_handler = _configure_logging(self._meter,
+            options.verbose)
 
         self.switches = parse_print_options(options.print_options,
             options.verbose, child_processes, is_fully_parallel)
 
-    # These two routines just hide the implmentation of the switches.
+    def cleanup(self):
+        """Restore logging configuration to its initial settings."""
+        if self._logging_handler:
+            _restore_logging(self._logging_handler)
+            self._logging_handler = None
+
+    def __del__(self):
+        self.cleanup()
+
+    # These two routines just hide the implementation of the switches.
     def disabled(self, option):
         return not option in self.switches
 
@@ -272,28 +285,52 @@ class Printer(object):
     def print_timing(self, msg):
         self.write(msg, 'timing')
 
-    def print_one_line_summary(self, total, expected):
+    def print_one_line_summary(self, total, expected, unexpected):
         """Print a one-line summary of the test run to stdout.
 
         Args:
           total: total number of tests run
           expected: number of expected results
+          unexpected: number of unexpected results
         """
         if self.disabled('one-line-summary'):
             return
 
-        unexpected = total - expected
-        if unexpected == 0:
-            self._write("All %d tests ran as expected." % expected)
-        elif expected == 1:
-            self._write("1 test ran as expected, %d didn't:" % unexpected)
+        incomplete = total - expected - unexpected
+        if incomplete:
+            self._write("")
+            incomplete_str = " (%d didn't run)" % incomplete
+            expected_str = str(expected)
         else:
-            self._write("%d tests ran as expected, %d didn't:" %
-                        (expected, unexpected))
+            incomplete_str = ""
+            expected_str = "All %d" % expected
+
+        if unexpected == 0:
+            self._write("%s tests ran as expected%s." %
+                        (expected_str, incomplete_str))
+        elif expected == 1:
+            self._write("1 test ran as expected, %d didn't%s:" %
+                        (unexpected, incomplete_str))
+        else:
+            self._write("%d tests ran as expected, %d didn't%s:" %
+                        (expected, unexpected, incomplete_str))
         self._write("")
 
     def print_test_result(self, result, expected, exp_str, got_str):
-        """Print the result of the test as determined by --print."""
+        """Print the result of the test as determined by --print.
+
+        This routine is used to print the details of each test as it completes.
+
+        Args:
+            result   - The actual TestResult object
+            expected - Whether the result we got was an expected result
+            exp_str  - What we expected to get (used for tracing)
+            got_str  - What we actually got (used for tracing)
+
+        Note that we need all of these arguments even though they seem
+        somewhat redundant, in order to keep this routine from having to
+        known anything about the set of expectations.
+        """
         if (self.enabled('trace-everything') or
             self.enabled('trace-unexpected') and not expected):
             self._print_test_trace(result, exp_str, got_str)

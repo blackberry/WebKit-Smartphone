@@ -256,14 +256,29 @@ void GraphicsContext::drawConvexPolygon(size_t npoints, const FloatPoint* points
     delete [] polygon;
 }
 
+void GraphicsContext::clipConvexPolygon(size_t numPoints, const FloatPoint* points, bool antialiased)
+{
+    if (paintingDisabled())
+        return;
+
+    if (numPoints <= 1)
+        return;
+
+    // FIXME: IMPLEMENT!!
+}
+
 void GraphicsContext::fillRect(const FloatRect& rect, const Color& color, ColorSpace colorSpace)
 {
     if (paintingDisabled())
         return;
 
+    savePlatformState();
+
     m_data->context->SetPen(*wxTRANSPARENT_PEN);
     m_data->context->SetBrush(wxBrush(color));
     m_data->context->DrawRectangle(rect.x(), rect.y(), rect.width(), rect.height());
+
+    restorePlatformState();
 }
 
 void GraphicsContext::fillRoundedRect(const IntRect& rect, const IntSize& topLeft, const IntSize& topRight, const IntSize& bottomLeft, const IntSize& bottomRight, const Color& color, ColorSpace colorSpace)
@@ -342,14 +357,18 @@ void GraphicsContext::drawLineForText(const IntPoint& origin, int width, bool pr
     m_data->context->DrawLine(origin.x(), origin.y(), endPoint.x(), endPoint.y());
 }
 
-
-void GraphicsContext::drawLineForMisspellingOrBadGrammar(const IntPoint& origin, int width, bool grammar)
+void GraphicsContext::drawLineForTextChecking(const IntPoint& origin, int width, TextCheckingLineStyle style)
 {
-    if (grammar)
-        m_data->context->SetPen(wxPen(*wxGREEN, 2, wxLONG_DASH));
-    else
+    switch (style) {
+    case TextCheckingSpellingLineStyle:
         m_data->context->SetPen(wxPen(*wxRED, 2, wxLONG_DASH));
-    
+        break;
+    case TextCheckingGrammarLineStyle:
+        m_data->context->SetPen(wxPen(*wxGREEN, 2, wxLONG_DASH));
+        break;
+    default:
+        return;
+    }
     m_data->context->DrawLine(origin.x(), origin.y(), origin.x() + width, origin.y());
 }
 
@@ -361,11 +380,6 @@ void GraphicsContext::clip(const Path&)
 void GraphicsContext::canvasClip(const Path& path)
 {
     clip(path);
-}
-
-void GraphicsContext::clipToImageBuffer(const FloatRect&, const ImageBuffer*)
-{
-    notImplemented();
 }
 
 AffineTransform GraphicsContext::getCTM() const
@@ -554,7 +568,7 @@ void GraphicsContext::fillRect(const FloatRect& rect)
         return;
 }
 
-void GraphicsContext::setPlatformShadow(IntSize const&,int,Color const&, ColorSpace) 
+void GraphicsContext::setPlatformShadow(FloatSize const&, float, Color const&, ColorSpace)
 { 
     notImplemented(); 
 }

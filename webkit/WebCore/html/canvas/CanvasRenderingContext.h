@@ -26,11 +26,13 @@
 #ifndef CanvasRenderingContext_h
 #define CanvasRenderingContext_h
 
+#include "GraphicsLayer.h"
+
 #include <wtf/Noncopyable.h>
 
 namespace WebCore {
 
-    class CanvasObject;
+    class WebGLObject;
     class HTMLCanvasElement;
 
     class CanvasRenderingContext : public Noncopyable {
@@ -46,6 +48,14 @@ namespace WebCore {
         
         virtual bool is2d() const { return false; }
         virtual bool is3d() const { return false; }
+        virtual bool isAccelerated() const { return false; }
+        
+        virtual void paintRenderingResultsToCanvas() {}
+        virtual bool paintsIntoCanvasBuffer() const { return true; }
+
+#if USE(ACCELERATED_COMPOSITING)
+        virtual PlatformLayer* platformLayer() const { return 0; }
+#endif
 
     private:
         HTMLCanvasElement* m_canvas;

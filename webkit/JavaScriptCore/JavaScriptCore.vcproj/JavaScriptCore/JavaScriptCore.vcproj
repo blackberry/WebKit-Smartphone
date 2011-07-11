@@ -709,6 +709,22 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\runtime\GCActivityCallback.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\runtime\GCActivityCallback.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\runtime\GCHandle.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\runtime\GCHandle.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\runtime\GetterSetter.cpp"
 				>
 			</File>
@@ -1089,11 +1105,23 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\runtime\RegExpCache.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\runtime\RegExpCache.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\runtime\RegExpConstructor.cpp"
 				>
 			</File>
 			<File
 				RelativePath="..\..\runtime\RegExpConstructor.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\runtime\RegExpKey.h"
 				>
 			</File>
 			<File
@@ -1629,10 +1657,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\jit\ExecutableAllocatorWin.cpp"
-				>
-			</File>
-			<File
 				RelativePath="..\..\jit\JIT.cpp"
 				>
 			</File>
@@ -1789,6 +1813,18 @@
 			Name="parser"
 			>
 			<File
+				RelativePath="..\..\parser\ASTBuilder.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\parser\JSParser.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\parser\JSParser.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\parser\Lexer.cpp"
 				>
 			</File>
@@ -1840,6 +1876,10 @@
 				RelativePath="..\..\parser\SourceProvider.h"
 				>
 			</File>
+			<File
+				RelativePath="..\..\parser\SyntaxChecker.h"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Derived Sources"
@@ -1850,78 +1890,6 @@
 			</File>
 			<File
 				RelativePath="$(WebKitOutputDir)\obj\$(ProjectName)\DerivedSources\DatePrototype.lut.h"
-				>
-			</File>
-			<File
-				RelativePath="$(WebKitOutputDir)\obj\$(ProjectName)\DerivedSources\Grammar.cpp"
-				>
-				<FileConfiguration
-					Name="Debug|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						DisableSpecificWarnings="4701"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Release|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						DisableSpecificWarnings="4701"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Debug_Internal|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						DisableSpecificWarnings="4701"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Release_PGOInstrument|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						DisableSpecificWarnings="4701"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Release_PGOOptimize|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						DisableSpecificWarnings="4701"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Debug_CFLite|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						DisableSpecificWarnings="4701"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Release_CFLite|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						DisableSpecificWarnings="4701"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Debug_All|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						DisableSpecificWarnings="4701"
-					/>
-				</FileConfiguration>
-			</File>
-			<File
-				RelativePath="$(WebKitOutputDir)\obj\$(ProjectName)\DerivedSources\Grammar.h"
 				>
 			</File>
 			<File

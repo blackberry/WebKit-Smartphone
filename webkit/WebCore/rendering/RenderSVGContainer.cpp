@@ -25,11 +25,13 @@
 
 #if ENABLE(SVG)
 #include "RenderSVGContainer.h"
-
+#include "RenderSVGResource.h"
 #include "GraphicsContext.h"
+#include "RenderSVGResource.h"
 #include "RenderSVGResourceFilter.h"
 #include "RenderView.h"
 #include "SVGRenderSupport.h"
+#include "SVGResources.h"
 #include "SVGStyledElement.h"
 
 namespace WebCore {
@@ -37,44 +39,53 @@ namespace WebCore {
 RenderSVGContainer::RenderSVGContainer(SVGStyledElement* node)
     : RenderSVGModelObject(node)
     , m_drawsContents(true)
+    , m_needsBoundariesUpdate(true)
 {
-}
-
-bool RenderSVGContainer::drawsContents() const
-{
-    return m_drawsContents;
-}
-
-void RenderSVGContainer::setDrawsContents(bool drawsContents)
-{
-    m_drawsContents = drawsContents;
 }
 
 void RenderSVGContainer::layout()
 {
     ASSERT(needsLayout());
-    ASSERT(!view()->layoutStateEnabled()); // RenderSVGRoot disables layoutState for the SVG rendering tree.
 
-    calcViewport(); // Allow RenderSVGViewportContainer to update its viewport
+    // RenderSVGRoot disables layoutState for the SVG rendering tree.
+    ASSERT(!view()->layoutStateEnabled());
 
-    LayoutRepainter repainter(*this, checkForRepaintDuringLayout() || selfWillPaint());
-    calculateLocalTransform(); // Allow RenderSVGTransformableContainer to update its transform
+    // Allow RenderSVGViewportContainer to update its viewport.
+    calcViewport();
 
-    layoutChildren(this, selfNeedsLayout());
+    LayoutRepainter repainter(*this, m_everHadLayout && checkForRepaintDuringLayout());
+
+    // Allow RenderSVGTransformableContainer to update its transform.
+    bool updatedTransform = calculateLocalTransform();
+
+    SVGRenderSupport::layoutChildren(this, selfNeedsLayout());
+
+    // Invalidate all resources of this client if our layout changed.
+    if (m_everHadLayout && selfNeedsLayout())
+        SVGResourcesCache::clientLayoutChanged(this);
+
+    // At this point LayoutRepainter already grabbed the old bounds,
+    // recalculate them now so repaintAfterLayout() uses the new bounds.
+    if (m_needsBoundariesUpdate || updatedTransform) {
+        updateCachedBoundaries();
+        m_needsBoundariesUpdate = false;
+    
+        // If our bounds changed, notify the parents.
+        RenderSVGModelObject::setNeedsBoundariesUpdate();
+    }
+
     repainter.repaintAfterLayout();
-
     setNeedsLayout(false);
 }
 
-bool RenderSVGContainer::selfWillPaint() const
+bool RenderSVGContainer::selfWillPaint()
 {
 #if ENABLE(FILTERS)
-    const SVGRenderStyle* svgStyle = style()->svgStyle();
-    RenderSVGResourceFilter* filter = getRenderSVGResourceById<RenderSVGResourceFilter>(document(), svgStyle->filterResource());
-    if (filter)
-        return true;
-#endif
+    SVGResources* resources = SVGResourcesCache::cachedResourcesForRenderObject(this);
+    return resources && resources->filter();
+#else
     return false;
+#endif
 }
 
 void RenderSVGContainer::paint(PaintInfo& paintInfo, int, int)
@@ -86,30 +97,30 @@ void RenderSVGContainer::paint(PaintInfo& paintInfo, int, int)
     if (!firstChild() && !selfWillPaint())
         return;
 
-    PaintInfo childPaintInfo(paintInfo);
+    FloatRect repaintRect = repaintRectInLocalCoordinates();
+    if (!SVGRenderSupport::paintInfoIntersectsRepaintRect(repaintRect, localToParentTransform(), paintInfo))
+        return;
 
+    PaintInfo childPaintInfo(paintInfo);
     childPaintInfo.context->save();
 
     // Let the RenderSVGViewportContainer subclass clip if necessary
     applyViewportClip(childPaintInfo);
 
-    applyTransformToPaintInfo(childPaintInfo, localToParentTransform());
-
-    RenderSVGResourceFilter* filter = 0;
-    FloatRect boundingBox = repaintRectInLocalCoordinates();
+    childPaintInfo.applyTransform(localToParentTransform());
 
     bool continueRendering = true;
     if (childPaintInfo.phase == PaintPhaseForeground)
-        continueRendering = prepareToRenderSVGContent(this, childPaintInfo, boundingBox, filter);
+        continueRendering = SVGRenderSupport::prepareToRenderSVGContent(this, childPaintInfo);
 
     if (continueRendering) {
-        childPaintInfo.paintingRoot = paintingRootForChildren(childPaintInfo);
+        childPaintInfo.updatePaintingRootForChildren(this);
         for (RenderObject* child = firstChild(); child; child = child->nextSibling())
             child->paint(childPaintInfo, 0, 0);
     }
 
     if (paintInfo.phase == PaintPhaseForeground)
-        finishRenderSVGContent(this, childPaintInfo, filter, paintInfo.context);
+        SVGRenderSupport::finishRenderSVGContent(this, childPaintInfo, paintInfo.context);
 
     childPaintInfo.context->restore();
 
@@ -118,9 +129,10 @@ void RenderSVGContainer::paint(PaintInfo& paintInfo, int, int)
     // outline rect into parent coords before drawing.
     // FIXME: This means our focus ring won't share our rotation like it should.
     // We should instead disable our clip during PaintPhaseOutline
-    IntRect paintRectInParent = enclosingIntRect(localToParentTransform().mapRect(repaintRectInLocalCoordinates()));
-    if ((paintInfo.phase == PaintPhaseOutline || paintInfo.phase == PaintPhaseSelfOutline) && style()->outlineWidth() && style()->visibility() == VISIBLE)
+    if ((paintInfo.phase == PaintPhaseOutline || paintInfo.phase == PaintPhaseSelfOutline) && style()->outlineWidth() && style()->visibility() == VISIBLE) {
+        IntRect paintRectInParent = enclosingIntRect(localToParentTransform().mapRect(repaintRect));
         paintOutline(paintInfo.context, paintRectInParent.x(), paintRectInParent.y(), paintRectInParent.width(), paintRectInParent.height());
+    }
 }
 
 // addFocusRingRects is called from paintOutline and needs to be in the same coordinates as the paintOuline call
@@ -131,37 +143,14 @@ void RenderSVGContainer::addFocusRingRects(Vector<IntRect>& rects, int, int)
         rects.append(paintRectInParent);
 }
 
-FloatRect RenderSVGContainer::objectBoundingBox() const
+void RenderSVGContainer::updateCachedBoundaries()
 {
-    return computeContainerBoundingBox(this, false);
-}
+    m_objectBoundingBox = FloatRect();
+    m_strokeBoundingBox = FloatRect();
+    m_repaintBoundingBox = FloatRect();
 
-FloatRect RenderSVGContainer::strokeBoundingBox() const
-{
-    return computeContainerBoundingBox(this, true);
-}
-
-// RenderSVGContainer is used for <g> elements which do not themselves have a
-// width or height, so we union all of our child rects as our repaint rect.
-FloatRect RenderSVGContainer::repaintRectInLocalCoordinates() const
-{
-    FloatRect repaintRect = computeContainerBoundingBox(this, true);
-
-    FloatRect rect = filterBoundingBoxForRenderer(this);
-    if (!rect.isEmpty())
-        repaintRect = rect;
-
-    rect = clipperBoundingBoxForRenderer(this);
-    if (!rect.isEmpty())
-        repaintRect.intersect(rect);
-
-    rect = maskerBoundingBoxForRenderer(this);
-    if (!rect.isEmpty())
-        repaintRect.intersect(rect);
-
-    style()->svgStyle()->inflateForShadow(repaintRect);
-
-    return repaintRect;
+    SVGRenderSupport::computeContainerBoundingBoxes(this, m_objectBoundingBox, m_strokeBoundingBox, m_repaintBoundingBox);
+    SVGRenderSupport::intersectRepaintRectWithResources(this, m_repaintBoundingBox);
 }
 
 bool RenderSVGContainer::nodeAtFloatPoint(const HitTestRequest& request, HitTestResult& result, const FloatPoint& pointInParent, HitTestAction hitTestAction)
@@ -172,6 +161,9 @@ bool RenderSVGContainer::nodeAtFloatPoint(const HitTestRequest& request, HitTest
 
     FloatPoint localPoint = localToParentTransform().inverse().mapPoint(pointInParent);
 
+    if (!SVGRenderSupport::pointInClippingArea(this, localPoint))
+        return false;
+                
     for (RenderObject* child = lastChild(); child; child = child->previousSibling()) {
         if (child->nodeAtFloatPoint(request, result, localPoint, hitTestAction)) {
             updateHitTestResult(result, roundedIntPoint(localPoint));

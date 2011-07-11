@@ -50,9 +50,10 @@ module threads {
         [Custom] void importScripts(/*[Variadic] in DOMString urls */);
                  attribute [Replaceable] WorkerNavigator navigator;
 #if defined(ENABLE_DATABASE) && ENABLE_DATABASE
-        [EnabledAtRuntime, Custom] Database openDatabase(in DOMString name, in DOMString version, in DOMString displayName, in unsigned long estimatedSize, in DatabaseCallback creationCallback)
+        [EnabledAtRuntime, RequiresAllArguments=Raise] Database openDatabase(in DOMString name, in DOMString version, in DOMString displayName, in unsigned long estimatedSize, in [Callback, Optional] DatabaseCallback creationCallback)
             raises(DOMException);
-        [EnabledAtRuntime, Custom] DatabaseSync openDatabaseSync(in DOMString name, in DOMString version, in DOMString displayName, in unsigned long estimatedSize, in DatabaseCallback creationCallback);
+        [EnabledAtRuntime, RequiresAllArguments=Raise] DatabaseSync openDatabaseSync(in DOMString name, in DOMString version, in DOMString displayName, in unsigned long estimatedSize, in [Callback, Optional] DatabaseCallback creationCallback)
+            raises(DOMException);
 #endif
 
         // Timers
@@ -94,6 +95,14 @@ module threads {
 #if defined(ENABLE_WEB_SOCKETS) && ENABLE_WEB_SOCKETS
         attribute [JSCCustomGetter,EnabledAtRuntime] WebSocketConstructor WebSocket; // Usable with the new operator
 #endif
+#endif
+
+#if defined(ENABLE_BLOB) && ENABLE_BLOB
+        attribute BlobBuilderConstructor BlobBuilder;
+        attribute FileReaderConstructor FileReader;
+        attribute FileReaderSyncConstructor FileReaderSync;
+        DOMString createBlobURL(in Blob blob);
+        void revokeBlobURL(in DOMString blobURL);
 #endif
     };
 

@@ -35,11 +35,13 @@
 #include "V8SQLTransactionSync.h"
 
 #include "DatabaseSync.h"
+#include "ExceptionCode.h"
 #include "SQLResultSet.h"
 #include "SQLValue.h"
 #include "V8Binding.h"
 #include "V8BindingMacros.h"
 #include "V8Proxy.h"
+#include "V8SQLResultSet.h"
 #include <wtf/Vector.h>
 
 using namespace WTF;
@@ -53,7 +55,7 @@ v8::Handle<v8::Value> V8SQLTransactionSync::executeSqlCallback(const v8::Argumen
     if (!args.Length())
         return throwError(SYNTAX_ERR);
 
-    EXCEPTION_BLOCK(String, statement, toWebCoreString(args[0]));
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, statement, args[0]);
 
     Vector<SQLValue> sqlValues;
 
@@ -80,7 +82,7 @@ v8::Handle<v8::Value> V8SQLTransactionSync::executeSqlCallback(const v8::Argumen
                 EXCEPTION_BLOCK(double, sqlValue, value->NumberValue());
                 sqlValues.append(SQLValue(sqlValue));
             } else {
-                EXCEPTION_BLOCK(String, sqlValue, toWebCoreString(value));
+                STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, sqlValue, value);
                 sqlValues.append(SQLValue(sqlValue));
             }
         }
@@ -89,10 +91,10 @@ v8::Handle<v8::Value> V8SQLTransactionSync::executeSqlCallback(const v8::Argumen
     SQLTransactionSync* transaction = V8SQLTransactionSync::toNative(args.Holder());
 
     ExceptionCode ec = 0;
-    transaction->executeSQL(statement, sqlValues, ec);
+    v8::Handle<v8::Value> result = toV8(transaction->executeSQL(statement, sqlValues, ec));
     V8Proxy::setDOMException(ec);
 
-    return v8::Undefined();
+    return result;
 }
 
 } // namespace WebCore

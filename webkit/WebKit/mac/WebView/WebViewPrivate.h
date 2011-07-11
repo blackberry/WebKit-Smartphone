@@ -44,12 +44,14 @@
 
 @class NSError;
 @class WebFrame;
+@class WebDeviceOrientation;
 @class WebGeolocationPosition;
 @class WebInspector;
 @class WebPreferences;
 @class WebScriptWorld;
 @class WebTextIterator;
 
+@protocol WebDeviceOrientationProvider;
 @protocol WebFormDelegate;
 
 extern NSString *_WebCanGoBackKey;
@@ -87,6 +89,11 @@ typedef enum {
     WebInjectAtDocumentStart,
     WebInjectAtDocumentEnd,
 } WebUserScriptInjectionTime;
+
+typedef enum {
+    WebInjectInAllFrames,
+    WebInjectInTopFrameOnly
+} WebUserContentInjectedFrames;
 
 @interface WebController : NSTreeController {
     IBOutlet WebView *webView;
@@ -175,6 +182,7 @@ typedef enum {
 // These methods are still in flux; don't rely on them yet.
 - (BOOL)canMarkAllTextMatches;
 - (WebNSUInteger)markAllMatchesForText:(NSString *)string caseSensitive:(BOOL)caseFlag highlight:(BOOL)highlight limit:(WebNSUInteger)limit;
+- (WebNSUInteger)countMatchesForText:(NSString *)string caseSensitive:(BOOL)caseFlag highlight:(BOOL)highlight limit:(WebNSUInteger)limit markMatches:(BOOL)markMatches;
 - (void)unmarkAllTextMatches;
 - (NSArray *)rectsForTextMatches;
 
@@ -504,8 +512,12 @@ Could be worth adding to the API.
 // Removes all white list entries created with _addOriginAccessWhitelistEntryWithSourceOrigin.
 + (void)_resetOriginAccessWhitelists;
 
+// FIXME: The following two methods are deprecated in favor of the overloads below that take the WebUserContentInjectedFrames argument. https://bugs.webkit.org/show_bug.cgi?id=41800.
 + (void)_addUserScriptToGroup:(NSString *)groupName world:(WebScriptWorld *)world source:(NSString *)source url:(NSURL *)url whitelist:(NSArray *)whitelist blacklist:(NSArray *)blacklist injectionTime:(WebUserScriptInjectionTime)injectionTime;
 + (void)_addUserStyleSheetToGroup:(NSString *)groupName world:(WebScriptWorld *)world source:(NSString *)source url:(NSURL *)url whitelist:(NSArray *)whitelist blacklist:(NSArray *)blacklist;
+
++ (void)_addUserScriptToGroup:(NSString *)groupName world:(WebScriptWorld *)world source:(NSString *)source url:(NSURL *)url whitelist:(NSArray *)whitelist blacklist:(NSArray *)blacklist injectionTime:(WebUserScriptInjectionTime)injectionTime injectedFrames:(WebUserContentInjectedFrames)injectedFrames;
++ (void)_addUserStyleSheetToGroup:(NSString *)groupName world:(WebScriptWorld *)world source:(NSString *)source url:(NSURL *)url whitelist:(NSArray *)whitelist blacklist:(NSArray *)blacklist injectedFrames:(WebUserContentInjectedFrames)injectedFrames;
 + (void)_removeUserScriptFromGroup:(NSString *)groupName world:(WebScriptWorld *)world url:(NSURL *)url;
 + (void)_removeUserStyleSheetFromGroup:(NSString *)groupName world:(WebScriptWorld *)world url:(NSURL *)url;
 + (void)_removeUserScriptsFromGroup:(NSString *)groupName world:(WebScriptWorld *)world;
@@ -593,6 +605,11 @@ Could be worth adding to the API.
 - (void)_replaceSelectionWithNode:(DOMNode *)node matchStyle:(BOOL)matchStyle;
 - (BOOL)_selectionIsCaret;
 - (BOOL)_selectionIsAll;
+@end
+
+@interface WebView (WebViewDeviceOrientation)
+- (void)_setDeviceOrientationProvider:(id<WebDeviceOrientationProvider>)deviceOrientationProvider;
+- (id<WebDeviceOrientationProvider>)_deviceOrientationProvider;
 @end
 
 @protocol WebGeolocationProvider <NSObject>

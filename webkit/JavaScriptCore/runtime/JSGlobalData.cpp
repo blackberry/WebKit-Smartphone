@@ -49,7 +49,12 @@
 #include "Lookup.h"
 #include "Nodes.h"
 #include "Parser.h"
+#include "RegExpCache.h"
 #include <wtf/WTFThreadData.h>
+#if ENABLE(REGEXP_TRACING)
+#include "RegExp.h"
+#endif
+
 
 #if ENABLE(JSC_MULTIPLE_THREADS)
 #include <wtf/Threading.h>
@@ -57,6 +62,7 @@
 
 #if PLATFORM(MAC)
 #include "ProfilerServer.h"
+#include <CoreFoundation/CoreFoundation.h>
 #endif
 
 using namespace WTF;
@@ -83,7 +89,7 @@ void JSGlobalData::storeVPtrs()
     void* storage = &cell;
 
     COMPILE_ASSERT(sizeof(JSArray) <= sizeof(CollectorCell), sizeof_JSArray_must_be_less_than_CollectorCell);
-    JSCell* jsArray = new (storage) JSArray(JSArray::createStructure(jsNull()));
+    JSCell* jsArray = new (storage) JSArray(JSArray::VPtrStealingHack);
     JSGlobalData::jsArrayVPtr = jsArray->vptr();
     jsArray->~JSCell();
 
@@ -134,25 +140,47 @@ JSGlobalData::JSGlobalData(GlobalDataType globalDataType, ThreadStackType thread
     , lexer(new Lexer(this))
     , parser(new Parser)
     , interpreter(new Interpreter)
-#if ENABLE(JIT)
-    , jitStubs(this)
-#endif
     , heap(this)
-    , initializingLazyNumericCompareFunction(false)
     , head(0)
     , dynamicGlobalObject(0)
     , functionCodeBlockBeingReparsed(0)
     , firstStringifierToMark(0)
     , markStack(jsArrayVPtr)
     , cachedUTCOffset(NaN)
-    , weakRandom(static_cast<int>(currentTime()))
     , maxReentryDepth(threadStackType == ThreadStackTypeSmall ? MaxSmallThreadReentryDepth : MaxLargeThreadReentryDepth)
+    , m_regExpCache(new RegExpCache(this))
+#if ENABLE(REGEXP_TRACING)
+    , m_rtTraceList(new RTTraceList())
+#endif
 #ifndef NDEBUG
     , exclusiveThread(0)
 #endif
 {
 #if PLATFORM(MAC)
     startProfilerServerIfNeeded();
+#endif
+#if ENABLE(JIT) && ENABLE(INTERPRETER)
+#if PLATFORM(CF)
+    CFStringRef canUseJITKey = CFStringCreateWithCString(0 , "JavaScriptCoreUseJIT", kCFStringEncodingMacRoman);
+    CFBooleanRef canUseJIT = (CFBooleanRef)CFPreferencesCopyAppValue(canUseJITKey, kCFPreferencesCurrentApplication);
+    if (canUseJIT) {
+        m_canUseJIT = kCFBooleanTrue == canUseJIT;
+        CFRelease(canUseJIT);
+    } else
+        m_canUseJIT = !getenv("JavaScriptCoreUseJIT");
+    CFRelease(canUseJITKey);
+#elif OS(UNIX)
+    m_canUseJIT = !getenv("JavaScriptCoreUseJIT");
+#else
+    m_canUseJIT = true;
+#endif
+#endif
+#if ENABLE(JIT)
+#if ENABLE(INTERPRETER)
+    if (m_canUseJIT)
+        m_canUseJIT = executableAllocator.isValid();
+#endif
+    jitStubs = new JITThunks(this);
 #endif
 }
 
@@ -196,6 +224,10 @@ JSGlobalData::~JSGlobalData()
         deleteIdentifierTable(identifierTable);
 
     delete clientData;
+    delete m_regExpCache;
+#if ENABLE(REGEXP_TRACING)
+    delete m_rtTraceList;
+#endif
 }
 
 PassRefPtr<JSGlobalData> JSGlobalData::createContextGroup(ThreadStackType type)
@@ -225,7 +257,7 @@ JSGlobalData& JSGlobalData::sharedInstance()
 {
     JSGlobalData*& instance = sharedInstanceInternal();
     if (!instance) {
-        instance = new JSGlobalData(APIShared, ThreadStackTypeSmall);
+        instance = adoptRef(new JSGlobalData(APIShared, ThreadStackTypeSmall)).leakRef();
 #if ENABLE(JSC_MULTIPLE_THREADS)
         instance->makeUsableFromMultipleThreads();
 #endif
@@ -240,27 +272,14 @@ JSGlobalData*& JSGlobalData::sharedInstanceInternal()
     return sharedInstance;
 }
 
-// FIXME: We can also detect forms like v1 < v2 ? -1 : 0, reverse comparison, etc.
-const Vector<Instruction>& JSGlobalData::numericCompareFunction(ExecState* exec)
-{
-    if (!lazyNumericCompareFunction.size() && !initializingLazyNumericCompareFunction) {
-        initializingLazyNumericCompareFunction = true;
-        RefPtr<FunctionExecutable> function = FunctionExecutable::fromGlobalCode(Identifier(exec, "numericCompare"), exec, 0, makeSource(UString("(function (v1, v2) { return v1 - v2; })")), 0, 0);
-        lazyNumericCompareFunction = function->bytecodeForCall(exec, exec->scopeChain()).instructions();
-        initializingLazyNumericCompareFunction = false;
-    }
-
-    return lazyNumericCompareFunction;
-}
-
 #if ENABLE(JIT)
 PassRefPtr<NativeExecutable> JSGlobalData::getHostFunction(NativeFunction function)
 {
-    return jitStubs.hostFunctionStub(this, function);
+    return jitStubs->hostFunctionStub(this, function);
 }
 PassRefPtr<NativeExecutable> JSGlobalData::getHostFunction(NativeFunction function, ThunkGenerator generator)
 {
-    return jitStubs.hostFunctionStub(this, function, generator);
+    return jitStubs->hostFunctionStub(this, function, generator);
 }
 #endif
 
@@ -291,5 +310,39 @@ void JSGlobalData::dumpSampleData(ExecState* exec)
 {
     interpreter->dumpSampleData(exec);
 }
+
+
+#if ENABLE(REGEXP_TRACING)
+void JSGlobalData::addRegExpToTrace(PassRefPtr<RegExp> regExp)
+{
+    m_rtTraceList->add(regExp);
+}
+
+void JSGlobalData::dumpRegExpTrace()
+{
+    // The first RegExp object is ignored.  It is create by the RegExpPrototype ctor and not used.
+    RTTraceList::iterator iter = ++m_rtTraceList->begin();
+    
+    if (iter != m_rtTraceList->end()) {
+        printf("\nRegExp Tracing\n");
+        printf("                                                            match()    matches\n");
+        printf("Regular Expression                          JIT Address      calls      found\n");
+        printf("----------------------------------------+----------------+----------+----------\n");
+    
+        unsigned reCount = 0;
+    
+        for (; iter != m_rtTraceList->end(); ++iter, ++reCount)
+            (*iter)->printTraceData();
+
+        printf("%d Regular Expressions\n", reCount);
+    }
+    
+    m_rtTraceList->clear();
+}
+#else
+void JSGlobalData::dumpRegExpTrace()
+{
+}
+#endif
 
 } // namespace JSC

@@ -1,23 +1,23 @@
 /*
-    Copyright (C) 2004, 2005, 2006, 2007, 2008 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-    Copyright (C) Research In Motion Limited 2010. All rights reserved.
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006, 2007, 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -49,13 +49,8 @@ using namespace std;
 
 namespace WebCore {
 
-SVGPatternElement::SVGPatternElement(const QualifiedName& tagName, Document* doc)
-    : SVGStyledElement(tagName, doc)
-    , SVGURIReference()
-    , SVGTests()
-    , SVGLangSpace()
-    , SVGExternalResourcesRequired()
-    , SVGFitToViewBox()
+inline SVGPatternElement::SVGPatternElement(const QualifiedName& tagName, Document* document)
+    : SVGStyledElement(tagName, document)
     , m_x(LengthModeWidth)
     , m_y(LengthModeHeight)
     , m_width(LengthModeWidth)
@@ -66,8 +61,9 @@ SVGPatternElement::SVGPatternElement(const QualifiedName& tagName, Document* doc
 {
 }
 
-SVGPatternElement::~SVGPatternElement()
+PassRefPtr<SVGPatternElement> SVGPatternElement::create(const QualifiedName& tagName, Document* document)
 {
+    return adoptRef(new SVGPatternElement(tagName, document));
 }
 
 void SVGPatternElement::parseMappedAttribute(Attribute* attr)
@@ -120,20 +116,30 @@ void SVGPatternElement::svgAttributeChanged(const QualifiedName& attrName)
 {
     SVGStyledElement::svgAttributeChanged(attrName);
 
-    if (attrName == SVGNames::patternUnitsAttr
-        || attrName == SVGNames::patternContentUnitsAttr
-        || attrName == SVGNames::patternTransformAttr
-        || attrName == SVGNames::xAttr
+    bool invalidateClients = false;
+    if (attrName == SVGNames::xAttr
         || attrName == SVGNames::yAttr
         || attrName == SVGNames::widthAttr
-        || attrName == SVGNames::heightAttr
+        || attrName == SVGNames::heightAttr) {
+        invalidateClients = true;
+        updateRelativeLengthsInformation();
+    }
+
+    RenderObject* object = renderer();
+    if (!object)
+        return;
+
+    if (invalidateClients
+        || attrName == SVGNames::patternUnitsAttr
+        || attrName == SVGNames::patternContentUnitsAttr
+        || attrName == SVGNames::patternTransformAttr
         || SVGURIReference::isKnownAttribute(attrName)
         || SVGTests::isKnownAttribute(attrName)
         || SVGLangSpace::isKnownAttribute(attrName)
         || SVGExternalResourcesRequired::isKnownAttribute(attrName)
         || SVGFitToViewBox::isKnownAttribute(attrName)
         || SVGStyledElement::isKnownAttribute(attrName))
-        invalidateResourceClients();
+        object->setNeedsLayout(true);
 }
 
 void SVGPatternElement::synchronizeProperty(const QualifiedName& attrName)
@@ -182,8 +188,11 @@ void SVGPatternElement::childrenChanged(bool changedByParser, Node* beforeChange
 {
     SVGStyledElement::childrenChanged(changedByParser, beforeChange, afterChange, childCountDelta);
 
-    if (!changedByParser)
-        invalidateResourceClients();
+    if (changedByParser)
+        return;
+
+    if (RenderObject* object = renderer())
+        object->setNeedsLayout(true);
 }
 
 RenderObject* SVGPatternElement::createRenderer(RenderArena* arena, RenderStyle*)
@@ -230,13 +239,23 @@ PatternAttributes SVGPatternElement::collectPatternProperties() const
             current = static_cast<const SVGPatternElement*>(const_cast<const Node*>(refNode));
 
             // Cycle detection
-            if (processedPatterns.contains(current))
-                return PatternAttributes();
+            if (processedPatterns.contains(current)) {
+                current = 0;
+                break;
+            }
         } else
             current = 0;
     }
 
     return attributes;
+}
+
+bool SVGPatternElement::selfHasRelativeLengths() const
+{
+    return x().isRelative()
+        || y().isRelative()
+        || width().isRelative()
+        || height().isRelative();
 }
 
 }

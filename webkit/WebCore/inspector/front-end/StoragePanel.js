@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007, 2008 Apple Inc.  All rights reserved.
+ * Copyright (C) 2007, 2008, 2010 Apple Inc.  All rights reserved.
  * Copyright (C) 2009 Joseph Pecoraro
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,7 +29,7 @@
 
 WebInspector.StoragePanel = function(database)
 {
-    WebInspector.Panel.call(this);
+    WebInspector.Panel.call(this, "storage");
 
     this.createSidebar();
 
@@ -49,6 +49,11 @@ WebInspector.StoragePanel = function(database)
     this.sidebarTree.appendChild(this.cookieListTreeElement);
     this.cookieListTreeElement.expand();
 
+    
+    this.applicationCacheListTreeElement = new WebInspector.SidebarSectionTreeElement(WebInspector.UIString("APPLICATION CACHE"), {}, true);
+    this.sidebarTree.appendChild(this.applicationCacheListTreeElement);
+    this.applicationCacheListTreeElement.expand();
+    
     this.storageViews = document.createElement("div");
     this.storageViews.id = "storage-views";
     this.element.appendChild(this.storageViews);
@@ -60,8 +65,6 @@ WebInspector.StoragePanel = function(database)
 }
 
 WebInspector.StoragePanel.prototype = {
-    toolbarItemClass: "storage",
-
     get toolbarItemLabel()
     {
         return WebInspector.UIString("Storage");
@@ -99,12 +102,17 @@ WebInspector.StoragePanel.prototype = {
 
         this._cookieViews = {};
 
+        this._applicationCacheView = null;
+        delete this._cachedApplicationCacheViewStatus;
+
         this.databasesListTreeElement.removeChildren();
         this.localStorageListTreeElement.removeChildren();
         this.sessionStorageListTreeElement.removeChildren();
         this.cookieListTreeElement.removeChildren();
 
-        this.storageViews.removeChildren();        
+        this.applicationCacheListTreeElement.removeChildren();
+
+        this.storageViews.removeChildren();
 
         this.storageViewStatusBarItemsContainer.removeChildren();
         
@@ -136,6 +144,12 @@ WebInspector.StoragePanel.prototype = {
             this.localStorageListTreeElement.appendChild(domStorageTreeElement);
         else
             this.sessionStorageListTreeElement.appendChild(domStorageTreeElement);
+    },
+
+    addApplicationCache: function(domain)
+    {
+        var applicationCacheTreeElement = new WebInspector.ApplicationCacheSidebarTreeElement(domain);
+        this.applicationCacheListTreeElement.appendChild(applicationCacheTreeElement);
     },
 
     selectDatabase: function(databaseId)
@@ -185,14 +199,7 @@ WebInspector.StoragePanel.prototype = {
             }
         }
 
-        view.show(this.storageViews);
-
-        this.visibleView = view;
-
-        this.storageViewStatusBarItemsContainer.removeChildren();
-        var statusBarItems = view.statusBarItems || [];
-        for (var i = 0; i < statusBarItems.length; ++i)
-            this.storageViewStatusBarItemsContainer.appendChild(statusBarItems[i].element);
+        this._genericViewSetup(view);
     },
 
     showDOMStorage: function(domStorage)
@@ -210,14 +217,7 @@ WebInspector.StoragePanel.prototype = {
             domStorage._domStorageView = view;
         }
 
-        view.show(this.storageViews);
-
-        this.visibleView = view;
-
-        this.storageViewStatusBarItemsContainer.removeChildren();
-        var statusBarItems = view.statusBarItems;
-        for (var i = 0; i < statusBarItems.length; ++i)
-            this.storageViewStatusBarItemsContainer.appendChild(statusBarItems[i]);
+        this._genericViewSetup(view);
     },
 
     showCookies: function(treeElement, cookieDomain)
@@ -231,12 +231,33 @@ WebInspector.StoragePanel.prototype = {
             this._cookieViews[cookieDomain] = view;
         }
 
-        view.show(this.storageViews);
+        this._genericViewSetup(view);
+    },
 
+    showApplicationCache: function(treeElement, appcacheDomain)
+    {
+        if (this.visibleView)
+            this.visibleView.hide();
+
+        var view = this._applicationCacheView;
+        if (!view) {
+            view = new WebInspector.ApplicationCacheItemsView(treeElement, appcacheDomain);
+            this._applicationCacheView = view;
+        }
+
+        this._genericViewSetup(view);
+
+        if ("_cachedApplicationCacheViewStatus" in this)
+            this._applicationCacheView.updateStatus(this._cachedApplicationCacheViewStatus);
+    },
+
+    _genericViewSetup: function(view)
+    {
+        view.show(this.storageViews);
         this.visibleView = view;
 
         this.storageViewStatusBarItemsContainer.removeChildren();
-        var statusBarItems = view.statusBarItems;
+        var statusBarItems = view.statusBarItems || [];
         for (var i = 0; i < statusBarItems.length; ++i)
             this.storageViewStatusBarItemsContainer.appendChild(statusBarItems[i]);
     },
@@ -277,31 +298,28 @@ WebInspector.StoragePanel.prototype = {
         database.getTableNames(tableNamesCallback);
     },
 
-    dataGridForResult: function(rows)
+    dataGridForResult: function(columnNames, values)
     {
-        if (!rows.length)
+        var numColumns = columnNames.length;
+        if (!numColumns)
             return null;
 
         var columns = {};
-        var numColumns = 0;
 
-        for (var columnIdentifier in rows[0]) {
+        for (var i = 0; i < columnNames.length; ++i) {
             var column = {};
-            column.width = columnIdentifier.length;
-            column.title = columnIdentifier;
+            column.width = columnNames[i].length;
+            column.title = columnNames[i];
+            column.sortable = true;
 
-            columns[columnIdentifier] = column;
-            ++numColumns;
+            columns[columnNames[i]] = column;
         }
 
         var nodes = [];
-        var length = rows.length;
-        for (var i = 0; i < length; ++i) {
+        for (var i = 0; i < values.length / numColumns; ++i) {
             var data = {};
-
-            var row = rows[i];
-            for (var columnIdentifier in row)
-                data[columnIdentifier] = row[columnIdentifier];
+            for (var j = 0; j < columnNames.length; ++j)
+                data[columnNames[j]] = values[numColumns * i + j];
 
             var node = new WebInspector.DataGridNode(data, false);
             node.selectable = false;
@@ -313,7 +331,43 @@ WebInspector.StoragePanel.prototype = {
         for (var i = 0; i < length; ++i)
             dataGrid.appendChild(nodes[i]);
 
+        dataGrid.addEventListener("sorting changed", this._sortDataGrid.bind(this, dataGrid), this);
         return dataGrid;
+    },
+
+    _sortDataGrid: function(dataGrid)
+    {
+        var nodes = dataGrid.children.slice();
+        var sortColumnIdentifier = dataGrid.sortColumnIdentifier;
+        var sortDirection = dataGrid.sortOrder === "ascending" ? 1 : -1;
+        var columnIsNumeric = true;
+
+        for (var i = 0; i < nodes.length; i++) {
+            if (isNaN(Number(nodes[i].data[sortColumnIdentifier])))
+                columnIsNumeric = false;
+        }
+
+        function comparator(dataGridNode1, dataGridNode2)
+        {
+            var item1 = dataGridNode1.data[sortColumnIdentifier];
+            var item2 = dataGridNode2.data[sortColumnIdentifier];
+
+            var comparison;
+            if (columnIsNumeric) {
+                // Sort numbers based on comparing their values rather than a lexicographical comparison.
+                var number1 = parseFloat(item1);
+                var number2 = parseFloat(item2);
+                comparison = number1 < number2 ? -1 : (number1 > number2 ? 1 : 0);
+            } else
+                comparison = item1 < item2 ? -1 : (item1 > item2 ? 1 : 0);
+
+            return sortDirection * comparison;
+        }
+
+        nodes.sort(comparator);
+        dataGrid.removeChildren();
+        for (var i = 0; i < nodes.length; i++)
+            dataGrid.appendChild(nodes[i]);
     },
 
     updateDOMStorage: function(storageId)
@@ -325,6 +379,25 @@ WebInspector.StoragePanel.prototype = {
         var view = domStorage._domStorageView;
         if (this.visibleView && view === this.visibleView)
             domStorage._domStorageView.update();
+    },
+
+    updateApplicationCacheStatus: function(status)
+    {
+        this._cachedApplicationCacheViewStatus = status;
+        if (this._applicationCacheView && this._applicationCacheView === this.visibleView)
+            this._applicationCacheView.updateStatus(status);
+    },
+
+    updateNetworkState: function(isNowOnline)
+    {
+        if (this._applicationCacheView && this._applicationCacheView === this.visibleView)
+            this._applicationCacheView.updateNetworkState(isNowOnline);
+    },
+
+    updateManifest: function(manifest)
+    {
+        if (this._applicationCacheView && this._applicationCacheView === this.visibleView)
+            this._applicationCacheView.updateManifest(manifest);
     },
 
     _domStorageForId: function(storageId)
@@ -503,3 +576,43 @@ WebInspector.CookieSidebarTreeElement.prototype = {
 }
 
 WebInspector.CookieSidebarTreeElement.prototype.__proto__ = WebInspector.SidebarTreeElement.prototype;
+
+WebInspector.ApplicationCacheSidebarTreeElement = function(appcacheDomain)
+{
+    WebInspector.SidebarTreeElement.call(this, "application-cache-sidebar-tree-item", appcacheDomain, "", null, false);
+    this._appcacheDomain = appcacheDomain;
+    this._subtitle = "";
+    this._mainTitle = this._appcacheDomain;
+    this.refreshTitles();
+}
+
+WebInspector.ApplicationCacheSidebarTreeElement.prototype = {
+    onselect: function()
+    {
+        WebInspector.panels.storage.showApplicationCache(this, this._appcacheDomain);
+    },
+
+    get mainTitle()
+    {
+        return this._mainTitle;
+    },
+
+    set mainTitle(x)
+    {
+        this._mainTitle = x;
+        this.refreshTitles();
+    },
+
+    get subtitle()
+    {
+        return this._subtitle;
+    },
+
+    set subtitle(x)
+    {
+        this._subtitle = x;
+        this.refreshTitles();
+    }
+}
+
+WebInspector.ApplicationCacheSidebarTreeElement.prototype.__proto__ = WebInspector.SidebarTreeElement.prototype;

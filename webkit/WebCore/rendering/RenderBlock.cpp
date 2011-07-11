@@ -3,6 +3,7 @@
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2007 David Smith (catfish.man@gmail.com)
  * Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -23,6 +24,7 @@
 #include "config.h"
 #include "RenderBlock.h"
 
+#include "ColumnInfo.h"
 #include "Document.h"
 #include "Element.h"
 #include "FloatQuad.h"
@@ -36,6 +38,7 @@
 #include "RenderFlexibleBox.h"
 #include "RenderImage.h"
 #include "RenderInline.h"
+#include "RenderLayer.h"
 #include "RenderMarquee.h"
 #include "RenderReplica.h"
 #include "RenderTableCell.h"
@@ -58,16 +61,6 @@ namespace WebCore {
 static const int verticalLineClickFudgeFactor = 3;
 
 using namespace HTMLNames;
-
-struct ColumnInfo : public Noncopyable {
-    ColumnInfo()
-        : m_desiredColumnWidth(0)
-        , m_desiredColumnCount(1)
-        { }
-    int m_desiredColumnWidth;
-    unsigned m_desiredColumnCount;
-    Vector<IntRect> m_columnRects;
-};
 
 typedef WTF::HashMap<const RenderBox*, ColumnInfo*> ColumnInfoMap;
 static ColumnInfoMap* gColumnInfoMap = 0;
@@ -230,6 +223,16 @@ void RenderBlock::styleDidChange(StyleDifference diff, const RenderStyle* oldSty
 {
     RenderBox::styleDidChange(diff, oldStyle);
 
+    if (!isAnonymousBlock()) {
+        // Ensure that all of our continuation blocks pick up the new style.
+        for (RenderBlock* currCont = blockElementContinuation(); currCont; currCont = currCont->blockElementContinuation()) {
+            RenderBoxModelObject* nextCont = currCont->continuation();
+            currCont->setContinuation(0);
+            currCont->setStyle(style());
+            currCont->setContinuation(nextCont);
+        }
+    }
+
     // FIXME: We could save this call when the change only affected non-inherited properties
     for (RenderObject* child = firstChild(); child; child = child->nextSibling()) {
         if (child->isAnonymousBlock()) {
@@ -253,7 +256,6 @@ void RenderBlock::styleDidChange(StyleDifference diff, const RenderStyle* oldSty
         updateBeforeAfterContent(BEFORE);
         updateBeforeAfterContent(AFTER);
     }
-    updateFirstLetter();
 }
 
 void RenderBlock::updateBeforeAfterContent(PseudoId pseudoId)
@@ -264,12 +266,74 @@ void RenderBlock::updateBeforeAfterContent(PseudoId pseudoId)
     return children()->updateBeforeAfterContent(this, pseudoId);
 }
 
+RenderBlock* RenderBlock::continuationBefore(RenderObject* beforeChild)
+{
+    if (beforeChild && beforeChild->parent() == this)
+        return this;
+
+    RenderBlock* curr = toRenderBlock(continuation());
+    RenderBlock* nextToLast = this;
+    RenderBlock* last = this;
+    while (curr) {
+        if (beforeChild && beforeChild->parent() == curr) {
+            if (curr->firstChild() == beforeChild)
+                return last;
+            return curr;
+        }
+
+        nextToLast = last;
+        last = curr;
+        curr = toRenderBlock(curr->continuation());
+    }
+
+    if (!beforeChild && !last->firstChild())
+        return nextToLast;
+    return last;
+}
+
+void RenderBlock::addChildToContinuation(RenderObject* newChild, RenderObject* beforeChild)
+{
+    RenderBlock* flow = continuationBefore(beforeChild);
+    ASSERT(!beforeChild || beforeChild->parent()->isAnonymousColumnSpanBlock() || beforeChild->parent()->isRenderBlock());
+    RenderBoxModelObject* beforeChildParent = 0;
+    if (beforeChild)
+        beforeChildParent = toRenderBoxModelObject(beforeChild->parent());
+    else {
+        RenderBoxModelObject* cont = flow->continuation();
+        if (cont)
+            beforeChildParent = cont;
+        else
+            beforeChildParent = flow;
+    }
+
+    if (newChild->isFloatingOrPositioned())
+        return beforeChildParent->addChildIgnoringContinuation(newChild, beforeChild);
+
+    // A continuation always consists of two potential candidates: a block or an anonymous
+    // column span box holding column span children.
+    bool childIsNormal = newChild->isInline() || !newChild->style()->columnSpan();
+    bool bcpIsNormal = beforeChildParent->isInline() || !beforeChildParent->style()->columnSpan();
+    bool flowIsNormal = flow->isInline() || !flow->style()->columnSpan();
+
+    if (flow == beforeChildParent)
+        return flow->addChildIgnoringContinuation(newChild, beforeChild);
+    
+    // The goal here is to match up if we can, so that we can coalesce and create the
+    // minimal # of continuations needed for the inline.
+    if (childIsNormal == bcpIsNormal)
+        return beforeChildParent->addChildIgnoringContinuation(newChild, beforeChild);
+    if (flowIsNormal == childIsNormal)
+        return flow->addChildIgnoringContinuation(newChild, 0); // Just treat like an append.
+    return beforeChildParent->addChildIgnoringContinuation(newChild, beforeChild);
+}
+
+
 void RenderBlock::addChildToAnonymousColumnBlocks(RenderObject* newChild, RenderObject* beforeChild)
 {
     ASSERT(!continuation()); // We don't yet support column spans that aren't immediate children of the multi-column block.
         
     // The goal is to locate a suitable box in which to place our child.
-    RenderBlock* beforeChildParent = toRenderBlock(beforeChild ? beforeChild->parent() : lastChild());
+    RenderBlock* beforeChildParent = toRenderBlock(beforeChild && beforeChild->parent()->isRenderBlock() ? beforeChild->parent() : lastChild());
     
     // If the new child is floating or positioned it can just go in that block.
     if (newChild->isFloatingOrPositioned())
@@ -310,33 +374,178 @@ void RenderBlock::addChildToAnonymousColumnBlocks(RenderObject* newChild, Render
     return;
 }
 
+RenderBlock* RenderBlock::containingColumnsBlock(bool allowAnonymousColumnBlock)
+{
+    for (RenderObject* curr = this; curr; curr = curr->parent()) {
+        if (!curr->isRenderBlock() || curr->isFloatingOrPositioned() || curr->isTableCell() || curr->isRoot() || curr->isRenderView() || curr->hasOverflowClip()
+            || curr->isInlineBlockOrInlineTable())
+            return 0;
+        
+        RenderBlock* currBlock = toRenderBlock(curr);
+        if (currBlock->style()->specifiesColumns() && (allowAnonymousColumnBlock || !currBlock->isAnonymousColumnsBlock()))
+            return currBlock;
+            
+        if (currBlock->isAnonymousColumnSpanBlock())
+            return 0;
+    }
+    return 0;
+}
+
+RenderBlock* RenderBlock::clone() const
+{
+    RenderBlock* cloneBlock;
+    if (isAnonymousBlock())
+        cloneBlock = createAnonymousBlock();
+    else {
+        cloneBlock = new (renderArena()) RenderBlock(node());
+        cloneBlock->setStyle(style());
+    }
+    cloneBlock->setChildrenInline(childrenInline());
+    return cloneBlock;
+}
+
+void RenderBlock::splitBlocks(RenderBlock* fromBlock, RenderBlock* toBlock,
+                              RenderBlock* middleBlock,
+                              RenderObject* beforeChild, RenderBoxModelObject* oldCont)
+{
+    // Create a clone of this inline.
+    RenderBlock* cloneBlock = clone();
+    if (!isAnonymousBlock())
+        cloneBlock->setContinuation(oldCont);
+
+    // Now take all of the children from beforeChild to the end and remove
+    // them from |this| and place them in the clone.
+    if (!beforeChild && isAfterContent(lastChild()))
+        beforeChild = lastChild();
+    moveChildrenTo(cloneBlock, beforeChild, 0);
+    
+    // Hook |clone| up as the continuation of the middle block.
+    if (!cloneBlock->isAnonymousBlock())
+        middleBlock->setContinuation(cloneBlock);
+
+    // We have been reparented and are now under the fromBlock.  We need
+    // to walk up our block parent chain until we hit the containing anonymous columns block.
+    // Once we hit the anonymous columns block we're done.
+    RenderBoxModelObject* curr = toRenderBoxModelObject(parent());
+    RenderBoxModelObject* currChild = this;
+    
+    while (curr && curr != fromBlock) {
+        ASSERT(curr->isRenderBlock());
+        
+        RenderBlock* blockCurr = toRenderBlock(curr);
+        
+        // Create a new clone.
+        RenderBlock* cloneChild = cloneBlock;
+        cloneBlock = blockCurr->clone();
+
+        // Insert our child clone as the first child.
+        cloneBlock->children()->appendChildNode(cloneBlock, cloneChild);
+
+        // Hook the clone up as a continuation of |curr|.  Note we do encounter
+        // anonymous blocks possibly as we walk up the block chain.  When we split an
+        // anonymous block, there's no need to do any continuation hookup, since we haven't
+        // actually split a real element.
+        if (!blockCurr->isAnonymousBlock()) {
+            oldCont = blockCurr->continuation();
+            blockCurr->setContinuation(cloneBlock);
+            cloneBlock->setContinuation(oldCont);
+        }
+
+        // Someone may have indirectly caused a <q> to split.  When this happens, the :after content
+        // has to move into the inline continuation.  Call updateBeforeAfterContent to ensure that the inline's :after
+        // content gets properly destroyed.
+        if (document()->usesBeforeAfterRules())
+            blockCurr->children()->updateBeforeAfterContent(blockCurr, AFTER);
+
+        // Now we need to take all of the children starting from the first child
+        // *after* currChild and append them all to the clone.
+        RenderObject* afterContent = isAfterContent(cloneBlock->lastChild()) ? cloneBlock->lastChild() : 0;
+        blockCurr->moveChildrenTo(cloneBlock, currChild->nextSibling(), 0, afterContent);
+
+        // Keep walking up the chain.
+        currChild = curr;
+        curr = toRenderBoxModelObject(curr->parent());
+    }
+
+    // Now we are at the columns block level. We need to put the clone into the toBlock.
+    toBlock->children()->appendChildNode(toBlock, cloneBlock);
+
+    // Now take all the children after currChild and remove them from the fromBlock
+    // and put them in the toBlock.
+    fromBlock->moveChildrenTo(toBlock, currChild->nextSibling(), 0);
+}
+
+void RenderBlock::splitFlow(RenderObject* beforeChild, RenderBlock* newBlockBox,
+                            RenderObject* newChild, RenderBoxModelObject* oldCont)
+{
+    RenderBlock* pre = 0;
+    RenderBlock* block = containingColumnsBlock();
+    
+    // Delete our line boxes before we do the inline split into continuations.
+    block->deleteLineBoxTree();
+    
+    bool madeNewBeforeBlock = false;
+    if (block->isAnonymousColumnsBlock()) {
+        // We can reuse this block and make it the preBlock of the next continuation.
+        pre = block;
+        pre->removePositionedObjects(0);
+        block = toRenderBlock(block->parent());
+    } else {
+        // No anonymous block available for use.  Make one.
+        pre = block->createAnonymousColumnsBlock();
+        pre->setChildrenInline(false);
+        madeNewBeforeBlock = true;
+    }
+
+    RenderBlock* post = block->createAnonymousColumnsBlock();
+    post->setChildrenInline(false);
+
+    RenderObject* boxFirst = madeNewBeforeBlock ? block->firstChild() : pre->nextSibling();
+    if (madeNewBeforeBlock)
+        block->children()->insertChildNode(block, pre, boxFirst);
+    block->children()->insertChildNode(block, newBlockBox, boxFirst);
+    block->children()->insertChildNode(block, post, boxFirst);
+    block->setChildrenInline(false);
+    
+    if (madeNewBeforeBlock)
+        block->moveChildrenTo(pre, boxFirst, 0);
+
+    splitBlocks(pre, post, newBlockBox, beforeChild, oldCont);
+
+    // We already know the newBlockBox isn't going to contain inline kids, so avoid wasting
+    // time in makeChildrenNonInline by just setting this explicitly up front.
+    newBlockBox->setChildrenInline(false);
+
+    // We delayed adding the newChild until now so that the |newBlockBox| would be fully
+    // connected, thus allowing newChild access to a renderArena should it need
+    // to wrap itself in additional boxes (e.g., table construction).
+    newBlockBox->addChild(newChild);
+
+    // Always just do a full layout in order to ensure that line boxes (especially wrappers for images)
+    // get deleted properly.  Because objects moves from the pre block into the post block, we want to
+    // make new line boxes instead of leaving the old line boxes around.
+    pre->setNeedsLayoutAndPrefWidthsRecalc();
+    block->setNeedsLayoutAndPrefWidthsRecalc();
+    post->setNeedsLayoutAndPrefWidthsRecalc();
+}
+
 RenderObject* RenderBlock::splitAnonymousBlocksAroundChild(RenderObject* beforeChild)
 {
     while (beforeChild->parent() != this) {
         RenderBlock* blockToSplit = toRenderBlock(beforeChild->parent());
-        ASSERT(blockToSplit->isAnonymousBlock() && !blockToSplit->continuation());
-        
         if (blockToSplit->firstChild() != beforeChild) {
             // We have to split the parentBlock into two blocks.
             RenderBlock* post = createAnonymousBlockWithSameTypeAs(blockToSplit);
             post->setChildrenInline(blockToSplit->childrenInline());
             RenderBlock* parentBlock = toRenderBlock(blockToSplit->parent());
             parentBlock->children()->insertChildNode(parentBlock, post, blockToSplit->nextSibling());
-            RenderObject* o = beforeChild;
-            while (o) {
-                RenderObject* no = o;
-                o = no->nextSibling();
-                post->children()->appendChildNode(post, blockToSplit->children()->removeChildNode(blockToSplit, no));
-                no->setNeedsLayoutAndPrefWidthsRecalc();
-            }
-            
+            blockToSplit->moveChildrenTo(post, beforeChild, 0, blockToSplit->hasLayer());
             post->setNeedsLayoutAndPrefWidthsRecalc();
             blockToSplit->setNeedsLayoutAndPrefWidthsRecalc();
             beforeChild = post;
         } else
             beforeChild = blockToSplit;
     }
-
     return beforeChild;
 }
 
@@ -349,10 +558,10 @@ void RenderBlock::makeChildrenAnonymousColumnBlocks(RenderObject* beforeChild, R
     
     // Delete the block's line boxes before we do the split.
     block->deleteLineBoxTree();
-    
+
     if (beforeChild && beforeChild->parent() != this)
         beforeChild = splitAnonymousBlocksAroundChild(beforeChild);
-        
+
     if (beforeChild != firstChild()) {
         pre = block->createAnonymousColumnsBlock();
         pre->setChildrenInline(block->childrenInline());
@@ -371,25 +580,9 @@ void RenderBlock::makeChildrenAnonymousColumnBlocks(RenderObject* beforeChild, R
         block->children()->insertChildNode(block, post, boxFirst);
     block->setChildrenInline(false);
     
-    RenderObject* o = boxFirst;
-    while (o) {
-        if (o == beforeChild)
-            break;
-        ASSERT(pre);
-        RenderObject* no = o;
-        o = no->nextSibling();
-        pre->children()->appendChildNode(pre, block->children()->removeChildNode(block, no));
-        no->setNeedsLayoutAndPrefWidthsRecalc();
-    }
-
-    o = beforeChild;
-    while (o) {
-        ASSERT(post);
-        RenderObject* no = o;
-        o = no->nextSibling();
-        post->children()->appendChildNode(post, block->children()->removeChildNode(block, no));
-        no->setNeedsLayoutAndPrefWidthsRecalc();
-    }
+    // The pre/post blocks always have layers, so we know to always do a full insert/remove (so we pass true as the last argument).
+    block->moveChildrenTo(pre, boxFirst, beforeChild, true);
+    block->moveChildrenTo(post, beforeChild, 0, true);
 
     // We already know the newBlockBox isn't going to contain inline kids, so avoid wasting
     // time in makeChildrenNonInline by just setting this explicitly up front.
@@ -410,19 +603,24 @@ void RenderBlock::makeChildrenAnonymousColumnBlocks(RenderObject* beforeChild, R
         post->setNeedsLayoutAndPrefWidthsRecalc();
 }
 
-static RenderBlock* columnsBlockForSpanningElement(RenderBlock* block, RenderObject* newChild)
+RenderBlock* RenderBlock::columnsBlockForSpanningElement(RenderObject* newChild)
 {
-    // FIXME: The style of this function may seem weird.
-    // This function is the gateway for the addition of column-span support.  Support will be added in three stages:
+    // FIXME: This function is the gateway for the addition of column-span support.  It will
+    // be added to in three stages:
     // (1) Immediate children of a multi-column block can span.
     // (2) Nested block-level children with only block-level ancestors between them and the multi-column block can span.
     // (3) Nested children with block or inline ancestors between them and the multi-column block can span (this is when we
     // cross the streams and have to cope with both types of continuations mixed together).
-    // This function currently only supports (1).
-    if (!newChild->isText() && newChild->style()->columnSpan() && !newChild->isFloatingOrPositioned() 
-        && !newChild->isInline() && !block->isAnonymousColumnSpanBlock() && block->style()->specifiesColumns())
-        return block;
-    return 0;
+    // This function currently supports (1) and (2).
+    RenderBlock* columnsBlockAncestor = 0;
+    if (!newChild->isText() && newChild->style()->columnSpan() && !newChild->isFloatingOrPositioned()
+        && !newChild->isInline() && !isAnonymousColumnSpanBlock()) {
+        if (style()->specifiesColumns())
+            columnsBlockAncestor = this;
+        else if (parent() && parent()->isRenderBlock())
+            columnsBlockAncestor = toRenderBlock(parent())->containingColumnsBlock(false);
+    }
+    return columnsBlockAncestor;
 }
 
 void RenderBlock::addChildIgnoringAnonymousColumnBlocks(RenderObject* newChild, RenderObject* beforeChild)
@@ -435,33 +633,6 @@ void RenderBlock::addChildIgnoringAnonymousColumnBlocks(RenderObject* newChild, 
         else if (lastRenderer && lastRenderer->isAnonymousBlock() && isAfterContent(lastRenderer->lastChild()))
             beforeChild = lastRenderer->lastChild();
     }
-
-    // Check for a spanning element in columns.
-    RenderBlock* columnsBlockAncestor = columnsBlockForSpanningElement(this, newChild);
-    if (columnsBlockAncestor) {
-        ASSERT(columnsBlockAncestor == this);
-
-        // We are placing a column-span element inside a block. We have to perform a split of this
-        // block's children.  This involves creating an anonymous block box to hold
-        // the column-spanning |newChild|.  We take all of the children from before |newChild| and put them into
-        // one anonymous columns block, and all of the children after |newChild| go into another anonymous block.
-        RenderBlock* newBox = createAnonymousColumnSpanBlock();
-        
-        // Someone may have put the spanning element inside an element with generated content, causing a split.  When this happens,
-        // the :after content has to move into the last anonymous block.  Call updateBeforeAfterContent to ensure that our :after
-        // content gets properly destroyed.
-        bool isLastChild = (beforeChild == lastChild());
-        if (document()->usesBeforeAfterRules())
-            children()->updateBeforeAfterContent(this, AFTER);
-        if (isLastChild && beforeChild != lastChild())
-            beforeChild = 0; // We destroyed the last child, so now we need to update our insertion
-                             // point to be 0.  It's just a straight append now.
-
-        makeChildrenAnonymousColumnBlocks(beforeChild, newBox, newChild);
-        return;
-    }
-
-    bool madeBoxesNonInline = false;
 
     // If the requested beforeChild is not one of our children, then this is because
     // there is an anonymous container within this object that contains the beforeChild.
@@ -497,6 +668,41 @@ void RenderBlock::addChildIgnoringAnonymousColumnBlocks(RenderObject* newChild, 
         // Go on to insert before the anonymous table.
         beforeChild = anonymousChild;
     }
+
+    // Check for a spanning element in columns.
+    RenderBlock* columnsBlockAncestor = columnsBlockForSpanningElement(newChild);
+    if (columnsBlockAncestor) {
+        // We are placing a column-span element inside a block. 
+        RenderBlock* newBox = createAnonymousColumnSpanBlock();
+        
+        if (columnsBlockAncestor != this) {
+            // We are nested inside a multi-column element and are being split by the span.  We have to break up
+            // our block into continuations.
+            RenderBoxModelObject* oldContinuation = continuation();
+            setContinuation(newBox);
+
+            // Someone may have put a <p> inside a <q>, causing a split.  When this happens, the :after content
+            // has to move into the inline continuation.  Call updateBeforeAfterContent to ensure that our :after
+            // content gets properly destroyed.
+            bool isLastChild = (beforeChild == lastChild());
+            if (document()->usesBeforeAfterRules())
+                children()->updateBeforeAfterContent(this, AFTER);
+            if (isLastChild && beforeChild != lastChild())
+                beforeChild = 0; // We destroyed the last child, so now we need to update our insertion
+                                 // point to be 0.  It's just a straight append now.
+
+            splitFlow(beforeChild, newBox, newChild, oldContinuation);
+            return;
+        }
+
+        // We have to perform a split of this block's children.  This involves creating an anonymous block box to hold
+        // the column-spanning |newChild|.  We take all of the children from before |newChild| and put them into
+        // one anonymous columns block, and all of the children after |newChild| go into another anonymous block.
+        makeChildrenAnonymousColumnBlocks(beforeChild, newBox, newChild);
+        return;
+    }
+
+    bool madeBoxesNonInline = false;
 
     // A block has to either have all of its children inline, or all of its children as blocks.
     // So, if our children are currently inline and a block child has to be inserted, we move all our
@@ -540,7 +746,14 @@ void RenderBlock::addChildIgnoringAnonymousColumnBlocks(RenderObject* newChild, 
 
 void RenderBlock::addChild(RenderObject* newChild, RenderObject* beforeChild)
 {
-    if (!isAnonymous() && firstChild() && (firstChild()->isAnonymousColumnsBlock() || firstChild()->isAnonymousColumnSpanBlock()))
+    if (continuation() && !isAnonymousBlock())
+        return addChildToContinuation(newChild, beforeChild);
+    return addChildIgnoringContinuation(newChild, beforeChild);
+}
+
+void RenderBlock::addChildIgnoringContinuation(RenderObject* newChild, RenderObject* beforeChild)
+{
+    if (!isAnonymousBlock() && firstChild() && (firstChild()->isAnonymousColumnsBlock() || firstChild()->isAnonymousColumnSpanBlock()))
         return addChildToAnonymousColumnBlocks(newChild, beforeChild);
     return addChildIgnoringAnonymousColumnBlocks(newChild, beforeChild);
 }
@@ -601,42 +814,24 @@ RootInlineBox* RenderBlock::createAndAppendRootInlineBox()
     m_lineBoxes.appendLineBox(rootBox);
     return rootBox;
 }
-    
-void RenderBlock::moveChildTo(RenderObject* to, RenderObjectChildList* toChildList, RenderObject* child)
-{
-    ASSERT(this == child->parent());
-    toChildList->appendChildNode(to, children()->removeChildNode(this, child, false), false);
-}
 
-void RenderBlock::moveChildTo(RenderObject* to, RenderObjectChildList* toChildList, RenderObject* beforeChild, RenderObject* child)
+void RenderBlock::moveChildTo(RenderBlock* to, RenderObject* child, RenderObject* beforeChild, bool fullRemoveInsert)
 {
     ASSERT(this == child->parent());
     ASSERT(!beforeChild || to == beforeChild->parent());
-    toChildList->insertChildNode(to, children()->removeChildNode(this, child, false), beforeChild, false);
+    to->children()->insertChildNode(to, children()->removeChildNode(this, child, fullRemoveInsert), beforeChild, fullRemoveInsert);
 }
 
-void RenderBlock::moveAllChildrenTo(RenderObject* to, RenderObjectChildList* toChildList, bool fullRemoveAppend)
-{
-    RenderObject* nextChild = children()->firstChild();
-    while (nextChild) {
-        RenderObject* child = nextChild;
-        nextChild = child->nextSibling();
-        toChildList->appendChildNode(to, children()->removeChildNode(this, child, fullRemoveAppend), fullRemoveAppend);
-    }
-}
-
-void RenderBlock::moveAllChildrenTo(RenderObject* to, RenderObjectChildList* toChildList, RenderObject* beforeChild)
+void RenderBlock::moveChildrenTo(RenderBlock* to, RenderObject* startChild, RenderObject* endChild, RenderObject* beforeChild, bool fullRemoveInsert)
 {
     ASSERT(!beforeChild || to == beforeChild->parent());
-    if (!beforeChild) {
-        moveAllChildrenTo(to, toChildList);
-        return;
-    }
-    RenderObject* nextChild = children()->firstChild();
-    while (nextChild) {
+    RenderObject* nextChild = startChild;
+    while (nextChild && nextChild != endChild) {
         RenderObject* child = nextChild;
         nextChild = child->nextSibling();
-        toChildList->insertChildNode(to, children()->removeChildNode(this, child, false), beforeChild, false);
+        to->children()->insertChildNode(to, children()->removeChildNode(this, child, fullRemoveInsert), beforeChild, fullRemoveInsert);
+        if (child == endChild)
+            return;
     }
 }
 
@@ -671,14 +866,7 @@ void RenderBlock::makeChildrenNonInline(RenderObject *insertionPoint)
 
         RenderBlock* block = createAnonymousBlock();
         children()->insertChildNode(this, block, inlineRunStart);
-        RenderObject* o = inlineRunStart;
-        while (o != inlineRunEnd) {
-            RenderObject* no = o;
-            o = no->nextSibling();
-            
-            moveChildTo(block, block->children(), no);
-        }
-        moveChildTo(block, block->children(), inlineRunEnd);
+        moveChildrenTo(block, inlineRunStart, child);
     }
 
 #ifndef NDEBUG
@@ -746,7 +934,8 @@ static bool canMergeContiguousAnonymousBlocks(RenderObject* oldChild, RenderObje
         || (next && (!next->isAnonymousBlock() || toRenderBlock(next)->continuation())))
         return false;
 
-    if (prev && prev->firstChild() && prev->firstChild()->isRunIn())
+    // FIXME: This check isn't required when inline run-ins can't be split into continuations.
+    if (prev && prev->firstChild() && prev->firstChild()->isInline() && prev->firstChild()->isRunIn())
         return false;
 
 #if ENABLE(RUBY)
@@ -797,11 +986,26 @@ void RenderBlock::removeChild(RenderObject* oldChild)
         } else {
             // Take all the children out of the |next| block and put them in
             // the |prev| block.
-            nextBlock->moveAllChildrenTo(prevBlock, prevBlock->children(), nextBlock->hasLayer() || prevBlock->hasLayer());
-       
+            nextBlock->moveAllChildrenTo(prevBlock, nextBlock->hasLayer() || prevBlock->hasLayer());
+
+            // FIXME: When we destroy nextBlock, it might happen that nextBlock's next sibling block and
+            // oldChild can get merged. Since oldChild is getting removed, we do not want to move
+            // nextBlock's next sibling block's children into it. By setting a fake continuation,
+            // we prevent this from happening. This is not the best approach, we should replace this
+            // something better later to automatically detect that oldChild is getting removed.
+            RenderBlock* oldChildBlock = 0;
+            if (oldChild->isAnonymous() && oldChild->isRenderBlock() && !toRenderBlock(oldChild)->continuation()) {
+                oldChildBlock = toRenderBlock(oldChild);
+                oldChildBlock->setContinuation(oldChildBlock);                
+            }          
+            
             // Delete the now-empty block's lines and nuke it.
             nextBlock->deleteLineBoxTree();
             nextBlock->destroy();
+
+            // FIXME: Revert the continuation change done above.
+            if (oldChildBlock)
+                oldChildBlock->setContinuation(0);
         }
     }
 
@@ -815,7 +1019,7 @@ void RenderBlock::removeChild(RenderObject* oldChild)
         setNeedsLayoutAndPrefWidthsRecalc();
         setChildrenInline(child->childrenInline());
         RenderBlock* anonBlock = toRenderBlock(children()->removeChildNode(this, child, child->hasLayer()));
-        anonBlock->moveAllChildrenTo(this, children(), child->hasLayer());
+        anonBlock->moveAllChildrenTo(this, child->hasLayer());
         // Delete the now-empty block's lines and nuke it.
         anonBlock->deleteLineBoxTree();
         anonBlock->destroy();
@@ -825,9 +1029,6 @@ void RenderBlock::removeChild(RenderObject* oldChild)
         // If this was our last child be sure to clear out our line boxes.
         if (childrenInline())
             lineBoxes()->deleteLineBoxes(renderArena());
-        // If we're now an empty anonymous block then go ahead and delete ourselves.
-        else if (isAnonymousBlock() && parent() && parent()->isRenderBlock() && !continuation())
-            destroy();
     }
 }
 
@@ -846,7 +1047,7 @@ bool RenderBlock::isSelfCollapsingBlock() const
         return false;
 
     bool hasAutoHeight = style()->height().isAuto();
-    if (style()->height().isPercent() && !style()->htmlHacks()) {
+    if (style()->height().isPercent() && !document()->inQuirksMode()) {
         hasAutoHeight = true;
         for (RenderBlock* cb = containingBlock(); !cb->isRenderView(); cb = cb->containingBlock()) {
             if (cb->style()->height().isFixed() || cb->isTableCell())
@@ -1071,8 +1272,8 @@ void RenderBlock::layoutBlock(bool relayoutChildren)
         int repaintRight = max(rightVisualOverflow(), rightLayoutOverflow());
         IntRect repaintRect(repaintLeft, repaintTop, repaintRight - repaintLeft, repaintBottom - repaintTop);
 
-        // FIXME: Deal with multiple column repainting.  We have to split the repaint
-        // rect up into multiple rects if it spans columns.
+        // The repaint rect may be split across columns, in which case adjustRectForColumns() will return the union.
+        adjustRectForColumns(repaintRect);
 
         repaintRect.inflate(maximalOutlineSize(PaintPhaseOutline));
         
@@ -1284,7 +1485,7 @@ int RenderBlock::collapseMargins(RenderBox* child, MarginInfo& marginInfo)
         // This child is collapsing with the top of the
         // block.  If it has larger margin values, then we need to update
         // our own maximal values.
-        if (!style()->htmlHacks() || !marginInfo.quirkContainer() || !topQuirk)
+        if (!document()->inQuirksMode() || !marginInfo.quirkContainer() || !topQuirk)
             setMaxTopMargins(max(posTop, maxTopPosMargin()), max(negTop, maxTopNegMargin()));
 
         // The minute any of the margins involved isn't a quirk, don't
@@ -1336,7 +1537,7 @@ int RenderBlock::collapseMargins(RenderBox* child, MarginInfo& marginInfo)
         }
         else if (!marginInfo.atTopOfBlock() ||
             (!marginInfo.canCollapseTopWithChildren()
-             && (!style()->htmlHacks() || !marginInfo.quirkContainer() || !marginInfo.topQuirk()))) {
+             && (!document()->inQuirksMode() || !marginInfo.quirkContainer() || !marginInfo.topQuirk()))) {
             // We're collapsing with a previous sibling's margins and not
             // with the top of the block.
             setHeight(height() + max(marginInfo.posMargin(), posTop) - max(marginInfo.negMargin(), negTop));
@@ -1489,7 +1690,7 @@ void RenderBlock::handleBottomOfBlock(int top, int bottom, MarginInfo& marginInf
 
     // If we can't collapse with children then go ahead and add in the bottom margin.
     if (!marginInfo.canCollapseWithBottom() && !marginInfo.canCollapseWithTop()
-        && (!style()->htmlHacks() || !marginInfo.quirkContainer() || !marginInfo.bottomQuirk()))
+        && (!document()->inQuirksMode() || !marginInfo.quirkContainer() || !marginInfo.bottomQuirk()))
         setHeight(height() + marginInfo.margin());
         
     // Now add in our bottom border/padding.
@@ -1803,7 +2004,7 @@ void RenderBlock::paint(PaintInfo& paintInfo, int tx, int ty)
     // Our scrollbar widgets paint exactly when we tell them to, so that they work properly with
     // z-index.  We paint after we painted the background/border, so that the scrollbars will
     // sit above the background/border.
-    if (hasOverflowClip() && style()->visibility() == VISIBLE && (phase == PaintPhaseBlockBackground || phase == PaintPhaseChildBlockBackground) && shouldPaintWithinRoot(paintInfo))
+    if (hasOverflowClip() && style()->visibility() == VISIBLE && (phase == PaintPhaseBlockBackground || phase == PaintPhaseChildBlockBackground) && paintInfo.shouldPaintWithinRoot(this))
         layer()->paintOverflowControls(paintInfo.context, tx, ty, paintInfo.rect);
 }
 
@@ -1819,13 +2020,13 @@ void RenderBlock::paintColumnRules(PaintInfo& paintInfo, int tx, int ty)
         return;
 
     // We need to do multiple passes, breaking up our child painting into strips.
-    Vector<IntRect>* colRects = columnRects();
-    unsigned colCount = colRects->size();
+    ColumnInfo* colInfo = columnInfo();
+    unsigned colCount = colInfo->columnCount();
     int currXOffset = style()->direction() == LTR ? 0 : contentWidth();
     int ruleAdd = borderLeft() + paddingLeft();
     int ruleX = style()->direction() == LTR ? 0 : contentWidth();
     for (unsigned i = 0; i < colCount; i++) {
-        IntRect colRect = colRects->at(i);
+        IntRect colRect = colInfo->columnRectAt(i);
 
         // Move to the next position.
         if (style()->direction() == LTR) {
@@ -1855,15 +2056,15 @@ void RenderBlock::paintColumnContents(PaintInfo& paintInfo, int tx, int ty, bool
     // We need to do multiple passes, breaking up our child painting into strips.
     GraphicsContext* context = paintInfo.context;
     int colGap = columnGap();
-    Vector<IntRect>* colRects = columnRects();
-    unsigned colCount = colRects->size();
+    ColumnInfo* colInfo = columnInfo();
+    unsigned colCount = colInfo->columnCount();
     if (!colCount)
         return;
-    int currXOffset = style()->direction() == LTR ? 0 : contentWidth() - colRects->at(0).width();
+    int currXOffset = style()->direction() == LTR ? 0 : contentWidth() - colInfo->columnRectAt(0).width();
     int currYOffset = 0;
     for (unsigned i = 0; i < colCount; i++) {
         // For each rect, we clip to the rect, and then we adjust our coords.
-        IntRect colRect = colRects->at(i);
+        IntRect colRect = colInfo->columnRectAt(i);
         colRect.move(tx, ty);
         PaintInfo info(paintInfo);
         info.rect.intersect(colRect);
@@ -1918,32 +2119,41 @@ void RenderBlock::paintChildren(PaintInfo& paintInfo, int tx, int ty)
     // We don't paint our own background, but we do let the kids paint their backgrounds.
     PaintInfo info(paintInfo);
     info.phase = newPhase;
-    info.paintingRoot = paintingRootForChildren(paintInfo);
-    bool isPrinting = document()->printing();
+    info.updatePaintingRootForChildren(this);
+    
+    RenderView* renderView = view();
+    bool usePrintRect = !renderView->printRect().isEmpty() && !document()->settings()->paginateDuringLayoutEnabled();
+    
+    bool checkPageBreaks = document()->paginated() && !document()->settings()->paginateDuringLayoutEnabled();
+    bool checkColumnBreaks = !checkPageBreaks && usePrintRect;
 
     for (RenderBox* child = firstChildBox(); child; child = child->nextSiblingBox()) {        
         // Check for page-break-before: always, and if it's set, break and bail.
-        if (isPrinting && !childrenInline() && child->style()->pageBreakBefore() == PBALWAYS
+        bool checkBeforeAlways = !childrenInline() && ((checkPageBreaks && child->style()->pageBreakBefore() == PBALWAYS) || (checkColumnBreaks && child->style()->columnBreakBefore() == PBALWAYS));
+        if (checkBeforeAlways
             && (ty + child->y()) > paintInfo.rect.y()
             && (ty + child->y()) < paintInfo.rect.bottom()) {
             view()->setBestTruncatedAt(ty + child->y(), this, true);
             return;
         }
 
-        // Check for page-break-inside: avoid, and it it's set, break and bail.
-        if (isPrinting && !childrenInline() && child->style()->pageBreakInside() == PBAVOID
-            && ty + child->y() > paintInfo.rect.y()
-            && ty + child->y() < paintInfo.rect.bottom()
-            && ty + child->y() + child->height() > paintInfo.rect.bottom()) {
-            view()->setBestTruncatedAt(ty + child->y(), this, true);
-            return;
+        if (!child->isFloating() && child->isReplaced() && usePrintRect && child->height() <= renderView->printRect().height()) {
+            // Paginate block-level replaced elements.
+            if (ty + child->y() + child->height() > renderView->printRect().bottom()) {
+                if (ty + child->y() < renderView->truncatedAt())
+                    renderView->setBestTruncatedAt(ty + child->y(), child);
+                // If we were able to truncate, don't paint.
+                if (ty + child->y() >= renderView->truncatedAt())
+                    break;
+            }
         }
 
         if (!child->hasSelfPaintingLayer() && !child->isFloating())
             child->paint(info, tx, ty);
 
         // Check for page-break-after: always, and if it's set, break and bail.
-        if (isPrinting && !childrenInline() && child->style()->pageBreakAfter() == PBALWAYS
+        bool checkAfterAlways = !childrenInline() && ((checkPageBreaks && child->style()->pageBreakAfter() == PBALWAYS) || (checkColumnBreaks && child->style()->columnBreakAfter() == PBALWAYS));
+        if (checkAfterAlways
             && (ty + child->y() + child->height()) > paintInfo.rect.y()
             && (ty + child->y() + child->height()) < paintInfo.rect.bottom()) {
             view()->setBestTruncatedAt(ty + child->y() + child->height() + max(0, child->collapsedMarginBottom()), this, true);
@@ -1954,10 +2164,10 @@ void RenderBlock::paintChildren(PaintInfo& paintInfo, int tx, int ty)
 
 void RenderBlock::paintCaret(PaintInfo& paintInfo, int tx, int ty, CaretType type)
 {
-    SelectionController* selection = type == CursorCaret ? document()->frame()->selection() : document()->frame()->dragCaretController();
+    SelectionController* selection = type == CursorCaret ? frame()->selection() : frame()->page()->dragCaretController();
 
     // Paint the caret if the SelectionController says so or if caret browsing is enabled
-    bool caretBrowsing = document()->frame()->settings() && document()->frame()->settings()->caretBrowsingEnabled();
+    bool caretBrowsing = frame()->settings() && frame()->settings()->caretBrowsingEnabled();
     RenderObject* caretPainter = selection->caretRenderer();
     if (caretPainter == this && (selection->isContentEditable() || caretBrowsing)) {
         // Convert the painting offset into the local coordinate system of this renderer,
@@ -1965,9 +2175,9 @@ void RenderBlock::paintCaret(PaintInfo& paintInfo, int tx, int ty, CaretType typ
         offsetForContents(tx, ty);
 
         if (type == CursorCaret)
-            document()->frame()->selection()->paintCaret(paintInfo.context, tx, ty, paintInfo.rect);
+            frame()->selection()->paintCaret(paintInfo.context, tx, ty, paintInfo.rect);
         else
-            document()->frame()->paintDragCaret(paintInfo.context, tx, ty, paintInfo.rect);
+            frame()->selection()->paintDragCaret(paintInfo.context, tx, ty, paintInfo.rect);
     }
 }
 
@@ -2091,7 +2301,7 @@ void RenderBlock::paintFloats(PaintInfo& paintInfo, int tx, int ty, bool preserv
 
 void RenderBlock::paintEllipsisBoxes(PaintInfo& paintInfo, int tx, int ty)
 {
-    if (!shouldPaintWithinRoot(paintInfo) || !firstLineBox())
+    if (!paintInfo.shouldPaintWithinRoot(this) || !firstLineBox())
         return;
 
     if (style()->visibility() == VISIBLE && paintInfo.phase == PaintPhaseForeground) {
@@ -2126,7 +2336,7 @@ RenderBlock* RenderBlock::blockElementContinuation() const
     RenderBlock* nextContinuation = toRenderBlock(m_continuation);
     if (nextContinuation->isAnonymousBlock())
         return nextContinuation->blockElementContinuation();
-    return 0;
+    return nextContinuation;
 }
     
 static ContinuationOutlineTableMap* continuationOutlineTable()
@@ -2178,25 +2388,6 @@ void RenderBlock::paintContinuationOutlines(PaintInfo& info, int tx, int ty)
     // Delete
     delete continuations;
     table->remove(this);
-}
-
-void RenderBlock::setSelectionState(SelectionState s)
-{
-    if (selectionState() == s)
-        return;
-    
-    if (s == SelectionInside && selectionState() != SelectionNone)
-        return;
-
-    if ((s == SelectionStart && selectionState() == SelectionEnd) ||
-        (s == SelectionEnd && selectionState() == SelectionStart))
-        RenderBox::setSelectionState(SelectionBoth);
-    else
-        RenderBox::setSelectionState(s);
-    
-    RenderBlock* cb = containingBlock();
-    if (cb && !cb->isRenderView())
-        cb->setSelectionState(s);
 }
 
 bool RenderBlock::shouldPaintSelectionGaps() const
@@ -2273,7 +2464,7 @@ void RenderBlock::paintSelection(PaintInfo& paintInfo, int tx, int ty)
 }
 
 #ifndef BUILDING_ON_TIGER
-static void clipOutPositionedObjects(const RenderObject::PaintInfo* paintInfo, int tx, int ty, RenderBlock::PositionedObjectsListHashSet* positionedObjects)
+static void clipOutPositionedObjects(const PaintInfo* paintInfo, int tx, int ty, RenderBlock::PositionedObjectsListHashSet* positionedObjects)
 {
     if (!positionedObjects)
         return;
@@ -2990,9 +3181,9 @@ int RenderBlock::lowestPosition(bool includeOverflowInterior, bool includeSelf) 
     }
 
     if (hasColumns()) {
-        Vector<IntRect>* colRects = columnRects();
-        for (unsigned i = 0; i < colRects->size(); i++)
-            bottom = max(bottom, colRects->at(i).bottom() + relativeOffset);
+        ColumnInfo* colInfo = columnInfo();
+        for (unsigned i = 0; i < colInfo->columnCount(); i++)
+            bottom = max(bottom, colInfo->columnRectAt(i).bottom() + relativeOffset);
         return bottom;
     }
 
@@ -3084,8 +3275,11 @@ int RenderBlock::rightmostPosition(bool includeOverflowInterior, bool includeSel
 
     if (hasColumns()) {
         // This only matters for LTR
-        if (style()->direction() == LTR)
-            right = max(columnRects()->last().right() + relativeOffset, right);
+        if (style()->direction() == LTR) {
+            ColumnInfo* colInfo = columnInfo();
+            if (colInfo->columnCount())
+                right = max(colInfo->columnRectAt(colInfo->columnCount() - 1).right() + relativeOffset, right);
+        }
         return right;
     }
 
@@ -3181,8 +3375,11 @@ int RenderBlock::leftmostPosition(bool includeOverflowInterior, bool includeSelf
 
     if (hasColumns()) {
         // This only matters for RTL
-        if (style()->direction() == RTL)
-            left = min(columnRects()->last().x() + relativeOffset, left);
+        if (style()->direction() == RTL) {
+            ColumnInfo* colInfo = columnInfo();
+            if (colInfo->columnCount())
+                left = min(colInfo->columnRectAt(colInfo->columnCount() - 1).x() + relativeOffset, left);
+        }
         return left;
     }
 
@@ -3353,7 +3550,7 @@ void RenderBlock::clearFloats()
 int RenderBlock::addOverhangingFloats(RenderBlock* child, int xoff, int yoff, bool makeChildPaintOtherFloats)
 {
     // Prevent floats from being added to the canvas by the root element, e.g., <html>.
-    if (child->hasOverflowClip() || !child->containsFloats() || child->isRoot())
+    if (child->hasOverflowClip() || !child->containsFloats() || child->isRoot() || child->hasColumns())
         return 0;
 
     int lowestFloatBottom = 0;
@@ -3591,19 +3788,22 @@ bool RenderBlock::nodeAtPoint(const HitTestRequest& request, HitTestResult& resu
         // Check if we need to do anything at all.
         IntRect overflowBox = visibleOverflowRect();
         overflowBox.move(tx, ty);
-        if (!overflowBox.contains(_x, _y))
+        if (!overflowBox.intersects(result.rectFromPoint(_x, _y)))
             return false;
     }
 
     if ((hitTestAction == HitTestBlockBackground || hitTestAction == HitTestChildBlockBackground) && isPointInOverflowControl(result, _x, _y, tx, ty)) {
         updateHitTestResult(result, IntPoint(_x - tx, _y - ty));
-        return true;
+        // FIXME: isPointInOverflowControl() doesn't handle rect-based tests yet.
+        if (!result.addNodeToRectBasedTestResult(node(), _x, _y))
+           return true;
     }
 
     // If we have clipping, then we can't have any spillout.
     bool useOverflowClip = hasOverflowClip() && !hasSelfPaintingLayer();
     bool useClip = (hasControlClip() || useOverflowClip);
-    bool checkChildren = !useClip || (hasControlClip() ? controlClipRect(tx, ty).contains(_x, _y) : overflowClipRect(tx, ty).contains(_x, _y));
+    IntRect hitTestArea(result.rectFromPoint(_x, _y));
+    bool checkChildren = !useClip || (hasControlClip() ? controlClipRect(tx, ty).intersects(hitTestArea) : overflowClipRect(tx, ty).intersects(hitTestArea));
     if (checkChildren) {
         // Hit test descendants first.
         int scrolledX = tx;
@@ -3615,45 +3815,52 @@ bool RenderBlock::nodeAtPoint(const HitTestRequest& request, HitTestResult& resu
         }
 
         // Hit test contents if we don't have columns.
-        if (!hasColumns() && hitTestContents(request, result, _x, _y, scrolledX, scrolledY, hitTestAction)) {
+        if (!hasColumns()) {
+            if (hitTestContents(request, result, _x, _y, scrolledX, scrolledY, hitTestAction)) {
+                updateHitTestResult(result, IntPoint(_x - tx, _y - ty));
+                return true;
+            }
+            if (hitTestAction == HitTestFloat && hitTestFloats(request, result, _x, _y, scrolledX, scrolledY))
+                return true;
+        } else if (hitTestColumns(request, result, _x, _y, scrolledX, scrolledY, hitTestAction)) {
             updateHitTestResult(result, IntPoint(_x - tx, _y - ty));
             return true;
-        }
-
-        // Hit test our columns if we do have them.
-        if (hasColumns() && hitTestColumns(request, result, _x, _y, scrolledX, scrolledY, hitTestAction)) {
-            updateHitTestResult(result, IntPoint(_x - tx, _y - ty));
-            return true;
-        }
-
-        // Hit test floats.
-        if (hitTestAction == HitTestFloat && m_floatingObjects) {
-            if (isRenderView()) {
-                scrolledX += toRenderView(this)->frameView()->scrollX();
-                scrolledY += toRenderView(this)->frameView()->scrollY();
-            }
-            
-            FloatingObject* o;
-            DeprecatedPtrListIterator<FloatingObject> it(*m_floatingObjects);
-            for (it.toLast(); (o = it.current()); --it) {
-                if (o->m_shouldPaint && !o->m_renderer->hasSelfPaintingLayer()) {
-                    int xoffset = scrolledX + o->m_left + o->m_renderer->marginLeft() - o->m_renderer->x();
-                    int yoffset =  scrolledY + o->m_top + o->m_renderer->marginTop() - o->m_renderer->y();
-                    if (o->m_renderer->hitTest(request, result, IntPoint(_x, _y), xoffset, yoffset)) {
-                        updateHitTestResult(result, IntPoint(_x - xoffset, _y - yoffset));
-                        return true;
-                    }
-                }
-            }
         }
     }
 
     // Now hit test our background
     if (hitTestAction == HitTestBlockBackground || hitTestAction == HitTestChildBlockBackground) {
         IntRect boundsRect(tx, ty, width(), height());
-        if (visibleToHitTesting() && boundsRect.contains(_x, _y)) {
+        if (visibleToHitTesting() && boundsRect.intersects(result.rectFromPoint(_x, _y))) {
             updateHitTestResult(result, IntPoint(_x - tx, _y - ty));
-            return true;
+            if (!result.addNodeToRectBasedTestResult(node(), _x, _y, boundsRect))
+                return true;
+        }
+    }
+
+    return false;
+}
+
+bool RenderBlock::hitTestFloats(const HitTestRequest& request, HitTestResult& result, int x, int y, int tx, int ty)
+{
+    if (!m_floatingObjects)
+        return false;
+
+    if (isRenderView()) {
+        tx += toRenderView(this)->frameView()->scrollX();
+        ty += toRenderView(this)->frameView()->scrollY();
+    }
+
+    FloatingObject* floatingObject;
+    DeprecatedPtrListIterator<FloatingObject> it(*m_floatingObjects);
+    for (it.toLast(); (floatingObject = it.current()); --it) {
+        if (floatingObject->m_shouldPaint && !floatingObject->m_renderer->hasSelfPaintingLayer()) {
+            int xOffset = tx + floatingObject->m_left + floatingObject->m_renderer->marginLeft() - floatingObject->m_renderer->x();
+            int yOffset =  ty + floatingObject->m_top + floatingObject->m_renderer->marginTop() - floatingObject->m_renderer->y();
+            if (floatingObject->m_renderer->hitTest(request, result, IntPoint(x, y), xOffset, yOffset)) {
+                updateHitTestResult(result, IntPoint(x - xOffset, y - yOffset));
+                return true;
+            }
         }
     }
 
@@ -3663,28 +3870,31 @@ bool RenderBlock::nodeAtPoint(const HitTestRequest& request, HitTestResult& resu
 bool RenderBlock::hitTestColumns(const HitTestRequest& request, HitTestResult& result, int x, int y, int tx, int ty, HitTestAction hitTestAction)
 {
     // We need to do multiple passes, breaking up our hit testing into strips.
-    Vector<IntRect>* colRects = columnRects();
-    int colCount = colRects->size();
+    ColumnInfo* colInfo = columnInfo();
+    int colCount = colInfo->columnCount();
     if (!colCount)
         return false;
     int left = borderLeft() + paddingLeft();
     int currYOffset = 0;
     int i;
     for (i = 0; i < colCount; i++)
-        currYOffset -= colRects->at(i).height();
+        currYOffset -= colInfo->columnRectAt(i).height();
     for (i = colCount - 1; i >= 0; i--) {
-        IntRect colRect = colRects->at(i);
+        IntRect colRect = colInfo->columnRectAt(i);
         int currXOffset = colRect.x() - left;
         currYOffset += colRect.height();
         colRect.move(tx, ty);
         
-        if (colRect.contains(x, y)) {
+        if (colRect.intersects(result.rectFromPoint(x, y))) {
             // The point is inside this column.
             // Adjust tx and ty to change where we hit test.
         
             int finalX = tx + currXOffset;
             int finalY = ty + currYOffset;
-            return hitTestContents(request, result, x, y, finalX, finalY, hitTestAction);
+            if (result.isRectBasedTest() && !colRect.contains(result.rectFromPoint(x, y)))
+                hitTestContents(request, result, x, y, finalX, finalY, hitTestAction);
+            else
+                return hitTestContents(request, result, x, y, finalX, finalY, hitTestAction) || (hitTestAction == HitTestFloat && hitTestFloats(request, result, x, y, finalX, finalY));
         }
     }
 
@@ -3810,16 +4020,15 @@ VisiblePosition RenderBlock::positionForPointWithInlineChildren(const IntPoint& 
         }
     }
 
-    Settings* settings = document()->settings();
-    bool useWindowsBehavior = settings && settings->editingBehavior() == EditingWindowsBehavior;
+    bool moveCaretToBoundary = document()->frame()->editor()->behavior().shouldMoveCaretToHorizontalBoundaryWhenPastTopOrBottom();
 
-    if (useWindowsBehavior && !closestBox && lastRootBoxWithChildren) {
+    if (!moveCaretToBoundary && !closestBox && lastRootBoxWithChildren) {
         // y coordinate is below last root line box, pretend we hit it
         closestBox = lastRootBoxWithChildren->closestLeafChildForXPos(pointInContents.x());
     }
 
     if (closestBox) {
-        if (!useWindowsBehavior && pointInContents.y() < firstRootBoxWithChildren->lineTop() - verticalLineClickFudgeFactor) {
+        if (moveCaretToBoundary && pointInContents.y() < firstRootBoxWithChildren->lineTop() - verticalLineClickFudgeFactor) {
             // y coordinate is above first root line box, so return the start of the first
             return VisiblePosition(positionForBox(firstRootBoxWithChildren->firstLeafChild(), true), DOWNSTREAM);
         }
@@ -3830,7 +4039,7 @@ VisiblePosition RenderBlock::positionForPointWithInlineChildren(const IntPoint& 
 
     if (lastRootBoxWithChildren) {
         // We hit this case for Mac behavior when the Y coordinate is below the last box.
-        ASSERT(!useWindowsBehavior);
+        ASSERT(moveCaretToBoundary);
         return VisiblePosition(positionForBox(lastRootBoxWithChildren->lastLeafChild(), false), DOWNSTREAM);
     }
 
@@ -3918,7 +4127,7 @@ void RenderBlock::calcColumnWidth()
     int desiredColumnWidth = contentWidth();
     
     // For now, we don't support multi-column layouts when printing, since we have to do a lot of work for proper pagination.
-    if (document()->printing() || (style()->hasAutoColumnCount() && style()->hasAutoColumnWidth())) {
+    if (document()->paginated() || (style()->hasAutoColumnCount() && style()->hasAutoColumnWidth())) {
         setDesiredColumnCountAndWidth(desiredColumnCount, desiredColumnWidth);
         return;
     }
@@ -3965,7 +4174,8 @@ void RenderBlock::setDesiredColumnCountAndWidth(int count, int width)
     bool destroyColumns = !firstChild()
                           || (count == 1 && style()->hasAutoColumnWidth())
                           || firstChild()->isAnonymousColumnsBlock()
-                          || firstChild()->isAnonymousColumnSpanBlock();
+                          || firstChild()->isAnonymousColumnSpanBlock()
+                          || document()->settings()->paginateDuringLayoutEnabled();
     if (destroyColumns) {
         if (hasColumns()) {
             delete gColumnInfoMap->take(this);
@@ -3982,8 +4192,8 @@ void RenderBlock::setDesiredColumnCountAndWidth(int count, int width)
             gColumnInfoMap->add(this, info);
             setHasColumns(true);
         }
-        info->m_desiredColumnCount = count;
-        info->m_desiredColumnWidth = width;   
+        info->setDesiredColumnCount(count);
+        info->setDesiredColumnWidth(width);   
     }
 }
 
@@ -3991,21 +4201,21 @@ int RenderBlock::desiredColumnWidth() const
 {
     if (!hasColumns())
         return contentWidth();
-    return gColumnInfoMap->get(this)->m_desiredColumnWidth;
+    return gColumnInfoMap->get(this)->desiredColumnWidth();
 }
 
 unsigned RenderBlock::desiredColumnCount() const
 {
     if (!hasColumns())
         return 1;
-    return gColumnInfoMap->get(this)->m_desiredColumnCount;
+    return gColumnInfoMap->get(this)->desiredColumnCount();
 }
 
-Vector<IntRect>* RenderBlock::columnRects() const
+ColumnInfo* RenderBlock::columnInfo() const
 {
     if (!hasColumns())
         return 0;
-    return &gColumnInfoMap->get(this)->m_columnRects;    
+    return gColumnInfoMap->get(this);    
 }
 
 int RenderBlock::layoutColumns(int endOfContent, int requestedColumnHeight)
@@ -4015,9 +4225,8 @@ int RenderBlock::layoutColumns(int endOfContent, int requestedColumnHeight)
         return -1;
 
     ColumnInfo* info = gColumnInfoMap->get(this);
-    int desiredColumnWidth = info->m_desiredColumnWidth;
-    int desiredColumnCount = info->m_desiredColumnCount;
-    Vector<IntRect>* columnRects = &info->m_columnRects;
+    int desiredColumnWidth = info->desiredColumnWidth();
+    int desiredColumnCount = info->desiredColumnCount();
     
     bool computeIntrinsicHeight = (endOfContent == -1);
 
@@ -4030,7 +4239,7 @@ int RenderBlock::layoutColumns(int endOfContent, int requestedColumnHeight)
     if (computeIntrinsicHeight && requestedColumnHeight >= 0)
         colHeight = requestedColumnHeight;
     else if (computeIntrinsicHeight)
-        colHeight = availableHeight / desiredColumnCount + columnSlop;
+        colHeight = min(availableHeight, availableHeight / desiredColumnCount + columnSlop);
     else
         colHeight = availableHeight;
     int originalColHeight = colHeight;
@@ -4038,7 +4247,7 @@ int RenderBlock::layoutColumns(int endOfContent, int requestedColumnHeight)
     int colGap = columnGap();
 
     // Compute a collection of column rects.
-    columnRects->clear();
+    info->clearColumns();
     
     // Then we do a simulated "paint" into the column slices and allow the content to slightly adjust our individual column rects.
     // FIXME: We need to take into account layers that are affected by the columns as well here so that they can have an opportunity
@@ -4067,7 +4276,7 @@ int RenderBlock::layoutColumns(int endOfContent, int requestedColumnHeight)
         v->setPrintRect(pageRect);
         v->setTruncatedAt(truncationPoint);
         GraphicsContext context((PlatformGraphicsContext*)0);
-        RenderObject::PaintInfo paintInfo(&context, pageRect, PaintPhaseForeground, false, 0, 0);
+        PaintInfo paintInfo(&context, pageRect, PaintPhaseForeground, false, 0, 0);
         
         setHasColumns(false);
         paintObject(paintInfo, 0, 0);
@@ -4107,7 +4316,7 @@ int RenderBlock::layoutColumns(int endOfContent, int requestedColumnHeight)
 
         maxColBottom = max(colRect.bottom(), maxColBottom);
 
-        columnRects->append(colRect);
+        info->addColumnRect(colRect);
         
         // Start adding in more columns as long as there's still content left.
         if (currY < endOfContent && i == colCount - 1 && (computeIntrinsicHeight || contentHeight()))
@@ -4136,7 +4345,7 @@ int RenderBlock::layoutColumns(int endOfContent, int requestedColumnHeight)
     v->setPrintRect(IntRect());
     v->setTruncatedAt(0);
     
-    ASSERT(colCount == columnRects->size());
+    ASSERT(colCount == info->columnCount());
     
     return contentBottom;
 }
@@ -4147,16 +4356,18 @@ void RenderBlock::adjustPointToColumnContents(IntPoint& point) const
     if (!hasColumns())
         return;
     
-    Vector<IntRect>* colRects = columnRects();
+    ColumnInfo* colInfo = columnInfo();
+    if (!colInfo->columnCount())
+        return;
 
     // Determine which columns we intersect.
     int colGap = columnGap();
     int leftGap = colGap / 2;
-    IntPoint columnPoint(colRects->at(0).location());
+    IntPoint columnPoint(colInfo->columnRectAt(0).location());
     int yOffset = 0;
-    for (unsigned i = 0; i < colRects->size(); i++) {
+    for (unsigned i = 0; i < colInfo->columnCount(); i++) {
         // Add in half the column gap to the left and right of the rect.
-        IntRect colRect = colRects->at(i);
+        IntRect colRect = colInfo->columnRectAt(i);
         IntRect gapAndColumnRect(colRect.x() - leftGap, colRect.y(), colRect.width() + colGap, colRect.height());
 
         if (point.x() >= gapAndColumnRect.x() && point.x() < gapAndColumnRect.right()) {
@@ -4188,13 +4399,13 @@ void RenderBlock::adjustRectForColumns(IntRect& r) const
     if (!hasColumns())
         return;
     
-    Vector<IntRect>* colRects = columnRects();
+    ColumnInfo* colInfo = columnInfo();
 
     // Begin with a result rect that is empty.
     IntRect result;
     
     // Determine which columns we intersect.
-    unsigned colCount = colRects->size();
+    unsigned colCount = colInfo->columnCount();
     if (!colCount)
         return;
     
@@ -4202,7 +4413,7 @@ void RenderBlock::adjustRectForColumns(IntRect& r) const
     
     int currYOffset = 0;
     for (unsigned i = 0; i < colCount; i++) {
-        IntRect colRect = colRects->at(i);
+        IntRect colRect = colInfo->columnRectAt(i);
         int currXOffset = colRect.x() - left;
         
         IntRect repaintRect = r;
@@ -4224,13 +4435,13 @@ void RenderBlock::adjustForColumns(IntSize& offset, const IntPoint& point) const
     if (!hasColumns())
         return;
 
-    Vector<IntRect>& columnRects = *this->columnRects();
-  
+    ColumnInfo* colInfo = columnInfo();
+
     int left = borderLeft() + paddingLeft();
     int yOffset = 0;
-    size_t columnCount = columnRects.size();
+    size_t columnCount = colInfo->columnCount();
     for (size_t i = 0; i < columnCount; ++i) {
-        IntRect columnRect = columnRects[i];
+        IntRect columnRect = colInfo->columnRectAt(i);
         int xOffset = columnRect.x() - left;
         if (point.y() < columnRect.bottom() + yOffset) {
             offset.expand(xOffset, -yOffset);
@@ -4413,7 +4624,7 @@ void RenderBlock::calcInlinePrefWidths()
     // Firefox and Opera will allow a table cell to grow to fit an image inside it under
     // very specific cirucumstances (in order to match common WinIE renderings). 
     // Not supporting the quirk has caused us to mis-render some real sites. (See Bugzilla 10517.) 
-    bool allowImagesToBreak = !style()->htmlHacks() || !isTableCell() || !style()->width().isIntrinsicOrAuto();
+    bool allowImagesToBreak = !document()->inQuirksMode() || !isTableCell() || !style()->width().isIntrinsicOrAuto();
 
     bool autoWrap, oldAutoWrap;
     autoWrap = oldAutoWrap = style()->autoWrap();
@@ -4421,7 +4632,6 @@ void RenderBlock::calcInlinePrefWidths()
     InlineMinMaxIterator childIterator(this);
     bool addedTextIndent = false; // Only gets added in once.
     RenderObject* prevFloat = 0;
-    RenderObject* previousLeaf = 0;
     while (RenderObject* child = childIterator.next()) {
         autoWrap = child->isReplaced() ? child->parent()->style()->autoWrap() : 
             child->style()->autoWrap();
@@ -4649,8 +4859,6 @@ void RenderBlock::calcInlinePrefWidths()
         }
 
         oldAutoWrap = autoWrap;
-        if (!child->isRenderInline())
-            previousLeaf = child;
     }
 
     if (style()->collapseWhiteSpace())
@@ -4745,7 +4953,7 @@ void RenderBlock::calcBlockPrefWidths()
         // of 100px because of the table.
         // We can achieve this effect by making the maxwidth of blocks that contain tables
         // with percentage widths be infinite (as long as they are not inside a table cell).
-        if (style()->htmlHacks() && child->style()->width().isPercent() &&
+        if (document()->inQuirksMode() && child->style()->width().isPercent() &&
             !isTableCell() && child->isTable() && m_maxPrefWidth < BLOCK_MAX_WIDTH) {
             RenderBlock* cb = containingBlock();
             while (!cb->isRenderView() && !cb->isTableCell())
@@ -4912,6 +5120,16 @@ RenderBlock* RenderBlock::firstLineBlock() const
     return firstLineBlock;
 }
 
+static RenderStyle* styleForFirstLetter(RenderObject* firstLetterBlock, RenderObject* firstLetterContainer)
+{
+    RenderStyle* pseudoStyle = firstLetterBlock->getCachedPseudoStyle(FIRST_LETTER, firstLetterContainer->firstLineStyle());
+    // Force inline display (except for floating first-letters).
+    pseudoStyle->setDisplay(pseudoStyle->isFloating() ? BLOCK : INLINE);
+    // CSS2 says first-letter can't be positioned.
+    pseudoStyle->setPosition(StaticPosition);
+    return pseudoStyle;
+}
+
 void RenderBlock::updateFirstLetter()
 {
     if (!document()->usesFirstLetterRules())
@@ -4961,84 +5179,110 @@ void RenderBlock::updateFirstLetter()
     if (!currChild)
         return;
 
-    RenderObject* firstLetterContainer = currChild->parent();
-
     // If the child already has style, then it has already been created, so we just want
     // to update it.
-    if (firstLetterContainer->style()->styleType() == FIRST_LETTER) {
-        RenderStyle* pseudo = firstLetterBlock->getCachedPseudoStyle(FIRST_LETTER,
-                                                                     firstLetterContainer->parent()->firstLineStyle());
-        firstLetterContainer->setStyle(pseudo);
-        for (RenderObject* genChild = firstLetterContainer->firstChild(); genChild; genChild = genChild->nextSibling()) {
+    if (currChild->parent()->style()->styleType() == FIRST_LETTER) {
+        RenderObject* firstLetter = currChild->parent();
+        RenderObject* firstLetterContainer = firstLetter->parent();
+        RenderStyle* pseudoStyle = styleForFirstLetter(firstLetterBlock, firstLetterContainer);
+
+        if (Node::diff(firstLetter->style(), pseudoStyle) == Node::Detach) {
+            // The first-letter renderer needs to be replaced. Create a new renderer of the right type.
+            RenderObject* newFirstLetter;
+            if (pseudoStyle->display() == INLINE)
+                newFirstLetter = new (renderArena()) RenderInline(document());
+            else
+                newFirstLetter = new (renderArena()) RenderBlock(document());
+            newFirstLetter->setStyle(pseudoStyle);
+
+            // Move the first letter into the new renderer.
+            view()->disableLayoutState();
+            while (RenderObject* child = firstLetter->firstChild()) {
+                if (child->isText())
+                    toRenderText(child)->dirtyLineBoxes(true);
+                firstLetter->removeChild(child);
+                newFirstLetter->addChild(child, 0);
+            }
+            RenderTextFragment* remainingText = toRenderTextFragment(firstLetter->nextSibling());
+            ASSERT(remainingText->node()->renderer() == remainingText);
+            // Replace the old renderer with the new one.
+            remainingText->setFirstLetter(newFirstLetter);
+            firstLetter->destroy();
+            firstLetter = newFirstLetter;
+            firstLetterContainer->addChild(firstLetter, remainingText);
+            view()->enableLayoutState();
+        } else
+            firstLetter->setStyle(pseudoStyle);
+
+        for (RenderObject* genChild = firstLetter->firstChild(); genChild; genChild = genChild->nextSibling()) {
             if (genChild->isText()) 
-                genChild->setStyle(pseudo);
+                genChild->setStyle(pseudoStyle);
         }
+
         return;
     }
 
+    if (!currChild->isText() || currChild->isBR())
+        return;
+
     // If the child does not already have style, we create it here.
-    if (currChild->isText() && !currChild->isBR() && currChild->parent()->style()->styleType() != FIRST_LETTER) {
-        // Our layout state is not valid for the repaints we are going to trigger by
-        // adding and removing children of firstLetterContainer.
-        view()->disableLayoutState();
+    RenderObject* firstLetterContainer = currChild->parent();
 
-        RenderText* textObj = toRenderText(currChild);
-        
-        // Create our pseudo style now that we have our firstLetterContainer determined.
-        RenderStyle* pseudoStyle = firstLetterBlock->getCachedPseudoStyle(FIRST_LETTER,
-                                                                          firstLetterContainer->firstLineStyle());
-        
-        // Force inline display (except for floating first-letters)
-        pseudoStyle->setDisplay(pseudoStyle->isFloating() ? BLOCK : INLINE);
-        pseudoStyle->setPosition(StaticPosition); // CSS2 says first-letter can't be positioned.
-        
-        RenderObject* firstLetter = 0;
-        if (pseudoStyle->display() == INLINE)
-            firstLetter = new (renderArena()) RenderInline(document());
-        else
-            firstLetter = new (renderArena()) RenderBlock(document());
-        firstLetter->setStyle(pseudoStyle);
-        firstLetterContainer->addChild(firstLetter, currChild);
-        
-        // The original string is going to be either a generated content string or a DOM node's
-        // string.  We want the original string before it got transformed in case first-letter has
-        // no text-transform or a different text-transform applied to it.
-        RefPtr<StringImpl> oldText = textObj->originalText();
-        ASSERT(oldText);
-        
-        if (oldText && oldText->length() > 0) {
-            unsigned int length = 0;
-            
-            // account for leading spaces and punctuation
-            while (length < oldText->length() && (isSpaceOrNewline((*oldText)[length]) || Unicode::isPunct((*oldText)[length])))
-                length++;
-            
-            // account for first letter
+    // Our layout state is not valid for the repaints we are going to trigger by
+    // adding and removing children of firstLetterContainer.
+    view()->disableLayoutState();
+
+    RenderText* textObj = toRenderText(currChild);
+
+    // Create our pseudo style now that we have our firstLetterContainer determined.
+    RenderStyle* pseudoStyle = styleForFirstLetter(firstLetterBlock, firstLetterContainer);
+
+    RenderObject* firstLetter = 0;
+    if (pseudoStyle->display() == INLINE)
+        firstLetter = new (renderArena()) RenderInline(document());
+    else
+        firstLetter = new (renderArena()) RenderBlock(document());
+    firstLetter->setStyle(pseudoStyle);
+    firstLetterContainer->addChild(firstLetter, currChild);
+
+    // The original string is going to be either a generated content string or a DOM node's
+    // string.  We want the original string before it got transformed in case first-letter has
+    // no text-transform or a different text-transform applied to it.
+    RefPtr<StringImpl> oldText = textObj->originalText();
+    ASSERT(oldText);
+
+    if (oldText && oldText->length() > 0) {
+        unsigned length = 0;
+
+        // account for leading spaces and punctuation
+        while (length < oldText->length() && (isSpaceOrNewline((*oldText)[length]) || Unicode::isPunct((*oldText)[length])))
             length++;
-            
-            // construct text fragment for the text after the first letter
-            // NOTE: this might empty
-            RenderTextFragment* remainingText = 
-                new (renderArena()) RenderTextFragment(textObj->node() ? textObj->node() : textObj->document(), oldText.get(), length, oldText->length() - length);
-            remainingText->setStyle(textObj->style());
-            if (remainingText->node())
-                remainingText->node()->setRenderer(remainingText);
-            
-            RenderObject* nextObj = textObj->nextSibling();
-            firstLetterContainer->removeChild(textObj);
-            firstLetterContainer->addChild(remainingText, nextObj);
-            remainingText->setFirstLetter(firstLetter);
-            
-            // construct text fragment for the first letter
-            RenderTextFragment* letter = 
-                new (renderArena()) RenderTextFragment(remainingText->node() ? remainingText->node() : remainingText->document(), oldText.get(), 0, length);
-            letter->setStyle(pseudoStyle);
-            firstLetter->addChild(letter);
 
-            textObj->destroy();
-        }
-        view()->enableLayoutState();
+        // account for first letter
+        length++;
+
+        // construct text fragment for the text after the first letter
+        // NOTE: this might empty
+        RenderTextFragment* remainingText = 
+            new (renderArena()) RenderTextFragment(textObj->node() ? textObj->node() : textObj->document(), oldText.get(), length, oldText->length() - length);
+        remainingText->setStyle(textObj->style());
+        if (remainingText->node())
+            remainingText->node()->setRenderer(remainingText);
+
+        RenderObject* nextObj = textObj->nextSibling();
+        firstLetterContainer->removeChild(textObj);
+        firstLetterContainer->addChild(remainingText, nextObj);
+        remainingText->setFirstLetter(firstLetter);
+        
+        // construct text fragment for the first letter
+        RenderTextFragment* letter = 
+            new (renderArena()) RenderTextFragment(remainingText->node() ? remainingText->node() : remainingText->document(), oldText.get(), 0, length);
+        letter->setStyle(pseudoStyle);
+        firstLetter->addChild(letter);
+
+        textObj->destroy();
     }
+    view()->enableLayoutState();
 }
 
 // Helper methods for obtaining the last line, computing line counts and heights for line counts

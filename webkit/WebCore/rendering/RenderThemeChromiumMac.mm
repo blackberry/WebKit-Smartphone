@@ -91,7 +91,7 @@ void RenderThemeChromiumMac::updateActiveState(NSCell* cell, const RenderObject*
 {
     NSControlTint oldTint = [cell controlTint];
     NSControlTint tint = isActive(o) ? [NSColor currentControlTint] :
-                                       NSClearControlTint;
+                                       static_cast<NSControlTint>(NSClearControlTint);
 
     if (tint != oldTint)
         [cell setControlTint:tint];
@@ -109,22 +109,22 @@ bool RenderThemeChromiumMac::shouldRenderMediaControlPart(ControlPart part, Elem
     return RenderMediaControlsChromium::shouldRenderMediaControlPart(part, e);
 }
 
-bool RenderThemeChromiumMac::paintMediaPlayButton(RenderObject* object, const RenderObject::PaintInfo& paintInfo, const IntRect& rect)
+bool RenderThemeChromiumMac::paintMediaPlayButton(RenderObject* object, const PaintInfo& paintInfo, const IntRect& rect)
 {
     return RenderMediaControlsChromium::paintMediaControlsPart(MediaPlayButton, object, paintInfo, rect);
 }
 
-bool RenderThemeChromiumMac::paintMediaMuteButton(RenderObject* object, const RenderObject::PaintInfo& paintInfo, const IntRect& rect)
+bool RenderThemeChromiumMac::paintMediaMuteButton(RenderObject* object, const PaintInfo& paintInfo, const IntRect& rect)
 {
     return RenderMediaControlsChromium::paintMediaControlsPart(MediaMuteButton, object, paintInfo, rect);
 }
 
-bool RenderThemeChromiumMac::paintMediaSliderTrack(RenderObject* object, const RenderObject::PaintInfo& paintInfo, const IntRect& rect)
+bool RenderThemeChromiumMac::paintMediaSliderTrack(RenderObject* object, const PaintInfo& paintInfo, const IntRect& rect)
 {
     return RenderMediaControlsChromium::paintMediaControlsPart(MediaSlider, object, paintInfo, rect);
 }
 
-bool RenderThemeChromiumMac::paintMediaControlsBackground(RenderObject* object, const RenderObject::PaintInfo& paintInfo, const IntRect& rect)
+bool RenderThemeChromiumMac::paintMediaControlsBackground(RenderObject* object, const PaintInfo& paintInfo, const IntRect& rect)
 {
     return RenderMediaControlsChromium::paintMediaControlsPart(MediaTimelineContainer, object, paintInfo, rect);
 }
@@ -134,16 +134,30 @@ String RenderThemeChromiumMac::extraMediaControlsStyleSheet()
     return String(mediaControlsChromiumUserAgentStyleSheet, sizeof(mediaControlsChromiumUserAgentStyleSheet));
 }
 
-bool RenderThemeChromiumMac::paintMediaVolumeSliderTrack(RenderObject* object, const RenderObject::PaintInfo& paintInfo, const IntRect& rect)
+bool RenderThemeChromiumMac::paintMediaVolumeSliderContainer(RenderObject* object, const PaintInfo& paintInfo, const IntRect& rect)
+{
+    return true;
+}
+
+bool RenderThemeChromiumMac::paintMediaVolumeSliderTrack(RenderObject* object, const PaintInfo& paintInfo, const IntRect& rect)
 {
     return RenderMediaControlsChromium::paintMediaControlsPart(MediaVolumeSlider, object, paintInfo, rect);
 }
 
-bool RenderThemeChromiumMac::paintMediaVolumeSliderThumb(RenderObject* object, const RenderObject::PaintInfo& paintInfo, const IntRect& rect)
+bool RenderThemeChromiumMac::paintMediaVolumeSliderThumb(RenderObject* object, const PaintInfo& paintInfo, const IntRect& rect)
 {
     return RenderMediaControlsChromium::paintMediaControlsPart(MediaVolumeSliderThumb, object, paintInfo, rect);
 }
 
+bool RenderThemeChromiumMac::paintMediaSliderThumb(RenderObject* object, const PaintInfo& paintInfo, const IntRect& rect)
+{
+    return RenderMediaControlsChromium::paintMediaControlsPart(MediaSliderThumb, object, paintInfo, rect);
+}
+
+IntPoint RenderThemeChromiumMac::volumeSliderOffsetFromMuteButton(Node* muteButton, const IntSize& size) const
+{
+    return RenderTheme::volumeSliderOffsetFromMuteButton(muteButton, size);
+}
 #endif
 
 } // namespace WebCore

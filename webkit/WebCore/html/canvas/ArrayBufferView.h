@@ -26,13 +26,14 @@
 #ifndef ArrayBufferView_h
 #define ArrayBufferView_h
 
-#include <algorithm>
+#include "ArrayBuffer.h"
 #include "ExceptionCode.h"
+
+#include <algorithm>
 #include <limits.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
-#include "ArrayBuffer.h"
 
 namespace WebCore {
 
@@ -71,6 +72,10 @@ class ArrayBufferView : public RefCounted<ArrayBufferView> {
     ArrayBufferView(PassRefPtr<ArrayBuffer> buffer, unsigned byteOffset);
 
     void setImpl(ArrayBufferView* array, unsigned byteOffset, ExceptionCode& ec);
+
+    void setRangeImpl(const char* data, size_t dataByteLength, unsigned byteOffset, ExceptionCode& ec);
+
+    void zeroRangeImpl(unsigned byteOffset, size_t rangeByteLength, ExceptionCode& ec);
 
     static void calculateOffsetAndLength(int start, int end, unsigned arraySize,
                                          unsigned* offset, unsigned* length);

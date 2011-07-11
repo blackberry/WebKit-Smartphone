@@ -14,11 +14,11 @@ class MKSBugTest(unittest.TestCase):
         bug = {"platform" : "Fledge"}
         self.assertEquals(MKSBug(RIMBug(bug)).handheld_discovered_on(), MKSBug._default_mks_handheld)
 
-    def test_targeted_release(self):
+    def test_component_targeted_release(self):
         bug = {"os" : "6.0"}
-        self.assertEquals(MKSBug(RIMBug(bug)).targeted_release(), MKSBug._map_rim_to_mks_release[bug["os"]])
+        self.assertEquals(MKSBug(RIMBug(bug)).component_targeted_release(), MKSBug._map_rim_to_mks_release[bug["os"]])
         bug = {"os" : "Other"}
-        self.assertEquals(MKSBug(RIMBug(bug)).targeted_release(), MKSBug._default_mks_releasee)
+        self.assertEquals(MKSBug(RIMBug(bug)).component_targeted_release(), MKSBug._default_mks_releasee)
 
     def test_sub_component(self):
         bug = {"component" : "Core UI"}
@@ -45,7 +45,7 @@ class MKSIntegrityTest(unittest.TestCase):
             <web:web_service_key>bugsdas890ad2320a22kzilla</web:web_service_key>
             <web:type_name>Handheld Dev Task</web:type_name>
             <web:change_number>Implementation</web:change_number>
-            <web:field_values>Summary=<!-- MKS HTML -->Example Bug</web:field_values><web:field_values>Dev Task Component=Browser</web:field_values><web:field_values>Dev Task Sub Component=WebKit</web:field_values><web:field_values>Handheld Discovered On=ExampleDevice</web:field_values><web:field_values>Build Type=Development/Test</web:field_values><web:field_values>Development/Test Build=n/a</web:field_values><web:field_values>Customer Importance=2 - Medium</web:field_values><web:field_values>UI Impact=No</web:field_values><web:field_values>Targeted Release(s)=6.0.0</web:field_values><web:field_values>Description=<!-- MKS HTML -->This is an example bug.</web:field_values><web:field_values>Issue Type=</web:field_values><web:field_values>Reason=Triage</web:field_values><web:field_values>Issue Owner=a_person</web:field_values><web:field_values>Assigned User=+Assign Developer</web:field_values><web:field_values>Activity=Production</web:field_values><web:field_values>Finder Role=Developer</web:field_values><web:field_values>Internal Finder=a_person</web:field_values><web:field_values>Finder E-Mail=a_person@rim.com</web:field_values><web:field_values>Finder Company=**RIM</web:field_values><web:field_values>Reproducible=Yes</web:field_values><web:field_values>Frequency of Occurrence=Frequent</web:field_values><web:field_values>Component Target Releases=6.0.0</web:field_values><web:field_values>Technical Risk=3 - Average</web:field_values><web:field_values>Include in RN/KIL=Yes</web:field_values><web:field_values>What deliverable caused the problem?=</web:field_values><web:field_values>Why did this problem occur on the deliverable?=</web:field_values></web:createDevTask>
+            <web:field_values>Summary=<!-- MKS HTML -->Example Bug</web:field_values><web:field_values>Dev Task Component=Browser</web:field_values><web:field_values>Dev Task Sub Component=WebKit</web:field_values><web:field_values>Handheld Discovered On=ExampleDevice</web:field_values><web:field_values>Build Type=Development/Test</web:field_values><web:field_values>Development/Test Build=n/a</web:field_values><web:field_values>Customer Importance=2 - Medium</web:field_values><web:field_values>UI Impact=No</web:field_values><web:field_values>Description=<!-- MKS HTML -->This is an example bug.</web:field_values><web:field_values>Issue Type=</web:field_values><web:field_values>Reason=Triage</web:field_values><web:field_values>Issue Owner=a_person</web:field_values><web:field_values>Assigned User=+Assign Developer</web:field_values><web:field_values>Activity=Production</web:field_values><web:field_values>Finder Role=Developer</web:field_values><web:field_values>Internal Finder=a_person</web:field_values><web:field_values>Finder E-Mail=a_person@rim.com</web:field_values><web:field_values>Finder Company=**RIM</web:field_values><web:field_values>Reproducible=Yes</web:field_values><web:field_values>Frequency of Occurrence=Frequent</web:field_values><web:field_values>Component Target Releases=6.0.0</web:field_values><web:field_values>Technical Risk=3 - Average</web:field_values><web:field_values>Include in RN/KIL=Yes</web:field_values><web:field_values>What deliverable caused the problem?=</web:field_values><web:field_values>Why did this problem occur on the deliverable?=</web:field_values></web:createDevTask>
         </soapenv:Body>
     </soapenv:Envelope>"""
 
@@ -56,7 +56,7 @@ class MKSIntegrityTest(unittest.TestCase):
                                                   sub_component="WebKit",
                                                   build_type="Development/Test",
                                                   build_version="n/a",
-                                                  targeted_release="6.0.0",
+                                                  component_targeted_release="6.0.0",
                                                   has_ui_impact="No",
                                                   reproducible="Yes",
                                                   frequency_of_occurrence="Frequent",
@@ -75,7 +75,7 @@ class MKSIntegrityTest(unittest.TestCase):
             <web:web_service_key>bugsdas890ad2320a22kzilla</web:web_service_key>
             <web:type_name>Handheld Dev Task</web:type_name>
             <web:change_number>Implementation</web:change_number>
-            <web:field_values>Summary=<!-- MKS HTML -->Example Bug with &lt;markup&gt;</web:field_values><web:field_values>Dev Task Component=Browser</web:field_values><web:field_values>Dev Task Sub Component=WebKit</web:field_values><web:field_values>Handheld Discovered On=ExampleDevice</web:field_values><web:field_values>Build Type=Development/Test</web:field_values><web:field_values>Development/Test Build=n/a</web:field_values><web:field_values>Customer Importance=2 - Medium</web:field_values><web:field_values>UI Impact=No</web:field_values><web:field_values>Targeted Release(s)=6.0.0</web:field_values><web:field_values>Description=<!-- MKS HTML -->This is an example bug that has {}, (), &lt;&gt;, ', &quot;, ; characters.</web:field_values><web:field_values>Issue Type=</web:field_values><web:field_values>Reason=Triage</web:field_values><web:field_values>Issue Owner=a_person</web:field_values><web:field_values>Assigned User=+Assign Developer</web:field_values><web:field_values>Activity=Production</web:field_values><web:field_values>Finder Role=Developer</web:field_values><web:field_values>Internal Finder=a_person</web:field_values><web:field_values>Finder E-Mail=a_person@rim.com</web:field_values><web:field_values>Finder Company=**RIM</web:field_values><web:field_values>Reproducible=Yes</web:field_values><web:field_values>Frequency of Occurrence=Frequent</web:field_values><web:field_values>Component Target Releases=6.0.0</web:field_values><web:field_values>Technical Risk=3 - Average</web:field_values><web:field_values>Include in RN/KIL=Yes</web:field_values><web:field_values>What deliverable caused the problem?=</web:field_values><web:field_values>Why did this problem occur on the deliverable?=</web:field_values></web:createDevTask>
+            <web:field_values>Summary=<!-- MKS HTML -->Example Bug with &lt;markup&gt;</web:field_values><web:field_values>Dev Task Component=Browser</web:field_values><web:field_values>Dev Task Sub Component=WebKit</web:field_values><web:field_values>Handheld Discovered On=ExampleDevice</web:field_values><web:field_values>Build Type=Development/Test</web:field_values><web:field_values>Development/Test Build=n/a</web:field_values><web:field_values>Customer Importance=2 - Medium</web:field_values><web:field_values>UI Impact=No</web:field_values><web:field_values>Description=<!-- MKS HTML -->This is an example bug that has {}, (), &lt;&gt;, ', &quot;, ; characters.</web:field_values><web:field_values>Issue Type=</web:field_values><web:field_values>Reason=Triage</web:field_values><web:field_values>Issue Owner=a_person</web:field_values><web:field_values>Assigned User=+Assign Developer</web:field_values><web:field_values>Activity=Production</web:field_values><web:field_values>Finder Role=Developer</web:field_values><web:field_values>Internal Finder=a_person</web:field_values><web:field_values>Finder E-Mail=a_person@rim.com</web:field_values><web:field_values>Finder Company=**RIM</web:field_values><web:field_values>Reproducible=Yes</web:field_values><web:field_values>Frequency of Occurrence=Frequent</web:field_values><web:field_values>Component Target Releases=6.0.0</web:field_values><web:field_values>Technical Risk=3 - Average</web:field_values><web:field_values>Include in RN/KIL=Yes</web:field_values><web:field_values>What deliverable caused the problem?=</web:field_values><web:field_values>Why did this problem occur on the deliverable?=</web:field_values></web:createDevTask>
         </soapenv:Body>
     </soapenv:Envelope>"""
 
@@ -86,7 +86,7 @@ class MKSIntegrityTest(unittest.TestCase):
                                                   sub_component="WebKit",
                                                   build_type="Development/Test",
                                                   build_version="n/a",
-                                                  targeted_release="6.0.0",
+                                                  component_targeted_release="6.0.0",
                                                   has_ui_impact="No",
                                                   reproducible="Yes",
                                                   frequency_of_occurrence="Frequent",

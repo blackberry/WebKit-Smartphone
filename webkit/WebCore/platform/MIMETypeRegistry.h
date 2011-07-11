@@ -27,18 +27,19 @@
 #define MIMETypeRegistry_h
 
 #include "PlatformString.h"
-#include "StringHash.h"
 #include <wtf/HashSet.h>
 #include <wtf/Vector.h>
+#include <wtf/text/StringHash.h>
 
 namespace WebCore {
 
 class MIMETypeRegistry {
 public:
-    static String getMIMETypeForExtension(const String& ext);
+    static String getMIMETypeForExtension(const String& extension);
     static Vector<String> getExtensionsForMIMEType(const String& type);
     static String getPreferredExtensionForMIMEType(const String& type);
-    static String getMediaMIMETypeForExtension(const String& ext);
+    static String getMediaMIMETypeForExtension(const String& extension);
+    static Vector<String> getMediaMIMETypesForExtension(const String& extension);
 
     static String getMIMETypeForPath(const String& path);
 

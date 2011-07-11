@@ -31,6 +31,7 @@
 #include "Document.h"
 #include "FixedTableLayout.h"
 #include "FrameView.h"
+#include "HitTestResult.h"
 #include "HTMLNames.h"
 #include "RenderLayer.h"
 #include "RenderTableCell.h"
@@ -170,6 +171,8 @@ void RenderTable::addChild(RenderObject* child, RenderObject* beforeChild)
     while (lastBox && lastBox->parent()->isAnonymous() && !lastBox->isTableSection() && lastBox->style()->display() != TABLE_CAPTION && lastBox->style()->display() != TABLE_COLUMN_GROUP)
         lastBox = lastBox->parent();
     if (lastBox && lastBox->isAnonymous() && !isAfterContent(lastBox)) {
+        if (beforeChild == lastBox)
+            beforeChild = lastBox->firstChild();
         lastBox->addChild(child, beforeChild);
         return;
     }
@@ -336,7 +339,7 @@ void RenderTable::layout()
             toRenderTableSection(child)->layoutRows(child == m_firstBody ? max(0, th - calculatedHeight) : 0);
     }
 
-    if (!m_firstBody && th > calculatedHeight && !style()->htmlHacks()) {
+    if (!m_firstBody && th > calculatedHeight && !document()->inQuirksMode()) {
         // Completely empty tables (with no sections or anything) should at least honor specified height
         // in strict mode.
         setHeight(height() + th);
@@ -459,7 +462,7 @@ void RenderTable::paintObject(PaintInfo& paintInfo, int tx, int ty)
 
     PaintInfo info(paintInfo);
     info.phase = paintPhase;
-    info.paintingRoot = paintingRootForChildren(paintInfo);
+    info.updatePaintingRootForChildren(this);
 
     for (RenderObject* child = firstChild(); child; child = child->nextSibling()) {
         if (child->isBox() && !toRenderBox(child)->hasSelfPaintingLayer() && (child->isTableSection() || child == m_caption))
@@ -490,7 +493,7 @@ void RenderTable::paintObject(PaintInfo& paintInfo, int tx, int ty)
 
 void RenderTable::paintBoxDecorations(PaintInfo& paintInfo, int tx, int ty)
 {
-    if (!shouldPaintWithinRoot(paintInfo))
+    if (!paintInfo.shouldPaintWithinRoot(this))
         return;
 
     int w = width();
@@ -561,7 +564,7 @@ void RenderTable::splitColumn(int pos, int firstSpan)
     // change width of all rows.
     for (RenderObject* child = firstChild(); child; child = child->nextSibling()) {
         if (child->isTableSection())
-            toRenderTableSection(child)->splitColumn(pos, oldSize + 1);
+            toRenderTableSection(child)->splitColumn(pos, firstSpan);
     }
 
     m_columnPos.grow(numEffCols() + 1);
@@ -755,12 +758,12 @@ int RenderTable::calcBorderLeft() const
 
             const RenderTableSection::CellStruct& cs = firstNonEmptySection->cellAt(0, leftmostColumn);
             
-            if (cs.cell) {
-                const BorderValue& cb = cs.cell->style()->borderLeft();
+            if (cs.hasCells()) {
+                const BorderValue& cb = cs.primaryCell()->style()->borderLeft();
                 if (cb.style() == BHIDDEN)
                     return 0;
 
-                const BorderValue& rb = cs.cell->parent()->style()->borderLeft();
+                const BorderValue& rb = cs.primaryCell()->parent()->style()->borderLeft();
                 if (rb.style() == BHIDDEN)
                     return 0;
 
@@ -814,12 +817,12 @@ int RenderTable::calcBorderRight() const
 
             const RenderTableSection::CellStruct& cs = firstNonEmptySection->cellAt(0, rightmostColumn);
             
-            if (cs.cell) {
-                const BorderValue& cb = cs.cell->style()->borderRight();
+            if (cs.hasCells()) {
+                const BorderValue& cb = cs.primaryCell()->style()->borderRight();
                 if (cb.style() == BHIDDEN)
                     return 0;
 
-                const BorderValue& rb = cs.cell->parent()->style()->borderRight();
+                const BorderValue& rb = cs.primaryCell()->parent()->style()->borderRight();
                 if (rb.style() == BHIDDEN)
                     return 0;
 
@@ -1024,13 +1027,8 @@ RenderTableCell* RenderTable::cellAbove(const RenderTableCell* cell) const
     // Look up the cell in the section's grid, which requires effective col index
     if (section) {
         int effCol = colToEffCol(cell->col());
-        RenderTableSection::CellStruct aboveCell;
-        // If we hit a span back up to a real cell.
-        do {
-            aboveCell = section->cellAt(rAbove, effCol);
-            effCol--;
-        } while (!aboveCell.cell && aboveCell.inColSpan && effCol >= 0);
-        return aboveCell.cell;
+        RenderTableSection::CellStruct& aboveCell = section->cellAt(rAbove, effCol);
+        return aboveCell.primaryCell();
     } else
         return 0;
 }
@@ -1056,13 +1054,8 @@ RenderTableCell* RenderTable::cellBelow(const RenderTableCell* cell) const
     // Look up the cell in the section's grid, which requires effective col index
     if (section) {
         int effCol = colToEffCol(cell->col());
-        RenderTableSection::CellStruct belowCell;
-        // If we hit a colspan back up to a real cell.
-        do {
-            belowCell = section->cellAt(rBelow, effCol);
-            effCol--;
-        } while (!belowCell.cell && belowCell.inColSpan && effCol >= 0);
-        return belowCell.cell;
+        RenderTableSection::CellStruct& belowCell = section->cellAt(rBelow, effCol);
+        return belowCell.primaryCell();
     } else
         return 0;
 }
@@ -1077,12 +1070,8 @@ RenderTableCell* RenderTable::cellBefore(const RenderTableCell* cell) const
         return 0;
     
     // If we hit a colspan back up to a real cell.
-    RenderTableSection::CellStruct prevCell;
-    do {
-        prevCell = section->cellAt(cell->row(), effCol - 1);
-        effCol--;
-    } while (!prevCell.cell && prevCell.inColSpan && effCol >= 0);
-    return prevCell.cell;
+    RenderTableSection::CellStruct& prevCell = section->cellAt(cell->row(), effCol - 1);
+    return prevCell.primaryCell();
 }
 
 RenderTableCell* RenderTable::cellAfter(const RenderTableCell* cell) const
@@ -1092,7 +1081,7 @@ RenderTableCell* RenderTable::cellAfter(const RenderTableCell* cell) const
     int effCol = colToEffCol(cell->col() + cell->colSpan());
     if (effCol >= numEffCols())
         return 0;
-    return cell->section()->cellAt(cell->row(), effCol).cell;
+    return cell->section()->primaryCellAt(cell->row(), effCol);
 }
 
 RenderBlock* RenderTable::firstLineBlock() const
@@ -1140,7 +1129,7 @@ bool RenderTable::nodeAtPoint(const HitTestRequest& request, HitTestResult& resu
     ty += y();
 
     // Check kids first.
-    if (!hasOverflowClip() || overflowClipRect(tx, ty).contains(xPos, yPos)) {
+    if (!hasOverflowClip() || overflowClipRect(tx, ty).intersects(result.rectFromPoint(xPos, yPos))) {
         for (RenderObject* child = lastChild(); child; child = child->previousSibling()) {
             if (child->isBox() && !toRenderBox(child)->hasSelfPaintingLayer() && (child->isTableSection() || child == m_caption) &&
                 child->nodeAtPoint(request, result, xPos, yPos, tx, ty, action)) {
@@ -1151,9 +1140,11 @@ bool RenderTable::nodeAtPoint(const HitTestRequest& request, HitTestResult& resu
     }
 
     // Check our bounds next.
-    if (visibleToHitTesting() && (action == HitTestBlockBackground || action == HitTestChildBlockBackground) && IntRect(tx, ty, width(), height()).contains(xPos, yPos)) {
+    IntRect boundsRect = IntRect(tx, ty, width(), height());
+    if (visibleToHitTesting() && (action == HitTestBlockBackground || action == HitTestChildBlockBackground) && boundsRect.intersects(result.rectFromPoint(xPos, yPos))) {
         updateHitTestResult(result, IntPoint(xPos - tx, yPos - ty));
-        return true;
+        if (!result.addNodeToRectBasedTestResult(node(), xPos, yPos, boundsRect))
+            return true;
     }
 
     return false;

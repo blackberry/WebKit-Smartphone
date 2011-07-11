@@ -3,7 +3,7 @@
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Peter Kelly (pmk@post.com)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004, 2005, 2006, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2005, 2006, 2008, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -126,7 +126,7 @@ void StyledElement::createInlineStyleDecl()
     m_inlineStyleDecl = CSSMutableStyleDeclaration::create();
     m_inlineStyleDecl->setParent(document()->elementSheet());
     m_inlineStyleDecl->setNode(this);
-    m_inlineStyleDecl->setStrictParsing(isHTMLElement() && !document()->inCompatMode());
+    m_inlineStyleDecl->setStrictParsing(isHTMLElement() && !document()->inQuirksMode());
 }
 
 void StyledElement::destroyInlineStyleDecl()
@@ -148,8 +148,8 @@ void StyledElement::attributeChanged(Attribute* attr, bool preserveDecls)
     if (attr->decl() && !preserveDecls) {
         attr->setDecl(0);
         setNeedsStyleRecalc();
-        if (namedAttrMap)
-            mappedAttributes()->declRemoved();
+        if (attributeMap())
+            attributeMap()->declRemoved();
     }
 
     bool checkDecl = true;
@@ -158,8 +158,8 @@ void StyledElement::attributeChanged(Attribute* attr, bool preserveDecls)
     if (preserveDecls) {
         if (attr->decl()) {
             setNeedsStyleRecalc();
-            if (namedAttrMap)
-                mappedAttributes()->declAdded();
+            if (attributeMap())
+                attributeMap()->declAdded();
             checkDecl = false;
         }
     } else if (!attr->isNull() && entry != eNone) {
@@ -167,8 +167,8 @@ void StyledElement::attributeChanged(Attribute* attr, bool preserveDecls)
         if (decl) {
             attr->setDecl(decl);
             setNeedsStyleRecalc();
-            if (namedAttrMap)
-                mappedAttributes()->declAdded();
+            if (attributeMap())
+                attributeMap()->declAdded();
             checkDecl = false;
         } else
             needToParse = true;
@@ -191,9 +191,10 @@ void StyledElement::attributeChanged(Attribute* attr, bool preserveDecls)
         attr->decl()->setMappedState(entry, attr->name(), attr->value());
         attr->decl()->setParent(0);
         attr->decl()->setNode(0);
-        if (namedAttrMap)
-            mappedAttributes()->declAdded();
+        if (attributeMap())
+            attributeMap()->declAdded();
     }
+
     updateAfterAttributeChanged(attr);
 }
 
@@ -219,8 +220,8 @@ void StyledElement::classAttributeChanged(const AtomicString& newClassString)
     if (hasClass)
         attributes()->setClass(newClassString);
     else {
-        if (namedAttrMap)    
-            namedAttrMap->clearClass();
+        if (attributeMap())    
+            attributeMap()->clearClass();
     }
     setNeedsStyleRecalc();
     dispatchSubtreeModifiedEvent();
@@ -228,16 +229,15 @@ void StyledElement::classAttributeChanged(const AtomicString& newClassString)
 
 void StyledElement::parseMappedAttribute(Attribute* attr)
 {
-    if (attr->name() == idAttributeName()) {
-        // unique id
+    if (isIdAttributeName(attr->name())) {
         setHasID(!attr->isNull());
-        if (namedAttrMap) {
+        if (attributeMap()) {
             if (attr->isNull())
-                namedAttrMap->setID(nullAtom);
-            else if (document()->inCompatMode())
-                namedAttrMap->setID(attr->value().lower());
+                attributeMap()->setIdForStyleResolution(nullAtom);
+            else if (document()->inQuirksMode())
+                attributeMap()->setIdForStyleResolution(attr->value().lower());
             else
-                namedAttrMap->setID(attr->value());
+                attributeMap()->setIdForStyleResolution(attr->value());
         }
         setNeedsStyleRecalc();
     } else if (attr->name() == classAttr)

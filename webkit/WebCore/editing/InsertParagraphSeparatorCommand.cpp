@@ -148,7 +148,7 @@ PassRefPtr<Element> InsertParagraphSeparatorCommand::cloneHierarchyUnderNewBlock
 void InsertParagraphSeparatorCommand::doApply()
 {
     bool splitText = false;
-    if (endingSelection().isNone())
+    if (!endingSelection().isNonOrphanedCaretOrRange())
         return;
     
     Position insertionPosition = endingSelection().start();
@@ -172,8 +172,9 @@ void InsertParagraphSeparatorCommand::doApply()
             || !startBlock->parentNode()
             || isTableCell(startBlock)
             || startBlock->hasTagName(formTag)
-            || (canonicalPos.node()->renderer() && canonicalPos.node()->renderer()->isTable())
-            || canonicalPos.node()->hasTagName(hrTag)) {
+            // FIXME: If the node is hidden, we don't have a canonical position so we will do the wrong thing for tables and <hr>. https://bugs.webkit.org/show_bug.cgi?id=40342
+            || (!canonicalPos.isNull() && canonicalPos.node()->renderer() && canonicalPos.node()->renderer()->isTable())
+            || (!canonicalPos.isNull() && canonicalPos.node()->hasTagName(hrTag))) {
         applyCommandToComposite(InsertLineBreakCommand::create(document()));
         return;
     }
@@ -214,7 +215,6 @@ void InsertParagraphSeparatorCommand::doApply()
     // Handle case when position is in the last visible position in its block,
     // including when the block is empty. 
     if (isLastInBlock) {
-        bool shouldApplyStyleAfterInsertion = true;
         if (nestNewBlock) {
             if (isFirstInBlock && !lineBreakExistsAtVisiblePosition(visiblePos)) {
                 // The block is empty.  Create an empty block to
@@ -227,11 +227,8 @@ void InsertParagraphSeparatorCommand::doApply()
         } else {
             // We can get here if we pasted a copied portion of a blockquote with a newline at the end and are trying to paste it
             // into an unquoted area. We then don't want the newline within the blockquote or else it will also be quoted.
-            if (Node* highestBlockquote = highestEnclosingNodeOfType(canonicalPos, &isMailBlockquote)) {
+            if (Node* highestBlockquote = highestEnclosingNodeOfType(canonicalPos, &isMailBlockquote))
                 startBlock = static_cast<Element*>(highestBlockquote);
-                // When inserting the newline after the blockquote, we don't want to apply the original style after the insertion
-                shouldApplyStyleAfterInsertion = false;
-            }
 
             // Most of the time we want to stay at the nesting level of the startBlock (e.g., when nesting within lists).  However,
             // for div nodes, this can result in nested div tags that are hard to break out of.

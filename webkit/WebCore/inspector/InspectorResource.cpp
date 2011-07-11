@@ -35,21 +35,47 @@
 
 #include "Cache.h"
 #include "CachedResource.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "DocumentLoader.h"
 #include "Frame.h"
 #include "InspectorFrontend.h"
+#include "InspectorValues.h"
+#include "ResourceLoadTiming.h"
 #include "ResourceRequest.h"
 #include "ResourceResponse.h"
+#include "StringBuffer.h"
 #include "TextEncoding.h"
-#include "ScriptObject.h"
+#include "WebSocketHandshakeRequest.h"
+#include "WebSocketHandshakeResponse.h"
+
+#include <wtf/Assertions.h>
 
 namespace WebCore {
+
+#if ENABLE(WEB_SOCKETS)
+// Create human-readable binary representation, like "01:23:45:67:89:AB:CD:EF".
+static String createReadableStringFromBinary(const unsigned char* value, size_t length)
+{
+    ASSERT(length > 0);
+    static const char hexDigits[17] = "0123456789ABCDEF";
+    size_t bufferSize = length * 3 - 1;
+    StringBuffer buffer(bufferSize);
+    size_t index = 0;
+    for (size_t i = 0; i < length; ++i) {
+        if (i > 0)
+            buffer[index++] = ':';
+        buffer[index++] = hexDigits[value[i] >> 4];
+        buffer[index++] = hexDigits[value[i] & 0xF];
+    }
+    ASSERT(index == bufferSize);
+    return String::adopt(buffer);
+}
+#endif
 
 InspectorResource::InspectorResource(unsigned long identifier, DocumentLoader* loader, const KURL& requestURL)
     : m_identifier(identifier)
     , m_loader(loader)
-    , m_frame(loader->frame())
+    , m_frame(loader ? loader->frame() : 0)
     , m_requestURL(requestURL)
     , m_expectedContentLength(0)
     , m_cached(false)
@@ -62,7 +88,12 @@ InspectorResource::InspectorResource(unsigned long identifier, DocumentLoader* l
     , m_endTime(-1.0)
     , m_loadEventTime(-1.0)
     , m_domContentEventTime(-1.0)
+    , m_connectionID(0)
+    , m_connectionReused(false)
     , m_isMainResource(false)
+#if ENABLE(WEB_SOCKETS)
+    , m_isWebSocket(false)
+#endif
 {
 }
 
@@ -85,6 +116,12 @@ PassRefPtr<InspectorResource> InspectorResource::appendRedirect(unsigned long id
     return redirect;
 }
 
+PassRefPtr<InspectorResource> InspectorResource::create(unsigned long identifier, DocumentLoader* loader, const KURL& requestURL)
+{
+    ASSERT(loader);
+    return adoptRef(new InspectorResource(identifier, loader, requestURL));
+}
+
 PassRefPtr<InspectorResource> InspectorResource::createCached(unsigned long identifier, DocumentLoader* loader, const CachedResource* cachedResource)
 {
     PassRefPtr<InspectorResource> resource = create(identifier, loader, KURL(ParsedURLString, cachedResource->url()));
@@ -103,6 +140,16 @@ PassRefPtr<InspectorResource> InspectorResource::createCached(unsigned long iden
 
     return resource;
 }
+
+#if ENABLE(WEB_SOCKETS)
+PassRefPtr<InspectorResource> InspectorResource::createWebSocket(unsigned long identifier, const KURL& requestURL, const KURL& documentURL)
+{
+    RefPtr<InspectorResource> resource = adoptRef(new InspectorResource(identifier, 0, requestURL));
+    resource->markWebSocket();
+    resource->m_documentURL = documentURL;
+    return resource.release();
+}
+#endif
 
 void InspectorResource::updateRequest(const ResourceRequest& request)
 {
@@ -128,16 +175,68 @@ void InspectorResource::updateResponse(const ResourceResponse& response)
     m_responseStatusText = response.httpStatusText();
     m_suggestedFilename = response.suggestedFilename();
 
+    m_connectionID = response.connectionID();
+    m_connectionReused = response.connectionReused();
+    m_loadTiming = response.resourceLoadTiming();
+    m_cached = response.wasCached();
+
+    if (!m_cached && m_loadTiming && m_loadTiming->requestTime)
+        m_responseReceivedTime = m_loadTiming->requestTime + m_loadTiming->receiveHeadersEnd / 1000.0;
+    else
+        m_responseReceivedTime = currentTime();
+
+    m_changes.set(TimingChange);
     m_changes.set(ResponseChange);
     m_changes.set(TypeChange);
 }
 
-static void populateHeadersObject(ScriptObject* object, const HTTPHeaderMap& headers)
+#if ENABLE(WEB_SOCKETS)
+void InspectorResource::updateWebSocketRequest(const WebSocketHandshakeRequest& request)
 {
+    m_requestHeaderFields = request.headerFields();
+    m_requestMethod = "GET"; // Currently we always use "GET" to request handshake.
+    m_webSocketRequestKey3.set(new WebSocketHandshakeRequest::Key3(request.key3()));
+    m_changes.set(RequestChange);
+    m_changes.set(TypeChange);
+}
+
+void InspectorResource::updateWebSocketResponse(const WebSocketHandshakeResponse& response)
+{
+    m_responseStatusCode = response.statusCode();
+    m_responseStatusText = response.statusText();
+    m_responseHeaderFields = response.headerFields();
+    m_webSocketChallengeResponse.set(new WebSocketHandshakeResponse::ChallengeResponse(response.challengeResponse()));
+    m_changes.set(ResponseChange);
+    m_changes.set(TypeChange);
+}
+#endif // ENABLE(WEB_SOCKETS)
+
+static PassRefPtr<InspectorObject> buildHeadersObject(const HTTPHeaderMap& headers)
+{
+    RefPtr<InspectorObject> object = InspectorObject::create();
     HTTPHeaderMap::const_iterator end = headers.end();
     for (HTTPHeaderMap::const_iterator it = headers.begin(); it != end; ++it) {
-        object->set(it->first.string(), it->second);
+        object->setString(it->first.string(), it->second);
     }
+    return object;
+}
+
+static PassRefPtr<InspectorObject> buildObjectForTiming(ResourceLoadTiming* timing)
+{
+    RefPtr<InspectorObject> jsonObject = InspectorObject::create();
+    jsonObject->setNumber("requestTime", timing->requestTime);
+    jsonObject->setNumber("proxyStart", timing->proxyStart);
+    jsonObject->setNumber("proxyEnd", timing->proxyEnd);
+    jsonObject->setNumber("dnsStart", timing->dnsStart);
+    jsonObject->setNumber("dnsEnd", timing->dnsEnd);
+    jsonObject->setNumber("connectStart", timing->connectStart);
+    jsonObject->setNumber("connectEnd", timing->connectEnd);
+    jsonObject->setNumber("sslStart", timing->sslStart);
+    jsonObject->setNumber("sslEnd", timing->sslEnd);
+    jsonObject->setNumber("sendStart", timing->sendStart);
+    jsonObject->setNumber("sendEnd", timing->sendEnd);
+    jsonObject->setNumber("receiveHeadersEnd", timing->receiveHeadersEnd);
+    return jsonObject;
 }
 
 
@@ -146,64 +245,76 @@ void InspectorResource::updateScriptObject(InspectorFrontend* frontend)
     if (m_changes.hasChange(NoChange))
         return;
 
-    ScriptObject jsonObject = frontend->newScriptObject();
+    RefPtr<InspectorObject> jsonObject = InspectorObject::create();
+    jsonObject->setNumber("id", m_identifier);
     if (m_changes.hasChange(RequestChange)) {
-        jsonObject.set("url", m_requestURL.string());
-        jsonObject.set("documentURL", m_frame->document()->url().string());
-        jsonObject.set("host", m_requestURL.host());
-        jsonObject.set("path", m_requestURL.path());
-        jsonObject.set("lastPathComponent", m_requestURL.lastPathComponent());
-        ScriptObject requestHeaders = frontend->newScriptObject();
-        populateHeadersObject(&requestHeaders, m_requestHeaderFields);
-        jsonObject.set("requestHeaders", requestHeaders);
-        jsonObject.set("mainResource", m_isMainResource);
-        jsonObject.set("requestMethod", m_requestMethod);
-        jsonObject.set("requestFormData", m_requestFormData);
-        jsonObject.set("didRequestChange", true);
-        jsonObject.set("cached", m_cached);
+        if (m_frame)
+            m_documentURL = m_frame->document()->url();
+        jsonObject->setString("url", m_requestURL.string());
+        jsonObject->setString("documentURL", m_documentURL.string());
+        jsonObject->setString("host", m_requestURL.host());
+        jsonObject->setString("path", m_requestURL.path());
+        jsonObject->setString("lastPathComponent", m_requestURL.lastPathComponent());
+        RefPtr<InspectorObject> requestHeaders = buildHeadersObject(m_requestHeaderFields);
+        jsonObject->setObject("requestHeaders", requestHeaders);
+        jsonObject->setBoolean("mainResource", m_isMainResource);
+        jsonObject->setString("requestMethod", m_requestMethod);
+        jsonObject->setString("requestFormData", m_requestFormData);
+        jsonObject->setBoolean("didRequestChange", true);
+#if ENABLE(WEB_SOCKETS)
+        if (m_webSocketRequestKey3)
+            jsonObject->setString("webSocketRequestKey3", createReadableStringFromBinary(m_webSocketRequestKey3->value, sizeof(m_webSocketRequestKey3->value)));
+#endif
     }
 
     if (m_changes.hasChange(ResponseChange)) {
-        jsonObject.set("mimeType", m_mimeType);
-        jsonObject.set("suggestedFilename", m_suggestedFilename);
-        jsonObject.set("expectedContentLength", m_expectedContentLength);
-        jsonObject.set("statusCode", m_responseStatusCode);
-        jsonObject.set("statusText", m_responseStatusText);
-        jsonObject.set("suggestedFilename", m_suggestedFilename);
-        ScriptObject responseHeaders = frontend->newScriptObject();
-        populateHeadersObject(&responseHeaders, m_responseHeaderFields);
-        jsonObject.set("responseHeaders", responseHeaders);
-        jsonObject.set("didResponseChange", true);
+        jsonObject->setString("mimeType", m_mimeType);
+        jsonObject->setString("suggestedFilename", m_suggestedFilename);
+        jsonObject->setNumber("expectedContentLength", m_expectedContentLength);
+        jsonObject->setNumber("statusCode", m_responseStatusCode);
+        jsonObject->setString("statusText", m_responseStatusText);
+        RefPtr<InspectorObject> responseHeaders = buildHeadersObject(m_responseHeaderFields);
+        jsonObject->setObject("responseHeaders", responseHeaders);
+        jsonObject->setNumber("connectionID", m_connectionID);
+        jsonObject->setBoolean("connectionReused", m_connectionReused);
+        jsonObject->setBoolean("cached", m_cached);
+        if (m_loadTiming && !m_cached)
+            jsonObject->setObject("timing", buildObjectForTiming(m_loadTiming.get()));
+#if ENABLE(WEB_SOCKETS)
+        if (m_webSocketChallengeResponse)
+            jsonObject->setString("webSocketChallengeResponse", createReadableStringFromBinary(m_webSocketChallengeResponse->value, sizeof(m_webSocketChallengeResponse->value)));
+#endif
+        jsonObject->setBoolean("didResponseChange", true);
     }
 
     if (m_changes.hasChange(TypeChange)) {
-        jsonObject.set("type", static_cast<int>(type()));
-        jsonObject.set("didTypeChange", true);
+        jsonObject->setNumber("type", static_cast<int>(type()));
+        jsonObject->setBoolean("didTypeChange", true);
     }
 
     if (m_changes.hasChange(LengthChange)) {
-        jsonObject.set("resourceSize", m_length);
-        jsonObject.set("didLengthChange", true);
+        jsonObject->setNumber("resourceSize", m_length);
+        jsonObject->setBoolean("didLengthChange", true);
     }
 
     if (m_changes.hasChange(CompletionChange)) {
-        jsonObject.set("failed", m_failed);
-        jsonObject.set("finished", m_finished);
-        jsonObject.set("didCompletionChange", true);
+        jsonObject->setBoolean("failed", m_failed);
+        jsonObject->setBoolean("finished", m_finished);
+        jsonObject->setBoolean("didCompletionChange", true);
     }
 
     if (m_changes.hasChange(TimingChange)) {
         if (m_startTime > 0)
-            jsonObject.set("startTime", m_startTime);
+            jsonObject->setNumber("startTime", m_startTime);
         if (m_responseReceivedTime > 0)
-            jsonObject.set("responseReceivedTime", m_responseReceivedTime);
+            jsonObject->setNumber("responseReceivedTime", m_responseReceivedTime);
         if (m_endTime > 0)
-            jsonObject.set("endTime", m_endTime);
+            jsonObject->setNumber("endTime", m_endTime);
         if (m_loadEventTime > 0)
-            jsonObject.set("loadEventTime", m_loadEventTime);
+            jsonObject->setNumber("loadEventTime", m_loadEventTime);
         if (m_domContentEventTime > 0)
-            jsonObject.set("domContentEventTime", m_domContentEventTime);
-        jsonObject.set("didTimingChange", true);
+            jsonObject->setNumber("domContentEventTime", m_domContentEventTime);
+        jsonObject->setBoolean("didTimingChange", true);
     }
 
     if (m_changes.hasChange(RedirectsChange)) {
@@ -211,8 +322,8 @@ void InspectorResource::updateScriptObject(InspectorFrontend* frontend)
             m_redirects[i]->updateScriptObject(frontend);
     }
 
-    if (frontend->updateResource(m_identifier, jsonObject))
-        m_changes.clearAll();
+    frontend->updateResource(jsonObject);
+    m_changes.clearAll();
 }
 
 void InspectorResource::releaseScriptObject(InspectorFrontend* frontend)
@@ -228,11 +339,13 @@ void InspectorResource::releaseScriptObject(InspectorFrontend* frontend)
 
 CachedResource* InspectorResource::cachedResource() const
 {
-    // Try hard to find a corresponding CachedResource. During preloading, DocLoader may not have the resource in document resources set yet,
+    // Try hard to find a corresponding CachedResource. During preloading, CachedResourceLoader may not have the resource in document resources set yet,
     // but Inspector will already try to fetch data that is only available via CachedResource (and it won't update once the resource is added,
     // because m_changes will not have the appropriate bits set).
+    if (!m_frame)
+        return 0;
     const String& url = m_requestURL.string();
-    CachedResource* cachedResource = m_frame->document()->docLoader()->cachedResource(url);
+    CachedResource* cachedResource = m_frame->document()->cachedResourceLoader()->cachedResource(url);
     if (!cachedResource)
         cachedResource = cache()->resourceForURL(url);
     return cachedResource;
@@ -267,7 +380,13 @@ InspectorResource::Type InspectorResource::type() const
     if (!m_overrideContent.isNull())
         return m_overrideContentType;
 
-    if (m_requestURL == m_loader->requestURL()) {
+#if ENABLE(WEB_SOCKETS)
+    if (m_isWebSocket)
+        return WebSocket;
+#endif
+
+    ASSERT(m_loader);
+    if (equalIgnoringFragmentIdentifier(m_requestURL, m_loader->requestURL())) {
         InspectorResource::Type resourceType = cachedResourceType();
         if (resourceType == Other)
             return Doc;
@@ -275,7 +394,7 @@ InspectorResource::Type InspectorResource::type() const
         return resourceType;
     }
 
-    if (m_loader->frameLoader() && m_requestURL == m_loader->frameLoader()->iconURL())
+    if (m_loader->frameLoader() && equalIgnoringFragmentIdentifier(m_requestURL, m_loader->frameLoader()->iconURL()))
         return Image;
 
     return cachedResourceType();
@@ -306,7 +425,7 @@ String InspectorResource::sourceString() const
 
 PassRefPtr<SharedBuffer> InspectorResource::resourceData(String* textEncodingName) const
 {
-    if (m_requestURL == m_loader->requestURL()) {
+    if (m_loader && equalIgnoringFragmentIdentifier(m_requestURL, m_loader->requestURL())) {
         *textEncodingName = m_frame->document()->inputEncoding();
         return m_loader->mainResourceData();
     }
@@ -333,12 +452,6 @@ PassRefPtr<SharedBuffer> InspectorResource::resourceData(String* textEncodingNam
 void InspectorResource::startTiming()
 {
     m_startTime = currentTime();
-    m_changes.set(TimingChange);
-}
-
-void InspectorResource::markResponseReceivedTime()
-{
-    m_responseReceivedTime = currentTime();
     m_changes.set(TimingChange);
 }
 

@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2004, 2005, 2006 Apple Inc.
  * Copyright (C) 2009 Google Inc. All rights reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -79,6 +80,10 @@
 
 #endif /* OS(WINDOWS) */
 
+#if OS(OLYMPIA)
+#define WEBCORE_NAVIGATOR_VENDOR "Research In Motion Limited"
+#endif
+
 #if PLATFORM(ANDROID)
 #define WEBCORE_NAVIGATOR_VENDOR "Google Inc."
 // This must be defined before we include FastMalloc.h, below.
@@ -152,21 +157,9 @@
 #define WTF_USE_CFNETWORK 1
 #undef WTF_USE_CURL
 #endif
-#undef WTF_USE_WININET
-#define WTF_PLATFORM_CF 1
-#define WTF_USE_PTHREADS 0
 #endif
 
 #if PLATFORM(MAC)
-// ATSUI vs. CoreText
-#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
-#define WTF_USE_ATSUI 0
-#define WTF_USE_CORE_TEXT 1
-#else
-#define WTF_USE_ATSUI 1
-#define WTF_USE_CORE_TEXT 0
-#endif
-
 // New theme
 #define WTF_USE_NEW_THEME 1
 #endif // PLATFORM(MAC)
@@ -202,7 +195,9 @@
 #endif /* !defined(WTF_USE_V8) */
 
 /* Using V8 implies not using JSC and vice versa */
+#if !defined(WTF_USE_JSC)
 #define WTF_USE_JSC !WTF_USE_V8
+#endif
 
 #if PLATFORM(CG)
 #ifndef CGFLOAT_DEFINED
@@ -223,3 +218,9 @@ typedef float CGFloat;
 #if PLATFORM(WIN) && PLATFORM(CG)
 #define WTF_USE_SAFARI_THEME 1
 #endif
+
+#if PLATFORM(QT) && USE(V8) && defined(Q_WS_X11)
+/* protect ourselves from evil X11 defines */
+#include <bridge/npruntime_internal.h>
+#endif
+

@@ -9,7 +9,7 @@ module PrettyPatch
 
 public
 
-    GIT_PATH = "/opt/local/bin/git"
+    GIT_PATH = "git"
 
     def self.prettify(string)
         fileDiffs = FileDiff.parse(string)
@@ -73,10 +73,13 @@ private
         SunSpider
         WebCore
         WebKit
+        WebKit2
         WebKitExamplePlugins
         WebKitLibraries
         WebKitSite
         WebKitTools
+        autotools
+        cmake
     ]
 
     def self.find_url_and_path(file_path)
@@ -184,120 +187,116 @@ h1 :hover {
 }
 
 /* Support for inline comments */
-.comment {
-  border: 1px width solid red;
-  font-family: monospace;
+
+.author {
+  font-style: italic;
 }
 
-.comment textarea {
+.comment {
+  position: relative;
+}
+
+.comment textarea, .overallComments textarea {
   width: 100%;
   height: 6em;
 }
 
-.submitted {
-  font-weight: bold;
-  color: red;
+body {
+  margin-bottom: 40px;
+}
+
+#toolbar {
+  position: fixed;
+  padding: 5px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-top: 1px solid #ddd;
+  background-color: #eee;
+}
+
+#toolbar .actions {
+  float: left;
+}
+
+#toolbar .message {
+  float: right;
+}
+
+#toolbar .commentStatus {
+  font-style:italic
+}
+
+.winter {
+  position: fixed;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background-color: black;
+  opacity: 0.8;
+}
+
+.inactive {
+  display: none;
+}
+
+.lightbox {
+  position: fixed;
+  z-index: 6;
+  left: 10%;
+  right: 10%;
+  top: 10%;
+  bottom: 10%;
+}
+
+.lightbox iframe {
+  width: 100%;
+  height: 100%;
+}
+
+.commentContext .lineNumber {
+  background-color: yellow;
+}
+
+.selected .lineNumber {
+  background-color: #69F;
+  border-bottom-color: #69F;
+  border-right-color: #69F;
+}
+
+.help {
+ color: gray;
+ font-style: italic;
+}
+
+.description {
+  font-style: italic;
+}
+
+.comment, .overallComments, .previousComment, .frozenComment {
+  background-color: #ffd;
+}
+
+.overallComments {
+  padding: 5px;
+}
+
+.previousComment, .frozenComment {
+  border: inset 1px; padding: 5px;
+}
+
+.comment button {
+  width: 6em;
+}
+
+.focused {
+  border: 1px solid blue;
 }
 </style>
-<script src="https://bugs.webkit.org/prototype.js"></script> 
-<script>
-// Code to support inline comments in bugs.webkit.org.
-
-function getSubmitTextArea() {
-  // Note that this only works when running on same domain.
-  if (parent.frames.length == 2) {
-    // We're probably in the action=review page.
-    return parent.frames[1].document.getElementById("comment");
-  }
-  // We're probably in the action=edit page.
-  return parent.document.getElementById("smallCommentFrame");
-}
-
-function onLineClicked(e) {
-  // Find the right line div.
-  // FIXME: why does a click event on my div get intercepted
-  // by a span or even document element :(
-  var line = e.target;
-  while (true) {
-    if (line == document)
-      return;
-    if (line.getAttribute("class").substr(0, 4) == "Line")
-      break;
-    line = line.up();
-  }
-
-  if (line.hasComment)
-    return;
-  line.hasComment = true;
-
-  var lineFrom = line.select("[class='from lineNumber']")[0].innerHTML;
-  var lineTo = line.select("[class='to lineNumber']")[0].innerHTML;
-  var lineText = line.select("[class='text']")[0].innerHTML;
-
-  line.insert({after:
-      "<div class='comment'>" +
-      "<textarea></textarea>" +
-      "<button onclick='onCommentSubmit(this.up())'>Add</button>" +
-      "<button onclick='onCommentCancel(this.up())'>Cancel</button>" +
-      "</div>"});
-
-  var comment = line.next();
-  var textarea = comment.select("textarea")[0];
-  textarea.focus();
-}
-
-function onCommentSubmit(comment) {
-  var textarea = comment.select("textarea")[0];
-  var buttons = comment.select("button");
-  var commentText = textarea.value;
-
-  var line = comment.previous();
-  line.hasComment = false
-  var lineFrom = line.select("[class='from lineNumber']")[0].textContent;
-  var lineTo = line.select("[class='to lineNumber']")[0].textContent;
-  var lineText = line.select("[class='text']")[0].textContent;
-  var filename = comment.up().up().select("h1")[0].down().textContent;
-
-  var snippet = filename + ":" + lineTo + "\\n +  " + lineText + "\\n" + commentText + "\\n\\n";
-
-  // Remove all the crap.
-  textarea.remove();
-  buttons[0].remove();
-  buttons[1].remove();
-
-  // Insert a non-editable form of our comment.
-  comment.insert("<pre>" + commentText + "</pre>");
-  comment.setAttribute("class", "comment submitted");
-
-  // Update the submission text area.
-  var submission = getSubmitTextArea();
-  submission.value = submission.value + snippet;
-}
-
-function onCommentCancel(comment) {
-  var line = comment.previous();
-  line.hasComment = false
-  comment.remove();
-}
-
-function onClearSubmitArea() {
-  var submission = getSubmitTextArea();
-  submission.value = "";
-}
-
-if (top !== window) {
-  window.addEventListener("load", function () {
-    var lines = $$("div[class~='Line']");
-    for (var i = 0; i < lines.length; ++i) {
-      lines[i].addEventListener("click", onLineClicked, false);
-    }
-
-    $$("h1")[0].insert("<button style='float:right;' "+
-      "onclick='onClearSubmitArea()'>" +
-      "Clear Main Comment Box</button>");
-  }, false);
-}
-</script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script> 
+<script src="code-review.js?version=7"></script> 
 EOF
 
     def self.revisionOrDescription(string)

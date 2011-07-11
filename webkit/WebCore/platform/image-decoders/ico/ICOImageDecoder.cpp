@@ -44,8 +44,9 @@ namespace WebCore {
 static const size_t sizeOfDirectory = 6;
 static const size_t sizeOfDirEntry = 16;
 
-ICOImageDecoder::ICOImageDecoder()
-    : m_decodedOffset(0)
+ICOImageDecoder::ICOImageDecoder(bool premultiplyAlpha)
+    : ImageDecoder(premultiplyAlpha)
+    , m_decodedOffset(0)
 {
 }
 
@@ -96,8 +97,11 @@ bool ICOImageDecoder::setSize(unsigned width, unsigned height)
 size_t ICOImageDecoder::frameCount()
 {
     decode(0, true);
-    if (m_frameBufferCache.isEmpty())
+    if (m_frameBufferCache.isEmpty()) {
         m_frameBufferCache.resize(m_dirEntries.size());
+        for (size_t i = 0; i < m_dirEntries.size(); ++i)
+            m_frameBufferCache[i].setPremultiplyAlpha(m_premultiplyAlpha);
+    }
     // CAUTION: We must not resize m_frameBufferCache again after this, as
     // decodeAtIndex() may give a BMPImageReader a pointer to one of the
     // entries.
@@ -114,6 +118,13 @@ RGBA32Buffer* ICOImageDecoder::frameBufferAtIndex(size_t index)
     if (buffer->status() != RGBA32Buffer::FrameComplete)
         decode(index, false);
     return buffer;
+}
+
+bool ICOImageDecoder::setFailed()
+{
+    m_bmpReaders.clear();
+    m_pngDecoders.clear();
+    return ImageDecoder::setFailed();
 }
 
 // static
@@ -147,6 +158,13 @@ void ICOImageDecoder::decode(size_t index, bool onlySize)
     // has failed.
     if ((!decodeDirectory() || (!onlySize && !decodeAtIndex(index))) && isAllDataReceived())
         setFailed();
+    // If we're done decoding this frame, we don't need the BMPImageReader or
+    // PNGImageDecoder anymore.  (If we failed, these have already been
+    // cleared.)
+    else if ((m_frameBufferCache.size() > index) && (m_frameBufferCache[index].status() == RGBA32Buffer::FrameComplete)) {
+        m_bmpReaders[index].clear();
+        m_pngDecoders[index].clear();
+    }
 }
 
 bool ICOImageDecoder::decodeDirectory()
@@ -183,7 +201,7 @@ bool ICOImageDecoder::decodeAtIndex(size_t index)
     }
 
     if (!m_pngDecoders[index]) {
-        m_pngDecoders[index].set(new PNGImageDecoder());
+        m_pngDecoders[index].set(new PNGImageDecoder(m_premultiplyAlpha));
         setDataForPNGDecoderAtIndex(index);
     }
     // Fail if the size the PNGImageDecoder calculated does not match the size
@@ -241,8 +259,9 @@ bool ICOImageDecoder::processDirectoryEntries()
 
     // The image size is the size of the largest entry.
     const IconDirectoryEntry& dirEntry = m_dirEntries.first();
-    setSize(dirEntry.m_size.width(), dirEntry.m_size.height());
-    return true;
+    // Technically, this next call shouldn't be able to fail, since the width
+    // and height here are each <= 256, and |m_frameSize| is empty.
+    return setSize(dirEntry.m_size.width(), dirEntry.m_size.height());
 }
 
 ICOImageDecoder::IconDirectoryEntry ICOImageDecoder::readDirectoryEntry()

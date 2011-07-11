@@ -1,22 +1,22 @@
 /*
-    Copyright (C) 2004, 2005, 2006, 2007, 2008 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006, 2007, 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #ifndef SVGUseElement_h
 #define SVGUseElement_h
@@ -40,11 +40,17 @@ namespace WebCore {
                           public SVGExternalResourcesRequired,
                           public SVGURIReference {
     public:
-        SVGUseElement(const QualifiedName&, Document*);
-        virtual ~SVGUseElement();
+        static PassRefPtr<SVGUseElement> create(const QualifiedName&, Document*);
 
         SVGElementInstance* instanceRoot() const;
         SVGElementInstance* animatedInstanceRoot() const;
+        SVGElementInstance* instanceForShadowTreeElement(Node*) const;
+        void invalidateShadowTree();
+
+        RenderObject* rendererClipChild() const;
+
+    private:
+        SVGUseElement(const QualifiedName&, Document*);
 
         virtual bool isValid() const { return SVGTests::isValid(); }
 
@@ -62,19 +68,16 @@ namespace WebCore {
         virtual void detach();
 
         virtual Path toClipPath() const;
-        RenderObject* rendererClipChild() const;
 
         static void removeDisallowedElementsFromSubtree(Node* element);
-        SVGElementInstance* instanceForShadowTreeElement(Node* element) const;
-        void invalidateShadowTree();
 
-    private:
+        void setUpdatesBlocked(bool blocked) { m_updatesBlocked = blocked; }
+
         friend class RenderSVGShadowTreeRootContainer;
         bool isPendingResource() const { return m_isPendingResource; }
         void buildShadowAndInstanceTree(SVGShadowTreeRootElement*);
 
-    private:
-        virtual bool hasRelativeValues() const;
+        virtual bool selfHasRelativeLengths() const;
 
         DECLARE_ANIMATED_PROPERTY(SVGUseElement, SVGNames::xAttr, SVGLength, X, x)
         DECLARE_ANIMATED_PROPERTY(SVGUseElement, SVGNames::yAttr, SVGLength, Y, y)
@@ -87,7 +90,6 @@ namespace WebCore {
         // SVGExternalResourcesRequired
         DECLARE_ANIMATED_PROPERTY(SVGUseElement, SVGNames::externalResourcesRequiredAttr, bool, ExternalResourcesRequired, externalResourcesRequired)
 
-    private:
         // Instance tree handling
         void buildInstanceTree(SVGElement* target, SVGElementInstance* targetInstance, bool& foundCycle);
         void handleDeepUseReferencing(SVGUseElement* use, SVGElementInstance* targetInstance, bool& foundCycle);
@@ -110,6 +112,7 @@ namespace WebCore {
         void updateContainerOffsets();
         void updateContainerSizes();
 
+        bool m_updatesBlocked;
         bool m_isPendingResource;
         bool m_needsShadowTreeRecreation;
         String m_resourceId;

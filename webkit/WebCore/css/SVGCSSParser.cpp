@@ -1,7 +1,7 @@
 /*
     Copyright (C) 2008 Eric Seidel <eric@webkit.org>
     Copyright (C) 2004, 2005, 2007 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2007 Rob Buis <buis@kde.org>
+                  2004, 2005, 2007, 2010 Rob Buis <buis@kde.org>
     Copyright (C) 2005, 2006 Apple Computer, Inc.
 
     This library is free software; you can redistribute it and/or
@@ -31,6 +31,7 @@
 #include "CSSQuirkPrimitiveValue.h"
 #include "CSSValueKeywords.h"
 #include "CSSValueList.h"
+#include "RenderTheme.h"
 #include "SVGPaint.h"
 
 using namespace std;
@@ -181,9 +182,11 @@ bool CSSParser::parseSVGValue(int propId, bool important)
                 parsedValue = SVGPaint::create(SVGPaint::SVG_PAINTTYPE_NONE);
             else if (id == CSSValueCurrentcolor)
                 parsedValue = SVGPaint::create(SVGPaint::SVG_PAINTTYPE_CURRENTCOLOR);
+            else if ((id >= CSSValueActiveborder && id <= CSSValueWindowtext) || id == CSSValueMenu)
+                parsedValue = SVGPaint::create(RenderTheme::defaultTheme()->systemColor(id));
             else if (value->unit == CSSPrimitiveValue::CSS_URI) {
                 RGBA32 c = Color::transparent;
-                if (m_valueList->next() && parseColorFromValue(m_valueList->current(), c, true)) {
+                if (m_valueList->next() && parseColorFromValue(m_valueList->current(), c)) {
                     parsedValue = SVGPaint::create(value->string, c);
                 } else
                     parsedValue = SVGPaint::create(SVGPaint::SVG_PAINTTYPE_URI, value->string);
@@ -220,6 +223,11 @@ bool CSSParser::parseSVGValue(int propId, bool important)
         if (parsedValue)
             m_valueList->next();
 
+        break;
+        
+    case CSSPropertyVectorEffect: // none | non-scaling-stroke | inherit
+        if (id == CSSValueNone || id == CSSValueNonScalingStroke)
+            valid_primitive = true;
         break;
 
     case CSSPropertyWritingMode:
@@ -330,7 +338,7 @@ PassRefPtr<CSSValue> CSSParser::parseSVGStrokeDasharray()
 PassRefPtr<CSSValue> CSSParser::parseSVGPaint()
 {
     RGBA32 c = Color::transparent;
-    if (!parseColorFromValue(m_valueList->current(), c, true))
+    if (!parseColorFromValue(m_valueList->current(), c))
         return SVGPaint::create();
     return SVGPaint::create(Color(c));
 }
@@ -338,7 +346,7 @@ PassRefPtr<CSSValue> CSSParser::parseSVGPaint()
 PassRefPtr<CSSValue> CSSParser::parseSVGColor()
 {
     RGBA32 c = Color::transparent;
-    if (!parseColorFromValue(m_valueList->current(), c, true))
+    if (!parseColorFromValue(m_valueList->current(), c))
         return 0;
     return SVGColor::create(Color(c));
 }

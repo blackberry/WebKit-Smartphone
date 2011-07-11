@@ -1,0 +1,19 @@
+<html>
+<head>
+<script>
+function runTest()
+{
+    var input = document.getElementById("input");
+    var selection = window.getSelection();
+    selection.setPosition(input, 2);
+}
+window.onload = runTest;
+</script>
+</head>
+<body>
+<p>This test can be used to verify that the vertical text insertion caret is drawn for a Unix newline. If the vertical caret is visible below then this test PASSED. Otherwise, it FAILED.</p>
+<pre id="input" contenteditable="true">There should be a vertical caret at the start of the next line:
+
+</pre>
+</body>
+</html>

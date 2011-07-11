@@ -1,4 +1,5 @@
 /*
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  * Copyright (C) 2003, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
  * Copyright (C) 2008-2009 Torch Mobile, Inc.
  *
@@ -21,7 +22,7 @@
  * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
  * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #ifndef GraphicsContext_h
@@ -40,6 +41,7 @@
 #if PLATFORM(CG)
 typedef struct CGContext PlatformGraphicsContext;
 #elif PLATFORM(CAIRO)
+#include "PlatformRefPtrCairo.h"
 typedef struct _cairo PlatformGraphicsContext;
 #elif PLATFORM(OPENVG)
 namespace WebCore {
@@ -47,9 +49,10 @@ class SurfaceOpenVG;
 }
 typedef class WebCore::SurfaceOpenVG PlatformGraphicsContext;
 #elif PLATFORM(QT)
-QT_BEGIN_NAMESPACE
-class QPainter;
-QT_END_NAMESPACE
+#include <QPainter>
+namespace WebCore {
+class ContextShadow;
+}
 typedef QPainter PlatformGraphicsContext;
 #elif PLATFORM(WX)
 class wxGCDC;
@@ -71,7 +74,10 @@ class wxWindowDC;
     typedef wxWindowDC PlatformGraphicsContext;
 #endif
 #elif PLATFORM(SKIA)
-typedef class PlatformContextSkia PlatformGraphicsContext;
+namespace WebCore {
+class PlatformContextSkia;
+}
+typedef WebCore::PlatformContextSkia PlatformGraphicsContext;
 #elif PLATFORM(HAIKU)
 class BView;
 typedef BView PlatformGraphicsContext;
@@ -95,6 +101,12 @@ typedef unsigned char UInt8;
 #endif
 #endif
 
+#if PLATFORM(CHROMIUM)
+#define CanvasInterpolationQuality InterpolationMedium
+#else
+#define CanvasInterpolationQuality InterpolationDefault
+#endif
+
 #if PLATFORM(QT) && defined(Q_WS_WIN)
 #include <windows.h>
 #endif
@@ -112,6 +124,7 @@ namespace WebCore {
     const int cMisspellingLinePatternGapWidth = 1;
 
     class AffineTransform;
+    class DrawingBuffer;
     class Font;
     class Generator;
     class Gradient;
@@ -121,6 +134,7 @@ namespace WebCore {
     class KURL;
     class Path;
     class Pattern;
+    class SharedGraphicsContext3D;
     class TextRun;
 
     // These bits can be ORed together for a total of 8 possible text drawing modes.
@@ -230,6 +244,13 @@ namespace WebCore {
                             Image::TileRule hRule = Image::StretchTile, Image::TileRule vRule = Image::StretchTile,
                             CompositeOperator = CompositeSourceOver, bool useLowQualityScale = false);
 
+        void drawImageBuffer(ImageBuffer*, ColorSpace styleColorSpace, const IntPoint&, CompositeOperator = CompositeSourceOver);
+        void drawImageBuffer(ImageBuffer*, ColorSpace styleColorSpace, const IntRect&, CompositeOperator = CompositeSourceOver, bool useLowQualityScale = false);
+        void drawImageBuffer(ImageBuffer*, ColorSpace styleColorSpace, const IntPoint& destPoint, const IntRect& srcRect, CompositeOperator = CompositeSourceOver);
+        void drawImageBuffer(ImageBuffer*, ColorSpace styleColorSpace, const IntRect& destRect, const IntRect& srcRect, CompositeOperator = CompositeSourceOver, bool useLowQualityScale = false);
+        void drawImageBuffer(ImageBuffer*, ColorSpace styleColorSpace, const FloatRect& destRect, const FloatRect& srcRect = FloatRect(0, 0, -1, -1),
+                             CompositeOperator = CompositeSourceOver, bool useLowQualityScale = false);
+
         void setImageInterpolationQuality(InterpolationQuality);
         InterpolationQuality imageInterpolationQuality() const;
 
@@ -240,19 +261,30 @@ namespace WebCore {
         void clipOutEllipseInRect(const IntRect&);
         void clipOutRoundedRect(const IntRect&, const IntSize& topLeft, const IntSize& topRight, const IntSize& bottomLeft, const IntSize& bottomRight);
         void clipPath(WindRule);
-        void clipToImageBuffer(const FloatRect&, const ImageBuffer*);
+        void clipConvexPolygon(size_t numPoints, const FloatPoint*, bool antialias = true);
+        void clipToImageBuffer(ImageBuffer*, const FloatRect&);
 
         int textDrawingMode();
         void setTextDrawingMode(int);
 
         void drawText(const Font&, const TextRun&, const IntPoint&, int from = 0, int to = -1);
         void drawBidiText(const Font&, const TextRun&, const FloatPoint&);
+#if OS(OLYMPIA)
+        // add width used for selection highlight to get m_width of inlineTextBox
+        void drawHighlightForText(const Font&, const TextRun&, const IntPoint&, int h, const Color& backgroundColor, ColorSpace, int from = 0, int to = -1, int width = 0);
+#else
         void drawHighlightForText(const Font&, const TextRun&, const IntPoint&, int h, const Color& backgroundColor, ColorSpace, int from = 0, int to = -1);
+#endif
 
         FloatRect roundToDevicePixels(const FloatRect&);
 
         void drawLineForText(const IntPoint&, int width, bool printing);
-        void drawLineForMisspellingOrBadGrammar(const IntPoint&, int width, bool grammar);
+        enum TextCheckingLineStyle {
+            TextCheckingSpellingLineStyle,
+            TextCheckingGrammarLineStyle,
+            TextCheckingReplacementLineStyle
+        };
+        void drawLineForTextChecking(const IntPoint&, int width, TextCheckingLineStyle);
 
         bool paintingDisabled() const;
         void setPaintingDisabled(bool);
@@ -263,8 +295,8 @@ namespace WebCore {
         void beginTransparencyLayer(float opacity);
         void endTransparencyLayer();
 
-        void setShadow(const IntSize&, int blur, const Color&, ColorSpace);
-        bool getShadow(IntSize&, int&, Color&) const;
+        void setShadow(const FloatSize&, float blur, const Color&, ColorSpace);
+        bool getShadow(FloatSize&, float&, Color&) const;
         void clearShadow();
 
         void drawFocusRing(const Vector<IntRect>&, int width, int offset, const Color&);
@@ -278,8 +310,11 @@ namespace WebCore {
         void setAlpha(float);
 #if PLATFORM(CAIRO)
         float getAlpha();
-        void createPlatformShadow(PassOwnPtr<ImageBuffer> buffer, const Color& shadowColor, const FloatRect& shadowRect, float kernelSize);
-        static void calculateShadowBufferDimensions(IntSize& shadowBufferSize, FloatRect& shadowRect, float& kernelSize, const FloatRect& sourceRect, const IntSize& shadowSize, int shadowBlur);
+        void applyPlatformShadow(PassOwnPtr<ImageBuffer> buffer, const Color& shadowColor, const FloatRect& shadowRect, float radius);
+        PlatformRefPtr<cairo_surface_t> createShadowMask(PassOwnPtr<ImageBuffer>, const FloatRect&, float radius);
+
+        static void calculateShadowBufferDimensions(IntSize& shadowBufferSize, FloatRect& shadowRect, float& radius, const FloatRect& sourceRect, const FloatSize& shadowOffset, float shadowBlur);
+        void drawTiledShadow(const IntRect& rect, const FloatSize& topLeftRadius, const FloatSize& topRightRadius, const FloatSize& bottomLeftRadius, const FloatSize& bottomRightRadius, ColorSpace colorSpace);
 #endif
 
         void setCompositeOperation(CompositeOperator);
@@ -308,16 +343,16 @@ namespace WebCore {
 
 #if OS(WINCE) && !PLATFORM(QT)
         void setBitmap(PassRefPtr<SharedBitmap>);
-        const TransformationMatrix& affineTransform() const;
-        TransformationMatrix& affineTransform();
+        const AffineTransform& affineTransform() const;
+        AffineTransform& affineTransform();
         void resetAffineTransform();
         void fillRect(const FloatRect&, const Gradient*);
         void drawText(const SimpleFontData* fontData, const GlyphBuffer& glyphBuffer, int from, int numGlyphs, const FloatPoint& point);
         void drawFrameControl(const IntRect& rect, unsigned type, unsigned state);
         void drawFocusRect(const IntRect& rect);
         void paintTextField(const IntRect& rect, unsigned state);
-        void drawBitmap(SharedBitmap*, const IntRect& dstRect, const IntRect& srcRect, CompositeOperator compositeOp);
-        void drawBitmapPattern(SharedBitmap*, const FloatRect& tileRectIn, const AffineTransform& patternTransform, const FloatPoint& phase, CompositeOperator op, const FloatRect& destRect, const IntSize& origSourceSize);
+        void drawBitmap(SharedBitmap*, const IntRect& dstRect, const IntRect& srcRect, ColorSpace styleColorSpace, CompositeOperator compositeOp);
+        void drawBitmapPattern(SharedBitmap*, const FloatRect& tileRectIn, const AffineTransform& patternTransform, const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator op, const FloatRect& destRect, const IntSize& origSourceSize);
         void drawIcon(HICON icon, const IntRect& dstRect, UINT flags);
         HDC getWindowsContext(const IntRect&, bool supportAlphaBlend = false, bool mayCreateBitmap = true); // The passed in rect is used to create a bitmap for compositing inside transparency layers.
         void releaseWindowsContext(HDC, const IntRect&, bool supportAlphaBlend = false, bool mayCreateBitmap = true);    // The passed in HDC should be the one handed back by getWindowsContext.
@@ -377,7 +412,10 @@ namespace WebCore {
 #if PLATFORM(QT)
         bool inTransparencyLayer() const;
         PlatformPath* currentPath();
+        void pushTransparencyLayerInternal(const QRect &rect, qreal opacity, QPixmap& alphaMask);
         QPen pen();
+        static QPainter::CompositionMode toQtCompositionMode(CompositeOperator op);
+        ContextShadow* contextShadow();
 #endif
 
 #if PLATFORM(GTK)
@@ -389,6 +427,10 @@ namespace WebCore {
 #if PLATFORM(HAIKU)
         pattern getHaikuStrokeStyle();
 #endif
+
+        void setSharedGraphicsContext3D(SharedGraphicsContext3D*, DrawingBuffer*, const IntSize&);
+        void syncSoftwareCanvas();
+        void markDirtyRect(const IntRect&); // Hints that a portion of the backing store is dirty.
 
     private:
         void savePlatformState();
@@ -409,7 +451,7 @@ namespace WebCore {
 
         void setPlatformShouldAntialias(bool b);
 
-        void setPlatformShadow(const IntSize&, int blur, const Color&, ColorSpace);
+        void setPlatformShadow(const FloatSize&, float blur, const Color&, ColorSpace);
         void clearPlatformShadow();
 
         static void adjustLineToPixelBoundaries(FloatPoint& p1, FloatPoint& p2, float strokeWidth, const StrokeStyle&);

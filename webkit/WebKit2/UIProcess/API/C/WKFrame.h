@@ -26,7 +26,6 @@
 #ifndef WKFrame_h
 #define WKFrame_h
 
-#include <CoreFoundation/CoreFoundation.h>
 #include <WebKit2/WKBase.h>
 
 #ifndef __cplusplus
@@ -44,13 +43,14 @@ enum WKFrameLoadState {
 };
 typedef enum WKFrameLoadState WKFrameLoadState;
 
+WK_EXPORT WKTypeID WKFrameGetTypeID();
+ 
 WK_EXPORT bool WKFrameIsMainFrame(WKFrameRef frame);
 WK_EXPORT WKFrameLoadState WKFrameGetFrameLoadState(WKFrameRef frame);
-WK_EXPORT WKURLRef WKFrameGetProvisionalURL(WKFrameRef frame);
-WK_EXPORT WKURLRef WKFrameGetURL(WKFrameRef frame);
+WK_EXPORT WKURLRef WKFrameCopyProvisionalURL(WKFrameRef frame);
+WK_EXPORT WKURLRef WKFrameCopyURL(WKFrameRef frame);
 
-WK_EXPORT WKFrameRef WKFrameRetain(WKFrameRef frame);
-WK_EXPORT void WKFrameRelease(WKFrameRef frame);
+WK_EXPORT WKPageRef WKFrameGetPage(WKFrameRef frame);
 
 #ifdef __cplusplus
 }

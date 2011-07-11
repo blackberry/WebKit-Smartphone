@@ -3,7 +3,7 @@
  *  Copyright (C) 2008 Nuanti Ltd.
  *  Copyright (C) 2009 Diego Escalante Urrelo <diegoe@gnome.org>
  *  Copyright (C) 2006, 2007 Apple Inc.  All rights reserved.
- *  Copyright (C) 2009, Igalia S.L.
+ *  Copyright (C) 2009, 2010 Igalia S.L.
  *  Copyright (C) 2010, Martin Robinson <mrobinson@webkit.org>
  *
  *  This library is free software; you can redistribute it and/or
@@ -67,6 +67,11 @@ static void imContextCommitted(GtkIMContext* context, const gchar* compositionSt
         return;
     }
 
+    // If this signal fires during a mousepress event when we are in the middle
+    // of a composition, skip this 'commit' because the composition is already confirmed. 
+    if (client->preventNextCompositionCommit()) 
+        return;
+ 
     frame->editor()->confirmComposition(String::fromUTF8(compositionString));
     client->clearPendingComposition();
 }
@@ -215,6 +220,10 @@ void EditorClient::updatePendingComposition(const gchar* newComposition)
         m_pendingComposition.set(g_strconcat(m_pendingComposition.get(), newComposition, NULL));
 }
 
+void EditorClient::willSetInputMethodState()
+{
+}
+
 void EditorClient::setInputMethodState(bool active)
 {
     WebKitWebViewPrivate* priv = m_webView->priv;
@@ -332,6 +341,31 @@ static void collapseSelection(GtkClipboard* clipboard, WebKitWebView* webView)
     frame->selection()->setBase(frame->selection()->extent(), frame->selection()->affinity());
 }
 
+#if PLATFORM(X11)
+static void setSelectionPrimaryClipboardIfNeeded(WebKitWebView* webView)
+{
+    if (!gtk_widget_has_screen(GTK_WIDGET(webView)))
+        return;
+
+    GtkClipboard* clipboard = gtk_widget_get_clipboard(GTK_WIDGET(webView), GDK_SELECTION_PRIMARY);
+    DataObjectGtk* dataObject = DataObjectGtk::forClipboard(clipboard);
+    WebCore::Page* corePage = core(webView);
+    Frame* targetFrame = corePage->focusController()->focusedOrMainFrame();
+
+    if (!targetFrame->selection()->isRange())
+        return;
+
+    dataObject->clear();
+    dataObject->setRange(targetFrame->selection()->toNormalizedRange());
+
+    viewSettingClipboard = webView;
+    GClosure* callback = g_cclosure_new_object(G_CALLBACK(collapseSelection), G_OBJECT(webView));
+    g_closure_set_marshal(callback, g_cclosure_marshal_VOID__VOID);
+    pasteboardHelperInstance()->writeClipboardContents(clipboard, callback);
+    viewSettingClipboard = 0;
+}
+#endif
+
 void EditorClient::respondToChangedSelection()
 {
     WebKitWebViewPrivate* priv = m_webView->priv;
@@ -345,19 +379,7 @@ void EditorClient::respondToChangedSelection()
         return;
 
 #if PLATFORM(X11)
-    GtkClipboard* clipboard = gtk_widget_get_clipboard(GTK_WIDGET(m_webView), GDK_SELECTION_PRIMARY);
-    DataObjectGtk* dataObject = DataObjectGtk::forClipboard(clipboard);
-
-    if (targetFrame->selection()->isRange()) {
-        dataObject->clear();
-        dataObject->setRange(targetFrame->selection()->toNormalizedRange());
-
-        viewSettingClipboard = m_webView;
-        GClosure* callback = g_cclosure_new_object(G_CALLBACK(collapseSelection), G_OBJECT(m_webView));
-        g_closure_set_marshal(callback, g_cclosure_marshal_VOID__VOID);
-        pasteboardHelperInstance()->writeClipboardContents(clipboard, callback);
-        viewSettingClipboard = 0;
-    }
+    setSelectionPrimaryClipboardIfNeeded(m_webView);
 #endif
 
     if (!targetFrame->editor()->hasComposition())
@@ -604,11 +626,6 @@ void EditorClient::handleKeyboardEvent(KeyboardEvent* event)
     if (!platformEvent)
         return;
 
-    // Don't allow editor commands or text insertion for nodes that
-    // cannot edit, unless we are in caret mode.
-    if (!frame->editor()->canEdit() && !(frame->settings() && frame->settings()->caretBrowsingEnabled()))
-        return;
-
     generateEditorCommands(event);
     if (m_pendingEditorCommands.size() > 0) {
 
@@ -622,11 +639,16 @@ void EditorClient::handleKeyboardEvent(KeyboardEvent* event)
             return;
         }
 
-        if (executePendingEditorCommands(frame, true)) {
+        // Only allow text insertion commands if the current node is editable.
+        if (executePendingEditorCommands(frame, frame->editor()->canEdit())) {
             event->setDefaultHandled();
             return;
         }
     }
+
+    // Don't allow text insertion for nodes that cannot edit.
+    if (!frame->editor()->canEdit())
+        return;
 
     // This is just a normal text insertion, so wait to execute the insertion
     // until a keypress event happens. This will ensure that the insertion will not
@@ -666,6 +688,7 @@ void EditorClient::handleInputMethodKeydown(KeyboardEvent* event)
 
     WebKitWebViewPrivate* priv = m_webView->priv;
 
+    m_preventNextCompositionCommit = false;
 
     // Some IM contexts (e.g. 'simple') will act as if they filter every
     // keystroke and just issue a 'commit' signal during handling. In situations
@@ -707,9 +730,32 @@ void EditorClient::handleInputMethodKeydown(KeyboardEvent* event)
     m_treatContextCommitAsKeyEvent = false;
 }
 
+void EditorClient::handleInputMethodMousePress()
+{
+    Frame* targetFrame = core(m_webView)->focusController()->focusedOrMainFrame();
+
+    if (!targetFrame || !targetFrame->editor()->canEdit())
+        return;
+
+    WebKitWebViewPrivate* priv = m_webView->priv;
+
+    // When a mouse press fires, the commit signal happens during a composition.
+    // In this case, if the focused node is changed, the commit signal happens in a diffrent node.
+    // Therefore, we need to confirm the current compositon and ignore the next commit signal. 
+    GOwnPtr<gchar> newPreedit(0);
+    gtk_im_context_get_preedit_string(priv->imContext, &newPreedit.outPtr(), 0, 0);
+    
+    if (g_utf8_strlen(newPreedit.get(), -1)) {
+        targetFrame->editor()->confirmComposition();
+        m_preventNextCompositionCommit = true;
+        gtk_im_context_reset(priv->imContext);
+    } 
+}
+
 EditorClient::EditorClient(WebKitWebView* webView)
     : m_isInRedo(false)
     , m_webView(webView)
+    , m_preventNextCompositionCommit(false)
     , m_treatContextCommitAsKeyEvent(false)
     , m_nativeWidget(gtk_text_view_new())
 {
@@ -758,13 +804,6 @@ void EditorClient::textWillBeDeletedInTextField(Element*)
 void EditorClient::textDidChangeInTextArea(Element*)
 {
     notImplemented();
-}
-
-// Note: This code is under review for upstreaming.
-bool EditorClient::focusedElementsAreRichlyEditable()
-{
-    notImplemented();
-    return false;
 }
 
 void EditorClient::ignoreWordInSpellDocument(const String& text)

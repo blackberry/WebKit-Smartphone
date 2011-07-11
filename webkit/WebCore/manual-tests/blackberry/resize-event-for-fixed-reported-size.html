@@ -1,0 +1,41 @@
+<html>
+<head>
+<meta name="viewport" content="initial-scale=1.0">
+<style>
+body { margin: 0; padding: 0; background-color: red; }
+#rect { width: 10px; height: 10px; background-color: green; }
+</style>
+<script type="text/javascript">
+function setSize() {
+    var rect = document.getElementById('rect');
+    rect.style.width = window.innerWidth + 'px';
+    rect.style.height = window.innerHeight + 'px';
+
+    document.getElementById("currentSize").innerHTML = "size: (" + window.innerWidth + ", " + window.innerHeight + ")";
+
+    var orientation = window.orientation;
+    switch(orientation) {
+        case 0:
+            document.getElementById("currentOrientation").innerHTML="Now in portrait orientation (Home button on the bottom).";
+            break; 
+        case 90:
+            document.getElementById("currentOrientation").innerHTML="Now in landscape orientation and turned to the left (Home button to the right).";
+            break;
+        case -90: 
+            document.getElementById("currentOrientation").innerHTML="Now in landscape orientation and turned to the right (Home button to the left).";
+            break;
+    }
+
+}
+
+window.addEventListener('resize', setSize, false);
+window.addEventListener('DOMContentLoaded', setSize, false); // We will also need to resize when loaded
+</script>
+</head>
+<body>
+<!-- This test can be used to verify that the resize event fires even when we use fixed reported size -->
+<!-- See ScrollView::fixedReportedSize() -->
+<!-- This test PASSED if the entire page is green. -->
+<div id="rect">Onresize test instructions: Rotate, show/hide virtual keyboard. <span id="currentOrientation">Unknown</span><br /><span id="currentSize">size: (0, 0)</span><br /></div>
+</body>
+</html>

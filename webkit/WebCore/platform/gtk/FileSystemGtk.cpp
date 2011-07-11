@@ -24,12 +24,13 @@
 
 #include "GOwnPtr.h"
 #include "PlatformString.h"
-#include <wtf/text/CString.h>
 
+#include <errno.h>
+#include <fcntl.h>
 #include <glib.h>
 #include <glib/gstdio.h>
-
 #include <unistd.h>
+#include <wtf/text/CString.h>
 
 namespace WebCore {
 
@@ -52,12 +53,15 @@ String filenameToString(const char* filename)
 #endif
 }
 
-char* filenameFromString(const String& string)
+CString fileSystemRepresentation(const String& path)
 {
 #if OS(WINDOWS)
-    return g_strdup(string.utf8().data());
+    return path.utf8();
 #else
-    return g_uri_unescape_string(string.utf8().data(), 0);
+    char* filename = g_uri_unescape_string(path.utf8().data(), 0);
+    CString cfilename(filename);
+    g_free(filename);
+    return cfilename;
 #endif
 }
 
@@ -67,9 +71,8 @@ String filenameForDisplay(const String& string)
 #if OS(WINDOWS)
     return string;
 #else
-    gchar* filename = filenameFromString(string);
-    gchar* display = g_filename_to_utf8(filename, 0, 0, 0, 0);
-    g_free(filename);
+    CString filename = fileSystemRepresentation(string);
+    gchar* display = g_filename_to_utf8(filename.data(), 0, 0, 0, 0);
     if (!display)
         return string;
 
@@ -83,12 +86,10 @@ String filenameForDisplay(const String& string)
 bool fileExists(const String& path)
 {
     bool result = false;
-    gchar* filename = filenameFromString(path);
+    CString filename = fileSystemRepresentation(path);
 
-    if (filename) {
-        result = g_file_test(filename, G_FILE_TEST_EXISTS);
-        g_free(filename);
-    }
+    if (!filename.isNull())
+        result = g_file_test(filename.data(), G_FILE_TEST_EXISTS);
 
     return result;
 }
@@ -96,12 +97,10 @@ bool fileExists(const String& path)
 bool deleteFile(const String& path)
 {
     bool result = false;
-    gchar* filename = filenameFromString(path);
+    CString filename = fileSystemRepresentation(path);
 
-    if (filename) {
-        result = g_remove(filename) == 0;
-        g_free(filename);
-    }
+    if (!filename.isNull())
+        result = g_remove(filename.data()) == 0;
 
     return result;
 }
@@ -109,25 +108,22 @@ bool deleteFile(const String& path)
 bool deleteEmptyDirectory(const String& path)
 {
     bool result = false;
-    gchar* filename = filenameFromString(path);
+    CString filename = fileSystemRepresentation(path);
 
-    if (filename) {
-        result = g_rmdir(filename) == 0;
-        g_free(filename);
-    }
+    if (!filename.isNull())
+        result = g_rmdir(filename.data()) == 0;
 
     return result;
 }
 
 bool getFileSize(const String& path, long long& resultSize)
 {
-    gchar* filename = filenameFromString(path);
-    if (!filename)
+    CString filename = fileSystemRepresentation(path);
+    if (filename.isNull())
         return false;
 
     struct stat statResult;
-    gint result = g_stat(filename, &statResult);
-    g_free(filename);
+    gint result = g_stat(filename.data(), &statResult);
     if (result != 0)
         return false;
 
@@ -137,13 +133,12 @@ bool getFileSize(const String& path, long long& resultSize)
 
 bool getFileModificationTime(const String& path, time_t& modifiedTime)
 {
-    gchar* filename = filenameFromString(path);
-    if (!filename)
+    CString filename = fileSystemRepresentation(path);
+    if (filename.isNull())
         return false;
 
     struct stat statResult;
-    gint result = g_stat(filename, &statResult);
-    g_free(filename);
+    gint result = g_stat(filename.data(), &statResult);
     if (result != 0)
         return false;
 
@@ -162,12 +157,11 @@ String pathByAppendingComponent(const String& path, const String& component)
 
 bool makeAllDirectories(const String& path)
 {
-    gchar* filename = filenameFromString(path);
-    if (!filename)
+    CString filename = fileSystemRepresentation(path);
+    if (filename.isNull())
         return false;
 
-    gint result = g_mkdir_with_parents(filename, S_IRWXU);
-    g_free(filename);
+    gint result = g_mkdir_with_parents(filename.data(), S_IRWXU);
 
     return result == 0;
 }
@@ -182,11 +176,10 @@ String pathGetFileName(const String& pathName)
     if (pathName.isEmpty())
         return pathName;
 
-    char* tmpFilename = filenameFromString(pathName);
-    char* baseName = g_path_get_basename(tmpFilename);
+    CString tmpFilename = fileSystemRepresentation(pathName);
+    char* baseName = g_path_get_basename(tmpFilename.data());
     String fileName = String::fromUTF8(baseName);
     g_free(baseName);
-    g_free(tmpFilename);
 
     return fileName;
 }
@@ -194,8 +187,7 @@ String pathGetFileName(const String& pathName)
 String directoryName(const String& path)
 {
     /* No null checking needed */
-    GOwnPtr<char> tmpFilename(filenameFromString(path));
-    GOwnPtr<char> dirname(g_path_get_dirname(tmpFilename.get()));
+    GOwnPtr<char> dirname(g_path_get_dirname(fileSystemRepresentation(path).data()));
     return String::fromUTF8(dirname.get());
 }
 
@@ -203,8 +195,8 @@ Vector<String> listDirectory(const String& path, const String& filter)
 {
     Vector<String> entries;
 
-    gchar* filename = filenameFromString(path);
-    GDir* dir = g_dir_open(filename, 0, 0);
+    CString filename = fileSystemRepresentation(path);
+    GDir* dir = g_dir_open(filename.data(), 0, 0);
     if (!dir)
         return entries;
 
@@ -213,12 +205,11 @@ Vector<String> listDirectory(const String& path, const String& filter)
         if (!g_pattern_match_string(pspec, name))
             continue;
 
-        gchar* entry = g_build_filename(filename, name, NULL);
-        entries.append(filenameToString(entry));
-        g_free(entry);
+        GOwnPtr<gchar> entry(g_build_filename(filename.data(), name, NULL));
+        entries.append(filenameToString(entry.get()));
     }
+    g_pattern_spec_free(pspec);
     g_dir_close(dir);
-    g_free(filename);
 
     return entries;
 }
@@ -242,6 +233,22 @@ CString openTemporaryFile(const char* prefix, PlatformFileHandle& handle)
     return tempFilePath;
 }
 
+PlatformFileHandle openFile(const String& path, FileOpenMode mode)
+{
+    CString fsRep = fileSystemRepresentation(path);
+
+    if (fsRep.isNull())
+        return invalidPlatformFileHandle;
+
+    int platformFlag = 0;
+    if (mode == OpenForRead)
+        platformFlag |= O_RDONLY;
+    else if (mode == OpenForWrite)
+        platformFlag |= (O_WRONLY | O_CREAT | O_TRUNC);
+
+    return g_open(fsRep.data(), platformFlag, 0666);
+}
+
 void closeFile(PlatformFileHandle& handle)
 {
     if (isHandleValid(handle)) {
@@ -258,9 +265,21 @@ int writeToFile(PlatformFileHandle handle, const char* data, int length)
         if (bytesWritten < 0)
             return -1;
         totalBytesWritten += bytesWritten;
+        data += bytesWritten;
     }
 
     return totalBytesWritten;
+}
+
+int readFromFile(PlatformFileHandle handle, char* data, int length)
+{
+    do {
+        int bytesRead = read(handle, data, static_cast<size_t>(length));
+        if (bytesRead >= 0)
+            return bytesRead;
+    } while (errno == EINTR);
+
+    return -1;
 }
 
 bool unloadModule(PlatformModule module)

@@ -1,32 +1,29 @@
 /*
-    Copyright (C) 2006 Apple Computer, Inc.
-                  2006 Nikolas Zimmermann <zimmermann@kde.org>
-                  2007 Rob Buis <buis@kde.org>
-
-    This file is part of the WebKit project
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2006 Apple Inc. All rights reserved.
+ * Copyright (C) 2006 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2007 Rob Buis <buis@kde.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
 #if ENABLE(SVG)
 #include "SVGDocumentExtensions.h"
 
-#include "AtomicString.h"
 #include "Console.h"
 #include "DOMWindow.h"
 #include "Document.h"
@@ -34,16 +31,18 @@
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "Page.h"
+#include "SMILTimeContainer.h"
 #include "SVGSMILElement.h"
 #include "SVGSVGElement.h"
-#include "SMILTimeContainer.h"
-#include "XMLTokenizer.h"
 #include "ScriptController.h"
+#include "ScriptableDocumentParser.h"
+#include <wtf/text/AtomicString.h>
 
 namespace WebCore {
 
-SVGDocumentExtensions::SVGDocumentExtensions(Document* doc)
-    : m_doc(doc)
+SVGDocumentExtensions::SVGDocumentExtensions(Document* document)
+    : m_document(document)
+    , m_resourcesCache(adoptPtr(new SVGResourcesCache))
 {
 }
 
@@ -116,6 +115,12 @@ void SVGDocumentExtensions::unpauseAnimations()
 
 bool SVGDocumentExtensions::sampleAnimationAtTime(const String& elementId, SVGSMILElement* element, double time)
 {
+#if !ENABLE(SVG_ANIMATION)
+    UNUSED_PARAM(elementId);
+    UNUSED_PARAM(element);
+    UNUSED_PARAM(time);
+    return false;
+#else
     ASSERT(element);
     SMILTimeContainer* container = element->timeContainer();
     if (!container || container->isPaused())
@@ -123,21 +128,35 @@ bool SVGDocumentExtensions::sampleAnimationAtTime(const String& elementId, SVGSM
 
     container->sampleAnimationAtTime(elementId, time);
     return true;
+#endif
+}
+
+// FIXME: Callers should probably use ScriptController::eventHandlerLineNumber()
+static int parserLineNumber(Document* document)
+{
+    ScriptableDocumentParser* parser = document->scriptableDocumentParser();
+    if (!parser)
+        return 1;
+    return parser->lineNumber();
+}
+
+static void reportMessage(Document* document, MessageLevel level, const String& message)
+{
+    if (Frame* frame = document->frame())
+        frame->domWindow()->console()->addMessage(JSMessageSource, LogMessageType, level, message, parserLineNumber(document), String());
 }
 
 void SVGDocumentExtensions::reportWarning(const String& message)
 {
-    if (Frame* frame = m_doc->frame())
-        frame->domWindow()->console()->addMessage(JSMessageSource, LogMessageType, ErrorMessageLevel, "Warning: " + message, m_doc->tokenizer() ? m_doc->tokenizer()->lineNumber() : 1, String());
+    reportMessage(m_document, WarningMessageLevel, "Warning: " + message);
 }
 
 void SVGDocumentExtensions::reportError(const String& message)
 {
-    if (Frame* frame = m_doc->frame())
-        frame->domWindow()->console()->addMessage(JSMessageSource, LogMessageType, ErrorMessageLevel, "Error: " + message, m_doc->tokenizer() ? m_doc->tokenizer()->lineNumber() : 1, String());
+    reportMessage(m_document, ErrorMessageLevel, "Error: " + message);
 }
 
-void SVGDocumentExtensions::addPendingResource(const AtomicString& id, SVGStyledElement* obj)
+void SVGDocumentExtensions::addPendingResource(const AtomicString& id, PassRefPtr<SVGStyledElement> obj)
 {
     ASSERT(obj);
 
@@ -147,7 +166,7 @@ void SVGDocumentExtensions::addPendingResource(const AtomicString& id, SVGStyled
     if (m_pendingResources.contains(id))
         m_pendingResources.get(id)->add(obj);
     else {
-        HashSet<SVGStyledElement*>* set = new HashSet<SVGStyledElement*>;
+        SVGPendingElements* set = new SVGPendingElements;
         set->add(obj);
 
         m_pendingResources.add(id, set);
@@ -162,11 +181,11 @@ bool SVGDocumentExtensions::isPendingResource(const AtomicString& id) const
     return m_pendingResources.contains(id);
 }
 
-PassOwnPtr<HashSet<SVGStyledElement*> > SVGDocumentExtensions::removePendingResource(const AtomicString& id)
+PassOwnPtr<HashSet<RefPtr<SVGStyledElement> > > SVGDocumentExtensions::removePendingResource(const AtomicString& id)
 {
     ASSERT(m_pendingResources.contains(id));
 
-    OwnPtr<HashSet<SVGStyledElement*> > set(m_pendingResources.get(id));
+    OwnPtr<SVGPendingElements> set(m_pendingResources.get(id));
     m_pendingResources.remove(id);
     return set.release();
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2007, 2008, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -21,9 +21,10 @@
 #ifndef SpaceSplitString_h
 #define SpaceSplitString_h
 
-#include "AtomicString.h"
 #include <wtf/OwnPtr.h>
+#include <wtf/PassOwnPtr.h>
 #include <wtf/Vector.h>
+#include <wtf/text/AtomicString.h>
 
 namespace WebCore {
 
@@ -64,9 +65,9 @@ namespace WebCore {
     class SpaceSplitString {
     public:
         SpaceSplitString() { }
-        SpaceSplitString(const String& string, bool shouldFoldCase) : m_data(new SpaceSplitStringData(string, shouldFoldCase)) { }
+        SpaceSplitString(const String& string, bool shouldFoldCase) : m_data(adoptPtr(new SpaceSplitStringData(string, shouldFoldCase))) { }
 
-        void set(const String& string, bool shouldFoldCase) { m_data.set(new SpaceSplitStringData(string, shouldFoldCase)); }
+        void set(const String& string, bool shouldFoldCase) { m_data = adoptPtr(new SpaceSplitStringData(string, shouldFoldCase)); }
         void clear() { m_data.clear(); }
 
         bool contains(const AtomicString& string) const { return m_data && m_data->contains(string); }

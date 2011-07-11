@@ -43,8 +43,6 @@
 #include "RenderTableCell.h"
 #include "RenderTableSection.h"
 
-using namespace std;
-
 namespace WebCore {
 
 using namespace HTMLNames;
@@ -75,7 +73,7 @@ bool AccessibilityTable::isTableExposableThroughAccessibility()
     // <table> should be exposed as an AXTable. The goal
     // is to only show "data" tables
     
-    if (!m_renderer || !m_renderer->isTable())
+    if (!renderer())
         return false;
     
     // if the developer assigned an aria role to this, then we shouldn't 
@@ -137,9 +135,15 @@ bool AccessibilityTable::isTableExposableThroughAccessibility()
     unsigned borderedCellCount = 0;
     unsigned backgroundDifferenceCellCount = 0;
     
+    Color alternatingRowColors[5];
+    int alternatingRowColorCount = 0;
+    
+    int headersInFirstColumnCount = 0;
     for (int row = 0; row < numRows; ++row) {
+    
+        int headersInFirstRowCount = 0;
         for (int col = 0; col < numCols; ++col) {    
-            RenderTableCell* cell = firstBody->cellAt(row, col).cell;
+            RenderTableCell* cell = firstBody->primaryCellAt(row, col);
             if (!cell)
                 continue;
             Node* cellNode = cell->node();
@@ -152,6 +156,15 @@ bool AccessibilityTable::isTableExposableThroughAccessibility()
             validCellCount++;
             
             HTMLTableCellElement* cellElement = static_cast<HTMLTableCellElement*>(cellNode);
+            
+            bool isTHCell = cellElement->hasTagName(thTag);
+            // If the first row is comprised of all <th> tags, assume it is a data table.
+            if (!row && isTHCell)
+                headersInFirstRowCount++;
+
+            // If the first column is comprised of all <tg> tags, assume it is a data table.
+            if (!col && isTHCell)
+                headersInFirstColumnCount++;
             
             // in this case, the developer explicitly assigned a "data" table attribute
             if (!cellElement->headers().isEmpty() || !cellElement->abbr().isEmpty()
@@ -177,9 +190,28 @@ bool AccessibilityTable::isTableExposableThroughAccessibility()
             // if we've found 10 "good" cells, we don't need to keep searching
             if (borderedCellCount >= 10 || backgroundDifferenceCellCount >= 10)
                 return true;
+            
+            // For the first 5 rows, cache the background color so we can check if this table has zebra-striped rows.
+            if (row < 5 && row == alternatingRowColorCount) {
+                RenderObject* renderRow = cell->parent();
+                if (!renderRow || !renderRow->isBoxModelObject() || !toRenderBoxModelObject(renderRow)->isTableRow())
+                    continue;
+                RenderStyle* rowRenderStyle = renderRow->style();
+                if (!rowRenderStyle)
+                    continue;
+                Color rowColor = rowRenderStyle->visitedDependentColor(CSSPropertyBackgroundColor);
+                alternatingRowColors[alternatingRowColorCount] = rowColor;
+                alternatingRowColorCount++;
+            }
         }
+        
+        if (!row && headersInFirstRowCount == numCols && numCols > 1)
+            return true;
     }
 
+    if (headersInFirstColumnCount == numRows && numRows > 1)
+        return true;
+    
     // if there is less than two valid cells, it's not a data table
     if (validCellCount <= 1)
         return false;
@@ -193,6 +225,20 @@ bool AccessibilityTable::isTableExposableThroughAccessibility()
     if (backgroundDifferenceCellCount >= neededCellCount)
         return true;
 
+    // Check if there is an alternating row background color indicating a zebra striped style pattern.
+    if (alternatingRowColorCount > 2) {
+        Color firstColor = alternatingRowColors[0];
+        for (int k = 1; k < alternatingRowColorCount; k++) {
+            // If an odd row was the same color as the first row, its not alternating.
+            if (k % 2 == 1 && alternatingRowColors[k] == firstColor)
+                return false;
+            // If an even row is not the same as the first row, its not alternating.
+            if (!(k % 2) && alternatingRowColors[k] != firstColor)
+                return false;
+        }
+        return true;
+    }
+    
     return false;
 }
     
@@ -239,7 +285,7 @@ void AccessibilityTable::addChildren()
         for (unsigned rowIndex = 0; rowIndex < numRows; ++rowIndex) {
             for (unsigned colIndex = 0; colIndex < numCols; ++colIndex) {
                 
-                RenderTableCell* cell = tableSection->cellAt(rowIndex, colIndex).cell;
+                RenderTableCell* cell = tableSection->primaryCellAt(rowIndex, colIndex);
                 if (!cell)
                     continue;
                 
@@ -393,7 +439,7 @@ AccessibilityTableCell* AccessibilityTable::cellForColumnAndRow(unsigned column,
         
         unsigned sectionSpecificRow = row - rowOffset;            
         if (row < rowCount && column < numCols && sectionSpecificRow < numRows) {
-            cell = tableSection->cellAt(sectionSpecificRow, column).cell;
+            cell = tableSection->primaryCellAt(sectionSpecificRow, column);
             
             // we didn't find the cell, which means there's spanning happening
             // search backwards to find the spanning cell
@@ -401,7 +447,7 @@ AccessibilityTableCell* AccessibilityTable::cellForColumnAndRow(unsigned column,
                 
                 // first try rows
                 for (int testRow = sectionSpecificRow-1; testRow >= 0; --testRow) {
-                    cell = tableSection->cellAt(testRow, column).cell;
+                    cell = tableSection->primaryCellAt(testRow, column);
                     // cell overlapped. use this one
                     if (cell && ((cell->row() + (cell->rowSpan()-1)) >= (int)sectionSpecificRow))
                         break;
@@ -411,7 +457,7 @@ AccessibilityTableCell* AccessibilityTable::cellForColumnAndRow(unsigned column,
                 if (!cell) {
                     // try cols
                     for (int testCol = column-1; testCol >= 0; --testCol) {
-                        cell = tableSection->cellAt(sectionSpecificRow, testCol).cell;
+                        cell = tableSection->primaryCellAt(sectionSpecificRow, testCol);
                         // cell overlapped. use this one
                         if (cell && ((cell->col() + (cell->colSpan()-1)) >= (int)column))
                             break;

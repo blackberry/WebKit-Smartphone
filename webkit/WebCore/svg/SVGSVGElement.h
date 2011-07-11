@@ -1,23 +1,23 @@
 /*
-    Copyright (C) 2004, 2005, 2006 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-    Copyright (C) Research In Motion Limited 2010. All rights reserved.
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007, 2010 Rob Buis <buis@kde.org>
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #ifndef SVGSVGElement_h
 #define SVGSVGElement_h
@@ -46,11 +46,8 @@ namespace WebCore {
                           public SVGFitToViewBox,
                           public SVGZoomAndPan {
     public:
-        SVGSVGElement(const QualifiedName&, Document*);
-        virtual ~SVGSVGElement();
+        static PassRefPtr<SVGSVGElement> create(const QualifiedName&, Document*);
 
-        virtual bool isSVG() const { return true; }
-        
         virtual bool isValid() const { return SVGTests::isValid(); }
 
         // 'SVGSVGElement' functions
@@ -113,6 +110,24 @@ namespace WebCore {
         static SVGTransform createSVGTransform();
         static SVGTransform createSVGTransformFromMatrix(const AffineTransform&);
 
+        AffineTransform viewBoxToViewTransform(float viewWidth, float viewHeight) const;
+
+        void inheritViewAttributes(SVGViewElement*);
+
+        bool isOutermostSVG() const;
+
+        Element* getElementById(const AtomicString&) const;
+
+#if PLATFORM(OLYMPIA)
+        virtual void setZoomAndPan(unsigned short zoomAndPan);
+#endif
+
+    private:
+        SVGSVGElement(const QualifiedName&, Document*);
+        virtual ~SVGSVGElement();
+
+        virtual bool isSVG() const { return true; }
+        
         virtual void parseMappedAttribute(Attribute*);
 
         virtual bool rendererIsNeeded(RenderStyle* style) { return StyledElement::rendererIsNeeded(style); }
@@ -124,18 +139,9 @@ namespace WebCore {
         virtual void svgAttributeChanged(const QualifiedName&);
         virtual void synchronizeProperty(const QualifiedName&);
 
-        AffineTransform viewBoxToViewTransform(float viewWidth, float viewHeight) const;
 
-        void inheritViewAttributes(SVGViewElement*);
+        virtual bool selfHasRelativeLengths() const;
 
-        bool isOutermostSVG() const;
-        virtual bool hasRelativeValues() const;
-
-#if PLATFORM(OLYMPIA)
-        virtual void setZoomAndPan(unsigned short zoomAndPan);
-#endif
-
-    private:
         DECLARE_ANIMATED_PROPERTY(SVGSVGElement, SVGNames::xAttr, SVGLength, X, x)
         DECLARE_ANIMATED_PROPERTY(SVGSVGElement, SVGNames::yAttr, SVGLength, Y, y)
         DECLARE_ANIMATED_PROPERTY(SVGSVGElement, SVGNames::widthAttr, SVGLength, Width, width)

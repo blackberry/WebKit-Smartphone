@@ -25,6 +25,7 @@
 
 #include "BooleanConstructor.h"
 #include "BooleanPrototype.h"
+#include "Error.h"
 #include "ExceptionHelpers.h"
 #include "JSGlobalObject.h"
 #include "JSFunction.h"
@@ -63,7 +64,7 @@ JSObject* JSValue::toObjectSlowCase(ExecState* exec) const
         return constructBooleanFromImmediateBoolean(exec, asValue());
     ASSERT(isUndefinedOrNull());
     JSNotAnObjectErrorStub* exception = createNotAnObjectErrorStub(exec, isNull());
-    exec->setException(exception);
+    throwError(exec, exception);
     return new (exec) JSNotAnObject(exec, exception);
 }
 
@@ -88,7 +89,7 @@ JSObject* JSValue::synthesizeObject(ExecState* exec) const
         return constructBooleanFromImmediateBoolean(exec, asValue());
     
     JSNotAnObjectErrorStub* exception = createNotAnObjectErrorStub(exec, isNull());
-    exec->setException(exception);
+    throwError(exec, exception);
     return new (exec) JSNotAnObject(exec, exception);
 }
 
@@ -101,7 +102,7 @@ JSObject* JSValue::synthesizePrototype(ExecState* exec) const
         return exec->lexicalGlobalObject()->booleanPrototype();
 
     JSNotAnObjectErrorStub* exception = createNotAnObjectErrorStub(exec, isNull());
-    exec->setException(exception);
+    throwError(exec, exception);
     return new (exec) JSNotAnObject(exec, exception);
 }
 
@@ -125,10 +126,10 @@ char* JSValue::description()
         snprintf(description, size, "False");
     else if (isNull())
         snprintf(description, size, "Null");
-    else {
-        ASSERT(isUndefined());
+    else if (isUndefined())
         snprintf(description, size, "Undefined");
-    }
+    else
+        snprintf(description, size, "INVALID");
 
     return description;
 }
@@ -136,15 +137,12 @@ char* JSValue::description()
 
 int32_t toInt32SlowCase(double d, bool& ok)
 {
-    ok = true;
-
-    if (d >= -D32 / 2 && d < D32 / 2)
-        return static_cast<int32_t>(d);
-
     if (isnan(d) || isinf(d)) {
         ok = false;
         return 0;
     }
+
+    ok = true;
 
     double d32 = fmod(trunc(d), D32);
     if (d32 >= D32 / 2)
@@ -156,15 +154,12 @@ int32_t toInt32SlowCase(double d, bool& ok)
 
 uint32_t toUInt32SlowCase(double d, bool& ok)
 {
-    ok = true;
-
-    if (d >= 0.0 && d < D32)
-        return static_cast<uint32_t>(d);
-
     if (isnan(d) || isinf(d)) {
         ok = false;
         return 0;
     }
+
+    ok = true;
 
     double d32 = fmod(trunc(d), D32);
     if (d32 < 0)

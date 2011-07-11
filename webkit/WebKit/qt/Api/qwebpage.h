@@ -42,12 +42,13 @@ class QWebFrame;
 class QWebNetworkRequest;
 class QWebHistory;
 
-class QWebPagePrivate;
 class QWebFrameData;
-class QWebNetworkInterface;
-class QWebPluginFactory;
-class QWebHitTestResult;
 class QWebHistoryItem;
+class QWebHitTestResult;
+class QWebNetworkInterface;
+class QWebPagePrivate;
+class QWebPluginFactory;
+class QtViewportConfigurationPrivate;
 
 namespace WebCore {
     class ChromeClientQt;
@@ -56,6 +57,7 @@ namespace WebCore {
     class InspectorClientQt;
     class InspectorFrontendClientQt;
     class NotificationPresenterClientQt;
+    class GeolocationPermissionClientQt;
     class ResourceHandle;
     class HitTestResult;
     class QNetworkReplyHandler;
@@ -170,6 +172,8 @@ public:
         AlignLeft,
         AlignRight,
 
+        StopScheduledPageRefresh,
+
         WebActionCount
     };
 
@@ -191,6 +195,49 @@ public:
         WebBrowserWindow,
         WebModalDialog
     };
+
+    enum PermissionPolicy {
+        PermissionGranted,
+        PermissionUnknown,
+        PermissionDenied
+    };
+
+    enum PermissionDomain {
+        NotificationsPermissionDomain,
+        GeolocationPermissionDomain
+    };
+
+    class ViewportConfiguration {
+    public:
+        ViewportConfiguration();
+        ViewportConfiguration(const QWebPage::ViewportConfiguration& other);
+
+        ~ViewportConfiguration();
+
+        QWebPage::ViewportConfiguration& operator=(const QWebPage::ViewportConfiguration& other);
+
+        inline qreal initialScaleFactor() const { return m_initialScaleFactor; };
+        inline qreal minimumScaleFactor() const { return m_minimumScaleFactor; };
+        inline qreal maximumScaleFactor() const { return m_maximumScaleFactor; };
+        inline qreal devicePixelRatio() const { return m_devicePixelRatio; };
+        inline bool isUserScalable() const { return m_isUserScalable; };
+        inline bool isValid() const { return m_isValid; };
+        inline QSize size() const { return m_size; };
+
+    private:
+        QSharedDataPointer<QtViewportConfigurationPrivate> d;
+        qreal m_initialScaleFactor;
+        qreal m_minimumScaleFactor;
+        qreal m_maximumScaleFactor;
+        qreal m_devicePixelRatio;
+        bool m_isUserScalable;
+        bool m_isValid;
+        QSize m_size;
+
+        friend class WebCore::ChromeClientQt;
+        friend class QWebPage;
+    };
+
 
     explicit QWebPage(QObject *parent = 0);
     ~QWebPage();
@@ -228,6 +275,7 @@ public:
 
     QSize viewportSize() const;
     void setViewportSize(const QSize &size) const;
+    ViewportConfiguration viewportConfigurationForSize(QSize availableSize) const;
 
     QSize preferredContentsSize() const;
     void setPreferredContentsSize(const QSize &size) const;
@@ -257,6 +305,8 @@ public:
     void updatePositionDependentActions(const QPoint &pos);
 
     QMenu *createStandardContextMenu();
+
+    void setUserPermission(QWebFrame* frame, PermissionDomain domain, PermissionPolicy policy);
 
     enum Extension {
         ChooseMultipleFilesExtension,
@@ -336,6 +386,12 @@ Q_SIGNALS:
     void saveFrameStateRequested(QWebFrame* frame, QWebHistoryItem* item);
     void restoreFrameStateRequested(QWebFrame* frame);
 
+    void viewportChangeRequested();
+
+    void requestPermissionFromUser(QWebFrame* frame, QWebPage::PermissionDomain domain);
+    void checkPermissionFromUser(QWebFrame* frame, QWebPage::PermissionDomain domain, QWebPage::PermissionPolicy& policy);
+    void cancelRequestsForPermission(QWebFrame* frame, QWebPage::PermissionDomain domain);
+
 protected:
     virtual QWebPage *createWindow(WebWindowType type);
     virtual QObject *createPlugin(const QString &classid, const QUrl &url, const QStringList &paramNames, const QStringList &paramValues);
@@ -371,6 +427,7 @@ private:
     friend class WebCore::InspectorClientQt;
     friend class WebCore::InspectorFrontendClientQt;
     friend class WebCore::NotificationPresenterClientQt;
+    friend class WebCore::GeolocationPermissionClientQt;
     friend class WebCore::ResourceHandle;
     friend class WebCore::QNetworkReplyHandler;
     friend class DumpRenderTreeSupportQt;

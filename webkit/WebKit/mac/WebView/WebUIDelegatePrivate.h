@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,6 +30,10 @@
 
 #if !defined(ENABLE_DASHBOARD_SUPPORT)
 #define ENABLE_DASHBOARD_SUPPORT 1
+#endif
+
+#if !defined(ENABLE_FULLSCREEN_API)
+#define ENABLE_FULLSCREEN_API 1
 #endif
 
 // Mail on Tiger expects the old value for WebMenuItemTagSearchInGoogle
@@ -95,6 +99,15 @@ enum {
 - (void)deny;
 @end
 
+#if ENABLE_FULLSCREEN_API
+@protocol WebKitFullScreenListener<NSObject>
+- (void)webkitWillEnterFullScreen;
+- (void)webkitDidEnterFullScreen;
+- (void)webkitWillExitFullScreen;
+- (void)webkitDidExitFullScreen;
+@end
+#endif
+
 @interface NSObject (WebUIDelegatePrivate)
 
 - (void)webView:(WebView *)webView addMessageToConsole:(NSDictionary *)message;
@@ -115,6 +128,7 @@ enum {
 - (void)webView:(WebView *)sender contextMenuItemSelected:(NSMenuItem *)item forElement:(NSDictionary *)element;
 - (void)webView:(WebView *)sender saveFrameView:(WebFrameView *)frameView showingPanel:(BOOL)showingPanel;
 - (BOOL)webView:(WebView *)sender shouldHaltPlugin:(DOMNode *)pluginNode isWindowed:(BOOL)isWindowed pluginName:(NSString *)pluginName;
+- (BOOL)webView:(WebView *)sender didPressMissingPluginButton:(DOMElement *)element;
 /*!
     @method webView:frame:exceededDatabaseQuotaForSecurityOrigin:database:
     @param sender The WebView sending the delegate method.
@@ -123,6 +137,16 @@ enum {
     @param databaseIdentifier The identifier of the database involved.
 */
 - (void)webView:(WebView *)sender frame:(WebFrame *)frame exceededDatabaseQuotaForSecurityOrigin:(WebSecurityOrigin *)origin database:(NSString *)databaseIdentifier;
+
+/*!
+    @method webView:exceededApplicationCacheOriginQuotaForSecurityOrigin:
+    @param sender The WebView sending the delegate method.
+    @param origin The security origin that needs a larger quota
+    @discussion This method is called when a page attempts to store more in the Application Cache
+    for an origin than was allowed by the quota (or default) set for the origin. This allows the
+    quota to be increased for the security origin.
+*/
+- (void)webView:(WebView *)sender exceededApplicationCacheOriginQuotaForSecurityOrigin:(WebSecurityOrigin *)origin;
 
 - (WebView *)webView:(WebView *)sender createWebViewWithRequest:(NSURLRequest *)request windowFeatures:(NSDictionary *)features;
 
@@ -152,5 +176,11 @@ enum {
     @discussion This method is called when a script or user requests the page to be printed.
 */
 - (void)webView:(WebView *)sender printFrame:(WebFrame *)frame;
+
+#if ENABLE_FULLSCREEN_API
+- (BOOL)webView:(WebView *)sender supportsFullScreenForElement:(DOMElement *)element;
+- (void)webView:(WebView *)sender enterFullScreenForElement:(DOMElement *)element;
+- (void)webView:(WebView *)sender exitFullScreenForElement:(DOMElement *)element;
+#endif
 
 @end

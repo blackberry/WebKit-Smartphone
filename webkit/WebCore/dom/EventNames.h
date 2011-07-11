@@ -22,8 +22,8 @@
 #ifndef EventNames_h
 #define EventNames_h
 
-#include "AtomicString.h"
 #include "ThreadGlobalData.h"
+#include <wtf/text/AtomicString.h>
 
 namespace WebCore {
 
@@ -34,6 +34,7 @@ namespace WebCore {
     macro(beforecut) \
     macro(beforeload) \
     macro(beforepaste) \
+    macro(beforeprocess) \
     macro(beforeunload) \
     macro(blur) \
     macro(cached) \
@@ -41,6 +42,7 @@ namespace WebCore {
     macro(checking) \
     macro(click) \
     macro(close) \
+    macro(complete) \
     macro(compositionend) \
     macro(compositionstart) \
     macro(compositionupdate) \
@@ -49,6 +51,7 @@ namespace WebCore {
     macro(copy) \
     macro(cut) \
     macro(dblclick) \
+    macro(devicemotion) \
     macro(deviceorientation) \
     macro(display) \
     macro(downloading) \
@@ -100,6 +103,9 @@ namespace WebCore {
     macro(textInput) \
     macro(unload) \
     macro(updateready) \
+    macro(write) \
+    macro(writeend) \
+    macro(writestart) \
     macro(zoom) \
     \
     macro(DOMActivate) \
@@ -149,6 +155,8 @@ namespace WebCore {
     \
     macro(orientationchange) \
     \
+    macro(timeout) \
+    \
     macro(touchstart) \
     macro(touchmove) \
     macro(touchend) \
@@ -157,6 +165,8 @@ namespace WebCore {
     macro(success) \
     \
     macro(loadend) \
+    \
+    macro(webkitfullscreenchange)
     \
 // end of DOM_EVENT_NAMES_FOR_EACH
 

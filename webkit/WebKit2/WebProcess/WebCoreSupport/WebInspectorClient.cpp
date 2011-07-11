@@ -25,6 +25,7 @@
 
 #include "WebInspectorClient.h"
 
+#define DISABLE_NOT_IMPLEMENTED_WARNINGS 1
 #include "NotImplemented.h"
 
 using namespace WebCore;
@@ -108,6 +109,13 @@ void WebInspectorClient::storeSetting(const String&, const String&)
 {
     notImplemented();
 }
+
+bool WebInspectorClient::sendMessageToFrontend(const String&)
+{
+    notImplemented();
+    return false;
+}
+
 
 void WebInspectorClient::inspectorWindowObjectCleared()
 {

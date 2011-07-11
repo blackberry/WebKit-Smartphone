@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2006 Nikolas Zimmermann <zimmermann@kde.org>
  * Copyright (C) 2007, 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Torch Mobile (Beijing) Co. Ltd. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,9 +29,11 @@
 #define ImageBuffer_h
 
 #include "AffineTransform.h"
+#include "FloatRect.h"
 #include "Image.h"
 #include "IntSize.h"
 #include "ImageBufferData.h"
+#include <wtf/Forward.h>
 #include <wtf/OwnPtr.h>
 #include <wtf/PassOwnPtr.h>
 #include <wtf/PassRefPtr.h>
@@ -41,8 +44,7 @@ namespace WebCore {
     class ImageData;
     class IntPoint;
     class IntRect;
-    class String;
-
+    
     enum ImageColorSpace {
         Unknown,
         DeviceRGB, // like sRGB
@@ -70,19 +72,21 @@ namespace WebCore {
         ~ImageBuffer();
 
         const IntSize& size() const { return m_size; }
+        int width() const { return m_size.width(); }
+        int height() const { return m_size.height(); }
+        
         GraphicsContext* context() const;
 
-        Image* image() const;
-
-        void clearImage() { m_image.clear(); }
+        bool drawsUsingCopy() const; // If the image buffer has to render using a copied image, it will return true.
+        PassRefPtr<Image> copyImage() const; // Return a new image that is a copy of the buffer.
 
         PassRefPtr<ImageData> getUnmultipliedImageData(const IntRect&) const;
         PassRefPtr<ImageData> getPremultipliedImageData(const IntRect&) const;
 
         void putUnmultipliedImageData(ImageData*, const IntRect& sourceRect, const IntPoint& destPoint);
         void putPremultipliedImageData(ImageData*, const IntRect& sourceRect, const IntPoint& destPoint);
-
-        String toDataURL(const String& mimeType) const;
+        
+        String toDataURL(const String& mimeType, const double* quality = 0) const;
 #if !PLATFORM(CG)
         AffineTransform baseTransform() const { return AffineTransform(); }
         void transformColorSpace(ImageColorSpace srcColorSpace, ImageColorSpace dstColorSpace);
@@ -90,6 +94,18 @@ namespace WebCore {
 #else
         AffineTransform baseTransform() const { return AffineTransform(1, 0, 0, -1, 0, m_size.height()); }
 #endif
+
+    private:
+        void clip(GraphicsContext*, const FloatRect&) const;
+
+        // The draw method draws the contents of the buffer without copying it.
+        void draw(GraphicsContext*, ColorSpace styleColorSpace, const FloatRect& destRect, const FloatRect& srcRect = FloatRect(0, 0, -1, -1),
+                             CompositeOperator = CompositeSourceOver, bool useLowQualityScale = false);
+        void drawPattern(GraphicsContext*, const FloatRect& srcRect, const AffineTransform& patternTransform,
+                         const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator, const FloatRect& destRect);
+        friend class GraphicsContext;
+        friend class GeneratedImage;
+
     private:
         ImageBufferData m_data;
 

@@ -34,16 +34,18 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
 
 class LayoutTestController : public RefCounted<LayoutTestController> {
 public:
-    LayoutTestController(const std::string& testPathOrURL, const std::string& expectedPixelHash);
+    static PassRefPtr<LayoutTestController> create(const std::string& testPathOrURL, const std::string& expectedPixelHash);
     ~LayoutTestController();
 
     void makeWindowObject(JSContextRef context, JSObjectRef windowObject, JSValueRef* exception);
 
     void addDisallowedURL(JSStringRef url);
+    void clearAllApplicationCaches();
     void clearAllDatabases();
     void clearBackForwardList();
     void clearPersistentUserStyleSheet();
@@ -62,10 +64,14 @@ public:
     int numberOfPages(float pageWidthInPixels, float pageHeightInPixels);
     void overridePreference(JSStringRef key, JSStringRef value);
     int pageNumberForElementById(JSStringRef id, float pageWidthInPixels, float pageHeightInPixels);
+    JSRetainPtr<JSStringRef> pageProperty(const char* propertyName, int pageNumber) const;
+    JSRetainPtr<JSStringRef> pageSizeAndMarginsInPixels(int pageNumber, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft) const;
+    bool isPageBoxVisible(int pageNumber) const;
     JSStringRef pathToLocalResource(JSContextRef, JSStringRef url);
     void queueBackNavigation(int howFarBackward);
     void queueForwardNavigation(int howFarForward);
     void queueLoad(JSStringRef url, JSStringRef target);
+    void queueLoadHTMLString(JSStringRef content, JSStringRef baseURL);
     void queueLoadingScript(JSStringRef script);
     void queueNonLoadingScript(JSStringRef script);
     void queueReload();
@@ -74,6 +80,7 @@ public:
     void setAllowUniversalAccessFromFileURLs(bool);
     void setAllowFileAccessFromFileURLs(bool);
     void setAppCacheMaximumSize(unsigned long long quota);
+    void setApplicationCacheOriginQuota(unsigned long long quota);
     void setAuthorAndUserStylesEnabled(bool);
     void setCacheModel(int);
     void setCustomPolicyDelegate(bool setDelegate, bool permissive);
@@ -83,8 +90,10 @@ public:
     void setJavaScriptProfilingEnabled(bool profilingEnabled);
     void setJavaScriptCanAccessClipboard(bool flag);
     void setMainFrameIsFirstResponder(bool flag);
+    void setMockDeviceOrientation(bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma);
     void setMockGeolocationError(int code, JSStringRef message);
     void setMockGeolocationPosition(double latitude, double longitude, double accuracy);
+    void setMockSpeechInputResult(JSStringRef result);
     void setPersistentUserStyleSheetLocation(JSStringRef path);
     void setPluginsEnabled(bool flag);
     void setPopupBlockingEnabled(bool flag);
@@ -95,6 +104,7 @@ public:
     void setUseDashboardCompatibilityMode(bool flag);
     void setUserStyleSheetEnabled(bool flag);
     void setUserStyleSheetLocation(JSStringRef path);
+    void setViewModeMediaFeature(JSStringRef mode);
     void setXSSAuditorEnabled(bool flag);
     void setFrameFlatteningEnabled(bool enable);
     void setSpatialNavigationEnabled(bool enable);
@@ -116,7 +126,13 @@ public:
 
     bool dumpAsText() const { return m_dumpAsText; }
     void setDumpAsText(bool dumpAsText) { m_dumpAsText = dumpAsText; }
-    
+
+    bool generatePixelResults() const { return m_generatePixelResults; }
+    void setGeneratePixelResults(bool generatePixelResults) { m_generatePixelResults = generatePixelResults; }
+
+    bool dumpApplicationCacheDelegateCallbacks() const { return m_dumpApplicationCacheDelegateCallbacks; }
+    void setDumpApplicationCacheDelegateCallbacks(bool dumpCallbacks) { m_dumpApplicationCacheDelegateCallbacks = dumpCallbacks; }
+
     bool dumpBackForwardList() const { return m_dumpBackForwardList; }
     void setDumpBackForwardList(bool dumpBackForwardList) { m_dumpBackForwardList = dumpBackForwardList; }
 
@@ -226,6 +242,9 @@ public:
     bool globalFlag() const { return m_globalFlag; }
     void setGlobalFlag(bool globalFlag) { m_globalFlag = globalFlag; }
     
+    bool deferMainResourceDataLoad() const { return m_deferMainResourceDataLoad; }
+    void setDeferMainResourceDataLoad(bool flag) { m_deferMainResourceDataLoad = flag; }
+
     const std::string& testPathOrURL() const { return m_testPathOrURL; }
     const std::string& expectedPixelHash() const { return m_expectedPixelHash; }
     
@@ -233,12 +252,14 @@ public:
     bool pauseTransitionAtTimeOnElementWithId(JSStringRef propertyName, double time, JSStringRef elementId);
     bool sampleSVGAnimationForElementAtTime(JSStringRef animationId, double time, JSStringRef elementId);
     unsigned numberOfActiveAnimations() const;
+    void suspendAnimations() const;
+    void resumeAnimations() const;
 
     void addOriginAccessWhitelistEntry(JSStringRef sourceOrigin, JSStringRef destinationProtocol, JSStringRef destinationHost, bool allowDestinationSubdomains);
     void removeOriginAccessWhitelistEntry(JSStringRef sourceOrigin, JSStringRef destinationProtocol, JSStringRef destinationHost, bool allowDestinationSubdomains);
 
-    void addUserScript(JSStringRef source, bool runAtStart);
-    void addUserStyleSheet(JSStringRef source);
+    void addUserScript(JSStringRef source, bool runAtStart, bool allFrames);
+    void addUserStyleSheet(JSStringRef source, bool allFrames);
 
     void setGeolocationPermission(bool allow);
     bool isGeolocationPermissionSet() const { return m_isGeolocationPermissionSet; }
@@ -254,6 +275,8 @@ public:
     void setPOSIXLocale(JSStringRef locale);
 
     void setWebViewEditable(bool);
+
+    void abortModal();
 
     // The following API test functions should probably be moved to platform-specific 
     // unit tests outside of DRT once they exist.
@@ -271,6 +294,11 @@ public:
     static const unsigned maxViewHeight;
 
 private:
+    LayoutTestController(const std::string& testPathOrURL, const std::string& expectedPixelHash);
+
+    void setGeolocationPermissionCommon(bool allow);
+
+    bool m_dumpApplicationCacheDelegateCallbacks;
     bool m_dumpAsPDF;
     bool m_dumpAsText;
     bool m_dumpBackForwardList;
@@ -290,6 +318,7 @@ private:
     bool m_dumpIconChanges;
     bool m_dumpVisitedLinksCallback;
     bool m_dumpWillCacheResponse;
+    bool m_generatePixelResults;
     bool m_callCloseOnWebViews;
     bool m_canOpenWindows;
     bool m_closeRemainingWindowsWhenComplete;
@@ -308,6 +337,7 @@ private:
     bool m_geolocationPermission;
     bool m_handlesAuthenticationChallenges;
     bool m_isPrinting;
+    bool m_deferMainResourceDataLoad;
 
     std::string m_authenticationUsername;
     std::string m_authenticationPassword; 

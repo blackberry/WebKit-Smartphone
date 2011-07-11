@@ -28,13 +28,15 @@
 
 import os
 
+from webkitpy.common.checkout.scm import CheckoutNeedsUpdate
 from webkitpy.common.net.bugzilla import Attachment
 from webkitpy.common.system.outputcapture import OutputCapture
 from webkitpy.thirdparty.mock import Mock
 from webkitpy.tool.commands.commandtest import CommandsTest
 from webkitpy.tool.commands.queues import *
 from webkitpy.tool.commands.queuestest import QueuesTest
-from webkitpy.tool.mocktool import MockTool, MockSCM
+from webkitpy.tool.commands.stepsequence import StepSequence
+from webkitpy.tool.mocktool import MockTool, MockSCM, MockStatusServer
 
 
 class TestQueue(AbstractPatchQueue):
@@ -99,6 +101,25 @@ class AbstractQueueTest(CommandsTest):
         self.assertTrue(queue.should_continue_work_queue())
         self.assertTrue(queue.should_continue_work_queue())
 
+    def _assert_log_message(self, script_error, log_message):
+        failure_log = AbstractQueue._log_from_script_error_for_upload(script_error, output_limit=10)
+        self.assertTrue(failure_log.read(), log_message)
+
+    def test_log_from_script_error_for_upload(self):
+        self._assert_log_message(ScriptError("test"), "test")
+        # In python 2.5 unicode(Exception) is busted. See:
+        # http://bugs.python.org/issue2517
+        # With no good workaround, we just ignore these tests.
+        if not hasattr(Exception, "__unicode__"):
+            return
+
+        unicode_tor = u"WebKit \u2661 Tor Arne Vestb\u00F8!"
+        utf8_tor = unicode_tor.encode("utf-8")
+        self._assert_log_message(ScriptError(unicode_tor), utf8_tor)
+        script_error = ScriptError(unicode_tor, output=unicode_tor)
+        expected_output = "%s\nLast %s characters of output:\n%s" % (utf8_tor, 10, utf8_tor[-10:])
+        self._assert_log_message(script_error, expected_output)
+
 
 class AbstractReviewQueueTest(CommandsTest):
     def test_patch_collection_delegate_methods(self):
@@ -114,6 +135,19 @@ class AbstractReviewQueueTest(CommandsTest):
         self.assertFalse(queue.is_terminal_status("Foo"))
 
 
+class NeedsUpdateSequence(StepSequence):
+    def _run(self, tool, options, state):
+        raise CheckoutNeedsUpdate([], 1, "", None)
+
+
+class AlwaysCommitQueueTool(object):
+    def __init__(self):
+        self.status_server = MockStatusServer()
+
+    def command_by_name(self, name):
+        return CommitQueue
+
+
 class CommitQueueTest(QueuesTest):
     def test_commit_queue(self):
         expected_stderr = {
@@ -122,10 +156,13 @@ class CommitQueueTest(QueuesTest):
             # FIXME: The commit-queue warns about bad committers twice.  This is due to the fact that we access Attachment.reviewer() twice and it logs each time.
             "next_work_item" : """Warning, attachment 128 on bug 42 has invalid committer (non-committer@example.com)
 Warning, attachment 128 on bug 42 has invalid committer (non-committer@example.com)
+MOCK setting flag 'commit-queue' to '-' on attachment '128' with comment 'Rejecting patch 128 from commit-queue.' and additional comment 'non-committer@example.com does not have committer permissions according to http://trac.webkit.org/browser/trunk/WebKitTools/Scripts/webkitpy/common/config/committers.py.\n\n- If you do not have committer rights please read http://webkit.org/coding/contributing.html for instructions on how to use bugzilla flags.\n\n- If you have committer rights please correct the error in WebKitTools/Scripts/webkitpy/common/config/committers.py by adding yourself to the file (no review needed).  The commit-queue restarts itself every 2 hours.  After restart the commit-queue will correctly respect your committer rights.'
 MOCK: update_work_items: commit-queue [106, 197]
 2 patches in commit-queue [106, 197]
 """,
             "process_work_item" : "MOCK: update_status: commit-queue Pass\n",
+            "handle_unexpected_error" : "MOCK setting flag 'commit-queue' to '-' on attachment '1234' with comment 'Rejecting patch 1234 from commit-queue.' and additional comment 'Mock error message'\n",
+            "handle_script_error": "MOCK: update_status: commit-queue ScriptError error message\nMOCK setting flag 'commit-queue' to '-' on attachment '1234' with comment 'Rejecting patch 1234 from commit-queue.' and additional comment 'ScriptError error message'\n",
         }
         self.assert_queue_outputs(CommitQueue(), expected_stderr=expected_stderr)
 
@@ -134,15 +171,21 @@ MOCK: update_work_items: commit-queue [106, 197]
         tool.buildbot.light_tree_on_fire()
         expected_stderr = {
             "begin_work_queue" : "CAUTION: commit-queue will discard all local changes in \"%s\"\nRunning WebKit commit-queue.\n" % MockSCM.fake_checkout_root,
-            "should_proceed_with_work_item": "MOCK: update_status: commit-queue Builders [\"Builder2\"] are red. See http://build.webkit.org\n",
+            "should_proceed_with_work_item": "MOCK: update_status: commit-queue Landing patch\n",
             # FIXME: The commit-queue warns about bad committers twice.  This is due to the fact that we access Attachment.reviewer() twice and it logs each time.
             "next_work_item" : """Warning, attachment 128 on bug 42 has invalid committer (non-committer@example.com)
 Warning, attachment 128 on bug 42 has invalid committer (non-committer@example.com)
+MOCK setting flag 'commit-queue' to '-' on attachment '128' with comment 'Rejecting patch 128 from commit-queue.' and additional comment 'non-committer@example.com does not have committer permissions according to http://trac.webkit.org/browser/trunk/WebKitTools/Scripts/webkitpy/common/config/committers.py.
+
+- If you do not have committer rights please read http://webkit.org/coding/contributing.html for instructions on how to use bugzilla flags.
+
+- If you have committer rights please correct the error in WebKitTools/Scripts/webkitpy/common/config/committers.py by adding yourself to the file (no review needed).  The commit-queue restarts itself every 2 hours.  After restart the commit-queue will correctly respect your committer rights.'
 MOCK: update_work_items: commit-queue [106, 197]
-MOCK: update_status: commit-queue Builders ["Builder2"] are red. See http://build.webkit.org
-1 patch in commit-queue [106]
+2 patches in commit-queue [106, 197]
 """,
-            "process_work_item" : "MOCK: update_status: commit-queue Builders [\"Builder2\"] are red. See http://build.webkit.org\n",
+            "process_work_item" : "MOCK run_and_throw_if_fail: ['echo', '--status-host=example.com', 'land-attachment', '--force-clean', '--build', '--non-interactive', '--ignore-builders', '--build-style=both', '--quiet', 1234, '--test']\nMOCK: update_status: commit-queue Pass\n",
+            "handle_unexpected_error" : "MOCK setting flag 'commit-queue' to '-' on attachment '1234' with comment 'Rejecting patch 1234 from commit-queue.' and additional comment 'Mock error message'\n",
+            "handle_script_error": "MOCK: update_status: commit-queue ScriptError error message\nMOCK setting flag 'commit-queue' to '-' on attachment '1234' with comment 'Rejecting patch 1234 from commit-queue.' and additional comment 'ScriptError error message'\n",
         }
         self.assert_queue_outputs(CommitQueue(), tool=tool, expected_stderr=expected_stderr)
 
@@ -156,11 +199,17 @@ MOCK: update_status: commit-queue Builders ["Builder2"] are red. See http://buil
             # FIXME: The commit-queue warns about bad committers twice.  This is due to the fact that we access Attachment.reviewer() twice and it logs each time.
             "next_work_item": """Warning, attachment 128 on bug 42 has invalid committer (non-committer@example.com)
 Warning, attachment 128 on bug 42 has invalid committer (non-committer@example.com)
+MOCK setting flag 'commit-queue' to '-' on attachment '128' with comment 'Rejecting patch 128 from commit-queue.' and additional comment 'non-committer@example.com does not have committer permissions according to http://trac.webkit.org/browser/trunk/WebKitTools/Scripts/webkitpy/common/config/committers.py.
+
+- If you do not have committer rights please read http://webkit.org/coding/contributing.html for instructions on how to use bugzilla flags.
+
+- If you have committer rights please correct the error in WebKitTools/Scripts/webkitpy/common/config/committers.py by adding yourself to the file (no review needed).  The commit-queue restarts itself every 2 hours.  After restart the commit-queue will correctly respect your committer rights.'
 MOCK: update_work_items: commit-queue [106, 197]
-MOCK: update_status: commit-queue Builders ["Builder2"] are red. See http://build.webkit.org
-1 patch in commit-queue [106]
+2 patches in commit-queue [106, 197]
 """,
             "process_work_item": "MOCK run_and_throw_if_fail: ['echo', '--status-host=example.com', 'land-attachment', '--force-clean', '--build', '--non-interactive', '--ignore-builders', '--build-style=both', '--quiet', 76543]\nMOCK: update_status: commit-queue Pass\n",
+            "handle_unexpected_error": "MOCK setting flag 'commit-queue' to '-' on attachment '76543' with comment 'Rejecting patch 76543 from commit-queue.' and additional comment 'Mock error message'\n",
+            "handle_script_error": "MOCK: update_status: commit-queue ScriptError error message\nMOCK setting flag 'commit-queue' to '-' on attachment '1234' with comment 'Rejecting patch 1234 from commit-queue.' and additional comment 'ScriptError error message'\n",
         }
         self.assert_queue_outputs(CommitQueue(), tool=tool, work_item=rollout_patch, expected_stderr=expected_stderr)
 
@@ -192,6 +241,33 @@ MOCK: update_status: commit-queue Builders ["Builder2"] are red. See http://buil
         attachments.sort(queue._patch_cmp)
         self.assertEqual(attachments, expected_sort)
 
+    def test_auto_retry(self):
+        queue = CommitQueue()
+        options = Mock()
+        options.parent_command = "commit-queue"
+        tool = AlwaysCommitQueueTool()
+        sequence = NeedsUpdateSequence(None)
+
+        expected_stderr = "Commit failed because the checkout is out of date.  Please update and try again.\nMOCK: update_status: commit-queue Tests passed, but commit failed (checkout out of date).  Updating, then landing without building or re-running tests.\n"
+        state = {'patch': None}
+        OutputCapture().assert_outputs(self, sequence.run_and_handle_errors, [tool, options, state], expected_exception=TryAgain, expected_stderr=expected_stderr)
+
+        self.assertEquals(options.update, True)
+        self.assertEquals(options.build, False)
+        self.assertEquals(options.test, False)
+
+
+class RietveldUploadQueueTest(QueuesTest):
+    def test_rietveld_upload_queue(self):
+        expected_stderr = {
+            "begin_work_queue": "CAUTION: rietveld-upload-queue will discard all local changes in \"%s\"\nRunning WebKit rietveld-upload-queue.\n" % MockSCM.fake_checkout_root,
+            "should_proceed_with_work_item": "MOCK: update_status: rietveld-upload-queue Uploading patch\n",
+            "process_work_item": "MOCK: update_status: rietveld-upload-queue Pass\n",
+            "handle_unexpected_error": "Mock error message\nMOCK setting flag 'in-rietveld' to '-' on attachment '1234' with comment 'None' and additional comment 'None'\n",
+            "handle_script_error": "ScriptError error message\nMOCK: update_status: rietveld-upload-queue ScriptError error message\nMOCK setting flag 'in-rietveld' to '-' on attachment '1234' with comment 'None' and additional comment 'None'\n",
+        }
+        self.assert_queue_outputs(RietveldUploadQueue(), expected_stderr=expected_stderr)
+
 
 class StyleQueueTest(QueuesTest):
     def test_style_queue(self):
@@ -201,5 +277,9 @@ class StyleQueueTest(QueuesTest):
             "should_proceed_with_work_item": "MOCK: update_status: style-queue Checking style\n",
             "process_work_item" : "MOCK: update_status: style-queue Pass\n",
             "handle_unexpected_error" : "Mock error message\n",
+            "handle_script_error": "MOCK: update_status: style-queue ScriptError error message\nMOCK bug comment: bug_id=345, cc=[]\n--- Begin comment ---\\Attachment 1234 did not pass style-queue:\n\nScriptError error message\n\nIf any of these errors are false positives, please file a bug against check-webkit-style.\n--- End comment ---\n\n",
         }
-        self.assert_queue_outputs(StyleQueue(), expected_stderr=expected_stderr)
+        expected_exceptions = {
+            "handle_script_error": SystemExit,
+        }
+        self.assert_queue_outputs(StyleQueue(), expected_stderr=expected_stderr, expected_exceptions=expected_exceptions)

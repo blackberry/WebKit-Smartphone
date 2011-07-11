@@ -51,12 +51,12 @@ namespace WebCore {
         {
         }
 
-        WindowFeatures(const String& features);
+        WindowFeatures(const WTF::String& features);
 
-        void setWindowFeature(const String& keyString, const String& valueString);
+        void setWindowFeature(const WTF::String& keyString, const WTF::String& valueString);
 
-        static bool boolFeature(const HashMap<String, String>& features, const char* key, bool defaultValue = false);
-        static float floatFeature(const HashMap<String, String>& features, const char* key, float min, float max, float defaultValue);
+        static bool boolFeature(const HashMap<WTF::String, String>& features, const char* key, bool defaultValue = false);
+        static float floatFeature(const HashMap<WTF::String, String>& features, const char* key, float min, float max, float defaultValue);
 
         float x;
         bool xSet;
@@ -77,7 +77,7 @@ namespace WebCore {
         bool fullscreen;
         bool dialog;
 
-        Vector<String> additionalFeatures;
+        Vector<WTF::String> additionalFeatures;
     };
 
 } // namespace WebCore

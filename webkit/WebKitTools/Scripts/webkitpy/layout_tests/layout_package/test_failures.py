@@ -73,11 +73,11 @@ class TestFailure(object):
     @staticmethod
     def message():
         """Returns a string describing the failure in more detail."""
-        raise NotImplemented
+        raise NotImplementedError
 
     def result_html_output(self, filename):
         """Returns an HTML string to be included on the results.html page."""
-        raise NotImplemented
+        raise NotImplementedError
 
     def should_kill_dump_render_tree(self):
         """Returns True if we should kill DumpRenderTree before the next
@@ -108,10 +108,8 @@ class FailureWithType(TestFailure):
     use the standard OutputLinks.
     """
 
-    def __init__(self, test_type):
+    def __init__(self):
         TestFailure.__init__(self)
-        # FIXME: This class no longer needs to know the test_type.
-        self._test_type = test_type
 
     # Filename suffixes used by ResultHtmlOutput.
     OUT_FILENAMES = []
@@ -202,8 +200,8 @@ class FailureTextMismatch(FailureWithType):
     OUT_FILENAMES_WDIFF = ["-actual.txt", "-expected.txt", "-diff.txt",
                            "-wdiff.html", "-pretty-diff.html"]
 
-    def __init__(self, test_type, has_wdiff):
-        FailureWithType.__init__(self, test_type)
+    def __init__(self, has_wdiff):
+        FailureWithType.__init__(self)
         if has_wdiff:
             self.OUT_FILENAMES = self.OUT_FILENAMES_WDIFF
 
@@ -248,15 +246,6 @@ class FailureImageHashMismatch(FailureWithType):
         # We call this a simple image mismatch to avoid confusion, since
         # we link to the PNGs rather than the checksums.
         return "Image mismatch"
-
-
-class FailureFuzzyFailure(FailureWithType):
-    """Image hashes didn't match."""
-    OUT_FILENAMES = ["-actual.png", "-expected.png"]
-
-    @staticmethod
-    def message():
-        return "Fuzzy image match also failed"
 
 
 class FailureImageHashIncorrect(FailureWithType):

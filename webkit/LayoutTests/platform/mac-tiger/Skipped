@@ -36,8 +36,12 @@ platform/mac/accessibility/table-updating.html
 platform/mac/accessibility/aria-treegrid.html
 platform/mac/accessibility/stale-table-rows.html
 platform/mac/accessibility/parent-of-table-row-is-table.html
+platform/mac/accessibility/aria-expanded-notifications.html
+platform/mac/accessibility/table-with-row-col-of-headers.html
+platform/mac/accessibility/table-with-zebra-rows.html
 # Lists are not supported on Leopard.
 platform/mac/accessibility/aria-directory.html
+platform/mac/accessibility/inherited-presentational-lists.html
 
 # Tests of font features not supported by ATSUI
 platform/mac/fast/text/myanmar-shaping.html
@@ -154,7 +158,7 @@ media/media-document-audio-size.html
 # These tests fail on Tiger/PPC, probably because of bugs in JSC intepreter.
 fast/js/sputnik/Conformance/07_Lexical_Conventions/7.8_Literals/7.8.5_Regular_Expression_Literals/S7.8.5_A1.4_T2.html
 fast/js/sputnik/Conformance/07_Lexical_Conventions/7.8_Literals/7.8.5_Regular_Expression_Literals/S7.8.5_A2.4_T2.html
-fast/js/sputnik/Conformance/11_Expressions/11.5_Multiplicative_Operators/11.5.3_Applying_the_percent_Operator/S11.5.3_A4_T2.html
+fast/js/sputnik/Conformance/11_Expressions/11.5_Multiplicative_Operators/11.5.3_Percent/S11.5.3_A4_T2.html
 fast/js/sputnik/Conformance/15_Native_Objects/15.3_Function/15.3.4/15.3.4.3_Function.prototype.apply/S15.3.4.3_A6_T1.html
 fast/js/sputnik/Conformance/15_Native_Objects/15.3_Function/15.3.4/15.3.4.3_Function.prototype.apply/S15.3.4.3_A6_T4.html
 fast/js/sputnik/Conformance/15_Native_Objects/15.3_Function/15.3.5/S15.3.5.3_A2_T6.html
@@ -175,9 +179,6 @@ fast/js/sputnik/Unicode
 # https://bugs.webkit.org/show_bug.cgi?id=38743
 webarchive/test-link-rel-icon.html
 
-# Python 2.5 is required to run websocket tests
-websocket/tests
-
 # IndexedDB is not yet enabled.
 storage/indexeddb
 
@@ -191,3 +192,17 @@ canvas/philip/tests/2d.shadow.composite.1.html
 canvas/philip/tests/2d.shadow.composite.2.html
 canvas/philip/tests/2d.shadow.pattern.alpha.html
 canvas/philip/tests/2d.shadow.pattern.transparent.1.html
+
+# Cannot compute bounds of custom fonts on Tiger, see SimpleFontData::platformBoundsForGlyph().
+fast/css/custom-font-xheight.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=40049
+http/tests/inspector/resource-parameters.html
+
+# New modal dialog tests fail on Tiger.
+# Tests introduced in http://trac.webkit.org/changeset/61599.
+fast/events/show-modal-dialog-onblur-onfocus.html
+fast/harness/show-modal-dialog.html
+
+# Loading fails on Tiger with error -1012 after asking NSURLConnection to continue without credentials.
+http/tests/misc/401-alternative-content.php

@@ -141,7 +141,27 @@ public:
     int width() const;
     int height() const;
 
+    /**
+     * OpenVG's coordinate system is bottom-up and often does not match up
+     * with other coordinate systems, including WebKit's native one. If this
+     * flag is set to true, a newly created PainterOpenVG (including those
+     * that are created internally by GraphicsContext) will automatically
+     * set a flip transformation to make pixel (0, 0) the top-left one
+     * instead of bottom-left. Defaults to false.
+     */
+    void setApplyFlipTransformationOnPainterCreation(bool flipOnPainterCreation)
+    {
+        m_doesApplyFlipTransformationOnPainterCreation = flipOnPainterCreation;
+    }
+
+    bool doesApplyFlipTransformationOnPainterCreation() { return m_doesApplyFlipTransformationOnPainterCreation; }
+
     SurfaceOpenVG* sharedSurface() const;
+
+    /**
+     * Determine whether this surface is the current drawing surface.
+     */
+    bool isCurrent() const;
 
     /**
      * Make the associated GL/EGL context the current one, so that subsequent
@@ -203,6 +223,7 @@ private:
     static PainterOpenVG* s_currentPainter; // global currently active painter
     IntSize m_size; // cached so we don't need to fetch it from EGL
     bool m_doesOwnSurface; // if false, the EGL surface won't be destroyed with the SurfaceOpenVG
+    bool m_doesApplyFlipTransformationOnPainterCreation;
 
     Vector<VGPath>& cachedPaths();
     Vector<VGPaint>& cachedPaints();

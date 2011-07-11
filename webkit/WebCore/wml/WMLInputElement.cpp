@@ -45,6 +45,11 @@ WMLInputElement::WMLInputElement(const QualifiedName& tagName, Document* doc)
 {
 }
 
+PassRefPtr<WMLInputElement> WMLInputElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new WMLInputElement(tagName, document));
+}
+
 WMLInputElement::~WMLInputElement()
 {
     if (m_isPasswordField)
@@ -269,7 +274,7 @@ void WMLInputElement::defaultEventHandler(Event* evt)
     }
 
     if (evt->type() == eventNames().keydownEvent && evt->isKeyboardEvent() && focused() && document()->frame()
-        && document()->frame()->doTextFieldCommandFromEvent(this, static_cast<KeyboardEvent*>(evt))) {
+        && document()->frame()->editor()->doTextFieldCommandFromEvent(this, static_cast<KeyboardEvent*>(evt))) {
         evt->setDefaultHandled();
         return;
     }

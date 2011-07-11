@@ -29,6 +29,7 @@
 #include "AuthenticationChallenge.h"
 #include "AuthenticationClient.h"
 #include "HTTPHeaderMap.h"
+#include "NetworkingContext.h"
 #include "ThreadableLoader.h"
 #include <wtf/OwnPtr.h>
 
@@ -98,19 +99,20 @@ class ResourceHandle : public RefCounted<ResourceHandle>
     , public AuthenticationClient
 #endif
     {
-private:
+protected:
     ResourceHandle(const ResourceRequest&, ResourceHandleClient*, bool defersLoading, bool shouldContentSniff);
 
+private:
     enum FailureType {
+        NoFailure,
         BlockedFailure,
         InvalidURLFailure
     };
 
 public:
-    // FIXME: should not need the Frame
-    static PassRefPtr<ResourceHandle> create(const ResourceRequest&, ResourceHandleClient*, Frame*, bool defersLoading, bool shouldContentSniff);
+    static PassRefPtr<ResourceHandle> create(NetworkingContext*, const ResourceRequest&, ResourceHandleClient*, bool defersLoading, bool shouldContentSniff);
+    static void loadResourceSynchronously(NetworkingContext*, const ResourceRequest&, StoredCredentials, ResourceError&, ResourceResponse&, Vector<char>& data);
 
-    static void loadResourceSynchronously(const ResourceRequest&, StoredCredentials, ResourceError&, ResourceResponse&, Vector<char>& data, Frame* frame);
     static void prepareForURL(const KURL&);
     static bool willLoadFromCache(ResourceRequest&, Frame*);
     static void cacheMetadata(const ResourceResponse&, const Vector<char>&);
@@ -186,7 +188,8 @@ public:
 
     // Used to work around the fact that you don't get any more NSURLConnection callbacks until you return from the one you're in.
     static bool loadsBlocked();    
-    
+
+    bool hasAuthenticationChallenge() const;
     void clearAuthentication();
     void cancel();
 
@@ -196,7 +199,7 @@ public:
 
     void setDefersLoading(bool);
       
-    const ResourceRequest& request() const;
+    ResourceRequest& firstRequest();
     const String& lastHTTPMethod() const;
 
     void fireFailure(Timer<ResourceHandle>*);
@@ -205,12 +208,20 @@ public:
     using RefCounted<ResourceHandle>::deref;
 
 private:
+    void platformSetDefersLoading(bool);
+
     void scheduleFailure(FailureType);
 
-    bool start(Frame*);
+    bool start(NetworkingContext*);
 
     virtual void refAuthenticationClient() { ref(); }
     virtual void derefAuthenticationClient() { deref(); }
+
+#if PLATFORM(MAC)
+    void createNSURLConnection(id delegate, bool shouldUseCredentialStorage, bool shouldContentSniff);
+#elif PLATFORM(CF)
+    void createCFURLConnection(bool shouldUseCredentialStorage, bool shouldContentSniff);
+#endif
 
     friend class ResourceHandleInternal;
     OwnPtr<ResourceHandleInternal> d;

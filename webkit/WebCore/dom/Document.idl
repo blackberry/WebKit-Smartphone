@@ -186,6 +186,11 @@ module core {
         readonly attribute [ConvertNullStringTo=Undefined] DOMString defaultCharset;
         readonly attribute [ConvertNullStringTo=Undefined] DOMString readyState;
 
+
+        NodeList           nodesFromRect(in long x, in long y,
+                                         in unsigned long hPadding,
+                                         in unsigned long vPadding,
+                                         in boolean ignoreClipping);
         Element            elementFromPoint(in long x, in long y);
         Range              caretRangeFromPoint(in long x, in long y);
 
@@ -238,6 +243,13 @@ module core {
         // Only used from within WML layout tests, WML doesn't have JS support at all.
         [DontEnum] void resetWMLPageState();
         [DontEnum] void initializeWMLPageState();
+#endif
+
+#if defined(ENABLE_FULLSCREEN_API) && ENABLE_FULLSCREEN_API
+        readonly attribute boolean webkitFullScreen;
+        readonly attribute boolean webkitFullScreenKeyboardInputAllowed;
+        readonly attribute Element webkitCurrentFullScreenElement;
+        void webkitCancelFullScreen();
 #endif
 
 #if !defined(LANGUAGE_OBJECTIVE_C) || !LANGUAGE_OBJECTIVE_C
@@ -312,6 +324,7 @@ module core {
         attribute [DontEnum,Conditional=TOUCH_EVENTS,EnabledAtRuntime] EventListener ontouchmove;
         attribute [DontEnum,Conditional=TOUCH_EVENTS,EnabledAtRuntime] EventListener ontouchend;
         attribute [DontEnum,Conditional=TOUCH_EVENTS,EnabledAtRuntime] EventListener ontouchcancel;
+        attribute [DontEnum, Conditional=FULLSCREEN_API] EventListener onwebkitfullscreenchange;
 #endif
 
 #if defined(LANGUAGE_CPP) && LANGUAGE_CPP

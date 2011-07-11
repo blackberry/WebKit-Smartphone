@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2007, 2008, 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,30 +40,26 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-HTMLSourceElement::HTMLSourceElement(const QualifiedName& tagName, Document* doc)
-    : HTMLElement(tagName, doc)
+inline HTMLSourceElement::HTMLSourceElement(const QualifiedName& tagName, Document* document)
+    : HTMLElement(tagName, document)
     , m_errorEventTimer(this, &HTMLSourceElement::errorEventTimerFired)
 {
     ASSERT(hasTagName(sourceTag));
 }
 
-HTMLSourceElement::~HTMLSourceElement()
+PassRefPtr<HTMLSourceElement> HTMLSourceElement::create(const QualifiedName& tagName, Document* document)
 {
+    return adoptRef(new HTMLSourceElement(tagName, document));
 }
 
-void HTMLSourceElement::insertedIntoDocument()
+void HTMLSourceElement::insertedIntoTree(bool deep)
 {
-    HTMLElement::insertedIntoDocument();
+    HTMLElement::insertedIntoTree(deep);
     if (parentNode() && (parentNode()->hasTagName(audioTag) ||  parentNode()->hasTagName(videoTag))) {
         HTMLMediaElement* media = static_cast<HTMLMediaElement*>(parentNode());
         if (media->networkState() == HTMLMediaElement::NETWORK_EMPTY)
             media->scheduleLoad();
     }
-}
-
-KURL HTMLSourceElement::src() const
-{
-    return document()->completeURL(getAttribute(srcAttr));
 }
 
 void HTMLSourceElement::setSrc(const String& url)
@@ -109,5 +105,11 @@ void HTMLSourceElement::errorEventTimerFired(Timer<HTMLSourceElement>*)
     dispatchEvent(Event::create(eventNames().errorEvent, false, true));
 }
 
+bool HTMLSourceElement::isURLAttribute(Attribute* attribute) const
+{
+    return attribute->name() == srcAttr;
 }
+
+}
+
 #endif

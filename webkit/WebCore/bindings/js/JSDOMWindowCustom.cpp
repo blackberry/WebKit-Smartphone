@@ -20,9 +20,7 @@
 #include "config.h"
 #include "JSDOMWindowCustom.h"
 
-#include "AtomicString.h"
 #include "Chrome.h"
-#include "Database.h"
 #include "DOMWindow.h"
 #include "Document.h"
 #include "ExceptionCode.h"
@@ -36,45 +34,41 @@
 #include "HTMLDocument.h"
 #include "History.h"
 #include "JSAudioConstructor.h"
-#if ENABLE(DATABASE)
-#include "JSDatabase.h"
-#include "JSDatabaseCallback.h"
-#endif
 #include "JSDOMWindowShell.h"
 #include "JSEvent.h"
 #include "JSEventListener.h"
-#include "JSEventSourceConstructor.h"
+#include "JSEventSource.h"
 #include "JSHTMLCollection.h"
 #include "JSHistory.h"
 #include "JSImageConstructor.h"
 #include "JSLocation.h"
-#include "JSMessageChannelConstructor.h"
+#include "JSMessageChannel.h"
 #include "JSMessagePort.h"
 #include "JSMessagePortCustom.h"
 #include "JSOptionConstructor.h"
 
 #if ENABLE(SHARED_WORKERS)
-#include "JSSharedWorkerConstructor.h"
+#include "JSSharedWorker.h"
 #endif
 
 #if ENABLE(3D_CANVAS)
-#include "JSArrayBufferConstructor.h"
-#include "JSInt8ArrayConstructor.h"
-#include "JSUint8ArrayConstructor.h"
-#include "JSInt32ArrayConstructor.h"
-#include "JSUint32ArrayConstructor.h"
-#include "JSInt16ArrayConstructor.h"
-#include "JSUint16ArrayConstructor.h"
-#include "JSFloatArrayConstructor.h"
+#include "JSArrayBuffer.h"
+#include "JSInt8Array.h"
+#include "JSUint8Array.h"
+#include "JSInt32Array.h"
+#include "JSUint32Array.h"
+#include "JSInt16Array.h"
+#include "JSUint16Array.h"
+#include "JSFloat32Array.h"
 #endif
-#include "JSWebKitCSSMatrixConstructor.h"
-#include "JSWebKitPointConstructor.h"
+#include "JSWebKitCSSMatrix.h"
+#include "JSWebKitPoint.h"
 #if ENABLE(WEB_SOCKETS)
-#include "JSWebSocketConstructor.h"
+#include "JSWebSocket.h"
 #endif
-#include "JSWorkerConstructor.h"
-#include "JSXMLHttpRequestConstructor.h"
-#include "JSXSLTProcessorConstructor.h"
+#include "JSWorker.h"
+#include "JSXMLHttpRequest.h"
+#include "JSXSLTProcessor.h"
 #include "Location.h"
 #include "MediaPlayer.h"
 #include "MessagePort.h"
@@ -92,6 +86,7 @@
 #include <runtime/JSFunction.h>
 #include <runtime/JSObject.h>
 #include <runtime/PrototypeFunction.h>
+#include <wtf/text/AtomicString.h>
 
 using namespace JSC;
 
@@ -276,7 +271,7 @@ bool JSDOMWindow::getOwnPropertySlot(ExecState* exec, const Identifier& property
 
     // allow window[1] or parent[1] etc. (#56983)
     bool ok;
-    unsigned i = propertyName.toArrayIndex(&ok);
+    unsigned i = propertyName.toArrayIndex(ok);
     if (ok && i < impl()->frame()->tree()->childCount()) {
         slot.setCustomIndex(this, i, indexGetter);
         return true;
@@ -350,7 +345,7 @@ bool JSDOMWindow::getOwnPropertyDescriptor(ExecState* exec, const Identifier& pr
     }
     
     bool ok;
-    unsigned i = propertyName.toArrayIndex(&ok);
+    unsigned i = propertyName.toArrayIndex(ok);
     if (ok && i < impl()->frame()->tree()->childCount()) {
         PropertySlot slot;
         slot.setCustomIndex(this, i, indexGetter);
@@ -517,7 +512,7 @@ void JSDOMWindow::setLocation(ExecState* exec, JSValue value)
 
     if (!protocolIsJavaScript(url) || allowsAccessFrom(exec)) {
         // We want a new history item if this JS was called via a user gesture
-        frame->redirectScheduler()->scheduleLocationChange(url, lexicalFrame->loader()->outgoingReferrer(), !lexicalFrame->script()->anyPageIsProcessingUserGesture(), false, processingUserGesture(exec));
+        frame->redirectScheduler()->scheduleLocationChange(url, lexicalFrame->loader()->outgoingReferrer(), !lexicalFrame->script()->anyPageIsProcessingUserGesture(), false, processingUserGesture());
     }
 }
 
@@ -606,52 +601,11 @@ JSValue JSDOMWindow::uint16Array(ExecState* exec) const
     return getDOMConstructor<JSUint16ArrayConstructor>(exec, this);
 }
  
-JSValue JSDOMWindow::floatArray(ExecState* exec) const
+JSValue JSDOMWindow::float32Array(ExecState* exec) const
 {
-    return getDOMConstructor<JSFloatArrayConstructor>(exec, this);
+    return getDOMConstructor<JSFloat32ArrayConstructor>(exec, this);
 }
 
-// Temporary aliases to keep current WebGL content working during transition period to TypedArray spec.
-// To be removed before WebGL spec is finalized. (FIXME)
-JSValue JSDOMWindow::webGLArrayBuffer(ExecState* exec) const
-{
-    return getDOMConstructor<JSArrayBufferConstructor>(exec, this);
-}
-
-JSValue JSDOMWindow::webGLByteArray(ExecState* exec) const
-{
-    return getDOMConstructor<JSInt8ArrayConstructor>(exec, this);
-}
-
-JSValue JSDOMWindow::webGLUnsignedByteArray(ExecState* exec) const
-{
-    return getDOMConstructor<JSUint8ArrayConstructor>(exec, this);
-}
-
-JSValue JSDOMWindow::webGLIntArray(ExecState* exec) const
-{
-    return getDOMConstructor<JSInt32ArrayConstructor>(exec, this);
-}
-
-JSValue JSDOMWindow::webGLUnsignedIntArray(ExecState* exec) const
-{
-    return getDOMConstructor<JSUint32ArrayConstructor>(exec, this);
-}
-
-JSValue JSDOMWindow::webGLShortArray(ExecState* exec) const
-{
-    return getDOMConstructor<JSInt16ArrayConstructor>(exec, this);
-}
-
-JSValue JSDOMWindow::webGLUnsignedShortArray(ExecState* exec) const
-{
-    return getDOMConstructor<JSUint16ArrayConstructor>(exec, this);
-}
-
-JSValue JSDOMWindow::webGLFloatArray(ExecState* exec) const
-{
-    return getDOMConstructor<JSFloatArrayConstructor>(exec, this);
-}
 #endif
  
 JSValue JSDOMWindow::xmlHttpRequest(ExecState* exec) const
@@ -729,10 +683,9 @@ static Frame* createWindow(ExecState* exec, Frame* lexicalFrame, Frame* dynamicF
     // We'd have to resolve all those issues to pass the URL instead of "".
 
     bool created;
-    // We pass in the opener frame here so it can be used for looking up the frame name, in case the active frame
-    // is different from the opener frame, and the name references a frame relative to the opener frame, for example
-    // "_self" or "_parent".
-    Frame* newFrame = lexicalFrame->loader()->createWindow(openerFrame->loader(), frameRequest, windowFeatures, created);
+    // We pass the opener frame for the lookupFrame in case the active frame is different from
+    // the opener frame, and the name references a frame relative to the opener frame.
+    Frame* newFrame = createWindow(lexicalFrame, openerFrame, frameRequest, windowFeatures, created);
     if (!newFrame)
         return 0;
 
@@ -747,7 +700,7 @@ static Frame* createWindow(ExecState* exec, Frame* lexicalFrame, Frame* dynamicF
 
     if (!protocolIsJavaScript(url) || newWindow->allowsAccessFrom(exec)) {
         KURL completedURL = url.isEmpty() ? KURL(ParsedURLString, "") : completeURL(exec, url);
-        bool userGesture = processingUserGesture(exec);
+        bool userGesture = processingUserGesture();
 
         if (created)
             newFrame->loader()->changeLocation(completedURL, referrer, false, false, userGesture);
@@ -758,19 +711,19 @@ static Frame* createWindow(ExecState* exec, Frame* lexicalFrame, Frame* dynamicF
     return newFrame;
 }
 
-static bool domWindowAllowPopUp(Frame* activeFrame, ExecState* exec)
+static bool domWindowAllowPopUp(Frame* activeFrame)
 {
     ASSERT(activeFrame);
-    if (activeFrame->script()->processingUserGesture(currentWorld(exec)))
+    if (ScriptController::processingUserGesture())
         return true;
     return DOMWindow::allowPopUp(activeFrame);
 }
 
-JSValue JSDOMWindow::open(ExecState* exec, const ArgList& args)
+JSValue JSDOMWindow::open(ExecState* exec)
 {
-    String urlString = valueToStringWithUndefinedOrNullCheck(exec, args.at(0));
-    AtomicString frameName = args.at(1).isUndefinedOrNull() ? "_blank" : ustringToAtomicString(args.at(1).toString(exec));
-    WindowFeatures windowFeatures(valueToStringWithUndefinedOrNullCheck(exec, args.at(2)));
+    String urlString = valueToStringWithUndefinedOrNullCheck(exec, exec->argument(0));
+    AtomicString frameName = exec->argument(1).isUndefinedOrNull() ? "_blank" : ustringToAtomicString(exec->argument(1).toString(exec));
+    WindowFeatures windowFeatures(valueToStringWithUndefinedOrNullCheck(exec, exec->argument(2)));
 
     Frame* frame = impl()->frame();
     if (!frame)
@@ -786,7 +739,7 @@ JSValue JSDOMWindow::open(ExecState* exec, const ArgList& args)
 
     // Because FrameTree::find() returns true for empty strings, we must check for empty framenames.
     // Otherwise, illegitimate window.open() calls with no name will pass right through the popup blocker.
-    if (!domWindowAllowPopUp(dynamicFrame, exec) && (frameName.isEmpty() || !frame->tree()->find(frameName)))
+    if (!domWindowAllowPopUp(dynamicFrame) && (frameName.isEmpty() || !frame->tree()->find(frameName)))
         return jsUndefined();
 
     // Get the target frame for the special cases of _top and _parent.  In those
@@ -810,7 +763,7 @@ JSValue JSDOMWindow::open(ExecState* exec, const ArgList& args)
 
         const JSDOMWindow* targetedWindow = toJSDOMWindow(frame, currentWorld(exec));
         if (!completedURL.isEmpty() && (!protocolIsJavaScript(completedURL) || (targetedWindow && targetedWindow->allowsAccessFrom(exec)))) {
-            bool userGesture = processingUserGesture(exec);
+            bool userGesture = processingUserGesture();
 
             // For whatever reason, Firefox uses the dynamicGlobalObject to
             // determine the outgoingReferrer.  We replicate that behavior
@@ -840,11 +793,11 @@ JSValue JSDOMWindow::open(ExecState* exec, const ArgList& args)
     return toJS(exec, frame->domWindow());
 }
 
-JSValue JSDOMWindow::showModalDialog(ExecState* exec, const ArgList& args)
+JSValue JSDOMWindow::showModalDialog(ExecState* exec)
 {
-    String url = valueToStringWithUndefinedOrNullCheck(exec, args.at(0));
-    JSValue dialogArgs = args.at(1);
-    String featureArgs = valueToStringWithUndefinedOrNullCheck(exec, args.at(2));
+    String url = valueToStringWithUndefinedOrNullCheck(exec, exec->argument(0));
+    JSValue dialogArgs = exec->argument(1);
+    String featureArgs = valueToStringWithUndefinedOrNullCheck(exec, exec->argument(2));
 
     Frame* frame = impl()->frame();
     if (!frame)
@@ -856,7 +809,7 @@ JSValue JSDOMWindow::showModalDialog(ExecState* exec, const ArgList& args)
     if (!dynamicFrame)
         return jsUndefined();
 
-    if (!DOMWindow::canShowModalDialogNow(frame) || !domWindowAllowPopUp(dynamicFrame, exec))
+    if (!DOMWindow::canShowModalDialogNow(frame) || !domWindowAllowPopUp(dynamicFrame))
         return jsUndefined();
 
     HashMap<String, String> features;
@@ -923,23 +876,23 @@ JSValue JSDOMWindow::showModalDialog(ExecState* exec, const ArgList& args)
     return jsUndefined();
 }
 
-JSValue JSDOMWindow::postMessage(ExecState* exec, const ArgList& args)
+JSValue JSDOMWindow::postMessage(ExecState* exec)
 {
     DOMWindow* window = impl();
 
     DOMWindow* source = asJSDOMWindow(exec->lexicalGlobalObject())->impl();
-    PassRefPtr<SerializedScriptValue> message = SerializedScriptValue::create(exec, args.at(0));
+    PassRefPtr<SerializedScriptValue> message = SerializedScriptValue::create(exec, exec->argument(0));
 
     if (exec->hadException())
         return jsUndefined();
 
     MessagePortArray messagePorts;
-    if (args.size() > 2)
-        fillMessagePortArray(exec, args.at(1), messagePorts);
+    if (exec->argumentCount() > 2)
+        fillMessagePortArray(exec, exec->argument(1), messagePorts);
     if (exec->hadException())
         return jsUndefined();
 
-    String targetOrigin = valueToStringWithUndefinedOrNullCheck(exec, args.at((args.size() == 2) ? 1 : 2));
+    String targetOrigin = valueToStringWithUndefinedOrNullCheck(exec, exec->argument((exec->argumentCount() == 2) ? 1 : 2));
     if (exec->hadException())
         return jsUndefined();
 
@@ -950,12 +903,12 @@ JSValue JSDOMWindow::postMessage(ExecState* exec, const ArgList& args)
     return jsUndefined();
 }
 
-JSValue JSDOMWindow::setTimeout(ExecState* exec, const ArgList& args)
+JSValue JSDOMWindow::setTimeout(ExecState* exec)
 {
-    OwnPtr<ScheduledAction> action = ScheduledAction::create(exec, args, currentWorld(exec));
+    OwnPtr<ScheduledAction> action = ScheduledAction::create(exec, currentWorld(exec));
     if (exec->hadException())
         return jsUndefined();
-    int delay = args.at(1).toInt32(exec);
+    int delay = exec->argument(1).toInt32(exec);
 
     ExceptionCode ec = 0;
     int result = impl()->setTimeout(action.release(), delay, ec);
@@ -964,12 +917,12 @@ JSValue JSDOMWindow::setTimeout(ExecState* exec, const ArgList& args)
     return jsNumber(exec, result);
 }
 
-JSValue JSDOMWindow::setInterval(ExecState* exec, const ArgList& args)
+JSValue JSDOMWindow::setInterval(ExecState* exec)
 {
-    OwnPtr<ScheduledAction> action = ScheduledAction::create(exec, args, currentWorld(exec));
+    OwnPtr<ScheduledAction> action = ScheduledAction::create(exec, currentWorld(exec));
     if (exec->hadException())
         return jsUndefined();
-    int delay = args.at(1).toInt32(exec);
+    int delay = exec->argument(1).toInt32(exec);
 
     ExceptionCode ec = 0;
     int result = impl()->setInterval(action.release(), delay, ec);
@@ -978,76 +931,33 @@ JSValue JSDOMWindow::setInterval(ExecState* exec, const ArgList& args)
     return jsNumber(exec, result);
 }
 
-JSValue JSDOMWindow::addEventListener(ExecState* exec, const ArgList& args)
+JSValue JSDOMWindow::addEventListener(ExecState* exec)
 {
     Frame* frame = impl()->frame();
     if (!frame)
         return jsUndefined();
 
-    JSValue listener = args.at(1);
+    JSValue listener = exec->argument(1);
     if (!listener.isObject())
         return jsUndefined();
 
-    impl()->addEventListener(ustringToAtomicString(args.at(0).toString(exec)), JSEventListener::create(asObject(listener), this, false, currentWorld(exec)), args.at(2).toBoolean(exec));
+    impl()->addEventListener(ustringToAtomicString(exec->argument(0).toString(exec)), JSEventListener::create(asObject(listener), this, false, currentWorld(exec)), exec->argument(2).toBoolean(exec));
     return jsUndefined();
 }
 
-JSValue JSDOMWindow::removeEventListener(ExecState* exec, const ArgList& args)
+JSValue JSDOMWindow::removeEventListener(ExecState* exec)
 {
     Frame* frame = impl()->frame();
     if (!frame)
         return jsUndefined();
 
-    JSValue listener = args.at(1);
+    JSValue listener = exec->argument(1);
     if (!listener.isObject())
         return jsUndefined();
 
-    impl()->removeEventListener(ustringToAtomicString(args.at(0).toString(exec)), JSEventListener::create(asObject(listener), this, false, currentWorld(exec)).get(), args.at(2).toBoolean(exec));
+    impl()->removeEventListener(ustringToAtomicString(exec->argument(0).toString(exec)), JSEventListener::create(asObject(listener), this, false, currentWorld(exec)).get(), exec->argument(2).toBoolean(exec));
     return jsUndefined();
 }
-
-#if ENABLE(DATABASE)
-JSValue JSDOMWindow::openDatabase(ExecState* exec, const ArgList& args)
-{
-    if (!allowsAccessFrom(exec) || (args.size() < 4)) {
-        setDOMException(exec, SYNTAX_ERR);
-        return jsUndefined();
-    }
-
-    String name = ustringToString(args.at(0).toString(exec));
-    if (exec->hadException())
-        return jsUndefined();
-
-    String version = ustringToString(args.at(1).toString(exec));
-    if (exec->hadException())
-        return jsUndefined();
-
-    String displayName = ustringToString(args.at(2).toString(exec));
-    if (exec->hadException())
-        return jsUndefined();
-
-    // args.at(3) = estimated size
-    unsigned long estimatedSize = args.at(3).toUInt32(exec);
-    if (exec->hadException())
-        return jsUndefined();
-
-    RefPtr<DatabaseCallback> creationCallback;
-    if (args.size() >= 5) {
-        if (!args.at(4).isObject()) {
-            setDOMException(exec, TYPE_MISMATCH_ERR);
-            return jsUndefined();
-        }
-
-        creationCallback = JSDatabaseCallback::create(asObject(args.at(4)), globalObject());
-    }
-
-    ExceptionCode ec = 0;
-    JSValue result = toJS(exec, globalObject(), WTF::getPtr(impl()->openDatabase(name, version, displayName, estimatedSize, creationCallback.release(), ec)));
-
-    setDOMException(exec, ec);
-    return result;
-}
-#endif
 
 DOMWindow* toDOMWindow(JSValue value)
 {

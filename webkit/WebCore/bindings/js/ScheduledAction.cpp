@@ -34,7 +34,6 @@
 #include "ScriptController.h"
 #include "ScriptExecutionContext.h"
 #include "ScriptSourceCode.h"
-#include "ScriptValue.h"
 #include <runtime/JSLock.h>
 
 #if ENABLE(WORKERS)
@@ -47,28 +46,28 @@ using namespace JSC;
 
 namespace WebCore {
 
-PassOwnPtr<ScheduledAction> ScheduledAction::create(ExecState* exec, const ArgList& args, DOMWrapperWorld* isolatedWorld)
+PassOwnPtr<ScheduledAction> ScheduledAction::create(ExecState* exec, DOMWrapperWorld* isolatedWorld)
 {
-    JSValue v = args.at(0);
+    JSValue v = exec->argument(0);
     CallData callData;
-    if (v.getCallData(callData) == CallTypeNone) {
+    if (getCallData(v, callData) == CallTypeNone) {
         UString string = v.toString(exec);
         if (exec->hadException())
             return 0;
         return new ScheduledAction(ustringToString(string), isolatedWorld);
     }
-    ArgList argsTail;
-    args.getSlice(2, argsTail);
-    return new ScheduledAction(v, argsTail, isolatedWorld);
+
+    return new ScheduledAction(exec, v, isolatedWorld);
 }
 
-ScheduledAction::ScheduledAction(JSValue function, const ArgList& args, DOMWrapperWorld* isolatedWorld)
+ScheduledAction::ScheduledAction(ExecState* exec, JSValue function, DOMWrapperWorld* isolatedWorld)
     : m_function(function)
     , m_isolatedWorld(isolatedWorld)
 {
-    ArgList::const_iterator end = args.end();
-    for (ArgList::const_iterator it = args.begin(); it != end; ++it)
-        m_args.append(*it);
+    // setTimeout(function, interval, arg0, arg1...).
+    // Start at 2 to skip function and interval.
+    for (size_t i = 2; i < exec->argumentCount(); ++i)
+        m_args.append(exec->argument(i));
 }
 
 void ScheduledAction::execute(ScriptExecutionContext* context)
@@ -91,7 +90,7 @@ void ScheduledAction::executeFunctionInContext(JSGlobalObject* globalObject, JSV
     JSLock lock(SilenceAssertionsOnly);
 
     CallData callData;
-    CallType callType = m_function.get().getCallData(callData);
+    CallType callType = getCallData(m_function.get(), callData);
     if (callType == CallTypeNone)
         return;
 

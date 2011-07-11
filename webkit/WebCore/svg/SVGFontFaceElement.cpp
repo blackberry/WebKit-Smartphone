@@ -1,23 +1,23 @@
 /*
-   Copyright (C) 2007 Eric Seidel <eric@webkit.org>
-   Copyright (C) 2007, 2008 Nikolas Zimmermann <zimmermann@kde.org>
-   Copyright (C) 2008 Apple Inc. All rights reserved.
-    
-   This library is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Library General Public
-   License as published by the Free Software Foundation; either
-   version 2 of the License, or (at your option) any later version.
-
-   This library is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Library General Public License for more details.
-
-   You should have received a copy of the GNU Library General Public License
-   along with this library; see the file COPYING.LIB.  If not, write to
-   the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-   Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2007 Eric Seidel <eric@webkit.org>
+ * Copyright (C) 2007, 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2008 Apple Inc. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -46,18 +46,19 @@ namespace WebCore {
 
 using namespace SVGNames;
 
-SVGFontFaceElement::SVGFontFaceElement(const QualifiedName& tagName, Document* doc)
-    : SVGElement(tagName, doc)
+inline SVGFontFaceElement::SVGFontFaceElement(const QualifiedName& tagName, Document* document)
+    : SVGElement(tagName, document)
     , m_fontFaceRule(CSSFontFaceRule::create())
     , m_styleDeclaration(CSSMutableStyleDeclaration::create())
 {
-    m_styleDeclaration->setParent(document()->mappedElementSheet());
+    m_styleDeclaration->setParent(document->mappedElementSheet());
     m_styleDeclaration->setStrictParsing(true);
     m_fontFaceRule->setDeclaration(m_styleDeclaration.get());
 }
 
-SVGFontFaceElement::~SVGFontFaceElement()
+PassRefPtr<SVGFontFaceElement> SVGFontFaceElement::create(const QualifiedName& tagName, Document* document)
 {
+    return adoptRef(new SVGFontFaceElement(tagName, document));
 }
 
 static int cssPropertyIdForSVGAttributeName(const QualifiedName& attrName)
@@ -287,7 +288,7 @@ void SVGFontFaceElement::rebuildFontFace()
             list = srcElement->srcValue();
     }
 
-    if (!list)
+    if (!list || !list->length())
         return;
 
     // Parse in-memory CSS rules
@@ -307,13 +308,14 @@ void SVGFontFaceElement::rebuildFontFace()
         }
     }
 
-    document()->updateStyleSelector();
+    document()->styleSelectorChanged(DeferRecalcStyle);
 }
 
 void SVGFontFaceElement::insertedIntoDocument()
 {
     SVGElement::insertedIntoDocument();
     document()->mappedElementSheet()->append(m_fontFaceRule);
+    m_fontFaceRule->setParent(document()->mappedElementSheet());
     rebuildFontFace();
 }
 
@@ -342,7 +344,7 @@ void SVGFontFaceElement::removeFromMappedElementSheet()
             break;
         }
     }
-    document()->updateStyleSelector();
+    document()->styleSelectorChanged(DeferRecalcStyle);
 }
 
 } // namespace WebCore

@@ -23,8 +23,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#ifndef SessionCredentialStorage_h
-#define SessionCredentialStorage_h
+#ifndef CredentialStorage_h
+#define CredentialStorage_h
 
 namespace WebCore {
 
@@ -37,6 +37,7 @@ public:
     // WebCore session credential storage.
     static void set(const Credential&, const ProtectionSpace&, const KURL&);
     static Credential get(const ProtectionSpace&);
+    static void remove(const ProtectionSpace&);
 
     // OS persistent storage.
     static Credential getFromPersistentStorage(const ProtectionSpace&);
@@ -49,4 +50,4 @@ public:
 
 } // namespace WebCore
 
-#endif // SessionCredentialStorage_h
+#endif // CredentialStorage_h

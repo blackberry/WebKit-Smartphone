@@ -31,16 +31,15 @@
 #if ENABLE(DATABASE)
 
 #include "Database.h"
-#include "DatabaseAuthorizer.h"
 #include "Logging.h"
 #include "SQLError.h"
 #include "SQLiteDatabase.h"
 #include "SQLiteStatement.h"
-#include "SQLResultSet.h"
 #include "SQLStatementCallback.h"
 #include "SQLStatementErrorCallback.h"
 #include "SQLTransaction.h"
 #include "SQLValue.h"
+#include <wtf/text/CString.h>
 
 namespace WebCore {
 
@@ -73,14 +72,14 @@ bool SQLStatement::execute(Database* db)
     if (m_readOnly)
         db->setAuthorizerReadOnly();
 
-    SQLiteDatabase* database = &db->m_sqliteDatabase;
+    SQLiteDatabase* database = &db->sqliteDatabase();
 
     SQLiteStatement statement(*database, m_statement);
     int result = statement.prepare();
 
     if (result != SQLResultOk) {
         LOG(StorageAPI, "Unable to verify correctness of statement %s - error %i (%s)", m_statement.ascii().data(), result, database->lastErrorMsg());
-        m_error = SQLError::create(1, database->lastErrorMsg());
+        m_error = SQLError::create(result == SQLResultInterrupt ? SQLError::DATABASE_ERR : SQLError::SYNTAX_ERR, database->lastErrorMsg());
         return false;
     }
 
@@ -88,7 +87,7 @@ bool SQLStatement::execute(Database* db)
     // If this is the case, they might be trying to do something fishy or malicious
     if (statement.bindParameterCount() != m_arguments.size()) {
         LOG(StorageAPI, "Bind parameter count doesn't match number of question marks");
-        m_error = SQLError::create(1, "number of '?'s in statement string does not match argument count");
+        m_error = SQLError::create(db->isInterrupted() ? SQLError::DATABASE_ERR : SQLError::SYNTAX_ERR, "number of '?'s in statement string does not match argument count");
         return false;
     }
 
@@ -101,7 +100,7 @@ bool SQLStatement::execute(Database* db)
 
         if (result != SQLResultOk) {
             LOG(StorageAPI, "Failed to bind value index %i to statement for query '%s'", i + 1, m_statement.ascii().data());
-            m_error = SQLError::create(1, database->lastErrorMsg());
+            m_error = SQLError::create(SQLError::DATABASE_ERR, database->lastErrorMsg());
             return false;
         }
     }
@@ -125,19 +124,19 @@ bool SQLStatement::execute(Database* db)
         } while (result == SQLResultRow);
 
         if (result != SQLResultDone) {
-            m_error = SQLError::create(1, database->lastErrorMsg());
+            m_error = SQLError::create(SQLError::DATABASE_ERR, database->lastErrorMsg());
             return false;
         }
     } else if (result == SQLResultDone) {
         // Didn't find anything, or was an insert
-        if (db->m_databaseAuthorizer->lastActionWasInsert())
+        if (db->lastActionWasInsert())
             resultSet->setInsertId(database->lastInsertRowID());
     } else if (result == SQLResultFull) {
         // Return the Quota error - the delegate will be asked for more space and this statement might be re-run
         setFailureDueToQuota();
         return false;
     } else {
-        m_error = SQLError::create(1, database->lastErrorMsg());
+        m_error = SQLError::create(SQLError::DATABASE_ERR, database->lastErrorMsg());
         return false;
     }
 
@@ -153,13 +152,13 @@ bool SQLStatement::execute(Database* db)
 void SQLStatement::setDatabaseDeletedError()
 {
     ASSERT(!m_error && !m_resultSet);
-    m_error = SQLError::create(0, "unable to execute statement, because the user deleted the database");
+    m_error = SQLError::create(SQLError::UNKNOWN_ERR, "unable to execute statement, because the user deleted the database");
 }
 
 void SQLStatement::setVersionMismatchedError()
 {
     ASSERT(!m_error && !m_resultSet);
-    m_error = SQLError::create(2, "current version of the database and `oldVersion` argument do not match");
+    m_error = SQLError::create(SQLError::VERSION_ERR, "current version of the database and `oldVersion` argument do not match");
 }
 
 bool SQLStatement::performCallback(SQLTransaction* transaction)
@@ -172,9 +171,9 @@ bool SQLStatement::performCallback(SQLTransaction* transaction)
     // because then we need to jump to the transaction error callback.
     if (m_error) {
         ASSERT(m_statementErrorCallback);
-        callbackError = m_statementErrorCallback->handleEvent(transaction->database()->scriptExecutionContext(), transaction, m_error.get());
+        callbackError = m_statementErrorCallback->handleEvent(transaction, m_error.get());
     } else if (m_statementCallback)
-        callbackError = !m_statementCallback->handleEvent(transaction->database()->scriptExecutionContext(), transaction, m_resultSet.get());
+        callbackError = !m_statementCallback->handleEvent(transaction, m_resultSet.get());
 
     // Now release our callbacks, to break reference cycles.
     m_statementCallback = 0;
@@ -186,7 +185,7 @@ bool SQLStatement::performCallback(SQLTransaction* transaction)
 void SQLStatement::setFailureDueToQuota()
 {
     ASSERT(!m_error && !m_resultSet);
-    m_error = SQLError::create(4, "there was not enough remaining storage space, or the storage quota was reached and the user declined to allow more space");
+    m_error = SQLError::create(SQLError::QUOTA_ERR, "there was not enough remaining storage space, or the storage quota was reached and the user declined to allow more space");
 }
 
 void SQLStatement::clearFailureDueToQuota()
@@ -197,7 +196,7 @@ void SQLStatement::clearFailureDueToQuota()
 
 bool SQLStatement::lastExecutionFailedDueToQuota() const
 {
-    return m_error && m_error->code() == 4;
+    return m_error && m_error->code() == SQLError::QUOTA_ERR;
 }
 
 } // namespace WebCore

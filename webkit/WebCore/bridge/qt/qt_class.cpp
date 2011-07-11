@@ -18,14 +18,14 @@
  */
 
 #include "config.h"
-#include "Identifier.h"
-
 #include "qt_class.h"
+
+#include "Identifier.h"
 #include "qt_instance.h"
 #include "qt_runtime.h"
 
-#include <qmetaobject.h>
 #include <qdebug.h>
+#include <qmetaobject.h>
 
 namespace JSC {
 namespace Bindings {
@@ -71,8 +71,7 @@ JSValue QtClass::fallbackObject(ExecState* exec, Instance* inst, const Identifie
     QtInstance* qtinst = static_cast<QtInstance*>(inst);
 
     const UString& ustring = identifier.ustring();
-    const QByteArray name = QString(reinterpret_cast<const QChar*>(ustring.data()),
-                                    ustring.size()).toAscii();
+    const QByteArray name = QString(reinterpret_cast<const QChar*>(ustring.characters()), ustring.length()).toAscii();
 
     // First see if we have a cache hit
     JSObject* val = qtinst->m_methods.value(name);
@@ -131,7 +130,7 @@ Field* QtClass::fieldNamed(const Identifier& identifier, Instance* instance) con
 
     QObject* obj = qtinst->getObject();
     const UString& ustring = identifier.ustring();
-    const QString name(reinterpret_cast<const QChar*>(ustring.data()), ustring.size());
+    const QString name(reinterpret_cast<const QChar*>(ustring.characters()), ustring.length());
     const QByteArray ascii = name.toAscii();
 
     // First check for a cached field
@@ -144,21 +143,19 @@ Field* QtClass::fieldNamed(const Identifier& identifier, Instance* instance) con
             if (f->fieldType() == QtField::MetaProperty)
                 return f;
 #ifndef QT_NO_PROPERTIES
-            else if (f->fieldType() == QtField::DynamicProperty) {
+            if (f->fieldType() == QtField::DynamicProperty) {
                 if (obj->dynamicPropertyNames().indexOf(ascii) >= 0)
                     return f;
-                else {
-                    // Dynamic property that disappeared
-                    qtinst->m_fields.remove(name);
-                    delete f;
-                }
+                // Dynamic property that disappeared
+                qtinst->m_fields.remove(name);
+                delete f;
             }
 #endif
             else {
                 const QList<QObject*>& children = obj->children();
                 const int count = children.size();
                 for (int index = 0; index < count; ++index) {
-                    QObject *child = children.at(index);
+                    QObject* child = children.at(index);
                     if (child->objectName() == name)
                         return f;
                 }
@@ -195,7 +192,7 @@ Field* QtClass::fieldNamed(const Identifier& identifier, Instance* instance) con
         const QList<QObject*>& children = obj->children();
         const int count = children.count();
         for (index = 0; index < count; ++index) {
-            QObject *child = children.at(index);
+            QObject* child = children.at(index);
             if (child->objectName() == name) {
                 f = new QtField(child);
                 qtinst->m_fields.insert(name, f);
@@ -205,23 +202,22 @@ Field* QtClass::fieldNamed(const Identifier& identifier, Instance* instance) con
 
         // Nothing named this
         return 0;
-    } else {
-        // For compatibility with qtscript, cached methods don't cause
-        // errors until they are accessed, so don't blindly create an error
-        // here.
-        if (qtinst->m_methods.contains(ascii))
-            return 0;
+    }
+    // For compatibility with qtscript, cached methods don't cause
+    // errors until they are accessed, so don't blindly create an error
+    // here.
+    if (qtinst->m_methods.contains(ascii))
+        return 0;
 
 #ifndef QT_NO_PROPERTIES
-        // deleted qobject, but can't throw an error from here (no exec)
-        // create a fake QtField that will throw upon access
-        if (!f) {
-            f = new QtField(ascii);
-            qtinst->m_fields.insert(name, f);
-        }
-#endif
-        return f;
+    // deleted qobject, but can't throw an error from here (no exec)
+    // create a fake QtField that will throw upon access
+    if (!f) {
+        f = new QtField(ascii);
+        qtinst->m_fields.insert(name, f);
     }
+#endif
+    return f;
 }
 
 }

@@ -31,15 +31,19 @@
 
 #include "WorkerContext.h"
 
+#include "AbstractDatabase.h"
 #include "ActiveDOMObject.h"
+#include "Database.h"
+#include "DatabaseCallback.h"
+#include "DatabaseSync.h"
 #include "DatabaseTracker.h"
 #include "DOMTimer.h"
 #include "DOMWindow.h"
-#include "Database.h"
 #include "ErrorEvent.h"
 #include "Event.h"
 #include "EventException.h"
 #include "InspectorController.h"
+#include "KURL.h"
 #include "MessagePort.h"
 #include "NotImplemented.h"
 #include "ScriptSourceCode.h"
@@ -185,7 +189,7 @@ void WorkerContext::postTask(PassOwnPtr<Task> task)
     thread()->runLoop().postTask(task);
 }
 
-int WorkerContext::setTimeout(ScheduledAction* action, int timeout)
+int WorkerContext::setTimeout(PassOwnPtr<ScheduledAction> action, int timeout)
 {
     return DOMTimer::install(scriptExecutionContext(), action, timeout, true);
 }
@@ -195,7 +199,7 @@ void WorkerContext::clearTimeout(int timeoutId)
     DOMTimer::removeById(scriptExecutionContext(), timeoutId);
 }
 
-int WorkerContext::setInterval(ScheduledAction* action, int timeout)
+int WorkerContext::setInterval(PassOwnPtr<ScheduledAction> action, int timeout)
 {
     return DOMTimer::install(scriptExecutionContext(), action, timeout, false);
 }
@@ -277,7 +281,7 @@ NotificationCenter* WorkerContext::webkitNotifications() const
 #if ENABLE(DATABASE)
 PassRefPtr<Database> WorkerContext::openDatabase(const String& name, const String& version, const String& displayName, unsigned long estimatedSize, PassRefPtr<DatabaseCallback> creationCallback, ExceptionCode& ec)
 {
-    if (!securityOrigin()->canAccessDatabase() || !Database::isAvailable()) {
+    if (!securityOrigin()->canAccessDatabase() || !AbstractDatabase::isAvailable()) {
         ec = SECURITY_ERR;
         return 0;
     }
@@ -300,14 +304,10 @@ void WorkerContext::databaseExceededQuota(const String&)
 
 PassRefPtr<DatabaseSync> WorkerContext::openDatabaseSync(const String& name, const String& version, const String& displayName, unsigned long estimatedSize, PassRefPtr<DatabaseCallback> creationCallback, ExceptionCode& ec)
 {
-    if (!securityOrigin()->canAccessDatabase()) {
+    if (!securityOrigin()->canAccessDatabase() || !AbstractDatabase::isAvailable()) {
         ec = SECURITY_ERR;
         return 0;
     }
-
-    ASSERT(DatabaseSync::isAvailable());
-    if (!DatabaseSync::isAvailable())
-        return 0;
 
     return DatabaseSync::openDatabaseSync(this, name, version, displayName, estimatedSize, creationCallback, ec);
 }
@@ -332,6 +332,18 @@ EventTargetData* WorkerContext::ensureEventTargetData()
 {
     return &m_eventTargetData;
 }
+
+#if ENABLE(BLOB)
+String WorkerContext::createBlobURL(Blob* blob)
+{
+    return scriptExecutionContext()->createPublicBlobURL(blob).string();
+}
+
+void WorkerContext::revokeBlobURL(const String& blobURLString)
+{
+    scriptExecutionContext()->revokePublicBlobURL(KURL(ParsedURLString, blobURLString));
+}
+#endif
 
 } // namespace WebCore
 

@@ -3,9 +3,15 @@ CONFIG += ordered
 
 include(WebKit.pri)
 
-SUBDIRS += \
-        JavaScriptCore \
-        WebCore
+!v8: SUBDIRS += JavaScriptCore
+webkit2 {
+    SUBDIRS += WebKit2
+}
+SUBDIRS += WebCore
+
+webkit2 {
+    exists($$PWD/WebKit2/WebProcess.pro): SUBDIRS += WebKit2/WebProcess.pro
+}
 
 symbian {
     # Forward the install target to WebCore. A workaround since INSTALLS is not implemented for symbian

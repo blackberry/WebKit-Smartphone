@@ -405,6 +405,10 @@
 			>
 		</File>
 		<File
+			RelativePath="..\..\wtf\NonCopyingSort.h"
+			>
+		</File>
+		<File
 			RelativePath="..\..\wtf\Noncopyable.h"
 			>
 		</File>
@@ -425,7 +429,27 @@
 			>
 		</File>
 		<File
+			RelativePath="..\..\wtf\OwnArrayPtrCommon.h"
+			>
+		</File>
+		<File
 			RelativePath="..\..\wtf\OwnPtrCommon.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\PageAllocation.cpp"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\PageAllocation.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\PageReservation.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\PassOwnArrayPtr.h"
 			>
 		</File>
 		<File
@@ -562,6 +586,10 @@
  		</File>
  		<File
  			RelativePath="..\..\wtf\text\AtomicString.h"
+ 			>
+ 		</File>
+ 		<File
+ 			RelativePath="..\..\wtf\text\AtomicStringHash.h"
  			>
  		</File>
  		<File

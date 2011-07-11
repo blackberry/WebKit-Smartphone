@@ -22,12 +22,19 @@
 #ifndef Collector_h
 #define Collector_h
 
+#include "AlignedMemoryAllocator.h"
+#include "GCHandle.h"
+#include "JSValue.h"
 #include <stddef.h>
 #include <string.h>
+#include <wtf/Bitmap.h>
+#include <wtf/FixedArray.h>
 #include <wtf/HashCountedSet.h>
 #include <wtf/HashSet.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/OwnPtr.h>
+#include <wtf/PageAllocation.h>
+#include <wtf/PassOwnPtr.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/Threading.h>
 
@@ -35,15 +42,12 @@
 #include <pthread.h>
 #endif
 
-#if OS(SYMBIAN)
-#include <wtf/symbian/BlockAllocatorSymbian.h>
-#endif
-
 #define ASSERT_CLASS_FITS_IN_CELL(class) COMPILE_ASSERT(sizeof(class) <= CELL_SIZE, class_fits_in_cell)
 
 namespace JSC {
 
     class CollectorBlock;
+    class GCActivityCallback;
     class JSCell;
     class JSGlobalData;
     class JSValue;
@@ -54,10 +58,19 @@ namespace JSC {
 
     class LiveObjectIterator;
 
+#if OS(WINCE) || OS(SYMBIAN) || OS(OLYMPIA)
+    const size_t BLOCK_SIZE = 64 * 1024; // 64k
+#else
+    const size_t BLOCK_SIZE = 256 * 1024; // 256k
+#endif
+
+    typedef AlignedMemoryAllocator<BLOCK_SIZE> CollectorBlockAllocator;
+    typedef AlignedMemory<BLOCK_SIZE> AlignedCollectorBlock;
+
     struct CollectorHeap {
         size_t nextBlock;
         size_t nextCell;
-        CollectorBlock** blocks;
+        AlignedCollectorBlock* blocks;
         
         void* nextNumber;
 
@@ -68,6 +81,11 @@ namespace JSC {
         bool didShrink;
 
         OperationInProgress operationInProgress;
+
+        CollectorBlock* collectorBlock(size_t index) const
+        {
+            return static_cast<CollectorBlock*>(blocks[index].base());
+        }
     };
 
     class Heap : public Noncopyable {
@@ -81,6 +99,7 @@ namespace JSC {
 
         bool isBusy(); // true if an allocation or collection is in progress
         void collectAllGarbage();
+        void setActivityCallback(PassOwnPtr<GCActivityCallback>);
 
         static const size_t minExtraCost = 256;
         static const size_t maxExtraCost = 1024 * 1024;
@@ -112,9 +131,15 @@ namespace JSC {
         void registerThread(); // Only needs to be called by clients that can use the same heap from multiple threads.
 
         static bool isCellMarked(const JSCell*);
+        static bool checkMarkCell(const JSCell*);
         static void markCell(JSCell*);
 
+        WeakGCHandle* addWeakGCHandle(JSCell*);
+
         void markConservatively(MarkStack&, void* start, void* end);
+
+        void pushTempSortVector(WTF::Vector<ValueStringPair>*);
+        void popTempSortVector(WTF::Vector<ValueStringPair>*);        
 
         HashSet<MarkedArgumentBuffer*>& markListSet() { if (!m_markListSet) m_markListSet = new HashSet<MarkedArgumentBuffer*>; return *m_markListSet; }
 
@@ -136,7 +161,6 @@ namespace JSC {
 
         NEVER_INLINE CollectorBlock* allocateBlock();
         NEVER_INLINE void freeBlock(size_t);
-        NEVER_INLINE void freeBlockPtr(CollectorBlock*);
         void freeBlocks();
         void resizeBlocks();
         void growBlocks(size_t neededBlocks);
@@ -151,18 +175,26 @@ namespace JSC {
 
         void markRoots();
         void markProtectedObjects(MarkStack&);
+        void markTempSortVectors(MarkStack&);
         void markCurrentThreadConservatively(MarkStack&);
         void markCurrentThreadConservativelyInternal(MarkStack&);
         void markOtherThreadConservatively(MarkStack&, Thread*);
         void markStackObjectsConservatively(MarkStack&);
+
+        void updateWeakGCHandles();
+        WeakGCHandlePool* weakGCHandlePool(size_t index);
 
         typedef HashCountedSet<JSCell*> ProtectCountSet;
 
         CollectorHeap m_heap;
 
         ProtectCountSet m_protectedValues;
+        WTF::Vector<AlignedMemory<WeakGCHandlePool::poolSize> > m_weakGCHandlePools;
+        WTF::Vector<WTF::Vector<ValueStringPair>* > m_tempSortingVectors;
 
         HashSet<MarkedArgumentBuffer*>* m_markListSet;
+
+        OwnPtr<GCActivityCallback> m_activityCallback;
 
 #if ENABLE(JSC_MULTIPLE_THREADS)
         void makeUsableFromMultipleThreads();
@@ -175,35 +207,19 @@ namespace JSC {
         pthread_key_t m_currentThreadRegistrar;
 #endif
 
-#if OS(SYMBIAN)
         // Allocates collector blocks with correct alignment
-        WTF::AlignedBlockAllocator m_blockallocator; 
-#endif
+        CollectorBlockAllocator m_blockallocator; 
+        WeakGCHandlePool::Allocator m_weakGCHandlePoolAllocator; 
         
         JSGlobalData* m_globalData;
     };
 
     // tunable parameters
-    template<size_t bytesPerWord> struct CellSize;
-
-    // cell size needs to be a power of two for certain optimizations in collector.cpp
-#if USE(JSVALUE32)
-    template<> struct CellSize<sizeof(uint32_t)> { static const size_t m_value = 32; };
-#else
-    template<> struct CellSize<sizeof(uint32_t)> { static const size_t m_value = 64; };
-#endif
-    template<> struct CellSize<sizeof(uint64_t)> { static const size_t m_value = 64; };
-
-#if OS(WINCE) || OS(SYMBIAN) || PLATFORM(OLYMPIA)
-    const size_t BLOCK_SIZE = 64 * 1024; // 64k
-#else
-    const size_t BLOCK_SIZE = 64 * 4096; // 256k
-#endif
 
     // derived constants
     const size_t BLOCK_OFFSET_MASK = BLOCK_SIZE - 1;
     const size_t BLOCK_MASK = ~BLOCK_OFFSET_MASK;
-    const size_t MINIMUM_CELL_SIZE = CellSize<sizeof(void*)>::m_value;
+    const size_t MINIMUM_CELL_SIZE = 64;
     const size_t CELL_ARRAY_LENGTH = (MINIMUM_CELL_SIZE / sizeof(double)) + (MINIMUM_CELL_SIZE % sizeof(double) != 0 ? sizeof(double) : 0);
     const size_t CELL_SIZE = CELL_ARRAY_LENGTH * sizeof(double);
     const size_t SMALL_CELL_SIZE = CELL_SIZE / 2;
@@ -215,11 +231,19 @@ namespace JSC {
     const size_t BITMAP_WORDS = (BITMAP_SIZE + 3) / sizeof(uint32_t);
 
     struct CollectorBitmap {
-        uint32_t bits[BITMAP_WORDS];
+        FixedArray<uint32_t, BITMAP_WORDS> bits;
         bool get(size_t n) const { return !!(bits[n >> 5] & (1 << (n & 0x1F))); } 
         void set(size_t n) { bits[n >> 5] |= (1 << (n & 0x1F)); } 
+        bool getset(size_t n)
+        {
+            unsigned i = (1 << (n & 0x1F));
+            uint32_t& b = bits[n >> 5];
+            bool r = !!(b & i);
+            b |= i;
+            return r;
+        } 
         void clear(size_t n) { bits[n >> 5] &= ~(1 << (n & 0x1F)); } 
-        void clearAll() { memset(bits, 0, sizeof(bits)); }
+        void clearAll() { memset(bits.data(), 0, sizeof(bits)); }
         ALWAYS_INLINE void advanceToNextPossibleFreeCell(size_t& startCell)
         {
             if (!~bits[startCell >> 5])
@@ -248,12 +272,12 @@ namespace JSC {
     };
   
     struct CollectorCell {
-        double memory[CELL_ARRAY_LENGTH];
+        FixedArray<double, CELL_ARRAY_LENGTH> memory;
     };
 
     class CollectorBlock {
     public:
-        CollectorCell cells[CELLS_PER_BLOCK];
+        FixedArray<CollectorCell, CELLS_PER_BLOCK> cells;
         CollectorBitmap marked;
         Heap* heap;
     };
@@ -280,6 +304,11 @@ namespace JSC {
         return cellBlock(cell)->marked.get(cellOffset(cell));
     }
 
+    inline bool Heap::checkMarkCell(const JSCell* cell)
+    {
+        return cellBlock(cell)->marked.getset(cellOffset(cell));
+    }
+
     inline void Heap::markCell(JSCell* cell)
     {
         cellBlock(cell)->marked.set(cellOffset(cell));
@@ -303,6 +332,11 @@ namespace JSC {
         return result;
     }
 
+
+    inline WeakGCHandlePool* Heap::weakGCHandlePool(size_t index)
+    {
+        return static_cast<WeakGCHandlePool*>(m_weakGCHandlePools[index].base());
+    }
 } // namespace JSC
 
 #endif /* Collector_h */

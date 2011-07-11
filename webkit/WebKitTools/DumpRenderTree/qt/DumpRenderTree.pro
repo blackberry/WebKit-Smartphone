@@ -6,14 +6,13 @@ BASEDIR = $$PWD/../
 isEmpty(OUTPUT_DIR): OUTPUT_DIR = ../../..
 
 include(../../../WebKit.pri)
-INCLUDEPATH += /usr/include/freetype2
 INCLUDEPATH += ../../..
 INCLUDEPATH += ../../../JavaScriptCore
 INCLUDEPATH += ../../../JavaScriptCore/ForwardingHeaders
 INCLUDEPATH += $$BASEDIR
 DESTDIR = ../../../bin
 
-!win32:!symbian {
+unix:!mac {
     CONFIG += link_pkgconfig
     PKGCONFIG += fontconfig
 }

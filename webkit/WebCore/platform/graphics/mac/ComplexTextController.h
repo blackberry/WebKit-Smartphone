@@ -53,7 +53,7 @@ public:
     void advance(unsigned to, GlyphBuffer* = 0);
 
     // Compute the character offset for a given x coordinate.
-    int offsetForPosition(int x, bool includePartialGlyphs);
+    int offsetForPosition(float x, bool includePartialGlyphs);
 
     // Returns the width of everything we've consumed so far.
     float runWidthSoFar() const { return m_runWidthSoFar; }
@@ -127,7 +127,7 @@ private:
         unsigned m_stringLocation;
         size_t m_stringLength;
 #if USE(CORE_TEXT)
-        RetainPtr<CFMutableDataRef> m_coreTextIndicesData;
+        Vector<CFIndex, 64> m_coreTextIndicesVector;
         const CFIndex* m_coreTextIndices;
 #endif
 #if USE(ATSUI)

@@ -29,6 +29,7 @@
 #import "DOMElementInternal.h"
 #import "DragClient.h"
 #import "DragController.h"
+#import "DragData.h"
 #import "Editor.h"
 #import "FoundationExtras.h"
 #import "FileList.h"
@@ -37,6 +38,7 @@
 #import "Page.h"
 #import "Pasteboard.h"
 #import "RenderImage.h"
+#import "ScriptExecutionContext.h"
 #import "SecurityOrigin.h"
 #import "WebCoreSystemInterface.h"
 
@@ -45,6 +47,11 @@ typedef unsigned NSUInteger;
 #endif
 
 namespace WebCore {
+
+PassRefPtr<Clipboard> Clipboard::create(ClipboardAccessPolicy policy, DragData* dragData, Frame* frame)
+{
+    return ClipboardMac::create(true, [dragData->platformData() draggingPasteboard], policy, frame);
+}
 
 ClipboardMac::ClipboardMac(bool forDragging, NSPasteboard *pasteboard, ClipboardAccessPolicy policy, Frame *frame)
     : Clipboard(policy, forDragging)
@@ -365,7 +372,7 @@ void ClipboardMac::writeRange(Range* range, Frame* frame)
 {
     ASSERT(range);
     ASSERT(frame);
-    Pasteboard::writeSelection(m_pasteboard.get(), range, frame->editor()->smartInsertDeleteEnabled() && frame->selectionGranularity() == WordGranularity, frame);
+    Pasteboard::writeSelection(m_pasteboard.get(), range, frame->editor()->smartInsertDeleteEnabled() && frame->selection()->granularity() == WordGranularity, frame);
 }
 
 void ClipboardMac::writePlainText(const String& text)

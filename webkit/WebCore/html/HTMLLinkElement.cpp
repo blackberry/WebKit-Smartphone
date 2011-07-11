@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2003, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2003, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2009 Rob Buis (rwlbuis@gmail.com)
  *
  * This library is free software; you can redistribute it and/or
@@ -27,7 +27,7 @@
 #include "Attribute.h"
 #include "CSSHelper.h"
 #include "CachedCSSStyleSheet.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "Document.h"
 #include "Frame.h"
 #include "FrameLoader.h"
@@ -46,9 +46,8 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-HTMLLinkElement::HTMLLinkElement(const QualifiedName& qName, Document *doc, bool createdByParser)
-    : HTMLElement(qName, doc)
-    , m_cachedSheet(0)
+inline HTMLLinkElement::HTMLLinkElement(const QualifiedName& tagName, Document* document, bool createdByParser)
+    : HTMLElement(tagName, document)
     , m_disabledState(Unset)
     , m_loading(false)
     , m_createdByParser(createdByParser)
@@ -56,8 +55,16 @@ HTMLLinkElement::HTMLLinkElement(const QualifiedName& qName, Document *doc, bool
     ASSERT(hasTagName(linkTag));
 }
 
+PassRefPtr<HTMLLinkElement> HTMLLinkElement::create(const QualifiedName& tagName, Document* document, bool createdByParser)
+{
+    return adoptRef(new HTMLLinkElement(tagName, document, createdByParser));
+}
+
 HTMLLinkElement::~HTMLLinkElement()
 {
+    if (m_sheet)
+        m_sheet->clearOwnerNode();
+
     if (m_cachedSheet) {
         m_cachedSheet->removeClient(this);
         if (m_loading && !isDisabled() && !isAlternate())
@@ -99,7 +106,7 @@ void HTMLLinkElement::setDisabledState(bool _disabled)
         if (!m_sheet && m_disabledState == EnabledViaScript)
             process();
         else
-            document()->updateStyleSelector(); // Update the style selector.
+            document()->styleSelectorChanged(DeferRecalcStyle); // Update the style selector.
     }
 }
 
@@ -139,12 +146,19 @@ void HTMLLinkElement::tokenizeRelAttribute(const AtomicString& rel, RelAttribute
     relAttribute.m_isIcon = false;
     relAttribute.m_isAlternate = false;
     relAttribute.m_isDNSPrefetch = false;
+#if ENABLE(LINK_PREFETCH)
+    relAttribute.m_isLinkPrefetch = false;
+#endif
     if (equalIgnoringCase(rel, "stylesheet"))
         relAttribute.m_isStyleSheet = true;
     else if (equalIgnoringCase(rel, "icon") || equalIgnoringCase(rel, "shortcut icon"))
         relAttribute.m_isIcon = true;
     else if (equalIgnoringCase(rel, "dns-prefetch"))
         relAttribute.m_isDNSPrefetch = true;
+#if ENABLE(LINK_PREFETCH)
+    else if (equalIgnoringCase(rel, "prefetch"))
+        relAttribute.m_isLinkPrefetch = true;
+#endif
     else if (equalIgnoringCase(rel, "alternate stylesheet") || equalIgnoringCase(rel, "stylesheet alternate")) {
         relAttribute.m_isStyleSheet = true;
         relAttribute.m_isAlternate = true;
@@ -168,8 +182,10 @@ void HTMLLinkElement::tokenizeRelAttribute(const AtomicString& rel, RelAttribute
 
 void HTMLLinkElement::process()
 {
-    if (!inDocument())
+    if (!inDocument()) {
+        ASSERT(!m_sheet);
         return;
+    }
 
     String type = m_type.lower();
 
@@ -178,8 +194,13 @@ void HTMLLinkElement::process()
     if (m_relAttribute.m_isIcon && m_url.isValid() && !m_url.isEmpty())
         document()->setIconURL(m_url.string(), type);
 
-    if (m_relAttribute.m_isDNSPrefetch && m_url.isValid() && !m_url.isEmpty())
+    if (m_relAttribute.m_isDNSPrefetch && document()->isDNSPrefetchEnabled() && m_url.isValid() && !m_url.isEmpty())
         ResourceHandle::prepareForURL(m_url);
+
+#if ENABLE(LINK_PREFETCH)
+    if (m_relAttribute.m_isLinkPrefetch && m_url.isValid() && document()->frame())
+        document()->cachedResourceLoader()->requestLinkPrefetch(m_url);
+#endif
 
     bool acceptIfTypeContainsTextCSS = document()->page() && document()->page()->settings() && document()->page()->settings()->treatsAnyTextCSSLinkAsStylesheet();
 
@@ -209,7 +230,7 @@ void HTMLLinkElement::process()
         if (!isAlternate())
             document()->addPendingSheet();
 
-        m_cachedSheet = document()->docLoader()->requestCSSStyleSheet(m_url, charset);
+        m_cachedSheet = document()->cachedResourceLoader()->requestCSSStyleSheet(m_url, charset);
         
         if (m_cachedSheet)
             m_cachedSheet->addClient(this);
@@ -222,7 +243,7 @@ void HTMLLinkElement::process()
     } else if (m_sheet) {
         // we no longer contain a stylesheet, e.g. perhaps rel or type was changed
         m_sheet = 0;
-        document()->updateStyleSelector();
+        document()->styleSelectorChanged(DeferRecalcStyle);
     }
 }
 
@@ -230,6 +251,7 @@ void HTMLLinkElement::insertedIntoDocument()
 {
     HTMLElement::insertedIntoDocument();
     document()->addStyleSheetCandidateNode(this, m_createdByParser);
+
     process();
 }
 
@@ -239,9 +261,14 @@ void HTMLLinkElement::removedFromDocument()
 
     document()->removeStyleSheetCandidateNode(this);
 
-    // FIXME: It's terrible to do a synchronous update of the style selector just because a <style> or <link> element got removed.
+    if (m_sheet) {
+        ASSERT(m_sheet->ownerNode() == this);
+        m_sheet->clearOwnerNode();
+        m_sheet = 0;
+    }
+
     if (document()->renderer())
-        document()->updateStyleSelector();
+        document()->styleSelectorChanged(DeferRecalcStyle);
 }
 
 void HTMLLinkElement::finishParsingChildren()
@@ -252,9 +279,14 @@ void HTMLLinkElement::finishParsingChildren()
 
 void HTMLLinkElement::setCSSStyleSheet(const String& href, const KURL& baseURL, const String& charset, const CachedCSSStyleSheet* sheet)
 {
+    if (!inDocument()) {
+        ASSERT(!m_sheet);
+        return;
+    }
+
     m_sheet = CSSStyleSheet::create(this, href, baseURL, charset);
 
-    bool strictParsing = !document()->inCompatMode();
+    bool strictParsing = !document()->inQuirksMode();
     bool enforceMIMEType = strictParsing;
     bool crossOriginCSS = false;
     bool validMIMEType = false;
@@ -262,7 +294,7 @@ void HTMLLinkElement::setCSSStyleSheet(const String& href, const KURL& baseURL, 
 
     // Check to see if we should enforce the MIME type of the CSS resource in strict mode.
     // Running in iWeb 2 is one example of where we don't want to - <rdar://problem/6099748>
-    if (enforceMIMEType && document()->page() && !document()->page()->settings()->enforceCSSMIMETypeInStrictMode())
+    if (enforceMIMEType && document()->page() && !document()->page()->settings()->enforceCSSMIMETypeInNoQuirksMode())
         enforceMIMEType = false;
 
 #if defined(BUILDING_ON_TIGER) || defined(BUILDING_ON_LEOPARD)
@@ -333,54 +365,9 @@ bool HTMLLinkElement::isURLAttribute(Attribute *attr) const
     return attr->name() == hrefAttr;
 }
 
-bool HTMLLinkElement::disabled() const
-{
-    return !getAttribute(disabledAttr).isNull();
-}
-
-void HTMLLinkElement::setDisabled(bool disabled)
-{
-    setAttribute(disabledAttr, disabled ? "" : 0);
-}
-
-String HTMLLinkElement::charset() const
-{
-    return getAttribute(charsetAttr);
-}
-
-void HTMLLinkElement::setCharset(const String& value)
-{
-    setAttribute(charsetAttr, value);
-}
-
 KURL HTMLLinkElement::href() const
 {
     return document()->completeURL(getAttribute(hrefAttr));
-}
-
-void HTMLLinkElement::setHref(const String& value)
-{
-    setAttribute(hrefAttr, value);
-}
-
-String HTMLLinkElement::hreflang() const
-{
-    return getAttribute(hreflangAttr);
-}
-
-void HTMLLinkElement::setHreflang(const String& value)
-{
-    setAttribute(hreflangAttr, value);
-}
-
-String HTMLLinkElement::media() const
-{
-    return getAttribute(mediaAttr);
-}
-
-void HTMLLinkElement::setMedia(const String& value)
-{
-    setAttribute(mediaAttr, value);
 }
 
 String HTMLLinkElement::rel() const
@@ -388,39 +375,14 @@ String HTMLLinkElement::rel() const
     return getAttribute(relAttr);
 }
 
-void HTMLLinkElement::setRel(const String& value)
-{
-    setAttribute(relAttr, value);
-}
-
-String HTMLLinkElement::rev() const
-{
-    return getAttribute(revAttr);
-}
-
-void HTMLLinkElement::setRev(const String& value)
-{
-    setAttribute(revAttr, value);
-}
-
 String HTMLLinkElement::target() const
 {
     return getAttribute(targetAttr);
 }
 
-void HTMLLinkElement::setTarget(const String& value)
-{
-    setAttribute(targetAttr, value);
-}
-
 String HTMLLinkElement::type() const
 {
     return getAttribute(typeAttr);
-}
-
-void HTMLLinkElement::setType(const String& value)
-{
-    setAttribute(typeAttr, value);
 }
 
 void HTMLLinkElement::addSubresourceAttributeURLs(ListHashSet<KURL>& urls) const

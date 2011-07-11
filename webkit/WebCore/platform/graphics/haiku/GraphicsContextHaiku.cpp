@@ -152,6 +152,17 @@ void GraphicsContext::drawConvexPolygon(size_t pointsLength, const FloatPoint* p
         m_data->m_view->StrokePolygon(bPoints, pointsLength, true, getHaikuStrokeStyle());
 }
 
+void GraphicsContext::clipConvexPolygon(size_t numPoints, const FloatPoint* points, bool antialiased)
+{
+    if (paintingDisabled())
+        return;
+
+    if (numPoints <= 1)
+        return;
+    
+    // FIXME: IMPLEMENT!!
+}
+
 void GraphicsContext::fillRect(const FloatRect& rect, const Color& color, ColorSpace colorSpace)
 {
     if (paintingDisabled())
@@ -237,7 +248,7 @@ void GraphicsContext::drawLineForText(const IntPoint& origin, int width, bool pr
     drawLine(origin, endPoint);
 }
 
-void GraphicsContext::drawLineForMisspellingOrBadGrammar(const IntPoint&, int width, bool grammar)
+void GraphicsContext::drawLineForTextChecking(const IntPoint&, int width, TextCheckingLineStyle)
 {
     if (paintingDisabled())
         return;
@@ -536,7 +547,7 @@ void GraphicsContext::clearPlatformShadow()
     notImplemented();
 }
 
-void GraphicsContext::setPlatformShadow(IntSize const&, int, Color const&, ColorSpace)
+void GraphicsContext::setPlatformShadow(FloatSize const&, float, Color const&, ColorSpace)
 {
     notImplemented();
 }

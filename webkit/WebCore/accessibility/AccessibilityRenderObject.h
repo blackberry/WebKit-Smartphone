@@ -1,3 +1,4 @@
+
 /*
  * Copyright (C) 2008 Apple Inc. All rights reserved.
  *
@@ -30,6 +31,7 @@
 #define AccessibilityRenderObject_h
 
 #include "AccessibilityObject.h"
+#include <wtf/Forward.h>
 
 namespace WebCore {
     
@@ -47,12 +49,10 @@ class HTMLSelectElement;
 class IntPoint;
 class IntSize;
 class Node;
-class RenderObject;
 class RenderListBox;
 class RenderTextControl;
 class RenderView;
 class VisibleSelection;
-class String;
 class Widget;
     
 class AccessibilityRenderObject : public AccessibilityObject {
@@ -75,7 +75,6 @@ public:
     virtual bool isTextControl() const;
     virtual bool isNativeTextControl() const;
     virtual bool isWebArea() const;
-    virtual bool isCheckboxOrRadio() const;
     virtual bool isFileUploadButton() const;
     virtual bool isInputImage() const;
     virtual bool isProgressIndicator() const;
@@ -106,14 +105,11 @@ public:
     virtual bool isExpanded() const;
     virtual void setIsExpanded(bool);
 
-    const AtomicString& getAttribute(const QualifiedName&) const;
     virtual bool canSetFocusAttribute() const;
     virtual bool canSetTextRangeAttributes() const;
     virtual bool canSetValueAttribute() const;
     virtual bool canSetExpandedAttribute() const;
 
-    virtual bool hasIntValue() const;
-    
     virtual void setAccessibleName(String&);
     
     // Provides common logic used by all elements when determining isIgnored.
@@ -121,7 +117,7 @@ public:
     virtual bool accessibilityIsIgnored() const;
     
     virtual int headingLevel() const;
-    virtual int intValue() const;
+    virtual AccessibilityButtonState checkboxOrRadioValue() const;
     virtual String valueDescription() const;
     virtual float valueForRange() const;
     virtual float maxValueForRange() const;
@@ -169,6 +165,9 @@ public:
     
     void setRenderer(RenderObject* renderer) { m_renderer = renderer; }
     RenderObject* renderer() const { return m_renderer; }
+    RenderBoxModelObject* renderBoxModelObject() const;
+    virtual Node* node() const;
+
     RenderView* topRenderer() const;
     RenderTextControl* textControl() const;
     Document* document() const;
@@ -199,7 +198,7 @@ public:
 
     virtual const AccessibilityChildrenVector& children();
     virtual void clearChildren();
-    void updateChildrenIfNecessary();
+    virtual void updateChildrenIfNecessary();
     
     virtual void setFocused(bool);
     virtual void setSelectedTextRange(const PlainTextRange&);
@@ -222,7 +221,8 @@ public:
     virtual bool shouldFocusActiveDescendant() const;
     virtual AccessibilityObject* activeDescendant() const;
     virtual void handleActiveDescendantChanged();
-
+    virtual void handleAriaExpandedChanged();
+    
     virtual VisiblePositionRange visiblePositionRange() const;
     virtual VisiblePositionRange visiblePositionRangeForLine(unsigned) const;
     virtual IntRect boundsForVisiblePositionRange(const VisiblePositionRange&) const;
@@ -277,7 +277,6 @@ private:
     bool isAllowedChildOfTree() const;
     bool hasTextAlternative() const;
     String positionalDescriptionForMSAA() const;
-    virtual String language() const;
 
     Element* menuElementForMenuButton() const;
     Element* menuItemElementForMenu() const;
@@ -285,12 +284,14 @@ private:
     AccessibilityRole determineAriaRoleAttribute() const;
 
     bool isTabItemSelected() const;
+    bool isNativeCheckboxOrRadio() const;
     IntRect checkboxOrRadioRect() const;
     void addRadioButtonGroupMembers(AccessibilityChildrenVector& linkedUIElements) const;
     AccessibilityObject* internalLinkElement() const;
     AccessibilityObject* accessibilityImageMapHitTest(HTMLAreaElement*, const IntPoint&) const;
     AccessibilityObject* accessibilityParentForImageMap(HTMLMapElement* map) const;
     bool renderObjectIsObservable(RenderObject*) const;
+    RenderObject* renderParentObject() const;
     
     void ariaSelectedRows(AccessibilityChildrenVector&);
     
@@ -305,6 +306,7 @@ private:
     virtual bool ariaLiveRegionAtomic() const;
     virtual bool ariaLiveRegionBusy() const;    
     
+    bool inheritsPresentationalRole() const;
     void setNeedsToUpdateChildren() const { m_childrenDirty = true; }
     
     mutable AccessibilityRole m_roleForMSAA;

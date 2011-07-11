@@ -38,10 +38,9 @@
 #include "IDBAny.h"
 #include "IDBCallbacks.h"
 #include "Timer.h"
+#include <wtf/Vector.h>
 
 namespace WebCore {
-
-class IDBDatabaseRequest;
 
 class IDBRequest : public IDBCallbacks, public EventTarget, public ActiveDOMObject {
 public:
@@ -51,30 +50,31 @@ public:
     // Defined in the IDL
     void abort();
     enum ReadyState {
-        INITIAL = 0,
         LOADING = 1,
         DONE = 2
     };
     unsigned short readyState() const { return m_readyState; }
-    PassRefPtr<IDBDatabaseError> error() const { return m_error; }
-    PassRefPtr<IDBAny> result() { return m_result; }
     DEFINE_ATTRIBUTE_EVENT_LISTENER(success);
     DEFINE_ATTRIBUTE_EVENT_LISTENER(error);
 
+    bool resetReadyState();
+
     // IDBCallbacks
     virtual void onError(PassRefPtr<IDBDatabaseError>);
-    virtual void onSuccess(PassRefPtr<IDBDatabase>);
+    virtual void onSuccess(); // For "null".
+    virtual void onSuccess(PassRefPtr<IDBDatabaseBackendInterface>);
+    virtual void onSuccess(PassRefPtr<IDBCursorBackendInterface>);
+    virtual void onSuccess(PassRefPtr<IDBIndexBackendInterface>);
+    virtual void onSuccess(PassRefPtr<IDBKey>);
+    virtual void onSuccess(PassRefPtr<IDBObjectStoreBackendInterface>);
     virtual void onSuccess(PassRefPtr<SerializedScriptValue>);
-    // FIXME: Have one onSuccess function for each possible result type.
 
     // EventTarget
     virtual IDBRequest* toIDBRequest() { return this; }
 
     // ActiveDOMObject
     virtual ScriptExecutionContext* scriptExecutionContext() const;
-    virtual void stop();
-    virtual void suspend();
-    virtual void resume();
+    virtual bool canSuspend() const;
 
     using RefCounted<IDBCallbacks>::ref;
     using RefCounted<IDBCallbacks>::deref;
@@ -83,7 +83,7 @@ private:
     IDBRequest(ScriptExecutionContext*, PassRefPtr<IDBAny> source);
 
     void timerFired(Timer<IDBRequest>*);
-    void onEventCommon();
+    void scheduleEvent(PassRefPtr<IDBAny> result, PassRefPtr<IDBDatabaseError>);
 
     // EventTarget
     virtual void refEventTarget() { ref(); }
@@ -93,14 +93,16 @@ private:
 
     RefPtr<IDBAny> m_source;
 
-    RefPtr<IDBAny> m_result;
-    RefPtr<IDBDatabaseError> m_error;
+    struct PendingEvent {
+        RefPtr<IDBAny> m_result;
+        RefPtr<IDBDatabaseError> m_error;
+    };
+    Vector<PendingEvent> m_pendingEvents;
 
     // Used to fire events asynchronously.
     Timer<IDBRequest> m_timer;
     RefPtr<IDBRequest> m_selfRef; // This is set to us iff there's an event pending.
 
-    bool m_stopped;
     bool m_aborted;
     ReadyState m_readyState;
     EventTargetData m_eventTargetData;

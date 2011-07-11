@@ -113,10 +113,23 @@ preload_sdcard()
         mkdir "$SDCARD_PATH/fonts"
     fi
     cp -f "$OLYMPIATOOLS/fonts/"* "$SDCARD_PATH/fonts"
+    cp -f "$WEBKITDIR/WebKitTools/DumpRenderTree/fonts/"* "$SDCARD_PATH/fonts"
+
 }
 
 check_device_dir()
 {
+    if [ ! -d "$SDCARD_PATH" ] || [ ! -d "$SDCARD_PATH/BlackBerry" ]; then
+        echo "$SDCARD_PATH does not appear to be available. Rebooting device with mass storage mode enabled..."
+        echo "If your device prompts you, please choose to mount as USB device."
+        interactive_continue
+        ret=$?; [ $ret -ne 0 ] && cleanup && return $ret
+        cfp -u$USB_PORT USBMS -s
+        echo "Waiting for $SDCARD_PATH to become available..."
+        until [ -d "$SDCARD_PATH" ] && [ -d "$SDCARD_PATH/BlackBerry" ]; do
+            sleep 1
+        done
+    fi
     if [ ! -d "$SDCARD_PATH/BlackBerry" ]; then
         INTERACTIVE_OLD=$INTERACTIVE
         INTERACTIVE=1
@@ -126,6 +139,7 @@ check_device_dir()
         INTERACTIVE=$INTERACTIVE_OLD
     fi
 }
+
 clean_sdcard()
 {
     echo -e "\nWarning: Cleaning sdcard [$SDCARD_PATH] (index.drt, current.drt, etc)."
@@ -157,7 +171,7 @@ if [ -z "$SDCARD_PATH" ] ; then
     interactive_continue
     ret=$?; [ $ret -ne 0 ] && cleanup && return $ret
 fi
-if [ ! -d "$SDCARD_PATH" ]; then
+if [ $SDCARD_PATH_IS_DEVICE -eq 0 ] && [ ! -d "$SDCARD_PATH" ]; then
     mkdir "$SDCARD_PATH"
     if [ $? != 0 ]; then
         echo "Error: Cannot create [$SDCARD_PATH]." >&2
@@ -210,7 +224,7 @@ fi
 
 
 #Start the DRTs
-pushd "$OLYMPIAROOT/olympia/WebKitTools/DumpRenderTree/olympia" > /dev/null
+pushd "$OLYMPIAROOT/olympia/WebKitTools/DumpRenderTree/blackberry" > /dev/null
     echo "INFO: Starting run-webkit-tests..."
    ../../Scripts/run-webkit-tests --olympia --root . --no-http $additionalDRTOpts $@
 popd > /dev/null
@@ -222,13 +236,18 @@ if [ $SDCARD_PATH_IS_DEVICE -gt 0 ]; then
     echo -e "\nWarning: Rebooting device."
     interactive_continue
     ret=$?; [ $ret -ne 0 ] && cleanup && return $ret
-    cfp -u$USB_PORT USBMS -s
+    cfp -u$USB_PORT USBMS -c
 
     cat <<EOT
+WARNING: USBMS NOW DISABLED
+
 !!!NOTE!!!
 Please ensure the OlympiaDebugger is started on the device after it boots.
-Once the device DRTs have completed, please remount your SDCard and run:
+Once the device DRTs have completed, please run:
    $SCRIPT_NAME -drs $SDCARD_PATH $@
+
+If you wish to restore USBMS functionality but not process DRT results you may run:
+   cfp -u$USB_PORT USBMS -s
 EOT
     cleanup && return 0
 fi

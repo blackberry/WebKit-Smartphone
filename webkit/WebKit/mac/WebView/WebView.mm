@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2006 David Smith (catfish.man@gmail.com)
+ * Copyright (C) 2010 Igalia S.L
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,6 +34,7 @@
 #import "DOMCSSStyleDeclarationInternal.h"
 #import "DOMNodeInternal.h"
 #import "DOMRangeInternal.h"
+#import "WebApplicationCache.h"
 #import "WebBackForwardListInternal.h"
 #import "WebBaseNetscapePluginView.h"
 #import "WebCache.h"
@@ -45,6 +47,8 @@
 #import "WebDefaultPolicyDelegate.h"
 #import "WebDefaultUIDelegate.h"
 #import "WebDelegateImplementationCaching.h"
+#import "WebDeviceOrientationClient.h"
+#import "WebDeviceOrientationProvider.h"
 #import "WebDocument.h"
 #import "WebDocumentInternal.h"
 #import "WebDownload.h"
@@ -86,6 +90,7 @@
 #import "WebPDFView.h"
 #import "WebPanelAuthenticationHandler.h"
 #import "WebPasteboardHelper.h"
+#import "WebPlatformStrategies.h"
 #import "WebPluginDatabase.h"
 #import "WebPluginHalterClient.h"
 #import "WebPolicyDelegate.h"
@@ -103,13 +108,13 @@
 #import <Foundation/NSURLConnection.h>
 #import <JavaScriptCore/APICast.h>
 #import <JavaScriptCore/JSValueRef.h>
+#import <WebCore/AbstractDatabase.h>
 #import <WebCore/ApplicationCacheStorage.h>
 #import <WebCore/BackForwardList.h>
 #import <WebCore/Cache.h>
 #import <WebCore/ColorMac.h>
 #import <WebCore/CSSComputedStyleDeclaration.h>
 #import <WebCore/Cursor.h>
-#import <WebCore/Database.h>
 #import <WebCore/Document.h>
 #import <WebCore/DocumentLoader.h>
 #import <WebCore/DragController.h>
@@ -139,6 +144,7 @@
 #import <WebCore/RenderWidget.h>
 #import <WebCore/ResourceHandle.h>
 #import <WebCore/RuntimeApplicationChecks.h>
+#import <WebCore/SchemeRegistry.h>
 #import <WebCore/ScriptController.h>
 #import <WebCore/ScriptValue.h>
 #import <WebCore/SecurityOrigin.h>
@@ -177,6 +183,10 @@
 #import <WebCore/GeolocationError.h>
 #endif
 
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+#import <glib.h>
+#endif
+
 @interface NSSpellChecker (WebNSSpellCheckerDetails)
 - (void)_preflightChosenSpellServer;
 @end
@@ -190,6 +200,7 @@
 @interface NSWindow (WebNSWindowDetails) 
 - (id)_oldFirstResponderBeforeBecoming;
 - (void)_enableScreenUpdatesIfNeeded;
+- (BOOL)_wrapsCarbonWindow;
 @end
 
 using namespace WebCore;
@@ -366,6 +377,9 @@ static const char webViewIsOpen[] = "At least one WebView is still open.";
 - (NSResponder *)_responderForResponderOperations;
 #if USE(ACCELERATED_COMPOSITING)
 - (void)_clearLayerSyncLoopObserver;
+#endif
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+- (void)_clearGlibLoopObserver;
 #endif
 @end
 
@@ -654,16 +668,27 @@ static bool shouldEnableLoadDeferring()
 #endif
         WebKitInitializeApplicationCachePathIfNecessary();
         patchMailRemoveAttributesMethod();
+        
+        // Initialize our platform strategies.
+        WebPlatformStrategies::initialize();
+
         didOneTimeInitialization = true;
     }
 
+    Page::PageClients pageClients;
+    pageClients.chromeClient = new WebChromeClient(self);
+    pageClients.contextMenuClient = new WebContextMenuClient(self);
+    pageClients.editorClient = new WebEditorClient(self);
+    pageClients.dragClient = new WebDragClient(self);
+    pageClients.inspectorClient = new WebInspectorClient(self);
+    pageClients.pluginHalterClient = new WebPluginHalterClient(self);
 #if ENABLE(CLIENT_BASED_GEOLOCATION)
-    WebGeolocationControllerClient* geolocationControllerClient = new WebGeolocationControllerClient(self);
-#else
-    WebGeolocationControllerClient* geolocationControllerClient = 0;
+    pageClients.geolocationControllerClient = new WebGeolocationControllerClient(self);
 #endif
-    DeviceOrientationClient* deviceOrientationClient = 0;
-    _private->page = new Page(new WebChromeClient(self), new WebContextMenuClient(self), new WebEditorClient(self), new WebDragClient(self), new WebInspectorClient(self), new WebPluginHalterClient(self), geolocationControllerClient, deviceOrientationClient);
+#if ENABLE(DEVICE_ORIENTATION)
+    pageClients.deviceOrientationClient = new WebDeviceOrientationClient(self);
+#endif
+    _private->page = new Page(pageClients);
 
     _private->page->setCanStartMedia([self window]);
     _private->page->settings()->setLocalStorageDatabasePath([[self preferences] _localStorageDatabasePath]);
@@ -716,6 +741,11 @@ static bool shouldEnableLoadDeferring()
 
     if (!WebKitLinkedOnOrAfter(WEBKIT_FIRST_VERSION_WITHOUT_CONTENT_SNIFFING_FOR_FILE_URLS))
         ResourceHandle::forceContentSniffing();
+
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    [self _scheduleGlibContextIterations];
+#endif
+
 }
 
 - (id)_initWithFrame:(NSRect)f frameName:(NSString *)frameName groupName:(NSString *)groupName usesDocumentViews:(BOOL)usesDocumentViews
@@ -817,7 +847,7 @@ static bool shouldEnableLoadDeferring()
 {
     Frame* frame = [self _mainCoreFrame];
     if (frame && frame->view())
-        frame->view()->layoutIfNeededRecursive();
+        frame->view()->updateLayoutAndStyleIfNeededRecursive();
 }
 
 #endif
@@ -1113,6 +1143,10 @@ static bool fastDocumentTeardownEnabled()
     [self _clearLayerSyncLoopObserver];
 #endif
     
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    [self _clearGlibLoopObserver];
+#endif
+
     [[NSDistributedNotificationCenter defaultCenter] removeObserver:self];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 
@@ -1356,7 +1390,7 @@ static bool fastDocumentTeardownEnabled()
     settings->setMinimumLogicalFontSize([preferences minimumLogicalFontSize]);
     settings->setPluginsEnabled([preferences arePlugInsEnabled]);
 #if ENABLE(DATABASE)
-    Database::setIsAvailable([preferences databasesEnabled]);
+    AbstractDatabase::setIsAvailable([preferences databasesEnabled]);
 #endif
     settings->setLocalStorageEnabled([preferences localStorageEnabled]);
     settings->setExperimentalNotificationsEnabled([preferences experimentalNotificationsEnabled]);
@@ -1369,7 +1403,7 @@ static bool fastDocumentTeardownEnabled()
     settings->setTextAreasAreResizable([preferences textAreasAreResizable]);
     settings->setShrinksStandaloneImagesToFit([preferences shrinksStandaloneImagesToFit]);
     settings->setEditableLinkBehavior(core([preferences editableLinkBehavior]));
-    settings->setEditingBehavior(core([preferences editingBehavior]));
+    settings->setEditingBehaviorType(core([preferences editingBehavior]));
     settings->setTextDirectionSubmenuInclusionBehavior(core([preferences textDirectionSubmenuInclusionBehavior]));
     settings->setDOMPasteAllowed([preferences isDOMPasteAllowed]);
     settings->setUsesPageCache([self usesPageCache]);
@@ -1393,10 +1427,10 @@ static bool fastDocumentTeardownEnabled()
     settings->setWebArchiveDebugModeEnabled([preferences webArchiveDebugModeEnabled]);
     settings->setLocalFileContentSniffingEnabled([preferences localFileContentSniffingEnabled]);
     settings->setOfflineWebApplicationCacheEnabled([preferences offlineWebApplicationCacheEnabled]);
-    settings->setZoomMode([preferences zoomsTextOnly] ? ZoomTextOnly : ZoomPage);
     settings->setJavaScriptCanAccessClipboard([preferences javaScriptCanAccessClipboard]);
     settings->setXSSAuditorEnabled([preferences isXSSAuditorEnabled]);
-    settings->setEnforceCSSMIMETypeInStrictMode(!WKAppVersionCheckLessThan(@"com.apple.iWeb", -1, 2.1));
+    settings->setEnforceCSSMIMETypeInNoQuirksMode(!WKAppVersionCheckLessThan(@"com.apple.iWeb", -1, 2.1));
+    settings->setDNSPrefetchingEnabled([preferences isDNSPrefetchingEnabled]);
     
     // FIXME: Enabling accelerated compositing when WebGL is enabled causes tests to fail on Leopard which expect HW compositing to be disabled.
     // Until we fix that, I will comment out the test (CFM)
@@ -1407,7 +1441,18 @@ static bool fastDocumentTeardownEnabled()
     settings->setWebGLEnabled([preferences webGLEnabled]);
     settings->setLoadDeferringEnabled(shouldEnableLoadDeferring());
     settings->setFrameFlatteningEnabled([preferences isFrameFlatteningEnabled]);
-    settings->setHTML5ParserEnabled([preferences html5ParserEnabled]);
+    settings->setPaginateDuringLayoutEnabled([preferences paginateDuringLayoutEnabled]);
+#if ENABLE(FULLSCREEN_API)
+    settings->setFullScreenEnabled([preferences fullScreenEnabled]);
+#endif
+    settings->setMemoryInfoEnabled([preferences memoryInfoEnabled]);
+
+    // Application Cache Preferences are stored on the global cache storage manager, not in Settings.
+    [WebApplicationCache setDefaultOriginQuota:[preferences applicationCacheDefaultOriginQuota]];
+
+    BOOL zoomsTextOnly = [preferences zoomsTextOnly];
+    if (_private->zoomsTextOnly != zoomsTextOnly)
+        [self _setZoomMultiplier:_private->zoomMultiplier isTextOnly:zoomsTextOnly];
 }
 
 static inline IMP getMethod(id o, SEL s)
@@ -1866,9 +1911,38 @@ static inline IMP getMethod(id o, SEL s)
     Frame* mainFrame = [self _mainCoreFrame];
     if (!mainFrame)
         return nil;
-    NSMutableDictionary *regions = mainFrame->dashboardRegionsDictionary();
-    [self _addScrollerDashboardRegions:regions];
-    return regions;
+
+    const Vector<DashboardRegionValue>& regions = mainFrame->document()->dashboardRegions();
+    size_t size = regions.size();
+
+    NSMutableDictionary *webRegions = [NSMutableDictionary dictionaryWithCapacity:size];
+    for (size_t i = 0; i < size; i++) {
+        const DashboardRegionValue& region = regions[i];
+
+        if (region.type == StyleDashboardRegion::None)
+            continue;
+
+        NSString *label = region.label;
+        WebDashboardRegionType type = WebDashboardRegionTypeNone;
+        if (region.type == StyleDashboardRegion::Circle)
+            type = WebDashboardRegionTypeCircle;
+        else if (region.type == StyleDashboardRegion::Rectangle)
+            type = WebDashboardRegionTypeRectangle;
+        NSMutableArray *regionValues = [webRegions objectForKey:label];
+        if (!regionValues) {
+            regionValues = [[NSMutableArray alloc] initWithCapacity:1];
+            [webRegions setObject:regionValues forKey:label];
+            [regionValues release];
+        }
+
+        WebDashboardRegion *webRegion = [[WebDashboardRegion alloc] initWithRect:region.bounds clip:region.clip type:type];
+        [regionValues addObject:webRegion];
+        [webRegion release];
+    }
+
+    [self _addScrollerDashboardRegions:webRegions];
+
+    return webRegions;
 }
 
 - (void)_setDashboardBehavior:(WebDashboardBehavior)behavior to:(BOOL)flag
@@ -2195,7 +2269,7 @@ static inline IMP getMethod(id o, SEL s)
 
 + (NSCursor *)_pointingHandCursor
 {
-    return handCursor().impl();
+    return handCursor().platformCursor();
 }
 
 - (BOOL)_postsAcceleratedCompositingNotifications
@@ -2255,6 +2329,7 @@ static inline IMP getMethod(id o, SEL s)
     return _private->includesFlattenedCompositingLayersWhenDrawingToBitmap;
 }
 
+#if ENABLE(NETSCAPE_PLUGIN_API)
 static WebBaseNetscapePluginView *_pluginViewForNode(DOMNode *node)
 {
     if (!node)
@@ -2278,22 +2353,33 @@ static WebBaseNetscapePluginView *_pluginViewForNode(DOMNode *node)
     
     return (WebBaseNetscapePluginView *)view;
 }
+#endif // ENABLE(NETSCAPE_PLUGIN_API)
 
 + (BOOL)_isNodeHaltedPlugin:(DOMNode *)node
 {
+#if ENABLE(NETSCAPE_PLUGIN_API)
     return [_pluginViewForNode(node) isHalted];
+#else
+    return YES;
+#endif
 }
 
 + (BOOL)_hasPluginForNodeBeenHalted:(DOMNode *)node
 {
+#if ENABLE(NETSCAPE_PLUGIN_API)
     return [_pluginViewForNode(node) hasBeenHalted];
+#else
+    return YES;
+#endif
 }
 + (void)_restartHaltedPluginForNode:(DOMNode *)node
 {
+#if ENABLE(NETSCAPE_PLUGIN_API)
     if (!node)
         return;
     
     [_pluginViewForNode(node) resumeFromHalt];
+#endif
 }
 
 - (NSPasteboard *)_insertionPasteboard
@@ -2338,7 +2424,16 @@ static PassOwnPtr<Vector<String> > toStringVector(NSArray* patterns)
 }
 
 + (void)_addUserScriptToGroup:(NSString *)groupName world:(WebScriptWorld *)world source:(NSString *)source url:(NSURL *)url
-                    whitelist:(NSArray *)whitelist blacklist:(NSArray *)blacklist injectionTime:(WebUserScriptInjectionTime)injectionTime
+                    whitelist:(NSArray *)whitelist blacklist:(NSArray *)blacklist
+                injectionTime:(WebUserScriptInjectionTime)injectionTime
+{
+    [WebView _addUserScriptToGroup:groupName world:world source:source url:url whitelist:whitelist blacklist:blacklist injectionTime:injectionTime injectedFrames:WebInjectInAllFrames];
+}
+
++ (void)_addUserScriptToGroup:(NSString *)groupName world:(WebScriptWorld *)world source:(NSString *)source url:(NSURL *)url
+                    whitelist:(NSArray *)whitelist blacklist:(NSArray *)blacklist
+                injectionTime:(WebUserScriptInjectionTime)injectionTime
+               injectedFrames:(WebUserContentInjectedFrames)injectedFrames
 {
     String group(groupName);
     if (group.isEmpty())
@@ -2349,11 +2444,19 @@ static PassOwnPtr<Vector<String> > toStringVector(NSArray* patterns)
         return;
     
     pageGroup->addUserScriptToWorld(core(world), source, url, toStringVector(whitelist), toStringVector(blacklist), 
-                                    injectionTime == WebInjectAtDocumentStart ? InjectAtDocumentStart : InjectAtDocumentEnd);
+                                    injectionTime == WebInjectAtDocumentStart ? InjectAtDocumentStart : InjectAtDocumentEnd,
+                                    injectedFrames == WebInjectInAllFrames ? InjectInAllFrames : InjectInTopFrameOnly);
 }
 
 + (void)_addUserStyleSheetToGroup:(NSString *)groupName world:(WebScriptWorld *)world source:(NSString *)source url:(NSURL *)url
                         whitelist:(NSArray *)whitelist blacklist:(NSArray *)blacklist
+{
+    [WebView _addUserStyleSheetToGroup:groupName world:world source:source url:url whitelist:whitelist blacklist:blacklist injectedFrames:WebInjectInAllFrames];
+}
+
++ (void)_addUserStyleSheetToGroup:(NSString *)groupName world:(WebScriptWorld *)world source:(NSString *)source url:(NSURL *)url
+                        whitelist:(NSArray *)whitelist blacklist:(NSArray *)blacklist
+                   injectedFrames:(WebUserContentInjectedFrames)injectedFrames
 {
     String group(groupName);
     if (group.isEmpty())
@@ -2363,7 +2466,7 @@ static PassOwnPtr<Vector<String> > toStringVector(NSArray* patterns)
     if (!pageGroup)
         return;
 
-    pageGroup->addUserStyleSheetToWorld(core(world), source, url, toStringVector(whitelist), toStringVector(blacklist));
+    pageGroup->addUserStyleSheetToWorld(core(world), source, url, toStringVector(whitelist), toStringVector(blacklist), injectedFrames == WebInjectInAllFrames ? InjectInAllFrames : InjectInTopFrameOnly);
 }
 
 + (void)_removeUserScriptFromGroup:(NSString *)groupName world:(WebScriptWorld *)world url:(NSURL *)url
@@ -2457,7 +2560,7 @@ static PassOwnPtr<Vector<String> > toStringVector(NSArray* patterns)
 
 + (void)_registerURLSchemeAsSecure:(NSString *)scheme
 {
-    SecurityOrigin::registerURLSchemeAsSecure(scheme);
+    SchemeRegistry::registerURLSchemeAsSecure(scheme);
 }
 
 @end
@@ -2578,6 +2681,20 @@ static PassOwnPtr<Vector<String> > toStringVector(NSArray* patterns)
     return nil;
 }
 
+#if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
+- (WebBasePluginPackage *)_videoProxyPluginForMIMEType:(NSString *)MIMEType
+{
+    WebBasePluginPackage *pluginPackage = [[WebPluginDatabase sharedDatabase] pluginForMIMEType:MIMEType];
+    if (pluginPackage)
+        return pluginPackage;
+
+    if (_private->pluginDatabase)
+        return [_private->pluginDatabase pluginForMIMEType:MIMEType];
+
+    return nil;
+}
+#endif
+
 - (WebBasePluginPackage *)_pluginForExtension:(NSString *)extension
 {
     if (![_private->preferences arePlugInsEnabled])
@@ -2677,7 +2794,7 @@ static PassOwnPtr<Vector<String> > toStringVector(NSArray* patterns)
 
 + (void)registerURLSchemeAsLocal:(NSString *)protocol
 {
-    SecurityOrigin::registerURLSchemeAsLocal(protocol);
+    SchemeRegistry::registerURLSchemeAsLocal(protocol);
 }
 
 - (id)_initWithArguments:(NSDictionary *) arguments
@@ -3043,7 +3160,7 @@ static bool needsWebViewInitThreadWorkaround()
     _private->UIDelegateForwarder = nil;
 }
 
-- UIDelegate
+- (id)UIDelegate
 {
     return _private->UIDelegate;
 }
@@ -3054,7 +3171,7 @@ static bool needsWebViewInitThreadWorkaround()
     [self _cacheResourceLoadDelegateImplementations];
 }
 
-- resourceLoadDelegate
+- (id)resourceLoadDelegate
 {
     return _private->resourceProgressDelegate;
 }
@@ -3065,7 +3182,7 @@ static bool needsWebViewInitThreadWorkaround()
 }
 
 
-- downloadDelegate
+- (id)downloadDelegate
 {
     return _private->downloadDelegate;
 }
@@ -3077,7 +3194,7 @@ static bool needsWebViewInitThreadWorkaround()
     _private->policyDelegateForwarder = nil;
 }
 
-- policyDelegate
+- (id)policyDelegate
 {
     return _private->policyDelegate;
 }
@@ -3103,7 +3220,7 @@ static bool needsWebViewInitThreadWorkaround()
 #endif
 }
 
-- frameLoadDelegate
+- (id)frameLoadDelegate
 {
     return _private->frameLoadDelegate;
 }
@@ -3187,17 +3304,18 @@ static bool needsWebViewInitThreadWorkaround()
 {
     // NOTE: This has no visible effect when viewing a PDF (see <rdar://problem/4737380>)
     _private->zoomMultiplier = multiplier;
-
-    ASSERT(_private->page);
-    if (_private->page)
-        _private->page->settings()->setZoomMode(isTextOnly ? ZoomTextOnly : ZoomPage);
+    _private->zoomsTextOnly = isTextOnly;
 
     // FIXME: It would be nice to rework this code so that _private->zoomMultiplier doesn't exist
     // and instead FrameView::zoomFactor is used.
     Frame* coreFrame = [self _mainCoreFrame];
     if (coreFrame) {
-        if (FrameView* view = coreFrame->view())
-            view->setZoomFactor(multiplier, isTextOnly ? ZoomTextOnly : ZoomPage);
+        if (FrameView* view = coreFrame->view()) {
+            if (_private->zoomsTextOnly)
+                view->setPageAndTextZoomFactors(1, multiplier);
+            else
+                view->setPageAndTextZoomFactors(multiplier, 1);
+        }
     }
 }
 
@@ -3218,7 +3336,7 @@ static bool needsWebViewInitThreadWorkaround()
     if (!_private->page)
         return NO;
     
-    return _private->page->settings()->zoomMode() == ZoomTextOnly;
+    return _private->zoomsTextOnly;
 }
 
 #define MinimumZoomMultiplier       0.5f
@@ -3841,7 +3959,7 @@ static WebFrame *incrementFrame(WebFrame *frame, BOOL forward, BOOL wrapFlag)
 
 - (BOOL)canGoBack
 {
-    if (!_private->page)
+    if (!_private->page || _private->page->defersLoading())
         return NO;
 
     return !!_private->page->backForwardList()->backItem();
@@ -3849,7 +3967,7 @@ static WebFrame *incrementFrame(WebFrame *frame, BOOL forward, BOOL wrapFlag)
 
 - (BOOL)canGoForward
 {
-    if (!_private->page)
+    if (!_private->page || _private->page->defersLoading())
         return NO;
 
     return !!_private->page->backForwardList()->forwardItem();
@@ -4208,7 +4326,7 @@ static WebFrame *incrementFrame(WebFrame *frame, BOOL forward, BOOL wrapFlag)
     Frame* coreFrame = [self _mainCoreFrame];
     if (!coreFrame)
         return YES;
-    return coreFrame->shouldClose();
+    return coreFrame->loader()->shouldClose();
 }
 
 static NSAppleEventDescriptor* aeDescFromJSValue(ExecState* exec, JSValue jsValue)
@@ -4281,6 +4399,9 @@ static NSAppleEventDescriptor* aeDescFromJSValue(ExecState* exec, JSValue jsValu
 
 - (BOOL)canMarkAllTextMatches
 {
+    if (_private->closed)
+        return NO;
+
     WebFrame *frame = [self mainFrame];
     do {
         id <WebDocumentView> view = [[frame frameView] documentView];
@@ -4295,15 +4416,27 @@ static NSAppleEventDescriptor* aeDescFromJSValue(ExecState* exec, JSValue jsValu
 
 - (NSUInteger)markAllMatchesForText:(NSString *)string caseSensitive:(BOOL)caseFlag highlight:(BOOL)highlight limit:(NSUInteger)limit
 {
+    if (_private->closed)
+        return 0;
+
+    return [self countMatchesForText:string caseSensitive:caseFlag highlight:highlight limit:limit markMatches:YES];
+}
+
+- (NSUInteger)countMatchesForText:(NSString *)string caseSensitive:(BOOL)caseFlag highlight:(BOOL)highlight limit:(NSUInteger)limit markMatches:(BOOL)markMatches
+{
+    if (_private->closed)
+        return 0;
+
     WebFrame *frame = [self mainFrame];
     unsigned matchCount = 0;
     do {
         id <WebDocumentView> view = [[frame frameView] documentView];
         if ([view conformsToProtocol:@protocol(WebMultipleTextMatches)]) {
-            [(NSView <WebMultipleTextMatches>*)view  setMarkedTextMatchesAreHighlighted:highlight];
+            if (markMatches)
+                [(NSView <WebMultipleTextMatches>*)view setMarkedTextMatchesAreHighlighted:highlight];
         
             ASSERT(limit == 0 || matchCount < limit);
-            matchCount += [(NSView <WebMultipleTextMatches>*)view markAllMatchesForText:string caseSensitive:caseFlag limit:limit == 0 ? 0 : limit - matchCount];
+            matchCount += [(NSView <WebMultipleTextMatches>*)view countMatchesForText:string caseSensitive:caseFlag limit:limit == 0 ? 0 : limit - matchCount markMatches:markMatches];
 
             // Stop looking if we've reached the limit. A limit of 0 means no limit.
             if (limit > 0 && matchCount >= limit)
@@ -4318,6 +4451,9 @@ static NSAppleEventDescriptor* aeDescFromJSValue(ExecState* exec, JSValue jsValu
 
 - (void)unmarkAllTextMatches
 {
+    if (_private->closed)
+        return;
+
     WebFrame *frame = [self mainFrame];
     do {
         id <WebDocumentView> view = [[frame frameView] documentView];
@@ -4330,6 +4466,9 @@ static NSAppleEventDescriptor* aeDescFromJSValue(ExecState* exec, JSValue jsValu
 
 - (NSArray *)rectsForTextMatches
 {
+    if (_private->closed)
+        return [NSArray array];
+
     NSMutableArray *result = [NSMutableArray array];
     WebFrame *frame = [self mainFrame];
     do {
@@ -4663,10 +4802,10 @@ static NSAppleEventDescriptor* aeDescFromJSValue(ExecState* exec, JSValue jsValu
         Frame* mainFrame = [self _mainCoreFrame];
         if (mainFrame) {
             if (flag) {
-                mainFrame->applyEditingStyleToBodyElement();
+                mainFrame->editor()->applyEditingStyleToBodyElement();
                 // If the WebView is made editable and the selection is empty, set it to something.
                 if (![self selectedDOMRange])
-                    mainFrame->setSelectionFromNone();
+                    mainFrame->selection()->setSelectionFromNone();
             }
         }
     }
@@ -5388,7 +5527,7 @@ static WebFrameView *containingFrameView(NSView *view)
     NSDictionary *element = [sender representedObject];
     ASSERT([element isKindOfClass:[NSDictionary class]]);
 
-    WebDataSource *dataSource = [[element objectForKey:WebElementFrameKey] dataSource];
+    WebDataSource *dataSource = [(WebFrame *)[element objectForKey:WebElementFrameKey] dataSource];
     NSURLRequest *request = [[dataSource request] copy];
     ASSERT(request);
     
@@ -5447,6 +5586,18 @@ static WebFrameView *containingFrameView(NSView *view)
     CFRunLoopObserverInvalidate(_private->layerSyncRunLoopObserver);
     CFRelease(_private->layerSyncRunLoopObserver);
     _private->layerSyncRunLoopObserver = 0;
+}
+#endif
+
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+- (void)_clearGlibLoopObserver
+{
+    if (!_private->glibRunLoopObserver)
+        return;
+
+    CFRunLoopObserverInvalidate(_private->glibRunLoopObserver);
+    CFRelease(_private->glibRunLoopObserver);
+    _private->glibRunLoopObserver = 0;
 }
 #endif
 @end
@@ -5668,7 +5819,15 @@ static void layerSyncRunLoopObserverCallBack(CFRunLoopObserverRef, CFRunLoopActi
     // An NSWindow may not display in the next runloop cycle after dirtying due to delayed window display logic,
     // in which case this observer can fire first. So if the window is due for a display, don't commit
     // layer changes, otherwise they'll show on screen before the view drawing.
-    if ([window viewsNeedDisplay])
+    bool viewsNeedDisplay;
+#ifndef __LP64__
+    if (window && [window _wrapsCarbonWindow])
+        viewsNeedDisplay = HIViewGetNeedsDisplay(HIViewGetRoot(static_cast<WindowRef>([window windowRef])));
+    else
+#endif
+        viewsNeedDisplay = [window viewsNeedDisplay];
+
+    if (viewsNeedDisplay)
         return;
 
     if ([webView _syncCompositingChanges]) {
@@ -5748,6 +5907,50 @@ static void layerSyncRunLoopObserverCallBack(CFRunLoopObserverRef, CFRunLoopActi
 
 #endif
 
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+
+static void glibContextIterationCallback(CFRunLoopObserverRef, CFRunLoopActivity, void*)
+{
+    g_main_context_iteration(0, FALSE);
+}
+
+- (void)_scheduleGlibContextIterations
+{
+    if (_private->glibRunLoopObserver)
+        return;
+
+    NSRunLoop* myRunLoop = [NSRunLoop currentRunLoop];
+
+    // Create a run loop observer and attach it to the run loop.
+    CFRunLoopObserverContext context = {0, self, 0, 0, 0};
+    _private->glibRunLoopObserver = CFRunLoopObserverCreate(kCFAllocatorDefault, kCFRunLoopBeforeWaiting, YES, 0, &glibContextIterationCallback, &context);
+
+    if (_private->glibRunLoopObserver) {
+        CFRunLoopRef cfLoop = [myRunLoop getCFRunLoop];
+        CFRunLoopAddObserver(cfLoop, _private->glibRunLoopObserver, kCFRunLoopDefaultMode);
+    }
+
+}
+#endif
+
+
+@end
+
+@implementation WebView (WebViewDeviceOrientation)
+
+- (void)_setDeviceOrientationProvider:(id<WebDeviceOrientationProvider>)deviceOrientationProvider
+{
+    if (_private)
+        _private->m_deviceOrientationProvider = deviceOrientationProvider;
+}
+
+- (id<WebDeviceOrientationProvider>)_deviceOrientationProvider
+{
+    if (_private)
+        return _private->m_deviceOrientationProvider;
+    return nil;
+}
+
 @end
 
 @implementation WebView (WebViewGeolocation)
@@ -5765,7 +5968,7 @@ static void layerSyncRunLoopObserverCallBack(CFRunLoopObserverRef, CFRunLoopActi
     return nil;
 }
 
-- (void)_geolocationDidChangePosition:(WebGeolocationPosition *)position;
+- (void)_geolocationDidChangePosition:(WebGeolocationPosition *)position
 {
 #if ENABLE(CLIENT_BASED_GEOLOCATION)
     if (_private && _private->page)

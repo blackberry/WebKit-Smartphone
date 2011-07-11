@@ -29,10 +29,10 @@
 
 #include "ArchiveFactory.h"
 #include "MediaPlayer.h"
-#include "StringHash.h"
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/text/StringHash.h>
 
 #if PLATFORM(CG)
 #include "ImageSourceCG.h"
@@ -52,8 +52,9 @@ static HashSet<String>* supportedImageMIMETypesForEncoding;
 static HashSet<String>* supportedJavaScriptMIMETypes;
 static HashSet<String>* supportedNonImageMIMETypes;
 static HashSet<String>* supportedMediaMIMETypes;
-static HashMap<String, String, CaseFoldingHash>* mediaMIMETypeForExtensionMap;
 
+typedef HashMap<String, Vector<String>*, CaseFoldingHash> MediaMIMETypeMap;
+    
 static void initializeSupportedImageMIMETypes()
 {
 #if PLATFORM(CG)
@@ -101,12 +102,11 @@ static void initializeSupportedImageMIMETypes()
             continue;
 #endif
         String mimeType = MIMETypeRegistry::getMIMETypeForExtension(formats.at(i).constData());
-        supportedImageMIMETypes->add(mimeType);
-        supportedImageResourceMIMETypes->add(mimeType);
+        if (!mimeType.isEmpty()) {
+            supportedImageMIMETypes->add(mimeType);
+            supportedImageResourceMIMETypes->add(mimeType);
+        }
     }
-
-    supportedImageMIMETypes->remove("application/octet-stream");
-    supportedImageResourceMIMETypes->remove("application/octet-stream");
 #else
     // assume that all implementations at least support the following standard
     // image types:
@@ -151,10 +151,15 @@ static void initializeSupportedImageMIMETypesForEncoding()
     QList<QByteArray> formats = QImageWriter::supportedImageFormats();
     for (int i = 0; i < formats.size(); ++i) {
         String mimeType = MIMETypeRegistry::getMIMETypeForExtension(formats.at(i).constData());
-        supportedImageMIMETypesForEncoding->add(mimeType);
+        if (!mimeType.isEmpty())
+            supportedImageMIMETypesForEncoding->add(mimeType);
     }
-
-    supportedImageMIMETypesForEncoding->remove("application/octet-stream");
+#elif PLATFORM(GTK)
+    supportedImageMIMETypesForEncoding->add("image/png");
+    supportedImageMIMETypesForEncoding->add("image/jpeg");
+    supportedImageMIMETypesForEncoding->add("image/tiff");
+    supportedImageMIMETypesForEncoding->add("image/bmp");
+    supportedImageMIMETypesForEncoding->add("image/ico");
 #elif PLATFORM(CAIRO)
     supportedImageMIMETypesForEncoding->add("image/png");
 #elif PLATFORM(OLYMPIA)
@@ -226,7 +231,7 @@ static void initializeSupportedNonImageMimeTypes()
     ArchiveFactory::registerKnownArchiveMIMETypes();
 }
 
-static void initializeMediaTypeMaps()
+static MediaMIMETypeMap& mediaMIMETypeMap()
 {
     struct TypeExtensionPair {
         const char* type;
@@ -234,11 +239,7 @@ static void initializeMediaTypeMaps()
     };
 
     // A table of common media MIME types and file extenstions used when a platform's
-    // specific MIME type lookup doens't have a match for a media file extension. While some
-    // file extensions are claimed by multiple MIME types, this table only includes one 
-    // for each because it is currently only used by getMediaMIMETypeForExtension. If we
-    // ever add a MIME type -> file extension mapping, the alternate MIME types will need
-    // to be added.
+    // specific MIME type lookup doesn't have a match for a media file extension.
     static const TypeExtensionPair pairs[] = {
     
         // Ogg
@@ -252,6 +253,10 @@ static void initializeMediaTypeMaps()
         { "audio/annodex", "axa" },
         { "video/annodex", "axv" },
         { "audio/speex", "spx" },
+
+        // WebM
+        { "video/webm", "webm" },
+        { "audio/webm", "webm" },
 
         // MPEG
         { "audio/mpeg", "m1a" },
@@ -269,17 +274,25 @@ static void initializeMediaTypeMaps()
         { "video/mpeg", "mpv" },
 
         // MPEG playlist
-        { "audio/x-mpegurl", "m3url" },
+        { "application/vnd.apple.mpegurl", "m3u8" },
+        { "application/mpegurl", "m3u8" },
         { "application/x-mpegurl", "m3u8" },
+        { "audio/mpegurl", "m3url" },
+        { "audio/x-mpegurl", "m3url" },
+        { "audio/mpegurl", "m3u" },
+        { "audio/x-mpegurl", "m3u" },
 
         // MPEG-4
         { "video/x-m4v", "m4v" },
         { "audio/x-m4a", "m4a" },
         { "audio/x-m4b", "m4b" },
         { "audio/x-m4p", "m4p" },
+        { "audio/mp4", "m4a" },
  
         // MP3
         { "audio/mp3", "mp3" },
+        { "audio/x-mp3", "mp3" },
+        { "audio/x-mpeg", "mp3" },
 
         // MPEG-2
         { "video/x-mpeg2", "mp2" },
@@ -304,23 +317,46 @@ static void initializeMediaTypeMaps()
         { "audio/x-gsm", "gsm" }
     };
 
-    mediaMIMETypeForExtensionMap = new HashMap<String, String, CaseFoldingHash>;
+    DEFINE_STATIC_LOCAL(MediaMIMETypeMap, mediaMIMETypeForExtensionMap, ());
+
+    if (!mediaMIMETypeForExtensionMap.isEmpty())
+        return mediaMIMETypeForExtensionMap;
+
     const unsigned numPairs = sizeof(pairs) / sizeof(pairs[0]);
-    for (unsigned ndx = 0; ndx < numPairs; ++ndx)
-        mediaMIMETypeForExtensionMap->set(pairs[ndx].extension, pairs[ndx].type);
+    for (unsigned ndx = 0; ndx < numPairs; ++ndx) {
+
+        if (mediaMIMETypeForExtensionMap.contains(pairs[ndx].extension))
+            mediaMIMETypeForExtensionMap.get(pairs[ndx].extension)->append(pairs[ndx].type);
+        else {
+            Vector<String>* synonyms = new Vector<String>;
+
+            // If there is a system specific type for this extension, add it as the first type so
+            // getMediaMIMETypeForExtension will always return it.
+            String systemType = MIMETypeRegistry::getMIMETypeForExtension(pairs[ndx].extension);
+            if (!systemType.isEmpty() && pairs[ndx].type != systemType)
+                synonyms->append(systemType);
+            synonyms->append(pairs[ndx].type);
+            mediaMIMETypeForExtensionMap.add(pairs[ndx].extension, synonyms);
+        }
+    }
+
+    return mediaMIMETypeForExtensionMap;
 }
 
 String MIMETypeRegistry::getMediaMIMETypeForExtension(const String& ext)
 {
-    // Check with system specific implementation first.
-    String mimeType = getMIMETypeForExtension(ext);
-    if (!mimeType.isEmpty())
-        return mimeType;
+    if (mediaMIMETypeMap().contains(ext))
+        return (*mediaMIMETypeMap().get(ext))[0];
+    
+    return String();
+}
+    
+Vector<String> MIMETypeRegistry::getMediaMIMETypesForExtension(const String& ext)
+{
+    if (mediaMIMETypeMap().contains(ext))
+        return *mediaMIMETypeMap().get(ext);
 
-    // No match, look in the static mapping.
-    if (!mediaMIMETypeForExtensionMap)
-        initializeMediaTypeMaps();
-    return mediaMIMETypeForExtensionMap->get(ext);
+    return Vector<String>();
 }
 
 static void initializeSupportedMediaMIMETypes()
@@ -346,8 +382,8 @@ static void initializeMIMETypeRegistry()
 
 String MIMETypeRegistry::getMIMETypeForPath(const String& path)
 {
-    int pos = path.reverseFind('.');
-    if (pos >= 0) {
+    size_t pos = path.reverseFind('.');
+    if (pos != notFound) {
         String extension = path.substring(pos + 1);
         String result = getMIMETypeForExtension(extension);
         if (result.length())

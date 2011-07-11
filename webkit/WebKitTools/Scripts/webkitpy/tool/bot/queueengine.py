@@ -107,13 +107,14 @@ class QueueEngine:
                 self._open_work_log(work_item)
                 try:
                     if not self._delegate.process_work_item(work_item):
-                        self._sleep("Unable to process work item.")
+                        log("Unable to process work item.")
+                        continue
                 except ScriptError, e:
                     # Use a special exit code to indicate that the error was already
                     # handled in the child process and we should just keep looping.
                     if e.exit_code == self.handled_error_code:
                         continue
-                    message = "Unexpected failure when landing patch!  Please file a bug against webkit-patch.\n%s" % e.message_with_output()
+                    message = "Unexpected failure when processing patch!  Please file a bug against webkit-patch.\n%s" % e.message_with_output()
                     self._delegate.handle_unexpected_error(work_item, message)
             except TerminateQueue, e:
                 log("\nTerminateQueue exception received.")

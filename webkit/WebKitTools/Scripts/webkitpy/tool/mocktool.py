@@ -86,6 +86,7 @@ _patch3 = {
     "name": "Patch3",
     "is_obsolete": False,
     "is_patch": True,
+    "in-rietveld": "?",
     "review": "?",
     "attacher_email": "eric@webkit.org",
 }
@@ -112,6 +113,7 @@ _patch5 = {
     "name": "Patch5",
     "is_obsolete": False,
     "is_patch": True,
+    "in-rietveld": "?",
     "review": "+",
     "reviewer_email": "foo@bar.com",
     "attacher_email": "eric@webkit.org",
@@ -125,6 +127,7 @@ _patch6 = { # Valid committer, but no reviewer.
     "name": "ROLLOUT of r3489",
     "is_obsolete": False,
     "is_patch": True,
+    "in-rietveld": "-",
     "commit-queue": "+",
     "committer_email": "foo@bar.com",
     "attacher_email": "eric@webkit.org",
@@ -138,6 +141,7 @@ _patch7 = { # Valid review, patch is marked obsolete.
     "name": "Patch7",
     "is_obsolete": True,
     "is_patch": True,
+    "in-rietveld": "+",
     "review": "+",
     "reviewer_email": "foo@bar.com",
     "attacher_email": "eric@webkit.org",
@@ -221,6 +225,12 @@ class MockBugzillaQueries(Mock):
     def fetch_patches_from_pending_commit_list(self):
         return sum([bug.reviewed_patches() for bug in self._all_bugs()], [])
 
+    def fetch_first_patch_from_rietveld_queue(self):
+        for bug in self._all_bugs():
+            patches = bug.in_rietveld_queue_patches()
+            if len(patches):
+                return patches[0]
+        raise Exception('No patches in the rietveld queue')
 
 # FIXME: Bugzilla is the wrong Mock-point.  Once we have a BugzillaNetwork
 #        class we should mock that instead.
@@ -287,6 +297,15 @@ class MockBugzilla(Mock):
             action_param = "&action=%s" % action
         return "%s/%s%s" % (self.bug_server_url, attachment_id, action_param)
 
+    def set_flag_on_attachment(self,
+                               attachment_id,
+                               flag_name,
+                               flag_value,
+                               comment_text=None,
+                               additional_comment_text=None):
+        log("MOCK setting flag '%s' to '%s' on attachment '%s' with comment '%s' and additional comment '%s'" % (
+            flag_name, flag_value, attachment_id, comment_text, additional_comment_text))
+
     def post_comment_to_bug(self, bug_id, comment_text, cc=None):
         log("MOCK bug comment: bug_id=%s, cc=%s\n--- Begin comment ---\%s\n--- End comment ---\n" % (
             bug_id, cc, comment_text))
@@ -313,12 +332,16 @@ class MockBuilder(object):
     def name(self):
         return self._name
 
+    def results_url(self):
+        return "http://example.com/builders/%s/results/" % self.name()
+
     def force_build(self, username, comments):
         log("MOCK: force_build: name=%s, username=%s, comments=%s" % (
             self._name, username, comments))
 
 
 class MockBuildBot(object):
+    buildbot_host = "dummy_buildbot_host"
     def __init__(self):
         self._mock_builder1_status = {
             "name": "Builder1",
@@ -378,7 +401,7 @@ class MockSCM(Mock):
         # will actually be the root.  Since getcwd() is wrong, use a globally fake root for now.
         self.checkout_root = self.fake_checkout_root
 
-    def create_patch(self, git_commit, squash):
+    def create_patch(self, git_commit):
         return "Patch1"
 
     def commit_ids_from_commitish_arguments(self, args):
@@ -418,12 +441,12 @@ class MockCheckout(object):
     def bug_id_for_revision(self, svn_revision):
         return 12345
 
-    def modified_changelogs(self, git_commit, squash):
+    def modified_changelogs(self, git_commit):
         # Ideally we'd return something more interesting here.  The problem is
         # that LandDiff will try to actually read the patch from disk!
         return []
 
-    def commit_message_for_this_commit(self, git_commit, squash):
+    def commit_message_for_this_commit(self, git_commit):
         commit_message = Mock()
         commit_message.message = lambda:"This is a fake commit message that is at least 50 characters."
         return commit_message
@@ -444,10 +467,16 @@ class MockUser(object):
     def edit(self, files):
         pass
 
+    def edit_changelog(self, files):
+        pass
+
     def page(self, message):
         pass
 
     def confirm(self, message=None):
+        return True
+
+    def can_open_url(self):
         return True
 
     def open_url(self, url):
@@ -487,6 +516,9 @@ class MockStatusServer(object):
     def update_svn_revision(self, svn_revision, broken_bot):
         return 191
 
+    def results_url_for_status(self, status_id):
+        return "http://dummy_url"
+
 
 class MockExecute(Mock):
     def __init__(self, should_log):
@@ -510,6 +542,38 @@ class MockExecute(Mock):
         return "MOCK output of child process"
 
 
+class MockOptions(Mock):
+    no_squash = False
+    squash = False
+
+
+class MockRietveld():
+
+    def __init__(self, executive, dryrun=False):
+        pass
+
+    def post(self, diff, patch_id, codereview_issue, message=None, cc=None):
+        log("MOCK: Uploading patch to rietveld")
+
+
+class MockTestPort1():
+
+    def skips_layout_test(self, test_name):
+        return test_name in ["media/foo/bar.html", "foo"]
+
+
+class MockTestPort2():
+
+    def skips_layout_test(self, test_name):
+        return test_name == "media/foo/bar.html"
+
+
+class MockPortFactory():
+
+    def get_all(self, options=None):
+        return {"test_port1": MockTestPort1(), "test_port2": MockTestPort2()}
+
+
 class MockTool():
 
     def __init__(self, log_executive=False):
@@ -523,7 +587,8 @@ class MockTool():
         self._checkout = MockCheckout()
         self.status_server = MockStatusServer()
         self.irc_password = "MOCK irc password"
-        self.codereview = Rietveld(self.executive)
+        self.codereview = MockRietveld(self.executive)
+        self.port_factory = MockPortFactory()
 
     def scm(self):
         return self._scm

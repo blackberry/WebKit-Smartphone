@@ -1,0 +1,83 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderTable {TABLE} at (0,0) size 784x72 [border: (5px outset #808080)]
+        RenderTableSection {TBODY} at (5,5) size 774x62
+          RenderTableRow {TR} at (0,2) size 774x58
+            RenderTableCell {TD} at (2,29) size 401x4 [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=1]
+            RenderTableCell {TD} at (405,2) size 367x58 [border: (1px inset #808080)] [r=0 c=1 rs=1 cs=1]
+              RenderInline {A} at (0,0) size 38x18 [color=#0000EE]
+                RenderText {#text} at (2,2) size 38x18
+                  text run at (2,2) width 38: "\x{B2}\x{AC}\x{BB}\x{B3}"
+              RenderText {#text} at (40,2) size 19x18
+                text run at (40,2) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 28x18 [color=#0000EE]
+                RenderText {#text} at (59,2) size 28x18
+                  text run at (59,2) width 7: "\x{B9}"
+                  text run at (66,2) width 21: "\x{C5}\x{E7}"
+              RenderText {#text} at (87,2) size 19x18
+                text run at (87,2) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 36x18 [color=#0000EE]
+                RenderText {#text} at (106,2) size 36x18
+                  text run at (106,2) width 36: "\x{BB}\x{B3}\x{B8}\x{FD}"
+              RenderText {#text} at (142,2) size 19x18
+                text run at (142,2) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 51x18 [color=#0000EE]
+                RenderText {#text} at (161,2) size 51x18
+                  text run at (161,2) width 51: "\x{C6}\x{C1}\x{C5}\x{E7}"
+              RenderText {#text} at (212,2) size 19x18
+                text run at (212,2) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 34x18 [color=#0000EE]
+                RenderText {#text} at (231,2) size 34x18
+                  text run at (231,2) width 34: "\x{B9}\x{E1}\x{C0}\x{EE}"
+              RenderText {#text} at (265,2) size 19x18
+                text run at (265,2) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 291x36 [color=#0000EE]
+                RenderText {#text} at (284,2) size 291x36
+                  text run at (284,2) width 9: "\x{B0}"
+                  text run at (2,20) width 24: "\x{A6}\x{C9}\x{B2}"
+              RenderText {#text} at (26,20) size 19x18
+                text run at (26,20) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 34x18 [color=#0000EE]
+                RenderText {#text} at (45,20) size 34x18
+                  text run at (45,20) width 34: "\x{B9}\x{E2}\x{C3}\x{CE}"
+              RenderText {#text} at (79,20) size 19x18
+                text run at (79,20) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 116x18 [color=#0000EE]
+                RenderText {#text} at (98,20) size 116x18
+                  text run at (98,20) width 116: "\x{CA}\x{A1}\x{B2}\x{AC}\x{A1}\x{A6}\x{CB}\x{CC}\x{B6}\x{E5}\x{BD}\x{A3}"
+              RenderText {#text} at (214,20) size 19x18
+                text run at (214,20) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 239x36 [color=#0000EE]
+                RenderText {#text} at (233,20) size 239x36
+                  text run at (233,20) width 8: "\x{BA}"
+                  text run at (2,38) width 21: "\x{B4}\x{B2}\x{EC}"
+              RenderText {#text} at (23,38) size 19x18
+                text run at (23,38) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 37x18 [color=#0000EE]
+                RenderText {#text} at (42,38) size 37x18
+                  text run at (42,38) width 37: "\x{C4}\x{B9}\x{BA}\x{EA}"
+              RenderText {#text} at (79,38) size 19x18
+                text run at (79,38) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 37x18 [color=#0000EE]
+                RenderText {#text} at (98,38) size 37x18
+                  text run at (98,38) width 37: "\x{B7}\x{A7}\x{CB}\x{DC}"
+              RenderText {#text} at (135,38) size 19x18
+                text run at (135,38) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 46x18 [color=#0000EE]
+                RenderText {#text} at (154,38) size 46x18
+                  text run at (154,38) width 46: "\x{C2}\x{E7}\x{CA}\x{AC}"
+              RenderText {#text} at (200,38) size 19x18
+                text run at (200,38) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 41x18 [color=#0000EE]
+                RenderText {#text} at (219,38) size 41x18
+                  text run at (219,38) width 41: "\x{B5}\x{DC}\x{BA}\x{EA}"
+              RenderText {#text} at (260,38) size 19x18
+                text run at (260,38) width 19: "\x{A1}\x{C3}"
+              RenderInline {A} at (0,0) size 67x18 [color=#0000EE]
+                RenderText {#text} at (279,38) size 67x18
+                  text run at (279,38) width 67: "\x{BC}\x{AF}\x{BB}\x{F9}\x{C5}\x{E7}"
+              RenderText {#text} at (346,38) size 19x18
+                text run at (346,38) width 19: "\x{A1}\x{C3}"

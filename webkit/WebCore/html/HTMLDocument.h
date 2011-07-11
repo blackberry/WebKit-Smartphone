@@ -23,10 +23,10 @@
 #ifndef HTMLDocument_h
 #define HTMLDocument_h
 
-#include "AtomicStringHash.h"
 #include "CachedResourceClient.h"
 #include "Document.h"
 #include <wtf/HashCountedSet.h>
+#include <wtf/text/AtomicStringHash.h>
 
 namespace WebCore {
 
@@ -35,9 +35,9 @@ class HTMLElement;
 
 class HTMLDocument : public Document, public CachedResourceClient {
 public:
-    static PassRefPtr<HTMLDocument> create(Frame* frame)
+    static PassRefPtr<HTMLDocument> create(Frame* frame, const KURL& url, const KURL& baseURL = KURL())
     {
-        return adoptRef(new HTMLDocument(frame));
+        return adoptRef(new HTMLDocument(frame, url, baseURL));
     }
     virtual ~HTMLDocument();
 
@@ -51,6 +51,7 @@ public:
     void setDesignMode(const String&);
 
     String compatMode() const;
+    virtual void setCompatibilityModeFromDoctype();
 
     Element* activeElement();
     bool hasFocus();
@@ -80,16 +81,16 @@ public:
     bool hasExtraNamedItem(AtomicStringImpl* name);
 
 protected:
-    HTMLDocument(Frame*);
+    HTMLDocument(Frame* frame, const KURL& url, const KURL& baseURL = KURL());
 
 private:
-    virtual bool childAllowed(Node*);
-
     virtual PassRefPtr<Element> createElement(const AtomicString& tagName, ExceptionCode&);
 
     virtual bool isFrameSet() const;
-    virtual Tokenizer* createTokenizer();
-    virtual void determineParseMode();
+    virtual PassRefPtr<DocumentParser> createParser();
+
+    void addItemToMap(HashCountedSet<AtomicStringImpl*>&, const AtomicString&);
+    void removeItemFromMap(HashCountedSet<AtomicStringImpl*>&, const AtomicString&);
 
     HashCountedSet<AtomicStringImpl*> m_namedItemCounts;
     HashCountedSet<AtomicStringImpl*> m_extraNamedItemCounts;

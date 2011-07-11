@@ -25,10 +25,10 @@
 #ifndef FrameView_h
 #define FrameView_h
 
-#include "Frame.h"
+#include "Frame.h" // Only used by FrameView::inspectorTimelineAgent()
 #include "IntSize.h"
-#include "Page.h"
-#include "RenderLayer.h"
+#include "Page.h" // Only used by FrameView::inspectorTimelineAgent()
+#include "RenderObject.h" // For PaintBehavior
 #include "ScrollView.h"
 #include <wtf/Forward.h>
 #include <wtf/OwnPtr.h>
@@ -37,7 +37,6 @@ namespace WebCore {
 
 class Color;
 class Event;
-class Frame;
 class FrameViewPrivate;
 class InspectorTimelineAgent;
 class IntRect;
@@ -46,8 +45,8 @@ class PlatformMouseEvent;
 class RenderLayer;
 class RenderObject;
 class RenderEmbeddedObject;
-class ScheduledEvent;
-class String;
+class RenderScrollbarPart;
+struct ScheduledEvent;
 
 template <typename T> class Timer;
 
@@ -63,6 +62,7 @@ public:
     virtual HostWindow* hostWindow() const;
     
     virtual void invalidateRect(const IntRect&);
+    virtual void setFrameRect(const IntRect&);
 
     Frame* frame() const { return m_frame.get(); }
     void clearFrame();
@@ -92,6 +92,7 @@ public:
     void scheduleRelayoutOfSubtree(RenderObject*);
     void unscheduleRelayout();
     bool layoutPending() const;
+    bool isInLayout() const { return m_inLayout; }
 
     RenderObject* layoutRoot(bool onlyDuringLayout = false) const;
     int layoutCount() const { return m_layoutCount; }
@@ -147,7 +148,7 @@ public:
     virtual IntRect windowResizerRect() const;
 
     void setScrollPosition(const IntPoint&);
-    void scrollPositionChanged();
+    void scrollPositionChangedViaPlatformWidget();
     virtual void repaintFixedElementsAfterScrolling();
 
     String mediaType() const;
@@ -196,13 +197,14 @@ public:
 
     static double currentPaintTimeStamp() { return sCurrentPaintTimeStamp; } // returns 0 if not painting
     
-    void layoutIfNeededRecursive();
+    void updateLayoutAndStyleIfNeededRecursive();
     void flushDeferredRepaints();
 
     void setIsVisuallyNonEmpty() { m_isVisuallyNonEmpty = true; }
 
     void forceLayout(bool allowSubtree = false);
-    void forceLayoutWithPageWidthRange(float minPageWidth, float maxPageWidth, bool adjustViewSize);
+    void forceLayoutForPagination(const FloatSize& pageSize, float maximumShrinkFactor, Frame::AdjustViewSizeOrNot);
+    int pageHeight() const { return m_pageHeight; }
 
     void adjustPageHeight(float* newBottom, float oldTop, float oldBottom, float bottomLimit);
 
@@ -219,12 +221,20 @@ public:
     bool isFrameViewScrollCorner(RenderScrollbarPart* scrollCorner) const { return m_scrollCorner == scrollCorner; }
     void invalidateScrollCorner();
 
-    void setZoomFactor(float scale, ZoomMode);
-    float zoomFactor() const { return m_zoomFactor; }
-    bool shouldApplyTextZoom() const;
-    bool shouldApplyPageZoom() const;
-    float pageZoomFactor() const { return shouldApplyPageZoom() ? m_zoomFactor : 1.0f; }
-    float textZoomFactor() const { return shouldApplyTextZoom() ? m_zoomFactor : 1.0f; }
+    void setPageZoomFactor(float factor);
+    float pageZoomFactor() const { return m_pageZoomFactor; }
+    void setTextZoomFactor(float factor);
+    float textZoomFactor() const { return m_textZoomFactor; }
+    void setPageAndTextZoomFactors(float pageZoomFactor, float textZoomFactor);
+
+    // Normal delay
+    static void setRepaintThrottlingDeferredRepaintDelay(double p);
+    // Negative value would mean that first few repaints happen without a delay
+    static void setRepaintThrottlingnInitialDeferredRepaintDelayDuringLoading(double p);
+    // The delay grows on each repaint to this maximum value
+    static void setRepaintThrottlingMaxDeferredRepaintDelayDuringLoading(double p);
+    // On each repaint the delay increses by this amount
+    static void setRepaintThrottlingDeferredRepaintDelayIncrementDuringLoading(double p);
 
 #if ENABLE(VIEWPORT_REFLOW)
     int reflowWidth() const;
@@ -232,9 +242,11 @@ public:
 #endif
 
 #if PLATFORM(OLYMPIA)
-    bool shouldSendResizeEvent();
     int firstLayoutScheduleElapsedTime() const;
 #endif
+
+protected:
+    virtual bool scrollContentsFastPath(const IntSize& scrollDelta, const IntRect& rectToScroll, const IntRect& clipRect);
 
 private:
     FrameView(Frame*);
@@ -270,6 +282,7 @@ private:
 
     // ScrollBarClient interface
     virtual void valueChanged(Scrollbar*);
+    virtual void valueChanged(const IntSize&);
     virtual void invalidateScrollbarRect(Scrollbar*, const IntRect&);
     virtual bool isActive() const;
     virtual void getTickmarks(Vector<IntRect>&) const;
@@ -280,7 +293,9 @@ private:
     double adjustedDeferredRepaintDelay() const;
 
     bool updateWidgets();
+    void updateWidget(RenderEmbeddedObject*);
     void scrollToAnchor();
+    void scrollPositionChanged();
 
 #if ENABLE(INSPECTOR)
     InspectorTimelineAgent* inspectorTimelineAgent() const;
@@ -317,7 +332,9 @@ private:
     RenderObject* m_layoutRoot;
     
     bool m_layoutSchedulingEnabled;
-    bool m_midLayout;
+    bool m_inLayout;
+    bool m_hasPendingPostLayoutTasks;
+    bool m_inSynchronousPostLayout;
     int m_layoutCount;
     unsigned m_nestedLayoutCount;
     Timer<FrameView> m_postLayoutTasksTimer;
@@ -331,6 +348,8 @@ private:
 
     String m_mediaType;
     String m_mediaTypeWhenNotPrinting;
+
+    int m_pageHeight;
 
     unsigned m_enqueueEvents;
     Vector<ScheduledEvent*> m_scheduledEvents;
@@ -367,8 +386,14 @@ private:
     // Renderer to hold our custom scroll corner.
     RenderScrollbarPart* m_scrollCorner;
 
-    float m_zoomFactor;
+    float m_pageZoomFactor;
+    float m_textZoomFactor;
 
+    static double s_deferredRepaintDelay;
+    static double s_initialDeferredRepaintDelayDuringLoading;
+    static double s_maxDeferredRepaintDelayDuringLoading;
+    static double s_deferredRepaintDelayIncrementDuringLoading;
+    
     IntSize m_contentsSizeFromHistory;
 
 #if PLATFORM(OLYMPIA)

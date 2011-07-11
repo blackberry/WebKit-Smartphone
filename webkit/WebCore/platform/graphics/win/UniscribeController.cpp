@@ -1,29 +1,26 @@
 /*
- * Copyright (C) 2007 Apple Inc.  All rights reserved.
+ * Copyright (C) 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
  *
- * 1.  Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer. 
- * 2.  Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution. 
- * 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of
- *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission. 
- *
- * THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL APPLE OR ITS CONTRIBUTORS BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS''
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "config.h"
@@ -51,24 +48,25 @@ UniscribeController::UniscribeController(const Font* font, const TextRun& run, H
     , m_end(run.length())
     , m_currentCharacter(0)
     , m_runWidthSoFar(0)
+    , m_padding(run.padding())
     , m_computingOffsetPosition(false)
     , m_includePartialGlyphs(false)
     , m_offsetX(0)
     , m_offsetPosition(0)
 {
-    m_padding = m_run.padding();
     if (!m_padding)
         m_padPerSpace = 0;
     else {
         float numSpaces = 0;
-        for (int s = 0; s < m_run.length(); s++)
+        for (int s = 0; s < m_run.length(); s++) {
             if (Font::treatAsSpace(m_run[s]))
                 numSpaces++;
+        }
 
         if (numSpaces == 0)
             m_padPerSpace = 0;
         else
-            m_padPerSpace = ceilf(m_run.padding() / numSpaces);
+            m_padPerSpace = m_padding / numSpaces;
     }
 
     // Null out our uniscribe structs
@@ -289,9 +287,16 @@ bool UniscribeController::shapeAndPlaceItem(const UChar* cp, unsigned i, const S
             roundingHackCharacters[clusters[k]] = m_currentCharacter + k + item.iCharPos;
 
         int boundary = k + m_currentCharacter + item.iCharPos;
-        if (boundary < m_run.length() &&
-            Font::isRoundingHackCharacter(*(str + k + 1)))
-            roundingHackWordBoundaries[clusters[k]] = boundary;
+        if (boundary < m_run.length()) {
+            // When at the last character in the str, don't look one past the end for a rounding hack character.
+            // Instead look ahead to the first character of next item, if there is a next one. 
+            if (k + 1 == len) {
+                if (i + 2 < m_items.size() // Check for at least 2 items remaining. The last item is a terminating item containing no characters.
+                    && Font::isRoundingHackCharacter(*(cp + m_items[i + 1].iCharPos)))
+                    roundingHackWordBoundaries[clusters[k]] = boundary;
+            } else if (Font::isRoundingHackCharacter(*(str + k + 1)))
+                roundingHackWordBoundaries[clusters[k]] = boundary;
+        }
     }
 
     // Populate our glyph buffer with this information.
@@ -339,8 +344,9 @@ bool UniscribeController::shapeAndPlaceItem(const UChar* cp, unsigned i, const S
                         advance += m_padding;
                         m_padding = 0;
                     } else {
-                        advance += m_padPerSpace;
+                        float previousPadding = m_padding;
                         m_padding -= m_padPerSpace;
+                        advance += roundf(previousPadding) - roundf(m_padding);
                     }
                 }
 

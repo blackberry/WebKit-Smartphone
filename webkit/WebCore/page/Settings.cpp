@@ -29,6 +29,7 @@
 
 #include "BackForwardList.h"
 #include "Database.h"
+#include "CachedResourceLoader.h"
 #include "Frame.h"
 #include "FrameTree.h"
 #include "FrameView.h"
@@ -42,10 +43,16 @@ using namespace std;
 
 namespace WebCore {
 
-static void setNeedsReapplyStylesInAllFrames(Page* page)
+static void setNeedsRecalcStyleInAllFrames(Page* page)
 {
     for (Frame* frame = page->mainFrame(); frame; frame = frame->tree()->traverseNext())
-        frame->setNeedsReapplyStyles();
+        frame->document()->styleSelectorChanged(DeferRecalcStyle);
+}
+
+static void setLoadsImagesAutomaticallyInAllFrames(Page* page)
+{
+    for (Frame* frame = page->mainFrame(); frame; frame = frame->tree()->traverseNext())
+        frame->document()->cachedResourceLoader()->setAutoLoadImages(page->settings()->loadsImagesAutomatically());
 }
 
 #if USE(SAFARI_THEME)
@@ -65,12 +72,10 @@ Settings::Settings(Page* page)
     , m_defaultFontSize(0)
     , m_defaultFixedFontSize(0)
     , m_maximumDecodedImageSize(numeric_limits<size_t>::max())
-#if ENABLE(DOM_STORAGE)            
-    , m_localStorageQuota(5 * 1024 * 1024)  // Suggested by the HTML5 spec.
+#if ENABLE(DOM_STORAGE)
     , m_sessionStorageQuota(StorageMap::noQuota)
 #endif
     , m_pluginAllowedRunTime(numeric_limits<unsigned>::max())
-    , m_zoomMode(ZoomPage)
     , m_isSpatialNavigationEnabled(false)
     , m_isJavaEnabled(false)
     , m_loadsImagesAutomatically(false)
@@ -112,10 +117,10 @@ Settings::Settings(Page* page)
     , m_inApplicationChromeMode(false)
     , m_offlineWebApplicationCacheEnabled(false)
     , m_shouldPaintCustomScrollbars(false)
-    , m_enforceCSSMIMETypeInStrictMode(true)
+    , m_enforceCSSMIMETypeInNoQuirksMode(true)
     , m_usesEncodingDetector(false)
     , m_allowScriptsToCloseWindows(false)
-    , m_editingBehavior(
+    , m_editingBehaviorType(
 #if PLATFORM(MAC) || (PLATFORM(CHROMIUM) && OS(DARWIN))
         // (PLATFORM(MAC) is always false in Chromium, hence the extra condition.)
         EditingMacBehavior
@@ -132,9 +137,16 @@ Settings::Settings(Page* page)
     , m_showRepaintCounter(false)
     , m_experimentalNotificationsEnabled(false)
     , m_webGLEnabled(false)
+    , m_acceleratedCanvas2dEnabled(false)
     , m_loadDeferringEnabled(true)
     , m_tiledBackingStoreEnabled(false)
-    , m_html5ParserEnabled(false)
+    , m_paginateDuringLayoutEnabled(false)
+    , m_dnsPrefetchingEnabled(true)
+#if ENABLE(FULLSCREEN_API)
+    , m_fullScreenAPIEnabled(false)
+#endif
+    , m_memoryInfoEnabled(false)
+    , m_interactiveFormValidation(false)
 #if ENABLE(VIEWPORT_REFLOW)
     , m_isTextReflowEnabled(false)
 #endif
@@ -156,7 +168,7 @@ void Settings::setStandardFontFamily(const AtomicString& standardFontFamily)
         return;
 
     m_standardFontFamily = standardFontFamily;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setFixedFontFamily(const AtomicString& fixedFontFamily)
@@ -165,7 +177,7 @@ void Settings::setFixedFontFamily(const AtomicString& fixedFontFamily)
         return;
         
     m_fixedFontFamily = fixedFontFamily;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setSerifFontFamily(const AtomicString& serifFontFamily)
@@ -174,7 +186,7 @@ void Settings::setSerifFontFamily(const AtomicString& serifFontFamily)
         return;
         
     m_serifFontFamily = serifFontFamily;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setSansSerifFontFamily(const AtomicString& sansSerifFontFamily)
@@ -183,7 +195,7 @@ void Settings::setSansSerifFontFamily(const AtomicString& sansSerifFontFamily)
         return;
         
     m_sansSerifFontFamily = sansSerifFontFamily; 
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setCursiveFontFamily(const AtomicString& cursiveFontFamily)
@@ -192,7 +204,7 @@ void Settings::setCursiveFontFamily(const AtomicString& cursiveFontFamily)
         return;
         
     m_cursiveFontFamily = cursiveFontFamily;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setFantasyFontFamily(const AtomicString& fantasyFontFamily)
@@ -201,7 +213,7 @@ void Settings::setFantasyFontFamily(const AtomicString& fantasyFontFamily)
         return;
         
     m_fantasyFontFamily = fantasyFontFamily;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setMinimumFontSize(int minimumFontSize)
@@ -210,7 +222,7 @@ void Settings::setMinimumFontSize(int minimumFontSize)
         return;
 
     m_minimumFontSize = minimumFontSize;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setMinimumLogicalFontSize(int minimumLogicalFontSize)
@@ -219,7 +231,7 @@ void Settings::setMinimumLogicalFontSize(int minimumLogicalFontSize)
         return;
 
     m_minimumLogicalFontSize = minimumLogicalFontSize;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setDefaultFontSize(int defaultFontSize)
@@ -228,7 +240,7 @@ void Settings::setDefaultFontSize(int defaultFontSize)
         return;
 
     m_defaultFontSize = defaultFontSize;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setDefaultFixedFontSize(int defaultFontSize)
@@ -237,12 +249,13 @@ void Settings::setDefaultFixedFontSize(int defaultFontSize)
         return;
 
     m_defaultFixedFontSize = defaultFontSize;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setLoadsImagesAutomatically(bool loadsImagesAutomatically)
 {
     m_loadsImagesAutomatically = loadsImagesAutomatically;
+    setLoadsImagesAutomaticallyInAllFrames(m_page);
 }
 
 void Settings::setShouldDrawBorderWhileLoadingImages(bool shouldDrawBorderWhileLoadingImages)
@@ -300,12 +313,7 @@ void Settings::setLocalStorageEnabled(bool localStorageEnabled)
     m_localStorageEnabled = localStorageEnabled;
 }
 
-#if ENABLE(DOM_STORAGE)        
-void Settings::setLocalStorageQuota(unsigned localStorageQuota)
-{
-    m_localStorageQuota = localStorageQuota;
-}
-
+#if ENABLE(DOM_STORAGE)
 void Settings::setSessionStorageQuota(unsigned sessionStorageQuota)
 {
     m_sessionStorageQuota = sessionStorageQuota;
@@ -357,7 +365,7 @@ void Settings::setTextAreasAreResizable(bool textAreasAreResizable)
         return;
 
     m_textAreasAreResizable = textAreasAreResizable;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setEditableLinkBehavior(EditableLinkBehavior editableLinkBehavior)
@@ -457,7 +465,7 @@ void Settings::setAuthorAndUserStylesEnabled(bool authorAndUserStylesEnabled)
         return;
 
     m_authorAndUserStylesEnabled = authorAndUserStylesEnabled;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setFontRenderingMode(FontRenderingMode mode)
@@ -465,7 +473,7 @@ void Settings::setFontRenderingMode(FontRenderingMode mode)
     if (fontRenderingMode() == mode)
         return;
     m_fontRenderingMode = mode;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 FontRenderingMode Settings::fontRenderingMode() const
@@ -498,6 +506,11 @@ void Settings::setLocalStorageDatabasePath(const String& path)
     m_localStorageDatabasePath = path;
 }
 
+void Settings::setFileSystemRootPath(const String& path)
+{
+    m_fileSystemRootPath = path;
+}
+
 void Settings::setApplicationChromeMode(bool mode)
 {
     m_inApplicationChromeMode = mode;
@@ -513,18 +526,9 @@ void Settings::setShouldPaintCustomScrollbars(bool shouldPaintCustomScrollbars)
     m_shouldPaintCustomScrollbars = shouldPaintCustomScrollbars;
 }
 
-void Settings::setZoomMode(ZoomMode mode)
+void Settings::setEnforceCSSMIMETypeInNoQuirksMode(bool enforceCSSMIMETypeInNoQuirksMode)
 {
-    if (mode == m_zoomMode)
-        return;
-    
-    m_zoomMode = mode;
-    setNeedsReapplyStylesInAllFrames(m_page);
-}
-
-void Settings::setEnforceCSSMIMETypeInStrictMode(bool enforceCSSMIMETypeInStrictMode)
-{
-    m_enforceCSSMIMETypeInStrictMode = enforceCSSMIMETypeInStrictMode;
+    m_enforceCSSMIMETypeInNoQuirksMode = enforceCSSMIMETypeInNoQuirksMode;
 }
 
 #if USE(SAFARI_THEME)
@@ -537,6 +541,11 @@ void Settings::setShouldPaintNativeControls(bool shouldPaintNativeControls)
 void Settings::setUsesEncodingDetector(bool usesEncodingDetector)
 {
     m_usesEncodingDetector = usesEncodingDetector;
+}
+
+void Settings::setDNSPrefetchingEnabled(bool dnsPrefetchingEnabled)
+{
+    m_dnsPrefetchingEnabled = dnsPrefetchingEnabled;
 }
 
 void Settings::setAllowScriptsToCloseWindows(bool allowScriptsToCloseWindows)
@@ -565,7 +574,7 @@ void Settings::setAcceleratedCompositingEnabled(bool enabled)
         return;
         
     m_acceleratedCompositingEnabled = enabled;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setShowDebugBorders(bool enabled)
@@ -574,7 +583,7 @@ void Settings::setShowDebugBorders(bool enabled)
         return;
         
     m_showDebugBorders = enabled;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setShowRepaintCounter(bool enabled)
@@ -583,7 +592,7 @@ void Settings::setShowRepaintCounter(bool enabled)
         return;
         
     m_showRepaintCounter = enabled;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 
 void Settings::setExperimentalNotificationsEnabled(bool enabled)
@@ -609,6 +618,11 @@ void Settings::setWebGLEnabled(bool enabled)
     m_webGLEnabled = enabled;
 }
 
+void Settings::setAccelerated2dCanvasEnabled(bool enabled)
+{
+    m_acceleratedCanvas2dEnabled = enabled;
+}
+
 void Settings::setLoadDeferringEnabled(bool enabled)
 {
     m_loadDeferringEnabled = enabled;
@@ -630,16 +644,11 @@ void Settings::setTextReflowEnabled(bool enabled)
         return;
 
     m_isTextReflowEnabled = enabled;
-    setNeedsReapplyStylesInAllFrames(m_page);
+    setNeedsRecalcStyleInAllFrames(m_page);
 }
 #endif
 
 #if PLATFORM(OLYMPIA)
-void Settings::setDetectedFormats(Vector<String>& formats)
-{
-    m_detectedFormats = formats;
-}
-
 void Settings::setFirstScheduledLayoutDelay(int i)
 {
     m_firstScheduledLayoutDelay = i;

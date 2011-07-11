@@ -20,13 +20,10 @@
 
     function doTest()
     {
-        // Need to wait for compositing layers to be updated.
-        window.setTimeout(function() {
-            if (window.layoutTestController) {
-                document.getElementById('layers').innerHTML = layoutTestController.layerTreeAsText();
-                layoutTestController.notifyDone();
-            }
-        }, 0);
+        if (window.layoutTestController) {
+            document.getElementById('layers').innerHTML = layoutTestController.layerTreeAsText();
+            layoutTestController.notifyDone();
+        }
     }
 
     window.addEventListener('load', doTest, false);
@@ -35,7 +32,7 @@
 <body>
 
     <!-- The parent document should be thrown into compositing mode by the iframe. -->
-    <iframe id="parent-iframe" src="resources/composited-subframe.html"></iframe>
+    <iframe src="resources/composited-subframe.html"></iframe>
 
     <pre id="layers">Layer tree appears here in DRT.</pre>
 </body>

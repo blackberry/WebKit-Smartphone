@@ -3,7 +3,6 @@
 <link rel="stylesheet" href="../../js/resources/js-test-style.css"/>
 <script src="../../js/resources/js-test-pre.js"></script>
 <script src="resources/webgl-test.js"></script>
-<script src="resources/utils3d.js"></script>
 <script id="vshader" type="x-shader/x-vertex">
 attribute vec3 pos;
 attribute vec4 colorIn;
@@ -19,6 +18,9 @@ void main()
 </script>
 
 <script id="fshader" type="x-shader/x-fragment">
+#ifdef GL_ES
+precision mediump float;
+#endif
 varying vec4 color;
 
 void main()
@@ -41,9 +43,9 @@ function runTest()
     // The choice of (0.4, 0.4) ensures that the centers of the surrounding
     // pixels are not contained within the point when it is of size 1, but
     // that they definitely are when it is of size 2.
-    var vertices = new WebGLFloatArray([
+    var vertices = new Float32Array([
         0.4, 0.4, 0.0]);
-    var colors = new WebGLUnsignedByteArray([
+    var colors = new Uint8Array([
         255, 0, 0, 255]);
 
     var colorOffset = vertices.byteLength;
@@ -65,7 +67,8 @@ function runTest()
 
     gl.uniform1f(locPointSize, 1.0);
     gl.drawArrays(gl.POINTS, 0, vertices.length / 3);
-    var buf = gl.readPixels(0, 0, 2, 2, gl.RGBA, gl.UNSIGNED_BYTE);
+    var buf = new Uint8Array(2 * 2 * 4);
+    gl.readPixels(0, 0, 2, 2, gl.RGBA, gl.UNSIGNED_BYTE, buf);
     var index = 0;
     for (var y = 0; y < 2; ++y) {
         for (var x = 0; x < 2; ++x) {
@@ -89,7 +92,7 @@ function runTest()
 
     gl.uniform1f(locPointSize, 2.0);
     gl.drawArrays(gl.POINTS, 0, vertices.length / 3);
-    buf = gl.readPixels(0, 0, 2, 2, gl.RGBA, gl.UNSIGNED_BYTE);
+    gl.readPixels(0, 0, 2, 2, gl.RGBA, gl.UNSIGNED_BYTE, buf);
     index = 0;
     for (var y = 0; y < 2; ++y) {
         for (var x = 0; x < 2; ++x) {
@@ -113,10 +116,13 @@ function runTest()
 <script>
 description('Verify GL_VERTEX_PROGRAM_POINT_SIZE is enabled in WebGL');
 
-debug('Regression test for <a href="https://bugs.webkit.org/show_bug.cgi?id=37178">https://bugs.webkit.org/show_bug.cgi?id=37178</a> : <code>Must enable GL_VERTEX_PROGRAM_POINT_SIZE during initialization</code>');
-
 if (runTest())
     testPassed("");
+
+successfullyParsed = true;
 </script>
+
+<script src="../../js/resources/js-test-post.js"></script>
+
 </body>
 </html>

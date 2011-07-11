@@ -29,8 +29,8 @@
 #include "Scrollbar.h"
 
 #include "EventHandler.h"
-#include "FrameView.h"
 #include "Frame.h"
+#include "FrameView.h"
 #include "GraphicsContext.h"
 #include "IntRect.h"
 #include "PlatformMouseEvent.h"
@@ -38,9 +38,9 @@
 
 #include <QApplication>
 #include <QDebug>
+#include <QMenu>
 #include <QPainter>
 #include <QStyle>
-#include <QMenu>
 
 using namespace std;
 
@@ -72,23 +72,21 @@ bool Scrollbar::contextMenu(const PlatformMouseEvent& event)
     const QPoint globalPos = QPoint(event.globalX(), event.globalY());
     QAction* actionSelected = menu.exec(globalPos);
 
-    if (!actionSelected)
-        { /* Do nothing */ }
-    else if (actionSelected == actScrollHere) {
+    if (actionSelected == actScrollHere) {
         const QPoint pos = convertFromContainingWindow(event.pos());
         moveThumb(horizontal ? pos.x() : pos.y());
     } else if (actionSelected == actScrollTop)
-        setValue(0);
+        scroll(horizontal ? ScrollLeft : ScrollUp, ScrollByDocument);
     else if (actionSelected == actScrollBottom)
-        setValue(maximum());
+        scroll(horizontal ? ScrollRight : ScrollDown, ScrollByDocument);
     else if (actionSelected == actPageUp)
-        scroll(horizontal ? ScrollLeft: ScrollUp, ScrollByPage, 1);
+        scroll(horizontal ? ScrollLeft : ScrollUp, ScrollByPage);
     else if (actionSelected == actPageDown)
-        scroll(horizontal ? ScrollRight : ScrollDown, ScrollByPage, 1);
+        scroll(horizontal ? ScrollRight : ScrollDown, ScrollByPage);
     else if (actionSelected == actScrollUp)
-        scroll(horizontal ? ScrollLeft : ScrollUp, ScrollByLine, 1);
+        scroll(horizontal ? ScrollLeft : ScrollUp, ScrollByLine);
     else if (actionSelected == actScrollDown)
-        scroll(horizontal ? ScrollRight : ScrollDown, ScrollByLine, 1);
+        scroll(horizontal ? ScrollRight : ScrollDown, ScrollByLine);
 #endif // QT_NO_CONTEXTMENU
     return true;
 }

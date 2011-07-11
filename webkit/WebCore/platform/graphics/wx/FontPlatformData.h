@@ -26,13 +26,14 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
  
-#ifndef FontPlatformData_H
-#define FontPlatformData_H
+#ifndef FontPlatformData_h
+#define FontPlatformData_h
 
 #include "FontDescription.h"
-#include "AtomicString.h"
 #include "StringImpl.h"
+#include <wtf/Forward.h>
 #include <wtf/RefPtr.h>
+#include <wtf/text/AtomicString.h>
 #include <wtf/text/CString.h>
 
 #include <wx/defs.h>
@@ -55,8 +56,6 @@ inline CTFontRef toCTFontRef(NSFont *nsFont) { return reinterpret_cast<CTFontRef
 #endif
 
 namespace WebCore {
-
-class String;
 
 class FontHolder: public WTF::RefCounted<FontHolder>
 {
@@ -157,6 +156,7 @@ public:
     ATSUFontID m_atsuFontID;
     CGFontRef cgFont() const;
     NSFont* nsFont() const { return m_nsFont; }
+    CTFontRef ctFont() const { return reinterpret_cast<CTFontRef>(m_nsFont); }
     void cacheNSFont();
 #endif
 

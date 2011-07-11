@@ -31,6 +31,8 @@ class FormDataList;
 
 class WMLInputElement : public WMLFormControlElement, public InputElement {
 public:
+    static PassRefPtr<WMLInputElement> create(const QualifiedName&, Document*);
+
     WMLInputElement(const QualifiedName& tagName, Document*);
     virtual ~WMLInputElement();
 
@@ -47,6 +49,7 @@ public:
     virtual bool isIndeterminate() const { return false; }
     virtual bool isTextFormControl() const { return true; }
     virtual bool isRadioButton() const { return false; }
+    virtual bool isCheckbox() const { return false; }
     virtual bool isTextField() const { return true; }
     virtual bool isSearchField() const { return false; }
     virtual bool isInputTypeHidden() const { return false; }
@@ -79,6 +82,7 @@ public:
     virtual void defaultEventHandler(Event*);
     virtual void cacheSelection(int start, int end);
 
+    virtual bool isAcceptableValue(const String&) const { return true; }
     virtual String sanitizeValue(const String& proposedValue) const { return constrainValue(proposedValue); }
 
     virtual void documentDidBecomeActive();
@@ -96,6 +100,7 @@ private:
     friend class WMLCardElement;
     void initialize();
 
+    virtual bool supportsMaxLength() const { return true; }
     String validateInputMask(const String&);
     unsigned cursorPositionToMaskIndex(unsigned);
     String constrainValue(const String&) const;

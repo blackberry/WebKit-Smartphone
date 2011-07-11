@@ -23,8 +23,10 @@
 #define ScriptController_h
 
 #include "JSDOMWindowShell.h"
+#include "ScriptControllerBase.h"
 #include "ScriptInstance.h"
 #include <runtime/Protect.h>
+#include <wtf/Forward.h>
 #include <wtf/RefPtr.h>
 
 #if PLATFORM(MAC)
@@ -56,22 +58,10 @@ class Frame;
 class Node;
 class ScriptSourceCode;
 class ScriptValue;
-class String;
 class Widget;
 class XSSAuditor;
 
 typedef HashMap<void*, RefPtr<JSC::Bindings::RootObject> > RootObjectMap;
-
-enum ReasonForCallingCanExecuteScripts {
-    AboutToExecuteScript,
-    NotAboutToExecuteScript
-};
-
-// Whether to call the XSSAuditor to audit a script before passing it to the JavaScript engine.
-enum ShouldAllowXSS {
-    AllowXSS,
-    DoNotAllowXSS
-};
 
 class ScriptController {
     friend class ScriptCachedFrameData;
@@ -117,11 +107,10 @@ public:
     ScriptValue evaluate(const ScriptSourceCode&, ShouldAllowXSS shouldAllowXSS = DoNotAllowXSS);
     ScriptValue evaluateInWorld(const ScriptSourceCode&, DOMWrapperWorld*, ShouldAllowXSS shouldAllowXSS = DoNotAllowXSS);
 
-    void setEventHandlerLineNumber(int lineno) { m_handlerLineNumber = lineno; }
-    int eventHandlerLineNumber() { return m_handlerLineNumber; }
-
+    int eventHandlerLineNumber() const;
+    
     void setProcessingTimerCallback(bool b) { m_processingTimerCallback = b; }
-    bool processingUserGesture(DOMWrapperWorld*) const;
+    static bool processingUserGesture();
     bool anyPageIsProcessingUserGesture() const;
 
     static bool canAccessFromCurrentOrigin(Frame*);
@@ -142,6 +131,9 @@ public:
     void clearWindowShell(bool goingIntoPageCache = false);
     void updateDocument();
 
+    void namedItemAdded(HTMLDocument*, const AtomicString&) { }
+    void namedItemRemoved(HTMLDocument*, const AtomicString&) { }
+
     // Notifies the ScriptController that the securityOrigin of the current
     // document was modified.  For example, this method is called when
     // document.domain is set.  This method is *not* called when a new document
@@ -155,8 +147,13 @@ public:
 
     PassScriptInstance createScriptInstanceForWidget(Widget*);
     JSC::Bindings::RootObject* bindingRootObject();
+    JSC::Bindings::RootObject* cacheableBindingRootObject();
 
     PassRefPtr<JSC::Bindings::RootObject> createRootObject(void* nativeHandle);
+
+#if ENABLE(INSPECTOR)
+    static void setCaptureCallStackForUncaughtExceptions(bool);
+#endif
 
 #if PLATFORM(MAC)
 #if ENABLE(JAVA_BRIDGE)
@@ -183,7 +180,6 @@ private:
 
     ShellMap m_windowShells;
     Frame* m_frame;
-    int m_handlerLineNumber;
     const String* m_sourceURL;
 
     bool m_inExecuteScript;
@@ -192,8 +188,13 @@ private:
     bool m_paused;
     bool m_allowPopupsFromPlugin;
 
-    // The root object used for objects bound outside the context of a plugin.
+    // The root object used for objects bound outside the context of a plugin, such
+    // as NPAPI plugins. The plugins using these objects prevent a page from being cached so they
+    // are safe to invalidate() when WebKit navigates away from the page that contains them.
     RefPtr<JSC::Bindings::RootObject> m_bindingRootObject;
+    // Unlike m_bindingRootObject these objects are used in pages that are cached, so they are not invalidate()'d.
+    // This ensures they are still available when the page is restored.
+    RefPtr<JSC::Bindings::RootObject> m_cacheableBindingRootObject;
     RootObjectMap m_rootObjects;
 #if ENABLE(NETSCAPE_PLUGIN_API)
     NPObject* m_windowScriptNPObject;

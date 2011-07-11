@@ -10,9 +10,6 @@
  * 2.  Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer in the
  *     documentation and/or other materials provided with the distribution.
- * 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of
- *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -29,28 +26,46 @@
 #ifndef IDBDatabase_h
 #define IDBDatabase_h
 
-#include "PlatformString.h"
+#include "DOMStringList.h"
+#include "IDBDatabaseBackendInterface.h"
+#include "IDBTransaction.h"
 #include <wtf/PassRefPtr.h>
-#include <wtf/Threading.h>
+#include <wtf/RefCounted.h>
+#include <wtf/RefPtr.h>
 
 #if ENABLE(INDEXED_DATABASE)
 
 namespace WebCore {
 
-class DOMStringList;
+class IDBAny;
+class IDBObjectStore;
+class IDBRequest;
+class ScriptExecutionContext;
 
-// This class is shared by IDBDatabaseRequest (async) and IDBDatabaseSync (sync).
-// This is implemented by IDBDatabaseImpl and optionally others (in order to proxy
-// calls across process barriers). All calls to these classes should be non-blocking and
-// trigger work on a background thread if necessary.
-class IDBDatabase : public ThreadSafeShared<IDBDatabase> {
+class IDBDatabase : public RefCounted<IDBDatabase> {
 public:
-    virtual ~IDBDatabase() { }
+    static PassRefPtr<IDBDatabase> create(PassRefPtr<IDBDatabaseBackendInterface> database)
+    {
+        return adoptRef(new IDBDatabase(database));
+    }
+    ~IDBDatabase();
 
-    virtual String name() = 0;
-    virtual String description() = 0;
-    virtual String version() = 0;
-    virtual PassRefPtr<DOMStringList> objectStores() = 0;
+    // Implement the IDL
+    String name() const { return m_backend->name(); }
+    String version() const { return m_backend->version(); }
+    PassRefPtr<DOMStringList> objectStores() const { return m_backend->objectStores(); }
+
+    PassRefPtr<IDBRequest> createObjectStore(ScriptExecutionContext*, const String& name, const String& keyPath = String(), bool autoIncrement = false);
+    PassRefPtr<IDBObjectStore> objectStore(const String& name, unsigned short mode = IDBTransaction::READ_ONLY);
+    PassRefPtr<IDBRequest> removeObjectStore(ScriptExecutionContext*, const String& name);
+    PassRefPtr<IDBRequest> setVersion(ScriptExecutionContext*, const String& version);
+    PassRefPtr<IDBTransaction> transaction(ScriptExecutionContext*, DOMStringList* storeNames = 0, unsigned short mode = IDBTransaction::READ_ONLY,
+                                           unsigned long timeout = 0); // FIXME: what should the default timeout be?
+
+private:
+    IDBDatabase(PassRefPtr<IDBDatabaseBackendInterface>);
+
+    RefPtr<IDBDatabaseBackendInterface> m_backend;
 };
 
 } // namespace WebCore
@@ -58,4 +73,3 @@ public:
 #endif
 
 #endif // IDBDatabase_h
-

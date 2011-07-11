@@ -76,7 +76,7 @@ namespace JSC {
         
         Opcode getOpcode(OpcodeID id)
         {
-            #if HAVE(COMPUTED_GOTO)
+            #if ENABLE(COMPUTED_GOTO_INTERPRETER)
                 return m_opcodeTable[id];
             #else
                 return id;
@@ -85,7 +85,7 @@ namespace JSC {
 
         OpcodeID getOpcodeID(Opcode opcode)
         {
-            #if HAVE(COMPUTED_GOTO)
+            #if ENABLE(COMPUTED_GOTO_INTERPRETER)
                 ASSERT(isOpcode(opcode));
                 return m_opcodeIDTable.get(opcode);
             #else
@@ -96,8 +96,8 @@ namespace JSC {
         bool isOpcode(Opcode);
         
         JSValue execute(ProgramExecutable*, CallFrame*, ScopeChainNode*, JSObject* thisObj, JSValue* exception);
-        JSValue executeCall(FunctionExecutable*, CallFrame*, JSFunction*, JSObject* thisObj, const ArgList& args, ScopeChainNode*, JSValue* exception);
-        JSValue executeConstruct(FunctionExecutable*, CallFrame*, JSFunction*, JSObject* thisObj, const ArgList& args, ScopeChainNode*, JSValue* exception);
+        JSValue executeCall(CallFrame*, JSObject* function, CallType, const CallData&, JSValue thisValue, const ArgList&, JSValue* exception);
+        JSObject* executeConstruct(CallFrame*, JSObject* function, ConstructType, const ConstructData&, const ArgList&, JSValue* exception);
         JSValue execute(EvalExecutable* evalNode, CallFrame* exec, JSObject* thisObj, ScopeChainNode* scopeChain, JSValue* exception);
 
         JSValue retrieveArguments(CallFrame*, JSFunction*) const;
@@ -124,7 +124,7 @@ namespace JSC {
 
         JSValue execute(EvalExecutable*, CallFrame*, JSObject* thisObject, int globalRegisterOffset, ScopeChainNode*, JSValue* exception);
 
-#if !ENABLE(JIT)
+#if ENABLE(INTERPRETER)
         NEVER_INLINE bool resolve(CallFrame*, Instruction*, JSValue& exceptionValue);
         NEVER_INLINE bool resolveSkip(CallFrame*, Instruction*, JSValue& exceptionValue);
         NEVER_INLINE bool resolveGlobal(CallFrame*, Instruction*, JSValue& exceptionValue);
@@ -137,7 +137,7 @@ namespace JSC {
         void uncacheGetByID(CodeBlock*, Instruction* vPC);
         void tryCachePutByID(CallFrame*, CodeBlock*, Instruction*, JSValue baseValue, const PutPropertySlot&);
         void uncachePutByID(CodeBlock*, Instruction* vPC);        
-#endif // !ENABLE(JIT)
+#endif // ENABLE(INTERPRETER)
 
         NEVER_INLINE bool unwindCallFrame(CallFrame*&, JSValue, unsigned& bytecodeOffset, CodeBlock*&);
 
@@ -160,7 +160,7 @@ namespace JSC {
 
         RegisterFile m_registerFile;
         
-#if HAVE(COMPUTED_GOTO)
+#if ENABLE(COMPUTED_GOTO_INTERPRETER)
         Opcode m_opcodeTable[numOpcodeIDs]; // Maps OpcodeID => Opcode for compiling
         HashMap<Opcode, OpcodeID> m_opcodeIDTable; // Maps Opcode => OpcodeID for decompiling
 #endif

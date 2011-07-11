@@ -37,15 +37,16 @@
 #include "InjectedScript.h"
 #include "InjectedScriptHost.h"
 #include "InspectorController.h"
+#include "InspectorValues.h"
 #include "Node.h"
 #include "Page.h"
 #include "ScriptDebugServer.h"
-#include "SerializedScriptValue.h"
 
 #include "V8Binding.h"
 #include "V8BindingState.h"
 #include "V8DOMWindow.h"
 #include "V8Database.h"
+#include "V8HiddenPropertyName.h"
 #include "V8JavaScriptCallFrame.h"
 #include "V8Node.h"
 #include "V8Proxy.h"
@@ -120,6 +121,21 @@ ScriptObject InjectedScriptHost::createInjectedScript(const String& scriptSource
     return ScriptObject(inspectedScriptState, injectedScript);
 }
 
+void InjectedScriptHost::discardInjectedScript(ScriptState* inspectedScriptState)
+{
+    v8::HandleScope handleScope;
+    v8::Local<v8::Context> context = inspectedScriptState->context();
+    v8::Context::Scope contextScope(context);
+
+    v8::Local<v8::Object> global = context->Global();
+    // Skip proxy object. The proxy object will survive page navigation while we need
+    // an object whose lifetime consides with that of the inspected context.
+    global = v8::Local<v8::Object>::Cast(global->GetPrototype());
+
+    v8::Handle<v8::String> key = V8HiddenPropertyName::devtoolsInjectedScript();
+    global->DeleteHiddenValue(key);
+}
+
 v8::Handle<v8::Value> V8InjectedScriptHost::nodeForIdCallback(const v8::Arguments& args)
 {
     INC_STATS("InjectedScriptHost.nodeForId()");
@@ -164,19 +180,6 @@ v8::Handle<v8::Value> V8InjectedScriptHost::currentCallFrameCallback(const v8::A
 #endif
 
 #if ENABLE(DATABASE)
-v8::Handle<v8::Value> V8InjectedScriptHost::databaseForIdCallback(const v8::Arguments& args)
-{
-    INC_STATS("InjectedScriptHost.databaseForId()");
-    if (args.Length() < 1)
-        return v8::Undefined();
-
-    InjectedScriptHost* host = V8InjectedScriptHost::toNative(args.Holder());
-    Database* database = host->databaseForId(args[0]->ToInt32()->Value());
-    if (!database)
-        return v8::Undefined();
-    return toV8(database);
-}
-
 v8::Handle<v8::Value> V8InjectedScriptHost::selectDatabaseCallback(const v8::Arguments& args)
 {
     INC_STATS("InjectedScriptHost.selectDatabase()");
@@ -208,19 +211,6 @@ v8::Handle<v8::Value> V8InjectedScriptHost::selectDOMStorageCallback(const v8::A
 }
 #endif
 
-v8::Handle<v8::Value> V8InjectedScriptHost::reportDidDispatchOnInjectedScriptCallback(const v8::Arguments& args)
-{
-    INC_STATS("InjectedScriptHost.reportDidDispatchOnInjectedScript()");
-    if (args.Length() < 3)
-        return v8::Undefined();
-    InjectedScriptHost* host = V8InjectedScriptHost::toNative(args.Holder());
-    int callId = args[0]->ToInt32()->Value();
-    RefPtr<SerializedScriptValue> result(SerializedScriptValue::create(args[1]));
-    bool isException = args[2]->ToBoolean()->Value();
-    host->reportDidDispatchOnInjectedScript(callId, result.get(), isException);
-    return v8::Undefined();
-}
-
 InjectedScript InjectedScriptHost::injectedScriptFor(ScriptState* inspectedScriptState)
 {
     v8::HandleScope handleScope;
@@ -232,10 +222,13 @@ InjectedScript InjectedScriptHost::injectedScriptFor(ScriptState* inspectedScrip
     // an object whose lifetime consides with that of the inspected context.
     global = v8::Local<v8::Object>::Cast(global->GetPrototype());
 
-    v8::Local<v8::String> key = v8::String::New("Devtools_InjectedScript");
+    v8::Handle<v8::String> key = V8HiddenPropertyName::devtoolsInjectedScript();
     v8::Local<v8::Value> val = global->GetHiddenValue(key);
     if (!val.IsEmpty() && val->IsObject())
         return InjectedScript(ScriptObject(inspectedScriptState, v8::Local<v8::Object>::Cast(val)));
+
+    if (!canAccessInspectedWindow(inspectedScriptState))
+        return InjectedScript();
 
     ASSERT(!m_injectedScriptSource.isEmpty());
     pair<long, ScriptObject> injectedScript = injectScript(m_injectedScriptSource, inspectedScriptState);

@@ -24,6 +24,10 @@
 
 namespace WebCore {
 
+void EventLoop::platformInit()
+{
+}
+
 void EventLoop::cycle()
 {
     g_main_context_iteration(NULL, FALSE);

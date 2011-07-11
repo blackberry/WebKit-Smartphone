@@ -30,20 +30,18 @@
 #include "RenderStyleConstants.h"
 #include "ScriptWrappable.h"
 #include "TreeShared.h"
+#include <wtf/Forward.h>
 #include <wtf/ListHashSet.h>
 
 #if USE(JSC)
 namespace JSC {
-
-    class JSGlobalData;
-    class MarkStack;
-
+class JSGlobalData;
+class MarkStack;
 }
 #endif
 
 namespace WebCore {
 
-class AtomicString;
 class Attribute;
 class ClassNodeList;
 class ContainerNode;
@@ -88,16 +86,7 @@ enum StyleChangeType {
     SyntheticStyleChange = 3 << nodeStyleChangeShift
 };
 
-const unsigned short DOCUMENT_POSITION_EQUIVALENT = 0x00;
-const unsigned short DOCUMENT_POSITION_DISCONNECTED = 0x01;
-const unsigned short DOCUMENT_POSITION_PRECEDING = 0x02;
-const unsigned short DOCUMENT_POSITION_FOLLOWING = 0x04;
-const unsigned short DOCUMENT_POSITION_CONTAINS = 0x08;
-const unsigned short DOCUMENT_POSITION_CONTAINED_BY = 0x10;
-const unsigned short DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC = 0x20;
-
-// this class implements nodes, which can have a parent but no children:
-class Node : public EventTarget, public TreeShared<Node>, public ScriptWrappable {
+class Node : public EventTarget, public TreeShared<ContainerNode>, public ScriptWrappable {
     friend class Document;
 public:
     enum NodeType {
@@ -115,7 +104,16 @@ public:
         NOTATION_NODE = 12,
         XPATH_NAMESPACE_NODE = 13
     };
-    
+    enum DocumentPosition {
+        DOCUMENT_POSITION_EQUIVALENT = 0x00,
+        DOCUMENT_POSITION_DISCONNECTED = 0x01,
+        DOCUMENT_POSITION_PRECEDING = 0x02,
+        DOCUMENT_POSITION_FOLLOWING = 0x04,
+        DOCUMENT_POSITION_CONTAINS = 0x08,
+        DOCUMENT_POSITION_CONTAINED_BY = 0x10,
+        DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC = 0x20,
+    };
+
     static bool isSupported(const String& feature, const String& version);
 
     static void startIgnoringLeaks();
@@ -135,7 +133,7 @@ public:
     virtual String nodeValue() const;
     virtual void setNodeValue(const String&, ExceptionCode&);
     virtual NodeType nodeType() const = 0;
-    Node* parentNode() const { return parent(); }
+    ContainerNode* parentNode() const { return parent(); }
     Element* parentElement() const;
     Node* previousSibling() const { return m_previous; }
     Node* nextSibling() const { return m_next; }
@@ -210,7 +208,7 @@ public:
     virtual bool isCharacterDataNode() const { return false; }
     bool isDocumentNode() const;
     virtual bool isShadowNode() const { return false; }
-    virtual Node* shadowParentNode() { return 0; }
+    virtual ContainerNode* shadowParentNode() { return 0; }
     Node* shadowAncestorNode();
     Node* shadowTreeRootNode();
     bool isInShadowTree();
@@ -260,11 +258,9 @@ public:
     Element* rootEditableElement() const;
     
     bool inSameContainingBlockFlowElement(Node*);
-    
-    // Used by the parser. Checks against the DTD, unlike DOM operations like appendChild().
-    // Also does not dispatch DOM mutation events.
-    // Returns the appropriate container node for future insertions as you parse, or 0 for failure.
-    virtual ContainerNode* addChild(PassRefPtr<Node>);
+
+    // FIXME: All callers of this function are almost certainly wrong!
+    virtual void deprecatedParserAddChild(PassRefPtr<Node>);
 
     // Called by the parser when this element's close tag is reached,
     // signaling that all child tags have been parsed and added.
@@ -306,13 +302,19 @@ public:
 
     void setInActiveChain() { setFlag(InActiveChainFlag); }
     void clearInActiveChain() { clearFlag(InActiveChainFlag); }
+
     void setNeedsStyleRecalc(StyleChangeType changeType = FullStyleChange);
+    void clearNeedsStyleRecalc() { m_nodeFlags &= ~StyleChangeMask; }
+
     void setIsLink(bool f) { setFlag(f, IsLinkFlag); }
     void setIsLink() { setFlag(IsLinkFlag); }
     void clearIsLink() { clearFlag(IsLinkFlag); }
 
-    void lazyAttach();
-    virtual bool canLazyAttach();
+    enum ShouldSetAttached {
+        SetAttached,
+        DoNotSetAttached
+    };
+    void lazyAttach(ShouldSetAttached = SetAttached);
 
     virtual void setFocus(bool b = true);
     virtual void setActive(bool f = true, bool /*pause*/ = false) { setFlag(f, IsActiveFlag); }
@@ -332,6 +334,7 @@ public:
     virtual bool isContentRichlyEditable() const;
     virtual bool shouldUseInputMethod() const;
     virtual IntRect getRect() const;
+    IntRect renderRect(bool* isReplaced);
 
     // Returns true if the node has a non-empty bounding box in layout.
     // This does not 100% guarantee the user can see it, but is pretty close.
@@ -421,11 +424,9 @@ public:
     bool isDescendantOf(const Node*) const;
     bool contains(const Node*) const;
 
-    // These two methods are mutually exclusive.  The former is used to do strict error-checking
-    // when adding children via the public DOM API (e.g., appendChild()).  The latter is called only when parsing, 
-    // to sanity-check against the DTD for error recovery.
+    // This method is used to do strict error-checking when adding children via
+    // the public DOM API (e.g., appendChild()).
     void checkAddChild(Node* newChild, ExceptionCode&); // Error-checking when adding via the DOM API
-    virtual bool childAllowed(Node* newChild);          // Error-checking during parsing that checks the DTD
 
     void checkReplaceChild(Node* newChild, Node* oldChild, ExceptionCode&);
     virtual bool canReplaceChild(Node* newChild, Node* oldChild);
@@ -533,8 +534,8 @@ public:
     void removeCachedTagNodeList(TagNodeList*, const QualifiedName&);
     void removeCachedLabelsNodeList(DynamicNodeList*);
     
-    PassRefPtr<NodeList> getElementsByTagName(const String&);
-    PassRefPtr<NodeList> getElementsByTagNameNS(const AtomicString& namespaceURI, const String& localName);
+    PassRefPtr<NodeList> getElementsByTagName(const AtomicString&);
+    PassRefPtr<NodeList> getElementsByTagNameNS(const AtomicString& namespaceURI, const AtomicString& localName);
     PassRefPtr<NodeList> getElementsByName(const String& elementName);
     PassRefPtr<NodeList> getElementsByClassName(const String& classNames);
 
@@ -588,8 +589,8 @@ public:
      */
     virtual bool disabled() const;
 
-    using TreeShared<Node>::ref;
-    using TreeShared<Node>::deref;
+    using TreeShared<ContainerNode>::ref;
+    using TreeShared<ContainerNode>::deref;
 
     virtual EventTargetData* eventTargetData();
     virtual EventTargetData* ensureEventTargetData();
@@ -637,7 +638,6 @@ private:
         HasSVGRareDataFlag = 1 << 23, // SVGElement
 #endif
         StyleChangeMask = 1 << nodeStyleChangeShift | 1 << (nodeStyleChangeShift + 1),
-        CreateWithZeroRefCountFlag = 1 << 26,
 
 #if ENABLE(SVG)
         DefaultNodeFlags = IsParsingChildrenFinishedFlag | IsStyleAttributeValidFlag | AreSVGAttributesValidFlag
@@ -654,21 +654,15 @@ private:
     void clearFlag(NodeFlags mask) const { m_nodeFlags &= ~mask; } 
 
 protected:
-    // CreateElementZeroRefCount is deprecated and can be removed once we convert all element
-    // classes to start with a reference count of 1.
     enum ConstructionType { 
         CreateOther = DefaultNodeFlags,
         CreateText = DefaultNodeFlags | IsTextFlag,
         CreateComment = DefaultNodeFlags | IsCommentFlag,
         CreateContainer = DefaultNodeFlags | IsContainerFlag, 
         CreateElement = CreateContainer | IsElementFlag, 
-        CreateElementZeroRefCount = IsElementFlag | CreateWithZeroRefCountFlag, 
         CreateStyledElement = CreateElement | IsStyledElementFlag, 
-        CreateStyledElementZeroRefCount =  CreateStyledElement | CreateWithZeroRefCountFlag, 
         CreateHTMLElement = CreateStyledElement | IsHTMLFlag, 
-        CreateHTMLElementZeroRefCount = CreateHTMLElement | CreateWithZeroRefCountFlag,
         CreateSVGElement = CreateStyledElement | IsSVGFlag, 
-        CreateSVGElementZeroRefCount = CreateSVGElement | CreateWithZeroRefCountFlag,
     };
     Node(Document*, ConstructionType);
 
@@ -688,8 +682,10 @@ private:
     void markCachedNodeListsSlow(JSC::MarkStack&, JSC::JSGlobalData&);
 #endif
 
-    static bool initialRefCount(ConstructionType);
     void setStyleChange(StyleChangeType);
+
+    // Used to share code between lazyAttach and setNeedsStyleRecalc.
+    void markAncestorsWithChildNeedsStyleRecalc();
 
     virtual void refEventTarget() { ref(); }
     virtual void derefEventTarget() { deref(); }
@@ -744,11 +740,6 @@ private:
     void clearHasRareSVGData() { clearFlag(HasSVGRareDataFlag); }
 #endif
 };
-
-inline bool Node::initialRefCount(ConstructionType type)
-{
-    return !(type & CreateWithZeroRefCountFlag);
-}
 
 // Used in Node::addSubresourceAttributeURLs() and in addSubresourceStyleURLs()
 inline void addSubresourceURL(ListHashSet<KURL>& urls, const KURL& url)

@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004, 2005, 2006 Apple Computer, Inc.
+ * Copyright (C) 2004, 2005, 2006, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -30,15 +30,16 @@ namespace WebCore {
 
 class HTMLKeygenElement : public HTMLSelectElement {
 public:
-    HTMLKeygenElement(const QualifiedName&, Document*, HTMLFormElement* = 0);
+    static PassRefPtr<HTMLKeygenElement> create(const QualifiedName&, Document*, HTMLFormElement*);
 
-    virtual int tagPriority() const { return 0; }
+private:
+    HTMLKeygenElement(const QualifiedName&, Document*, HTMLFormElement*);
+
     virtual const AtomicString& formControlType() const;
     virtual bool isEnumeratable() const { return false; }
     virtual void parseMappedAttribute(Attribute*);
     virtual bool appendFormData(FormDataList&, bool);
 
-private:
     virtual bool isOptionalFormControl() const { return false; }
 
     AtomicString m_challenge;

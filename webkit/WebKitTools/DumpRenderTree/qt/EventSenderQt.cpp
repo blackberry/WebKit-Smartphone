@@ -29,8 +29,7 @@
 #include "config.h"
 #include "EventSenderQt.h"
 
-//#include <QtDebug>
-
+#include <QGraphicsSceneMouseEvent>
 #include <QtTest/QtTest>
 
 #define KEYCODE_DEL         127
@@ -70,6 +69,9 @@ EventSender::EventSender(QWebPage* parent)
     m_currentButton = 0;
     resetClickCount();
     m_page->view()->installEventFilter(this);
+    // So that we can match Scrollbar::pixelsPerLineStep() in WheelEventQt.cpp and
+    // pass fast/events/platform-wheelevent-in-scrolling-div.html
+    QApplication::setWheelScrollLines(2);
 }
 
 void EventSender::mouseDown(int button)
@@ -108,10 +110,16 @@ void EventSender::mouseDown(int button)
     m_mouseButtons |= mouseButton;
 
 //     qDebug() << "EventSender::mouseDown" << frame;
-    QMouseEvent* event;
-    event = new QMouseEvent((m_clickCount == 2) ? QEvent::MouseButtonDblClick :
+    QEvent* event;
+    if (isGraphicsBased()) {
+        event = createGraphicsSceneMouseEvent((m_clickCount == 2) ?
+                    QEvent::GraphicsSceneMouseDoubleClick : QEvent::GraphicsSceneMousePress,
+                    m_mousePos, m_mousePos, mouseButton, m_mouseButtons, Qt::NoModifier);
+    } else {
+        event = new QMouseEvent((m_clickCount == 2) ? QEvent::MouseButtonDblClick :
                     QEvent::MouseButtonPress, m_mousePos, m_mousePos,
                     mouseButton, m_mouseButtons, Qt::NoModifier);
+    }
 
     sendOrQueueEvent(event);
 
@@ -143,7 +151,15 @@ void EventSender::mouseUp(int button)
     m_mouseButtons &= ~mouseButton;
 
 //     qDebug() << "EventSender::mouseUp" << frame;
-    QMouseEvent* event = new QMouseEvent(QEvent::MouseButtonRelease, m_mousePos, m_mousePos, mouseButton, m_mouseButtons, Qt::NoModifier);
+    QEvent* event;
+    if (isGraphicsBased()) {
+        event = createGraphicsSceneMouseEvent(QEvent::GraphicsSceneMouseRelease,
+                    m_mousePos, m_mousePos, mouseButton, m_mouseButtons, Qt::NoModifier);
+    } else {
+        event = new QMouseEvent(QEvent::MouseButtonRelease,
+                    m_mousePos, m_mousePos, mouseButton, m_mouseButtons, Qt::NoModifier);
+    }
+
     sendOrQueueEvent(event);
 }
 
@@ -151,9 +167,51 @@ void EventSender::mouseMoveTo(int x, int y)
 {
 //     qDebug() << "EventSender::mouseMoveTo" << x << y;
     m_mousePos = QPoint(x, y);
-    QMouseEvent* event = new QMouseEvent(QEvent::MouseMove, m_mousePos, m_mousePos, Qt::NoButton, m_mouseButtons, Qt::NoModifier);
+
+    QEvent* event;
+    if (isGraphicsBased()) {
+        event = createGraphicsSceneMouseEvent(QEvent::GraphicsSceneMouseMove,
+                    m_mousePos, m_mousePos, Qt::NoButton, m_mouseButtons, Qt::NoModifier);
+    } else {
+        event = new QMouseEvent(QEvent::MouseMove,
+                    m_mousePos, m_mousePos, Qt::NoButton, m_mouseButtons, Qt::NoModifier);
+    }
+
     sendOrQueueEvent(event);
 }
+
+#ifndef QT_NO_WHEELEVENT
+void EventSender::mouseScrollBy(int x, int y)
+{
+    continuousMouseScrollBy((x*120), (y*120));
+}
+
+void EventSender::continuousMouseScrollBy(int x, int y)
+{
+    // continuousMouseScrollBy() mimics devices that send fine-grained scroll events where the 'delta' specified is not the usual
+    // multiple of 120. See http://doc.qt.nokia.com/4.6/qwheelevent.html#delta for a good explanation of this.
+    if (x) {
+        QEvent* event;
+        if (isGraphicsBased()) {
+            event = createGraphicsSceneWheelEvent(QEvent::GraphicsSceneWheel,
+                        m_mousePos, m_mousePos, x, Qt::NoModifier, Qt::Horizontal);
+        } else
+            event = new QWheelEvent(m_mousePos, m_mousePos, x, m_mouseButtons, Qt::NoModifier, Qt::Horizontal);
+
+        sendOrQueueEvent(event);
+    }
+    if (y) {
+        QEvent* event;
+        if (isGraphicsBased()) {
+            event = createGraphicsSceneWheelEvent(QEvent::GraphicsSceneWheel,
+                        m_mousePos, m_mousePos, y, Qt::NoModifier, Qt::Vertical);
+        } else
+            event = new QWheelEvent(m_mousePos, m_mousePos, y, m_mouseButtons, Qt::NoModifier, Qt::Vertical);
+
+        sendOrQueueEvent(event);
+    }
+}
+#endif
 
 void EventSender::leapForward(int ms)
 {
@@ -276,33 +334,49 @@ void EventSender::keyDown(const QString& string, const QStringList& modifiers, u
         } else if (string == QLatin1String("end")) {
             s = QString();
             code = Qt::Key_End;
+        } else if (string == QLatin1String("insert")) {
+            s = QString();
+            code = Qt::Key_Insert;
         } else if (string == QLatin1String("delete")) {
             s = QString();
             code = Qt::Key_Delete;
+        } else if (string == QLatin1String("printScreen")) {
+            s = QString();
+            code = Qt::Key_Print;
         }
     }
     QKeyEvent event(QEvent::KeyPress, code, modifs, s);
-    QApplication::sendEvent(m_page, &event);
+    sendEvent(m_page, &event);
     QKeyEvent event2(QEvent::KeyRelease, code, modifs, s);
-    QApplication::sendEvent(m_page, &event2);
+    sendEvent(m_page, &event2);
 }
 
 void EventSender::contextClick()
 {
     QMouseEvent event(QEvent::MouseButtonPress, m_mousePos, Qt::RightButton, Qt::RightButton, Qt::NoModifier);
-    QApplication::sendEvent(m_page, &event);
+    sendEvent(m_page, &event);
     QMouseEvent event2(QEvent::MouseButtonRelease, m_mousePos, Qt::RightButton, Qt::RightButton, Qt::NoModifier);
-    QApplication::sendEvent(m_page, &event2);
-    QContextMenuEvent event3(QContextMenuEvent::Mouse, m_mousePos);
-    QApplication::sendEvent(m_page->view(), &event3);
+    sendEvent(m_page, &event2);
+
+    if (isGraphicsBased()) {
+        QGraphicsSceneContextMenuEvent ctxEvent(QEvent::GraphicsSceneContextMenu);
+        ctxEvent.setReason(QGraphicsSceneContextMenuEvent::Mouse);
+        ctxEvent.setPos(m_mousePos);
+        WebCore::WebViewGraphicsBased* view = qobject_cast<WebCore::WebViewGraphicsBased*>(m_page->view());
+        if (view)
+            sendEvent(view->graphicsView(), &ctxEvent);
+    } else {
+        QContextMenuEvent ctxEvent(QContextMenuEvent::Mouse, m_mousePos);
+        sendEvent(m_page->view(), &ctxEvent);
+    }
 }
 
 void EventSender::scheduleAsynchronousClick()
 {
     QMouseEvent* event = new QMouseEvent(QEvent::MouseButtonPress, m_mousePos, Qt::LeftButton, Qt::RightButton, Qt::NoModifier);
-    QApplication::postEvent(m_page, event);
+    postEvent(m_page, event);
     QMouseEvent* event2 = new QMouseEvent(QEvent::MouseButtonRelease, m_mousePos, Qt::LeftButton, Qt::RightButton, Qt::NoModifier);
-    QApplication::postEvent(m_page, event2);
+    postEvent(m_page, event2);
 }
 
 void EventSender::addTouchPoint(int x, int y)
@@ -407,7 +481,7 @@ void EventSender::sendTouchEvent(QEvent::Type type)
 #if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
     QTouchEvent event(type, QTouchEvent::TouchScreen, m_touchModifiers);
     event.setTouchPoints(m_touchPoints);
-    QApplication::sendEvent(m_page, &event);
+    sendEvent(m_page, &event);
     QList<QTouchEvent::TouchPoint>::Iterator it = m_touchPoints.begin();
     while (it != m_touchPoints.end()) {
         if (it->state() == Qt::TouchPointReleased)
@@ -469,7 +543,7 @@ void EventSender::sendOrQueueEvent(QEvent* event)
     // 3. A call to mouseMoveTo while the mouse button is pressed could initiate a drag operation, and that does not return until mouseUp is processed. 
     // To be safe and avoid a deadlock, this event is queued.
     if (endOfQueue == startOfQueue && !eventQueue[endOfQueue].m_delay && (!(m_mouseButtonPressed && (m_eventLoop && event->type() == QEvent::MouseButtonRelease)))) {
-        QApplication::sendEvent(m_page->view(), event);
+        sendEvent(m_page->view(), event);
         delete event;
         return;
     }
@@ -484,7 +558,7 @@ void EventSender::replaySavedEvents(bool flush)
         // First send all the events that are ready to be sent
         while (!eventQueue[startOfQueue].m_delay && startOfQueue < endOfQueue) {
             QEvent* ev = eventQueue[startOfQueue++].m_event;
-            QApplication::postEvent(m_page->view(), ev); // ev deleted by the system
+            postEvent(m_page->view(), ev);
         }
         if (startOfQueue == endOfQueue) {
             // Reset the queue
@@ -517,13 +591,16 @@ bool EventSender::eventFilter(QObject* watched, QEvent* event)
     case QEvent::Leave:
         return true;
     case QEvent::MouseButtonPress:
+    case QEvent::GraphicsSceneMousePress:
         m_mouseButtonPressed = true;
         break;
     case QEvent::MouseMove:
+    case QEvent::GraphicsSceneMouseMove:
         if (m_mouseButtonPressed)
             m_drag = true;
         break;
     case QEvent::MouseButtonRelease:
+    case QEvent::GraphicsSceneMouseRelease:
         m_mouseButtonPressed = false;
         m_drag = false;
         break;
@@ -537,4 +614,49 @@ bool EventSender::eventFilter(QObject* watched, QEvent* event)
 void EventSender::timerEvent(QTimerEvent* ev)
 {
     m_clickTimer.stop();
+}
+
+QGraphicsSceneMouseEvent* EventSender::createGraphicsSceneMouseEvent(QEvent::Type type, const QPoint& pos, const QPoint& screenPos, Qt::MouseButton button, Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers)
+{
+    QGraphicsSceneMouseEvent* event;
+    event = new QGraphicsSceneMouseEvent(type);
+    event->setPos(pos);
+    event->setScreenPos(screenPos);
+    event->setButton(button);
+    event->setButtons(buttons);
+    event->setModifiers(modifiers);
+
+    return event;
+}
+
+QGraphicsSceneWheelEvent* EventSender::createGraphicsSceneWheelEvent(QEvent::Type type, const QPoint& pos, const QPoint& screenPos, int delta, Qt::KeyboardModifiers modifiers, Qt::Orientation orientation)
+{
+    QGraphicsSceneWheelEvent* event;
+    event = new QGraphicsSceneWheelEvent(type);
+    event->setPos(pos);
+    event->setScreenPos(screenPos);
+    event->setDelta(delta);
+    event->setModifiers(modifiers);
+    event->setOrientation(orientation);
+
+    return event;
+}
+
+void EventSender::sendEvent(QObject* receiver, QEvent* event)
+{
+    if (WebCore::WebViewGraphicsBased* view = qobject_cast<WebCore::WebViewGraphicsBased*>(receiver))
+        view->scene()->sendEvent(view->graphicsView(), event);
+    else
+        QApplication::sendEvent(receiver, event);
+}
+
+void EventSender::postEvent(QObject* receiver, QEvent* event)
+{
+    // QGraphicsScene does not have a postEvent method, so send the event in this case
+    // and delete it after that.
+    if (WebCore::WebViewGraphicsBased* view = qobject_cast<WebCore::WebViewGraphicsBased*>(receiver)) {
+        view->scene()->sendEvent(view->graphicsView(), event);
+        delete event;
+    } else
+        QApplication::postEvent(receiver, event); // event deleted by the system
 }

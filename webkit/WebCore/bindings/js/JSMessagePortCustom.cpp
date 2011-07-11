@@ -26,7 +26,6 @@
 #include "config.h"
 #include "JSMessagePort.h"
 
-#include "AtomicString.h"
 #include "Event.h"
 #include "ExceptionCode.h"
 #include "Frame.h"
@@ -36,6 +35,7 @@
 #include "JSMessagePortCustom.h"
 #include "MessagePort.h"
 #include <runtime/Error.h>
+#include <wtf/text/AtomicString.h>
 
 using namespace JSC;
 
@@ -52,9 +52,9 @@ void JSMessagePort::markChildren(MarkStack& markStack)
     m_impl->markJSEventListeners(markStack);
 }
 
-JSC::JSValue JSMessagePort::postMessage(JSC::ExecState* exec, const JSC::ArgList& args)
+JSC::JSValue JSMessagePort::postMessage(JSC::ExecState* exec)
 {
-    return handlePostMessage(exec, args, impl());
+    return handlePostMessage(exec, impl());
 }
 
 void fillMessagePortArray(JSC::ExecState* exec, JSC::JSValue value, MessagePortArray& portArray)
@@ -86,7 +86,7 @@ void fillMessagePortArray(JSC::ExecState* exec, JSC::JSValue value, MessagePortA
         // Validation of Objects implementing an interface, per WebIDL spec 4.1.15.
         RefPtr<MessagePort> port = toMessagePort(value);
         if (!port) {
-            throwError(exec, TypeError);
+            throwTypeError(exec);
             return;
         }
         portArray[i] = port.release();

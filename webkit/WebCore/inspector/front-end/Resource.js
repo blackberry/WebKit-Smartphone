@@ -33,7 +33,6 @@ WebInspector.Resource = function(identifier, url)
     this._startTime = -1;
     this._endTime = -1;
     this._requestMethod = "";
-    this._requestFormData = "";
     this._category = WebInspector.resourceCategories.other;
 }
 
@@ -46,31 +45,43 @@ WebInspector.Resource.Type = {
     Script:     4,
     XHR:        5,
     Media:      6,
-    Other:      7,
+    WebSocket:  7,
+    Other:      8,
 
     isTextType: function(type)
     {
         return (type === this.Document) || (type === this.Stylesheet) || (type === this.Script) || (type === this.XHR);
     },
 
+    toUIString: function(type)
+    {
+        return WebInspector.UIString(WebInspector.Resource.Type.toString(type));
+    },
+
+    // Returns locale-independent string identifier of resource type (primarily for use in extension API).
+    // The IDs need to be kept in sync with webInspector.resoureces.Types object in ExtensionAPI.js.
     toString: function(type)
     {
         switch (type) {
             case this.Document:
-                return WebInspector.UIString("document");
+                return "document";
             case this.Stylesheet:
-                return WebInspector.UIString("stylesheet");
+                return "stylesheet";
             case this.Image:
-                return WebInspector.UIString("image");
+                return "image";
             case this.Font:
-                return WebInspector.UIString("font");
+                return "font";
             case this.Script:
-                return WebInspector.UIString("script");
+                return "script";
             case this.XHR:
-                return WebInspector.UIString("XHR");
+                return "XHR";
+            case this.Media:
+                return "media";
+            case this.WebSocket:
+                return "WebSocket";
             case this.Other:
             default:
-                return WebInspector.UIString("other");
+                return "other";
         }
     }
 }
@@ -88,7 +99,7 @@ WebInspector.Resource.prototype = {
 
         var oldURL = this._url;
         this._url = x;
-
+        delete this._parsedQueryParameters;
         // FIXME: We should make the WebInspector object listen for the "url changed" event.
         // Then resourceURLChanged can be removed.
         WebInspector.resourceURLChanged(this, oldURL);
@@ -215,6 +226,13 @@ WebInspector.Resource.prototype = {
         return this._responseReceivedTime - this._startTime;
     },
 
+    get receiveDuration()
+    {
+        if (this._endTime === -1 || this._responseReceivedTime === -1)
+            return -1;
+        return this._endTime - this._responseReceivedTime;
+    },
+
     get resourceSize()
     {
         return this._resourceSize || 0;
@@ -302,6 +320,17 @@ WebInspector.Resource.prototype = {
         }
     },
 
+    get cached()
+    {
+        return this._cached;
+    },
+
+    set cached(x)
+    {
+        this._cached = x;
+        this.dispatchEventToListeners("cached changed");
+    },
+
     get mimeType()
     {
         return this._mimeType;
@@ -346,6 +375,9 @@ WebInspector.Resource.prototype = {
             case WebInspector.Resource.Type.XHR:
                 this.category = WebInspector.resourceCategories.xhr;
                 break;
+            case WebInspector.Resource.Type.WebSocket:
+                this.category = WebInspector.resourceCategories.websocket;
+                break;
             case WebInspector.Resource.Type.Other:
             default:
                 this.category = WebInspector.resourceCategories.other;
@@ -384,6 +416,22 @@ WebInspector.Resource.prototype = {
         return this._sortedRequestHeaders;
     },
 
+    requestHeaderValue: function(headerName)
+    {
+        return this._headerValue(this.requestHeaders, headerName);
+    },
+
+    get requestFormData()
+    {
+        return this._requestFormData;
+    },
+
+    set requestFormData(x)
+    {
+        this._requestFormData = x;
+        delete this._parsedFormParameters;
+    },
+
     get responseHeaders()
     {
         if (this._responseHeaders === undefined)
@@ -413,6 +461,61 @@ WebInspector.Resource.prototype = {
         this._sortedResponseHeaders.sort(function(a,b) { return a.header.localeCompare(b.header) });
 
         return this._sortedResponseHeaders;
+    },
+
+    responseHeaderValue: function(headerName)
+    {
+        return this._headerValue(this.responseHeaders, headerName);
+    },
+
+    get queryParameters()
+    {
+        if (this._parsedQueryParameters)
+            return this._parsedQueryParameters;
+        var queryString = this.url.split("?", 2)[1];
+        if (!queryString)
+            return;
+        this._parsedQueryParameters = this._parseParameters(queryString);
+        return this._parsedQueryParameters;
+    },
+
+    get formParameters()
+    {
+        if (this._parsedFormParameters)
+            return this._parsedFormParameters;
+        if (!this.requestFormData)
+            return;
+        var requestContentType = this.requestHeaderValue("Content-Type");
+        if (!requestContentType || !requestContentType.match(/^application\/x-www-form-urlencoded\s*(;.*)?$/i))
+            return;
+        this._parsedFormParameters = this._parseParameters(this.requestFormData);
+        return this._parsedFormParameters;
+    },
+
+    _parseParameters: function(queryString)
+    {
+        function parseNameValue(pair)
+        {
+            var parameter = {};
+            var splitPair = pair.split("=", 2);
+
+            parameter.name = splitPair[0];
+            if (splitPair.length === 1)
+                parameter.value = "";
+            else
+                parameter.value = splitPair[1];
+            return parameter;
+        }
+        return queryString.split("&").map(parseNameValue);
+    },
+
+    _headerValue: function(headers, headerName)
+    {
+        headerName = headerName.toLowerCase();
+        for (var header in headers) {
+            if (header.toLowerCase() === headerName)
+                return headers[header];
+        }
     },
 
     get scripts()
@@ -487,7 +590,8 @@ WebInspector.Resource.prototype = {
 
         if (typeof this.type === "undefined"
          || this.type === WebInspector.Resource.Type.Other
-         || this.type === WebInspector.Resource.Type.XHR)
+         || this.type === WebInspector.Resource.Type.XHR
+         || this.type === WebInspector.Resource.Type.WebSocket)
             return true;
 
         if (this.mimeType in WebInspector.MIMETypes)
@@ -510,9 +614,14 @@ WebInspector.Resource.prototype = {
                 if (!this._mimeTypeIsConsistentWithType())
                     msg = new WebInspector.ConsoleMessage(WebInspector.ConsoleMessage.MessageSource.Other,
                         WebInspector.ConsoleMessage.MessageType.Log, 
-                        WebInspector.ConsoleMessage.MessageLevel.Warning, -1, this.url, null, 1,
-                        String.sprintf(WebInspector.Warnings.IncorrectMIMEType.message,
-                        WebInspector.Resource.Type.toString(this.type), this.mimeType));
+                        WebInspector.ConsoleMessage.MessageLevel.Warning,
+                        -1,
+                        this.url,
+                        null,
+                        1,
+                        String.sprintf(WebInspector.Warnings.IncorrectMIMEType.message, WebInspector.Resource.Type.toUIString(this.type), this.mimeType),
+                        null,
+                        null);
                 break;
         }
 

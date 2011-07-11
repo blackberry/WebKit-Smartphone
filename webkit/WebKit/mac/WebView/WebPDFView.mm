@@ -193,6 +193,7 @@ static BOOL _PDFSelectionsAreEqual(PDFSelection *selectionA, PDFSelection *selec
 {
     [dataSource release];
     [previewView release];
+    [PDFSubview setDelegate:nil];
     [PDFSubview release];
     [path release];
     [PDFSubviewProxy release];
@@ -626,6 +627,11 @@ static BOOL _PDFSelectionsAreEqual(PDFSelection *selectionA, PDFSelection *selec
 }
 
 - (NSUInteger)markAllMatchesForText:(NSString *)string caseSensitive:(BOOL)caseFlag limit:(NSUInteger)limit
+{
+    return [self countMatchesForText:string caseSensitive:caseFlag limit:limit markMatches:YES];
+}
+
+- (NSUInteger)countMatchesForText:(NSString *)string caseSensitive:(BOOL)caseFlag limit:(NSUInteger)limit markMatches:(BOOL)markMatches
 {
     PDFSelection *previousMatch = nil;
     PDFSelection *nextMatch = nil;

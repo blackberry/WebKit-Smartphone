@@ -45,12 +45,12 @@ bool WebFormControlElement::isEnabled() const
 
 WebString WebFormControlElement::formControlName() const
 {
-    return constUnwrap<HTMLFormControlElement>()->formControlName();
+    return constUnwrap<HTMLFormControlElement>()->name();
 }
 
 WebString WebFormControlElement::formControlType() const
 {
-    return constUnwrap<HTMLFormControlElement>()->formControlType();
+    return constUnwrap<HTMLFormControlElement>()->type();
 }
 
 WebString WebFormControlElement::nameForAutofill() const
@@ -59,7 +59,7 @@ WebString WebFormControlElement::nameForAutofill() const
     String trimmedName = name.stripWhiteSpace();
     if (!trimmedName.isEmpty())
         return trimmedName;
-    name = constUnwrap<HTMLFormControlElement>()->getAttribute(HTMLNames::idAttr);
+    name = constUnwrap<HTMLFormControlElement>()->getIdAttribute();
     trimmedName = name.stripWhiteSpace();
     if (!trimmedName.isEmpty())
         return trimmedName;

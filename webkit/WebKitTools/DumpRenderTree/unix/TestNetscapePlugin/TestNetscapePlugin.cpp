@@ -27,6 +27,7 @@
 
 #include "config.h"
 #include "PluginObject.h"
+#include "PluginTest.h"
 
 #include "npapi.h"
 #include "npruntime.h"
@@ -37,7 +38,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <X11/Xlib.h>
+#include <string>
 
+using namespace std;
+ 
 extern "C" {
     NPError NP_Initialize (NPNetscapeFuncs *aMozillaVTable, NPPluginFuncs *aPluginVTable);
     NPError NP_Shutdown(void);
@@ -60,8 +64,12 @@ webkit_test_plugin_new_instance(NPMIMEType /*mimetype*/,
         PluginObject* obj = (PluginObject*)browser->createobject(instance, getPluginClass());
         instance->pdata = obj;
 
+        string testIdentifier;
+
         for (int i = 0; i < argc; i++) {
-            if (strcasecmp(argn[i], "onstreamload") == 0 && !obj->onStreamLoad)
+            if (strcasecmp(argn[i], "test") == 0)
+                testIdentifier = argv[i];
+            else if (strcasecmp(argn[i], "onstreamload") == 0 && !obj->onStreamLoad)
                 obj->onStreamLoad = strdup(argv[i]);
             else if (strcasecmp(argn[i], "onStreamDestroy") == 0 && !obj->onStreamDestroy)
                 obj->onStreamDestroy = strdup(argv[i]);
@@ -82,8 +90,6 @@ webkit_test_plugin_new_instance(NPMIMEType /*mimetype*/,
                 executeScript(obj, "document.body.innerHTML = ''");
             else if (!strcasecmp(argn[i], "ondestroy"))
                 obj->onDestroy = strdup(argv[i]);
-            else if (strcasecmp(argn[i], "testdocumentopenindestroystream") == 0)
-                obj->testDocumentOpenInDestroyStream = TRUE;
             else if (strcasecmp(argn[i], "testwindowopen") == 0)
                 obj->testWindowOpen = TRUE;
             else if (strcasecmp(argn[i], "onSetWindow") == 0 && !obj->onSetWindow)
@@ -91,6 +97,8 @@ webkit_test_plugin_new_instance(NPMIMEType /*mimetype*/,
         }
 
         browser->getvalue(instance, NPNVprivateModeBool, (void *)&obj->cachedPrivateBrowsingMode);
+
+        obj->pluginTest = PluginTest::create(instance, testIdentifier);
     }
 
     return NPERR_NO_ERROR;
@@ -175,7 +183,7 @@ webkit_test_plugin_new_stream(NPP instance,
 {
     PluginObject* obj = static_cast<PluginObject*>(instance->pdata);
     obj->stream = stream;
-    *stype = NP_ASFILEONLY;
+    *stype = NP_NORMAL;
 
     if (obj->returnErrorFromNewStream)
         return NPERR_GENERIC_ERROR;
@@ -190,19 +198,34 @@ webkit_test_plugin_new_stream(NPP instance,
 }
 
 static NPError
-webkit_test_plugin_destroy_stream(NPP instance, NPStream* /*stream*/, NPError /*reason*/)
+webkit_test_plugin_destroy_stream(NPP instance, NPStream* stream, NPError reason)
 {
     PluginObject* obj = (PluginObject*)instance->pdata;
 
-    if (obj->onStreamDestroy)
-        executeScript(obj, obj->onStreamDestroy);
+    if (obj->onStreamDestroy) {
+        NPObject* windowObject = 0;
+        NPError error = browser->getvalue(instance, NPNVWindowNPObject, &windowObject);
+        
+        if (error == NPERR_NO_ERROR) {
+            NPVariant onStreamDestroyVariant;
+            if (browser->getproperty(instance, windowObject, browser->getstringidentifier(obj->onStreamDestroy), &onStreamDestroyVariant)) {
+                if (NPVARIANT_IS_OBJECT(onStreamDestroyVariant)) {
+                    NPObject* onStreamDestroyFunction = NPVARIANT_TO_OBJECT(onStreamDestroyVariant);
 
-    if (obj->testDocumentOpenInDestroyStream) {
-        testDocumentOpen(instance);
-        obj->testDocumentOpenInDestroyStream = FALSE;
+                    NPVariant reasonVariant;
+                    INT32_TO_NPVARIANT(reason, reasonVariant);
+
+                    NPVariant result;
+                    browser->invokeDefault(instance, onStreamDestroyFunction, &reasonVariant, 1, &result);
+                    browser->releasevariantvalue(&result);
+                }
+                browser->releasevariantvalue(&onStreamDestroyVariant);
+            }
+            browser->releaseobject(windowObject);
+        }
     }
 
-    return NPERR_NO_ERROR;
+    return obj->pluginTest->NPP_DestroyStream(stream, reason);
 }
 
 static void
@@ -213,17 +236,22 @@ webkit_test_plugin_stream_as_file(NPP /*instance*/, NPStream* /*stream*/, const 
 static int32_t
 webkit_test_plugin_write_ready(NPP /*instance*/, NPStream* /*stream*/)
 {
-    return 0;
+    return 4096;
 }
 
 static int32_t
-webkit_test_plugin_write(NPP /*instance*/,
+webkit_test_plugin_write(NPP instance,
                          NPStream* /*stream*/,
                          int32_t /*offset*/,
-                         int32_t /*len*/,
+                         int32_t len,
                          void* /*buffer*/)
 {
-    return 0;
+    PluginObject* obj = (PluginObject*)instance->pdata;
+
+    if (obj->returnNegativeOneFromWrite)
+        return -1;
+
+    return len;
 }
 
 static void
@@ -239,7 +267,33 @@ webkit_test_plugin_handle_event(NPP instance, void* event)
         return 0;
 
     XEvent* evt = static_cast<XEvent*>(event);
-    pluginLog(instance, "event %d", evt->type);
+
+    switch (evt->type) {
+        case ButtonRelease:
+            pluginLog(instance, "mouseUp at (%d, %d)", evt->xbutton.x, evt->xbutton.y);
+            break;
+        case ButtonPress:
+            pluginLog(instance, "mouseDown at (%d, %d)", evt->xbutton.x, evt->xbutton.y);
+            break;
+        case KeyRelease:
+            pluginLog(instance, "keyUp '%c'", evt->xkey.keycode);
+            break;
+        case KeyPress:
+            pluginLog(instance, "keyDown '%c'", evt->xkey.keycode);
+            break;
+        case MotionNotify:
+        case EnterNotify:
+        case LeaveNotify:
+            break;
+        case FocusIn:
+            pluginLog(instance, "getFocusEvent");
+            break;
+        case FocusOut:
+            pluginLog(instance, "loseFocusEvent");
+            break;
+        default:
+            pluginLog(instance, "event %d", evt->type);
+    }
 
     return 0;
 }
@@ -258,6 +312,14 @@ webkit_test_plugin_url_notify(NPP instance, const char* url, NPReason reason, vo
 static NPError
 webkit_test_plugin_get_value(NPP instance, NPPVariable variable, void *value)
 {
+    PluginObject* obj = 0;
+    if (instance)
+        obj = static_cast<PluginObject*>(instance->pdata);
+
+    // First, check if the PluginTest object supports getting this value.
+    if (obj && obj->pluginTest->NPP_GetValue(variable, value) == NPERR_NO_ERROR)
+        return NPERR_NO_ERROR;
+    
     NPError err = NPERR_NO_ERROR;
 
     switch (variable) {
@@ -283,7 +345,6 @@ webkit_test_plugin_get_value(NPP instance, NPPVariable variable, void *value)
 
     if (variable == NPPVpluginScriptableNPObject) {
         void **v = (void **)value;
-        PluginObject* obj = static_cast<PluginObject*>(instance->pdata);
         browser->retainobject((NPObject *)obj);
         *v = obj;
         err = NPERR_NO_ERROR;

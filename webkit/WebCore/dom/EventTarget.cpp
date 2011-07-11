@@ -156,8 +156,14 @@ Notification* EventTarget::toNotification()
 }
 #endif
 
-#if ENABLE(FILE_READER)
+#if ENABLE(BLOB)
 FileReader* EventTarget::toFileReader()
+{
+    return 0;
+}
+#endif
+#if ENABLE(FILE_WRITER)
+FileWriter* EventTarget::toFileWriter()
 {
     return 0;
 }
@@ -165,6 +171,10 @@ FileReader* EventTarget::toFileReader()
 
 #if ENABLE(INDEXED_DATABASE)
 IDBRequest* EventTarget::toIDBRequest()
+{
+    return 0;
+}
+IDBTransaction* EventTarget::toIDBTransaction()
 {
     return 0;
 }

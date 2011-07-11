@@ -27,6 +27,7 @@
 #ifndef ImageSource_h
 #define ImageSource_h
 
+#include <wtf/Forward.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/Vector.h>
 
@@ -49,7 +50,9 @@ QT_END_NAMESPACE
 struct _cairo_surface;
 typedef struct _cairo_surface cairo_surface_t;
 #elif PLATFORM(SKIA)
+namespace WebCore {
 class NativeImageSkia;
+}
 #elif PLATFORM(HAIKU)
 class BBitmap;
 #elif OS(WINCE)
@@ -58,9 +61,9 @@ class BBitmap;
 
 namespace WebCore {
 
+class IntPoint;
 class IntSize;
 class SharedBuffer;
-class String;
 
 #if PLATFORM(CG)
 typedef CGImageSourceRef NativeImageSourcePtr;
@@ -85,7 +88,7 @@ typedef wxBitmap* NativeImagePtr;
 #elif PLATFORM(CAIRO)
 typedef cairo_surface_t* NativeImagePtr;
 #elif PLATFORM(SKIA)
-typedef NativeImageSkia* NativeImagePtr;
+typedef WebCore::NativeImageSkia* NativeImagePtr;
 #elif PLATFORM(HAIKU)
 typedef BBitmap* NativeImagePtr;
 #elif OS(WINCE)
@@ -97,12 +100,27 @@ typedef void* NativeImagePtr;
 #endif
 #endif
 
-const int cAnimationLoopOnce = -1;
+// Right now GIFs are the only recognized image format that supports animation.
+// The animation system and the constants below are designed with this in mind.
+// GIFs have an optional 16-bit unsigned loop count that describes how an
+// animated GIF should be cycled.  If the loop count is absent, the animation
+// cycles once; if it is 0, the animation cycles infinitely; otherwise the
+// animation plays n + 1 cycles (where n is the specified loop count).  If the
+// GIF decoder defaults to cAnimationLoopOnce in the absence of any loop count
+// and translates an explicit "0" loop count to cAnimationLoopInfinite, then we
+// get a couple of nice side effects:
+//   * By making cAnimationLoopOnce be 0, we allow the animation cycling code in
+//     BitmapImage.cpp to avoid special-casing it, and simply treat all
+//     non-negative loop counts identically.
+//   * By making the other two constants negative, we avoid conflicts with any
+//     real loop count values.
+const int cAnimationLoopOnce = 0;
+const int cAnimationLoopInfinite = -1;
 const int cAnimationNone = -2;
 
 class ImageSource : public Noncopyable {
 public:
-    ImageSource();
+    ImageSource(bool premultiplyAlpha = true);
     ~ImageSource();
 
     // Tells the ImageSource that the Image no longer cares about decoded frame
@@ -139,6 +157,7 @@ public:
     bool isSizeAvailable();
     IntSize size() const;
     IntSize frameSizeAtIndex(size_t) const;
+    bool getHotSpot(IntPoint&) const;
 
     int repetitionCount();
 
@@ -159,6 +178,7 @@ public:
 
 private:
     NativeImageSourcePtr m_decoder;
+    bool m_premultiplyAlpha;
 #if ENABLE(IMAGE_DECODER_DOWN_SAMPLING)
     static unsigned s_maxPixelsPerDecodedImage;
 #endif

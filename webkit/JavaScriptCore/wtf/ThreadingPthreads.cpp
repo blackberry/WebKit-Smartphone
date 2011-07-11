@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2007, 2009 Apple Inc. All rights reserved.
  * Copyright (C) 2007 Justin Haygood (jhaygood@reaktix.com)
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,13 +43,14 @@
 #include "UnusedParam.h"
 #include <errno.h>
 
-#if !COMPILER(MSVC)
+#if !COMPILER(MSVC) || PLATFORM(OLYMPIA)
 #include <limits.h>
+#include <sched.h>
 #include <sys/time.h>
 #endif
 
 #if OS(ANDROID)
-#include "jni_utility.h"
+#include "JNIUtility.h"
 #endif
 
 #if PLATFORM(OLYMPIA)
@@ -255,6 +257,11 @@ void detachThread(ThreadIdentifier threadID)
         return;
 
     pthread_detach(pthreadHandle);
+}
+
+void yield()
+{
+    sched_yield();
 }
 
 ThreadIdentifier currentThread()

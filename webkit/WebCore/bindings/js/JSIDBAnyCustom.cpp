@@ -11,9 +11,6 @@
  * copyright notice, this list of conditions and the following disclaimer
  * in the documentation and/or other materials provided with the
  * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
@@ -35,12 +32,18 @@
 #include "JSIDBAny.h"
 
 #include "IDBAny.h"
-#include "IDBDatabaseRequest.h"
-#include "IDBObjectStoreRequest.h"
-#include "IndexedDatabaseRequest.h"
-#include "JSIDBDatabaseRequest.h"
-#include "JSIDBObjectStoreRequest.h"
-#include "JSIndexedDatabaseRequest.h"
+#include "IDBCursor.h"
+#include "IDBDatabase.h"
+#include "IDBFactory.h"
+#include "IDBIndex.h"
+#include "IDBKey.h"
+#include "IDBObjectStore.h"
+#include "JSIDBCursor.h"
+#include "JSIDBDatabase.h"
+#include "JSIDBFactory.h"
+#include "JSIDBIndex.h"
+#include "JSIDBKey.h"
+#include "JSIDBObjectStore.h"
 #include "SerializedScriptValue.h"
 
 using namespace JSC;
@@ -55,12 +58,20 @@ JSValue toJS(ExecState* exec, JSDOMGlobalObject* globalObject, IDBAny* idbAny)
     switch (idbAny->type()) {
     case IDBAny::UndefinedType:
         return jsUndefined();
-    case IDBAny::IDBDatabaseRequestType:
-        return toJS(exec, globalObject, idbAny->idbDatabaseRequest());
-    case IDBAny::IDBObjectStoreRequestType:
-        return toJS(exec, globalObject, idbAny->idbObjectStoreRequest());
-    case IDBAny::IndexedDatabaseRequestType:
-        return toJS(exec, globalObject, idbAny->indexedDatabaseRequest());
+    case IDBAny::NullType:
+        return jsNull();
+    case IDBAny::IDBCursorType:
+        return toJS(exec, globalObject, idbAny->idbCursor());
+    case IDBAny::IDBDatabaseType:
+        return toJS(exec, globalObject, idbAny->idbDatabase());
+    case IDBAny::IDBIndexType:
+        return toJS(exec, globalObject, idbAny->idbIndex());
+    case IDBAny::IDBKeyType:
+        return toJS(exec, globalObject, idbAny->idbKey());
+    case IDBAny::IDBObjectStoreType:
+        return toJS(exec, globalObject, idbAny->idbObjectStore());
+    case IDBAny::IDBFactoryType:
+        return toJS(exec, globalObject, idbAny->idbFactory());
     case IDBAny::SerializedScriptValueType:
         return idbAny->serializedScriptValue()->deserialize(exec, globalObject);
     }

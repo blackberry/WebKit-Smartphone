@@ -29,6 +29,7 @@
 #if ENABLE(VIDEO)
 
 #include "HTMLElement.h"
+#include "ActiveDOMObject.h"
 #include "MediaCanStartListener.h"
 #include "MediaPlayer.h"
 
@@ -51,7 +52,7 @@ class Widget;
 // But it can't be until the Chromium WebMediaPlayerClientImpl class is fixed so it
 // no longer depends on typecasting a MediaPlayerClient to an HTMLMediaElement.
 
-class HTMLMediaElement : public HTMLElement, public MediaPlayerClient, private MediaCanStartListener {
+class HTMLMediaElement : public HTMLElement, public MediaPlayerClient, private MediaCanStartListener, private ActiveDOMObject {
 public:
     MediaPlayer* player() const { return m_player.get(); }
     
@@ -64,7 +65,6 @@ public:
 
     // Eventually overloaded in HTMLVideoElement
     virtual bool supportsFullscreen() const { return false; };
-    virtual const KURL poster() const { return KURL(); }
 
     virtual bool supportsSave() const;
     
@@ -84,11 +84,10 @@ public:
     PassRefPtr<MediaError> error() const;
 
 // network state
-    KURL src() const;
     void setSrc(const String&);
     String currentSrc() const;
 
-    enum NetworkState { NETWORK_EMPTY, NETWORK_IDLE, NETWORK_LOADING, NETWORK_LOADED, NETWORK_NO_SOURCE };
+    enum NetworkState { NETWORK_EMPTY, NETWORK_IDLE, NETWORK_LOADING, NETWORK_NO_SOURCE };
     NetworkState networkState() const;
     
     String preload() const;    
@@ -155,6 +154,7 @@ public:
     void getPluginProxyParams(KURL& url, Vector<String>& names, Vector<String>& values);
     virtual void finishParsingChildren();
     void createMediaPlayerProxy();
+    void updateWidget(bool onlyCreateNonNetscapePlugins);
     void ensureMediaPlayer();
 #endif
 
@@ -175,13 +175,17 @@ protected:
     virtual ~HTMLMediaElement();
 
     virtual void parseMappedAttribute(Attribute*);
+    virtual bool isURLAttribute(Attribute*) const;
     virtual void attach();
 
     virtual void willMoveToNewOwnerDocument();
     virtual void didMoveToNewOwnerDocument();
 
+    enum DisplayMode { Unknown, None, Poster, Video };
+    DisplayMode displayMode() const { return m_displayMode; }
+    virtual void setDisplayMode(DisplayMode mode) { m_displayMode = mode; }
+
 private:
-    virtual bool checkDTD(const Node* newChild);    
     virtual void attributeChanged(Attribute*, bool preserveDecls);
     virtual bool rendererIsNeeded(RenderStyle*);
     virtual RenderObject* createRenderer(RenderArena*, RenderStyle*);
@@ -194,10 +198,16 @@ private:
     float getTimeOffsetAttribute(const QualifiedName&, float valueOnError) const;
     void setTimeOffsetAttribute(const QualifiedName&, float value);
     
-    virtual void documentWillBecomeInactive();
-    virtual void documentDidBecomeActive();
+    // ActiveDOMObject functions.
+    virtual bool canSuspend() const;
+    virtual void suspend(ReasonForSuspension);
+    virtual void resume();
+    virtual void stop();
+    virtual bool hasPendingActivity() const;
+    
     virtual void mediaVolumeDidChange();
-    virtual void updatePosterImage() { }
+
+    virtual void updateDisplayState() { }
     
     void setReadyState(MediaPlayer::ReadyState);
     void setNetworkState(MediaPlayer::NetworkState);
@@ -210,6 +220,7 @@ private:
     virtual void mediaPlayerMuteChanged(MediaPlayer*);
     virtual void mediaPlayerDurationChanged(MediaPlayer*);
     virtual void mediaPlayerRateChanged(MediaPlayer*);
+    virtual void mediaPlayerPlaybackStateChanged(MediaPlayer*);
     virtual void mediaPlayerSawUnsupportedTracks(MediaPlayer*);
     virtual void mediaPlayerRepaint(MediaPlayer*);
     virtual void mediaPlayerSizeChanged(MediaPlayer*);
@@ -256,7 +267,8 @@ private:
     void pauseInternal();
 
     void prepareForLoad();
-    
+    void allowVideoRendering();
+
     bool processingMediaPlayerCallback() const { return m_processingMediaPlayerCallback > 0; }
     void beginProcessingMediaPlayerCallback() { ++m_processingMediaPlayerCallback; }
     void endProcessingMediaPlayerCallback() { ASSERT(m_processingMediaPlayerCallback); --m_processingMediaPlayerCallback; }
@@ -276,6 +288,8 @@ private:
     void setPausedInternal(bool);
 
     virtual void mediaCanStart();
+
+    void setShouldDelayLoadEvent(bool);
 
     // Restrictions to change default behaviors. This is effectively a compile time choice at the moment
     // because there are no accessor functions.
@@ -328,16 +342,16 @@ private:
     
     MediaPlayer::Preload m_preload;
 
-    bool m_playing;
+    DisplayMode m_displayMode;
 
     // Counter incremented while processing a callback from the media player, so we can avoid
     // calling the media engine recursively.
     int m_processingMediaPlayerCallback;
 
-    bool m_isWaitingUntilMediaCanStart;
-
-    bool m_processingLoad : 1;
-    bool m_delayingTheLoadEvent : 1;
+    bool m_playing : 1;
+    bool m_isWaitingUntilMediaCanStart : 1;
+    bool m_shouldDelayLoadEvent : 1;
+    bool m_isWaitingToDecrementLoadEventDelayCount : 1;
     bool m_haveFiredLoadedData : 1;
     bool m_inActiveDocument : 1;
     bool m_autoplaying : 1;
@@ -366,6 +380,7 @@ private:
 
     bool m_dispatchingCanPlayEvent : 1;
     bool m_loadInitiatedByUserGesture : 1;
+    bool m_completelyLoaded : 1;
 };
 
 } //namespace

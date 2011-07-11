@@ -28,30 +28,30 @@
 
 #include "ArgumentDecoder.h"
 #include "ArgumentEncoder.h"
-#include "WebCoreTypeArgumentMarshalling.h"
-#include <WebCore/PlatformString.h>
+#include "WebCoreArgumentCoders.h"
+#include <wtf/text/WTFString.h>
 
 namespace WebKit {
 
 struct WebNavigationDataStore {
-    void encode(CoreIPC::ArgumentEncoder& encoder) const
+    void encode(CoreIPC::ArgumentEncoder* encoder) const
     {
-        encoder.encode(url);
-        encoder.encode(title);
+        encoder->encode(url);
+        encoder->encode(title);
     }
 
-    static bool decode(CoreIPC::ArgumentDecoder& decoder, WebNavigationDataStore& store)
+    static bool decode(CoreIPC::ArgumentDecoder* decoder, WebNavigationDataStore& store)
     {
-        if (!decoder.decode(store.url))
+        if (!decoder->decode(store.url))
             return false;
-        if (!decoder.decode(store.title))
+        if (!decoder->decode(store.title))
             return false;
         return true;
     }
 
     // FIXME: Add the remaining items we want to track for history.
-    WebCore::String url;
-    WebCore::String title;
+    WTF::String url;
+    WTF::String title;
 };
 
 } // namespace WebKit

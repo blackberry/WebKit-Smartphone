@@ -40,15 +40,19 @@
 #include "WebCookieJar.h"
 #include "WebCursorInfo.h"
 #include "WebData.h"
-#include "WebFileSystem.h"
+#include "WebDragData.h"
+#include "WebFileUtilities.h"
 #include "WebFrameClient.h"
 #include "WebFrameImpl.h"
+#include "WebIDBKey.h"
 #include "WebImage.h"
 #include "WebKit.h"
 #include "WebKitClient.h"
 #include "WebMimeRegistry.h"
 #include "WebPluginContainerImpl.h"
 #include "WebPluginListBuilderImpl.h"
+#include "WebSandboxSupport.h"
+#include "WebSerializedScriptValue.h"
 #include "WebScreenInfo.h"
 #include "WebString.h"
 #include "WebURL.h"
@@ -59,12 +63,10 @@
 
 #if OS(WINDOWS)
 #include "WebRect.h"
-#include "WebSandboxSupport.h"
 #include "WebThemeEngine.h"
 #endif
 
 #if OS(LINUX)
-#include "WebSandboxSupport.h"
 #include "WebFontInfo.h"
 #include "WebFontRenderStyle.h"
 #endif
@@ -77,7 +79,7 @@
 #include "Cookie.h"
 #include "FrameView.h"
 #include "GraphicsContext.h"
-#include "IndexedDatabaseProxy.h"
+#include "IDBFactoryBackendProxy.h"
 #include "KURL.h"
 #include "NotImplemented.h"
 #include "PlatformContextSkia.h"
@@ -198,6 +200,48 @@ void ChromiumBridge::clipboardWriteImage(NativeImagePtr image,
     webKitClient()->clipboard()->writeImage(webImage, sourceURL, title);
 }
 
+void ChromiumBridge::clipboardWriteData(const String& type,
+                                        const String& data,
+                                        const String& metadata)
+{
+    webKitClient()->clipboard()->writeData(type, data, metadata);
+}
+
+HashSet<String> ChromiumBridge::clipboardReadAvailableTypes(
+    PasteboardPrivate::ClipboardBuffer buffer, bool* containsFilenames)
+{
+    WebVector<WebString> result = webKitClient()->clipboard()->readAvailableTypes(
+        static_cast<WebClipboard::Buffer>(buffer), containsFilenames);
+    HashSet<String> types;
+    for (size_t i = 0; i < result.size(); ++i)
+        types.add(result[i]);
+    return types;
+}
+
+bool ChromiumBridge::clipboardReadData(PasteboardPrivate::ClipboardBuffer buffer,
+                                       const String& type, String& data, String& metadata)
+{
+    WebString resultData;
+    WebString resultMetadata;
+    bool succeeded = webKitClient()->clipboard()->readData(
+        static_cast<WebClipboard::Buffer>(buffer), type, &resultData, &resultMetadata);
+    if (succeeded) {
+        data = resultData;
+        metadata = resultMetadata;
+    }
+    return succeeded;
+}
+
+Vector<String> ChromiumBridge::clipboardReadFilenames(PasteboardPrivate::ClipboardBuffer buffer)
+{
+    WebVector<WebString> result = webKitClient()->clipboard()->readFilenames(
+        static_cast<WebClipboard::Buffer>(buffer));
+    Vector<String> convertedResult;
+    for (size_t i = 0; i < result.size(); ++i)
+        convertedResult.append(result[i]);
+    return convertedResult;
+}
+
 // Cookies --------------------------------------------------------------------
 
 void ChromiumBridge::setCookies(const Document* document, const KURL& url,
@@ -278,28 +322,28 @@ void ChromiumBridge::prefetchDNS(const String& hostname)
 
 bool ChromiumBridge::fileExists(const String& path)
 {
-    return webKitClient()->fileSystem()->fileExists(path);
+    return webKitClient()->fileUtilities()->fileExists(path);
 }
 
 bool ChromiumBridge::deleteFile(const String& path)
 {
-    return webKitClient()->fileSystem()->deleteFile(path);
+    return webKitClient()->fileUtilities()->deleteFile(path);
 }
 
 bool ChromiumBridge::deleteEmptyDirectory(const String& path)
 {
-    return webKitClient()->fileSystem()->deleteEmptyDirectory(path);
+    return webKitClient()->fileUtilities()->deleteEmptyDirectory(path);
 }
 
 bool ChromiumBridge::getFileSize(const String& path, long long& result)
 {
-    return webKitClient()->fileSystem()->getFileSize(path, result);
+    return webKitClient()->fileUtilities()->getFileSize(path, result);
 }
 
 bool ChromiumBridge::getFileModificationTime(const String& path, time_t& result)
 {
     double modificationTime;
-    if (!webKitClient()->fileSystem()->getFileModificationTime(path, modificationTime))
+    if (!webKitClient()->fileUtilities()->getFileModificationTime(path, modificationTime))
         return false;
     result = static_cast<time_t>(modificationTime);
     return true;
@@ -307,62 +351,62 @@ bool ChromiumBridge::getFileModificationTime(const String& path, time_t& result)
 
 String ChromiumBridge::directoryName(const String& path)
 {
-    return webKitClient()->fileSystem()->directoryName(path);
+    return webKitClient()->fileUtilities()->directoryName(path);
 }
 
 String ChromiumBridge::pathByAppendingComponent(const String& path, const String& component)
 {
-    return webKitClient()->fileSystem()->pathByAppendingComponent(path, component);
+    return webKitClient()->fileUtilities()->pathByAppendingComponent(path, component);
 }
 
 bool ChromiumBridge::makeAllDirectories(const String& path)
 {
-    return webKitClient()->fileSystem()->makeAllDirectories(path);
+    return webKitClient()->fileUtilities()->makeAllDirectories(path);
 }
 
 String ChromiumBridge::getAbsolutePath(const String& path)
 {
-    return webKitClient()->fileSystem()->getAbsolutePath(path);
+    return webKitClient()->fileUtilities()->getAbsolutePath(path);
 }
 
 bool ChromiumBridge::isDirectory(const String& path)
 {
-    return webKitClient()->fileSystem()->isDirectory(path);
+    return webKitClient()->fileUtilities()->isDirectory(path);
 }
 
 KURL ChromiumBridge::filePathToURL(const String& path)
 {
-    return webKitClient()->fileSystem()->filePathToURL(path);
+    return webKitClient()->fileUtilities()->filePathToURL(path);
 }
 
 PlatformFileHandle ChromiumBridge::openFile(const String& path, FileOpenMode mode)
 {
-    return webKitClient()->fileSystem()->openFile(path, mode);
+    return webKitClient()->fileUtilities()->openFile(path, mode);
 }
 
 void ChromiumBridge::closeFile(PlatformFileHandle& handle)
 {
-    webKitClient()->fileSystem()->closeFile(handle);
+    webKitClient()->fileUtilities()->closeFile(handle);
 }
 
 long long ChromiumBridge::seekFile(PlatformFileHandle handle, long long offset, FileSeekOrigin origin)
 {
-    return webKitClient()->fileSystem()->seekFile(handle, offset, origin);
+    return webKitClient()->fileUtilities()->seekFile(handle, offset, origin);
 }
 
 bool ChromiumBridge::truncateFile(PlatformFileHandle handle, long long offset)
 {
-    return webKitClient()->fileSystem()->truncateFile(handle, offset);
+    return webKitClient()->fileUtilities()->truncateFile(handle, offset);
 }
 
 int ChromiumBridge::readFromFile(PlatformFileHandle handle, char* data, int length)
 {
-    return webKitClient()->fileSystem()->readFromFile(handle, data, length);
+    return webKitClient()->fileUtilities()->readFromFile(handle, data, length);
 }
 
 int ChromiumBridge::writeToFile(PlatformFileHandle handle, const char* data, int length)
 {
-    return webKitClient()->fileSystem()->writeToFile(handle, data, length);
+    return webKitClient()->fileUtilities()->writeToFile(handle, data, length);
 }
 
 // Font -----------------------------------------------------------------------
@@ -404,6 +448,22 @@ void ChromiumBridge::getRenderStyleForStrike(const char* font, int sizeAndStyle,
 }
 #endif
 
+#if OS(DARWIN)
+bool ChromiumBridge::loadFont(NSFont* srcFont, ATSFontContainerRef* out)
+{
+    WebSandboxSupport* ss = webKitClient()->sandboxSupport();
+    if (ss)
+        return ss->loadFont(srcFont, out);
+
+    // This function should only be called in response to an error loading a
+    // font due to being blocked by the sandbox.
+    // This by definition shouldn't happen if there is no sandbox support.
+    ASSERT_NOT_REACHED();
+    *out = 0;
+    return false;
+}
+#endif
+
 // Geolocation ----------------------------------------------------------------
 
 GeolocationServiceBridge* ChromiumBridge::createGeolocationServiceBridge(GeolocationServiceChromium* geolocationServiceChromium)
@@ -411,9 +471,8 @@ GeolocationServiceBridge* ChromiumBridge::createGeolocationServiceBridge(Geoloca
     return createGeolocationServiceBridgeImpl(geolocationServiceChromium);
 }
 
-// HTML5 DB -------------------------------------------------------------------
+// Databases ------------------------------------------------------------------
 
-#if ENABLE(DATABASE)
 PlatformFileHandle ChromiumBridge::databaseOpenFile(const String& vfsFileName, int desiredFlags)
 {
     return webKitClient()->databaseOpenFile(WebString(vfsFileName), desiredFlags);
@@ -433,15 +492,26 @@ long long ChromiumBridge::databaseGetFileSize(const String& vfsFileName)
 {
     return webKitClient()->databaseGetFileSize(WebString(vfsFileName));
 }
-#endif
 
 // Indexed Database -----------------------------------------------------------
 
-PassRefPtr<IndexedDatabase> ChromiumBridge::indexedDatabase()
+PassRefPtr<IDBFactoryBackendInterface> ChromiumBridge::idbFactory()
 {
     // There's no reason why we need to allocate a new proxy each time, but
     // there's also no strong reason not to.
-    return IndexedDatabaseProxy::create();
+    return IDBFactoryBackendProxy::create();
+}
+
+void ChromiumBridge::createIDBKeysFromSerializedValuesAndKeyPath(const Vector<RefPtr<SerializedScriptValue> >& values, const String& keyPath, Vector<RefPtr<IDBKey> >& keys)
+{
+    WebVector<WebSerializedScriptValue> webValues = values;
+    WebVector<WebIDBKey> webKeys;
+    webKitClient()->createIDBKeysFromSerializedValuesAndKeyPath(webValues, WebString(keyPath), webKeys);
+
+    size_t webKeysSize = webKeys.size();
+    keys.reserveCapacity(webKeysSize);
+    for (size_t i = 0; i < webKeysSize; ++i)
+        keys.append(PassRefPtr<IDBKey>(webKeys[i]));
 }
 
 // Keygen ---------------------------------------------------------------------
@@ -505,7 +575,7 @@ String ChromiumBridge::preferredExtensionForMIMEType(const String& mimeType)
 
 // Plugin ---------------------------------------------------------------------
 
-bool ChromiumBridge::plugins(bool refresh, Vector<PluginInfo*>* results)
+bool ChromiumBridge::plugins(bool refresh, Vector<PluginInfo>* results)
 {
     WebPluginListBuilderImpl builder(results);
     webKitClient()->getPluginList(refresh, &builder);
@@ -633,6 +703,14 @@ void ChromiumBridge::paintScrollbarTrack(
         alignRect);
 }
 
+void ChromiumBridge::paintSpinButton(
+    GraphicsContext* gc, int part, int state, int classicState,
+    const IntRect& rect)
+{
+    webKitClient()->themeEngine()->paintSpinButton(
+        gc->platformContext()->canvas(), part, state, classicState, rect);
+}
+
 void ChromiumBridge::paintTextField(
     GraphicsContext* gc, int part, int state, int classicState,
     const IntRect& rect, const Color& color, bool fillContentArea,
@@ -745,6 +823,11 @@ int ChromiumBridge::memoryUsageMB()
     return static_cast<int>(webKitClient()->memoryUsageMB());
 }
 
+int ChromiumBridge::actualMemoryUsageMB()
+{
+    return static_cast<int>(webKitClient()->actualMemoryUsageMB());
+}
+
 int ChromiumBridge::screenDepth(Widget* widget)
 {
     WebWidgetClient* client = toWebWidgetClient(widget);
@@ -796,13 +879,6 @@ void ChromiumBridge::widgetSetCursor(Widget* widget, const Cursor& cursor)
     ChromeClientImpl* client = toChromeClientImpl(widget);
     if (client)
         client->setCursor(WebCursorInfo(cursor));
-}
-
-void ChromiumBridge::widgetSetFocus(Widget* widget)
-{
-    ChromeClientImpl* client = toChromeClientImpl(widget);
-    if (client)
-        client->focus();
 }
 
 WorkerContextProxy* WorkerContextProxy::create(Worker* worker)

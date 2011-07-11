@@ -69,7 +69,8 @@ public:
         TargetIsObject = 7,
         TargetIsMedia = 8,
         TargetIsWorker = 9,
-        TargetIsSharedWorker = 10
+        TargetIsSharedWorker = 10,
+        TargetIsPrefetch = 11,
     };
 
     ~WebURLRequest() { reset(); }
@@ -129,6 +130,10 @@ public:
     WEBKIT_API bool reportUploadProgress() const;
     WEBKIT_API void setReportUploadProgress(bool);
 
+    // Controls whether load timing info is collected for the request.
+    WEBKIT_API bool reportLoadTiming() const;
+    WEBKIT_API void setReportLoadTiming(bool);
+
     WEBKIT_API TargetType targetType() const;
     WEBKIT_API void setTargetType(TargetType);
 
@@ -145,6 +150,11 @@ public:
     // Allows the request to be matched up with its app cache host.
     WEBKIT_API int appCacheHostID() const;
     WEBKIT_API void setAppCacheHostID(int id);
+
+    // If true, the response body will be downloaded to a file managed by the
+    // WebURLLoader.  See WebURLResponse::downloadedFilePath.
+    WEBKIT_API bool downloadToFile() const;
+    WEBKIT_API void setDownloadToFile(bool);
 
 #if defined(WEBKIT_IMPLEMENTATION)
     WebCore::ResourceRequest& toMutableResourceRequest();

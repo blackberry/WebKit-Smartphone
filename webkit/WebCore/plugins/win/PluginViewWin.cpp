@@ -30,6 +30,8 @@
 
 #include "BitmapImage.h"
 #include "Bridge.h"
+#include "Chrome.h"
+#include "ChromeClient.h"
 #include "Document.h"
 #include "DocumentLoader.h"
 #include "Element.h"
@@ -48,6 +50,7 @@
 #include "JSDOMBinding.h"
 #include "JSDOMWindow.h"
 #include "KeyboardEvent.h"
+#include "LocalWindowsContext.h"
 #include "MIMETypeRegistry.h"
 #include "MouseEvent.h"
 #include "Page.h"
@@ -561,7 +564,7 @@ void PluginView::paintWindowedPluginIntoContext(GraphicsContext* context, const 
     ASSERT(parent()->isFrameView());
     IntPoint locationInWindow = static_cast<FrameView*>(parent())->contentsToWindow(frameRect().location());
 
-    HDC hdc = context->getWindowsContext(frameRect(), false);
+    LocalWindowsContext windowsContext(context, frameRect(), false);
 
 #if PLATFORM(CAIRO)
     // Must flush drawings up to this point to the backing metafile, otherwise the
@@ -571,6 +574,7 @@ void PluginView::paintWindowedPluginIntoContext(GraphicsContext* context, const 
     cairo_show_page(ctx);
 #endif
 
+    HDC hdc = windowsContext.hdc();
     XFORM originalTransform;
     GetWorldTransform(hdc, &originalTransform);
 
@@ -585,8 +589,6 @@ void PluginView::paintWindowedPluginIntoContext(GraphicsContext* context, const 
     paintIntoTransformedContext(hdc);
 
     SetWorldTransform(hdc, &originalTransform);
-
-    context->releaseWindowsContext(hdc, frameRect(), false);
 #endif
 }
 
@@ -615,7 +617,7 @@ void PluginView::paint(GraphicsContext* context, const IntRect& rect)
 
     ASSERT(parent()->isFrameView());
     IntRect rectInWindow = static_cast<FrameView*>(parent())->contentsToWindow(frameRect());
-    HDC hdc = context->getWindowsContext(rectInWindow, m_isTransparent);
+    LocalWindowsContext windowsContext(context, rectInWindow, m_isTransparent);
 
     // On Safari/Windows without transparency layers the GraphicsContext returns the HDC
     // of the window and the plugin expects that the passed in DC has window coordinates.
@@ -624,16 +626,14 @@ void PluginView::paint(GraphicsContext* context, const IntRect& rect)
 #if !PLATFORM(QT) && !OS(WINCE)
     if (!context->inTransparencyLayer()) {
         XFORM transform;
-        GetWorldTransform(hdc, &transform);
+        GetWorldTransform(windowsContext.hdc(), &transform);
         transform.eDx = 0;
         transform.eDy = 0;
-        SetWorldTransform(hdc, &transform);
+        SetWorldTransform(windowsContext.hdc(), &transform);
     }
 #endif
 
-    paintIntoTransformedContext(hdc);
-
-    context->releaseWindowsContext(hdc, frameRect(), m_isTransparent);
+    paintIntoTransformedContext(windowsContext.hdc());
 }
 
 void PluginView::handleKeyboardEvent(KeyboardEvent* event)
@@ -656,7 +656,6 @@ void PluginView::handleKeyboardEvent(KeyboardEvent* event)
 }
 
 #if !OS(WINCE)
-extern HCURSOR lastSetCursor;
 extern bool ignoreNextSetCursor;
 #endif
 
@@ -727,7 +726,8 @@ void PluginView::handleMouseEvent(MouseEvent* event)
     // Currently, Widget::setCursor is always called after this function in EventHandler.cpp
     // and since we don't want that we set ignoreNextSetCursor to true here to prevent that.
     ignoreNextSetCursor = true;
-    lastSetCursor = ::GetCursor();
+    if (Page* page = m_parentFrame->page())
+        page->chrome()->client()->setLastSetCursorToCurrentCursor();    
 #endif
 }
 

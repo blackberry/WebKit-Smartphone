@@ -27,7 +27,6 @@
 #include "config.h"
 #include "CSSFontSelector.h"
 
-#include "AtomicString.h"
 #include "CachedFont.h"
 #include "CSSFontFace.h"
 #include "CSSFontFaceRule.h"
@@ -40,7 +39,7 @@
 #include "CSSUnicodeRangeValue.h"
 #include "CSSValueKeywords.h"
 #include "CSSValueList.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "Document.h"
 #include "FontCache.h"
 #include "FontFamilyValue.h"
@@ -48,6 +47,7 @@
 #include "RenderObject.h"
 #include "Settings.h"
 #include "SimpleFontData.h"
+#include <wtf/text/AtomicString.h>
 
 #if ENABLE(SVG)
 #include "SVGFontFaceElement.h"
@@ -80,9 +80,9 @@ bool CSSFontSelector::isEmpty() const
     return m_fonts.isEmpty();
 }
 
-DocLoader* CSSFontSelector::docLoader() const
+CachedResourceLoader* CSSFontSelector::cachedResourceLoader() const
 {
-    return m_document ? m_document->docLoader() : 0;
+    return m_document ? m_document->cachedResourceLoader() : 0;
 }
 
 void CSSFontSelector::addFontFaceRule(const CSSFontFaceRule* fontFaceRule)
@@ -231,7 +231,6 @@ void CSSFontSelector::addFontFaceRule(const CSSFontFaceRule* fontFaceRule)
 
     int srcLength = srcList->length();
 
-    bool foundLocal = false;
     bool foundSVGFont = false;
 
     for (int i = 0; i < srcLength; i++) {
@@ -246,7 +245,7 @@ void CSSFontSelector::addFontFaceRule(const CSSFontFaceRule* fontFaceRule)
             Settings* settings = m_document ? m_document->frame() ? m_document->frame()->settings() : 0 : 0;
             bool allowDownloading = foundSVGFont || (settings && settings->downloadableBinaryFontsEnabled());
             if (allowDownloading && item->isSupportedFormat() && m_document) {
-                CachedFont* cachedFont = m_document->docLoader()->requestFont(item->resource());
+                CachedFont* cachedFont = m_document->cachedResourceLoader()->requestFont(item->resource());
                 if (cachedFont) {
 #if ENABLE(SVG_FONTS)
                     if (foundSVGFont)
@@ -257,7 +256,6 @@ void CSSFontSelector::addFontFaceRule(const CSSFontFaceRule* fontFaceRule)
             }
         } else {
             source = new CSSFontFaceSource(item->resource());
-            foundLocal = true;
         }
 
         if (!fontFace)
@@ -358,16 +356,14 @@ void CSSFontSelector::fontLoaded()
 {
     if (!m_document || m_document->inPageCache() || !m_document->renderer())
         return;
-    m_document->recalcStyle(Document::Force);
-    m_document->renderer()->setNeedsLayoutAndPrefWidthsRecalc();
+    m_document->scheduleForcedStyleRecalc();
 }
 
 void CSSFontSelector::fontCacheInvalidated()
 {
     if (!m_document || m_document->inPageCache() || !m_document->renderer())
         return;
-    m_document->recalcStyle(Document::Force);
-    m_document->renderer()->setNeedsLayoutAndPrefWidthsRecalc();
+    m_document->scheduleForcedStyleRecalc();
 }
 
 static FontData* fontDataForGenericFamily(Document* document, const FontDescription& fontDescription, const AtomicString& familyName)

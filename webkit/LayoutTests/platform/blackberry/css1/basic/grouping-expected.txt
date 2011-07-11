@@ -1,0 +1,44 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584 [bgcolor=#CCCCCC]
+      RenderBlock {P} at (0,0) size 784x21
+        RenderText {#text} at (0,1) size 356x19
+          text run at (0,1) width 356: "The style declarations which apply to the text below are:"
+      RenderBlock {PRE} at (0,37) size 784x30
+        RenderText {#text} at (0,0) size 272x30
+          text run at (0,0) width 272: ".one, .two, .three {color: green;}"
+          text run at (272,0) width 0: " "
+          text run at (0,15) width 0: " "
+      RenderBlock {HR} at (0,80) size 784x2 [border: (1px inset #000000)]
+      RenderBlock {P} at (0,98) size 784x21 [color=#008000]
+        RenderText {#text} at (0,1) size 194x19
+          text run at (0,1) width 194: "This sentence should be green."
+      RenderBlock {P} at (0,135) size 784x21 [color=#008000]
+        RenderText {#text} at (0,1) size 194x19
+          text run at (0,1) width 194: "This sentence should be green."
+      RenderBlock {P} at (0,172) size 784x21 [color=#008000]
+        RenderText {#text} at (0,1) size 194x19
+          text run at (0,1) width 194: "This sentence should be green."
+      RenderTable {TABLE} at (0,209) size 217x134 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 215x132
+          RenderTableRow {TR} at (0,0) size 215x29
+            RenderTableCell {TD} at (0,0) size 215x29 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderInline {STRONG} at (0,0) size 161x19
+                RenderText {#text} at (4,5) size 161x19
+                  text run at (4,5) width 161: "TABLE Testing Section"
+          RenderTableRow {TR} at (0,29) size 215x103
+            RenderTableCell {TD} at (0,66) size 12x29 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,5) size 4x19
+                text run at (4,5) width 4: " "
+            RenderTableCell {TD} at (12,29) size 203x103 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderBlock {P} at (4,4) size 195x21 [color=#008000]
+                RenderText {#text} at (0,1) size 194x19
+                  text run at (0,1) width 194: "This sentence should be green."
+              RenderBlock {P} at (4,41) size 195x21 [color=#008000]
+                RenderText {#text} at (0,1) size 194x19
+                  text run at (0,1) width 194: "This sentence should be green."
+              RenderBlock {P} at (4,78) size 195x21 [color=#008000]
+                RenderText {#text} at (0,1) size 194x19
+                  text run at (0,1) width 194: "This sentence should be green."

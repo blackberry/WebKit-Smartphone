@@ -63,7 +63,7 @@ bool EventHandler::passMousePressEventToSubframe(MouseEventWithHitTestResults& m
         VisiblePosition visiblePos(
             mev.targetNode()->renderer()->positionForPoint(mev.localPoint()));
         VisibleSelection newSelection(visiblePos);
-        if (m_frame->shouldChangeSelection(newSelection))
+        if (m_frame->selection()->shouldChangeSelection(newSelection))
             m_frame->selection()->setSelection(newSelection);
     }
 
@@ -129,7 +129,7 @@ bool EventHandler::eventActivatedView(const PlatformMouseEvent& event) const
 PassRefPtr<Clipboard> EventHandler::createDraggingClipboard() const
 {
     RefPtr<ChromiumDataObject> dataObject = ChromiumDataObject::create();
-    return ClipboardChromium::create(true, dataObject.get(), ClipboardWritable);
+    return ClipboardChromium::create(true, dataObject.get(), ClipboardWritable, m_frame);
 }
 
 void EventHandler::focusDocumentView()

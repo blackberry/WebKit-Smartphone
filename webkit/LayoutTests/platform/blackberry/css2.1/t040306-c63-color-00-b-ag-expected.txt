@@ -1,0 +1,77 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x124
+  RenderBlock {HTML} at (0,0) size 800x124
+    RenderBody {BODY} at (8,16) size 784x100 [color=#0000FF]
+      RenderBlock {P} at (0,0) size 784x21
+        RenderText {#text} at (0,1) size 652x19
+          text run at (0,1) width 652: "There should be three solid bars of colour below, each longer than the last, each of the colour specified."
+      RenderBlock {DIV} at (0,37) size 784x21
+        RenderText {#text} at (0,1) size 38x19
+          text run at (0,1) width 38: "Blue: "
+        RenderInline {SPAN} at (0,0) size 15x15
+          RenderText {#text} at (38,6) size 15x15
+            text run at (38,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15
+          RenderText {#text} at (53,6) size 15x15
+            text run at (53,6) width 15: "X"
+        RenderImage {IMG} at (68,6) size 15x15 [color=#FF0000]
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {DIV} at (0,58) size 784x21
+        RenderText {#text} at (0,1) size 55x19
+          text run at (0,1) width 55: "Orange: "
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#FFA500]
+          RenderText {#text} at (55,6) size 15x15
+            text run at (55,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#FFA500]
+          RenderText {#text} at (70,6) size 15x15
+            text run at (70,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#FFA500]
+          RenderText {#text} at (85,6) size 15x15
+            text run at (85,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#FFA500]
+          RenderText {#text} at (100,6) size 15x15
+            text run at (100,6) width 15: "X"
+        RenderImage {IMG} at (115,6) size 15x15 [color=#FF0000]
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {DIV} at (0,79) size 784x21
+        RenderText {#text} at (0,1) size 41x19
+          text run at (0,1) width 41: "Lime: "
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#00FF00]
+          RenderText {#text} at (41,6) size 15x15
+            text run at (41,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#00FF00]
+          RenderText {#text} at (56,6) size 15x15
+            text run at (56,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#00FF00]
+          RenderText {#text} at (71,6) size 15x15
+            text run at (71,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#00FF00]
+          RenderText {#text} at (86,6) size 15x15
+            text run at (86,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#00FF00]
+          RenderText {#text} at (101,6) size 15x15
+            text run at (101,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#00FF00]
+          RenderText {#text} at (116,6) size 15x15
+            text run at (116,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#00FF00]
+          RenderText {#text} at (131,6) size 15x15
+            text run at (131,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#00FF00]
+          RenderText {#text} at (146,6) size 15x15
+            text run at (146,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#00FF00]
+          RenderText {#text} at (161,6) size 15x15
+            text run at (161,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#00FF00]
+          RenderText {#text} at (176,6) size 15x15
+            text run at (176,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#00FF00]
+          RenderText {#text} at (191,6) size 15x15
+            text run at (191,6) width 15: "X"
+        RenderInline {SPAN} at (0,0) size 15x15 [color=#00FF00]
+          RenderText {#text} at (206,6) size 15x15
+            text run at (206,6) width 15: "X"
+        RenderImage {IMG} at (221,6) size 15x15 [color=#FF0000]
+        RenderText {#text} at (0,0) size 0x0

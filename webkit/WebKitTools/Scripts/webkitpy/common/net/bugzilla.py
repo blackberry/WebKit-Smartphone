@@ -113,6 +113,9 @@ class Attachment(object):
     def commit_queue(self):
         return self._attachment_dictionary.get("commit-queue")
 
+    def in_rietveld(self):
+        return self._attachment_dictionary.get("in-rietveld")
+
     def url(self):
         # FIXME: This should just return
         # self._bugzilla().attachment_url_for_id(self.id()). scm_unittest.py
@@ -158,6 +161,9 @@ class Bug(object):
     def id(self):
         return self.bug_dictionary["id"]
 
+    def title(self):
+        return self.bug_dictionary["title"]
+
     def assigned_to_email(self):
         return self.bug_dictionary["assigned_to_email"]
 
@@ -200,6 +206,9 @@ class Bug(object):
         # Checking committer() ensures that it was both commit-queue+'d and has
         # a valid committer.
         return filter(lambda patch: patch.committer(), patches)
+
+    def in_rietveld_queue_patches(self):
+        return [patch for patch in self.patches() if patch.in_rietveld() == None]
 
 
 # A container for all of the logic for making and parsing buzilla queries.
@@ -264,6 +273,16 @@ class BugzillaQueries(object):
         return sum([self._fetch_bug(bug_id).commit_queued_patches()
                     for bug_id in self.fetch_bug_ids_from_commit_queue()], [])
 
+    def fetch_first_patch_from_rietveld_queue(self):
+        # rietveld-queue processes all patches that don't have in-rietveld set.
+        query_url = "buglist.cgi?query_format=advanced&bug_status=UNCONFIRMED&bug_status=NEW&bug_status=ASSIGNED&bug_status=REOPENED&field0-0-0=flagtypes.name&type0-0-0=notsubstring&value0-0-0=in-rietveld&field0-1-0=attachments.ispatch&type0-1-0=equals&value0-1-0=1&order=Last+Changed&field0-2-0=attachments.isobsolete&type0-2-0=equals&value0-2-0=0"
+        bugs = self._fetch_bug_ids_advanced_query(query_url)
+        if not len(bugs):
+            return None
+
+        patches = self._fetch_bug(bugs[0]).in_rietveld_queue_patches()
+        return patches[0] if len(patches) else None
+
     def _fetch_bug_ids_from_review_queue(self):
         review_queue_url = "buglist.cgi?query_format=advanced&bug_status=UNCONFIRMED&bug_status=NEW&bug_status=ASSIGNED&bug_status=REOPENED&field0-0-0=flagtypes.name&type0-0-0=equals&value0-0-0=review?"
         return self._fetch_bug_ids_advanced_query(review_queue_url)
@@ -322,11 +341,8 @@ class CommitterValidator(object):
                         flag_name, contribution_guidlines)
         message += "\n\n- If you have %s rights please correct the error in %s by adding yourself to the file (no review needed).  " % (
                         flag_name, committers_list)
-        message += "Due to bug 30084 the %s will require a restart after your change.  " % queue_name
-        message += "Please contact %s to request a %s restart.  " % (
-                        queue_administrator, queue_name)
-        message += "After restart the %s will correctly respect your %s rights." % (
-                        queue_name, flag_name)
+        message += "The %s restarts itself every 2 hours.  After restart the %s will correctly respect your %s rights." % (
+                        queue_name, queue_name, flag_name)
         return message
 
     def _validate_setter_email(self, patch, result_key, rejection_function):
@@ -474,6 +490,8 @@ class Bugzilla(object):
         self._parse_attachment_flag(
                 element, 'review', attachment, 'reviewer_email')
         self._parse_attachment_flag(
+                element, 'in-rietveld', attachment, 'rietveld_uploader_email')
+        self._parse_attachment_flag(
                 element, 'commit-queue', attachment, 'committer_email')
         return attachment
 
@@ -500,6 +518,8 @@ class Bugzilla(object):
     def fetch_bug_dictionary(self, bug_id):
         try:
             return self._parse_bug_page(self._fetch_bug_page(bug_id))
+        except KeyboardInterrupt:
+            raise
         except:
             self.authenticate()
             return self._parse_bug_page(self._fetch_bug_page(bug_id))
@@ -592,7 +612,8 @@ class Bugzilla(object):
                               comment_text=None,
                               mark_for_review=False,
                               mark_for_commit_queue=False,
-                              mark_for_landing=False, bug_id=None):
+                              mark_for_landing=False,
+                              bug_id=None):
         self.browser['description'] = description
         self.browser['ispatch'] = ("1",)
         self.browser['flag_type-1'] = ('?',) if mark_for_review else ('X',)
@@ -703,7 +724,7 @@ class Bugzilla(object):
             self.browser["blocked"] = unicode(blocked)
         if assignee == None:
             assignee = self.username
-        if assignee:
+        if assignee and not self.browser.find_control("assigned_to").disabled:
             self.browser["assigned_to"] = assignee
         self.browser["short_desc"] = bug_title
         self.browser["comment"] = bug_description
@@ -730,8 +751,10 @@ class Bugzilla(object):
         # FIXME: This will break if we ever re-order attachment flags
         if flag_name == "review":
             return self.browser.find_control(type='select', nr=0)
-        if flag_name == "commit-queue":
+        elif flag_name == "commit-queue":
             return self.browser.find_control(type='select', nr=1)
+        elif flag_name == "in-rietveld":
+            return self.browser.find_control(type='select', nr=2)
         raise Exception("Don't know how to find flag named \"%s\"" % flag_name)
 
     def clear_attachment_flags(self,
@@ -758,8 +781,8 @@ class Bugzilla(object):
                                attachment_id,
                                flag_name,
                                flag_value,
-                               comment_text,
-                               additional_comment_text):
+                               comment_text=None,
+                               additional_comment_text=None):
         # FIXME: We need a way to test this function on a live bugzilla
         # instance.
 
@@ -774,7 +797,10 @@ class Bugzilla(object):
 
         self.browser.open(self.attachment_url_for_id(attachment_id, 'edit'))
         self.browser.select_form(nr=1)
-        self.browser.set_value(comment_text, name='comment', nr=0)
+
+        if comment_text:
+            self.browser.set_value(comment_text, name='comment', nr=0)
+
         self._find_select_element_for_flag(flag_name).value = (flag_value,)
         self.browser.submit()
 

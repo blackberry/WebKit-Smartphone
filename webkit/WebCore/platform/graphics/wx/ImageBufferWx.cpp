@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2007 Kevin Ollivier <kevino@theolliviers.com>
+ * Copyright (C) 2010 Torch Mobile (Beijing) Co. Ltd. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -75,16 +76,40 @@ void ImageBuffer::putPremultipliedImageData(ImageData* source, const IntRect& so
     notImplemented();
 }
 
-String ImageBuffer::toDataURL(const String&) const
+String ImageBuffer::toDataURL(const String&, const double*) const
 {
     notImplemented();
     return String();
 }
 
-Image* ImageBuffer::image() const
+bool ImageBuffer::drawsUsingCopy() const
+{
+    return true;
+}
+
+PassRefPtr<Image> ImageBuffer::copyImage() const
 {
     notImplemented();
     return 0;
+}
+
+void ImageBuffer::clip(GraphicsContext*, const FloatRect&) const
+{
+    notImplemented();
+}
+
+void ImageBuffer::draw(GraphicsContext* context, ColorSpace styleColorSpace, const FloatRect& destRect, const FloatRect& srcRect,
+                       CompositeOperator op, bool useLowQualityScale)
+{
+    RefPtr<Image> imageCopy = copyImage();
+    context->drawImage(imageCopy.get(), styleColorSpace, destRect, srcRect, op, useLowQualityScale);
+}
+
+void ImageBuffer::drawPattern(GraphicsContext* context, const FloatRect& srcRect, const AffineTransform& patternTransform,
+                              const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator op, const FloatRect& destRect)
+{
+    RefPtr<Image> imageCopy = copyImage();
+    imageCopy->drawPattern(context, srcRect, patternTransform, phase, styleColorSpace, op, destRect);
 }
 
 void ImageBuffer::platformTransformColorSpace(const Vector<int>&)

@@ -1,0 +1,32 @@
+<!-- instructions
+a. This web page should be used on simulator or Torch device
+   in order to illustrate the text overlapped bug when block zoom in
+   the website http://www.formula1.com/default.html.
+b. When the web page loaded, change the default font size in browser options to "6",
+   then the text will be displayed normally without overlap.
+c. Press the trackpad and move the magnifying glass "+" under the text "relationship"
+   so that the center of the glass "+" should be about 1~3px vertically away from that text.
+d. Click the trackpad. If you see overlapping text, then the test FAILED.
+   Otherwise, the test PASSED.
+-->
+<html>
+<head>
+</head>
+<body>
+<h2>TOP STORIES</h2>
+<div style="width:715px;">
+<table summary="Latest Headlines" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-collapse:collapse;">
+    <tbody>
+    <tr style="height:24px;">
+        <td style="width:35px; line-height:0;"><img src="none"/></td>
+        <td style="font-size:1.2em; width:75px; color:#888888; line-height:0;">Interview</td>
+        <td style="font-size:1.3em; width:515px; line-height:0;">
+            <a href="none">Sebastian Vettel Q&A: Suzuka and I have a special relationship</a>
+        </td>
+        <td style="font-size:1.2em; width:90px; color:#888888; line-height:0;">10 Oct 2010</td>
+    </tr>
+    </tbody>
+</table>
+</div>
+</body>
+</html>

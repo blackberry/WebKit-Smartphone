@@ -58,6 +58,7 @@ import Queue
 import random
 import re
 import shutil
+import signal
 import sys
 import time
 import traceback
@@ -69,12 +70,10 @@ from layout_package import test_expectations
 from layout_package import test_failures
 from layout_package import test_files
 from layout_package import test_results_uploader
-from test_types import fuzzy_image_diff
 from test_types import image_diff
 from test_types import text_diff
 from test_types import test_type_base
 
-from webkitpy.common.system.executive import Executive
 from webkitpy.thirdparty import simplejson
 
 import port
@@ -105,12 +104,11 @@ class TestInfo:
         self._image_hash = None
 
     def _read_image_hash(self):
-        try:
-            with codecs.open(self._expected_hash_path, "r", "ascii") as hash_file:
-                return hash_file.read()
-        except IOError, e:
-            if errno.ENOENT != e.errno:
-                raise
+        if not os.path.exists(self._expected_hash_path):
+            return None
+
+        with codecs.open(self._expected_hash_path, "r", "ascii") as hash_file:
+            return hash_file.read()
 
     def image_hash(self):
         # Read the image_hash lazily to reduce startup time.
@@ -272,34 +270,41 @@ class TestRunner:
         #        options.results_directory, use_tls=True, port=9323)
 
         # a list of TestType objects
-        self._test_types = []
+        self._test_types = [text_diff.TestTextDiff]
+        if options.pixel_tests:
+            self._test_types.append(image_diff.ImageDiff)
 
         # a set of test files, and the same tests as a list
         self._test_files = set()
         self._test_files_list = None
         self._result_queue = Queue.Queue()
-
         self._retrying = False
 
-        # Hack for dumping threads on the bots
-        self._last_thread_dump = None
-
-    def __del__(self):
-        _log.debug("flushing stdout")
-        sys.stdout.flush()
-        _log.debug("flushing stderr")
-        sys.stderr.flush()
-        _log.debug("stopping http server")
-        self._port.stop_http_server()
-        _log.debug("stopping websocket server")
-        self._port.stop_websocket_server()
-
-    def gather_file_paths(self, paths):
+    def collect_tests(self, args, last_unexpected_results):
         """Find all the files to test.
 
         Args:
-          paths: a list of globs to use instead of the defaults."""
+          args: list of test arguments from the command line
+          last_unexpected_results: list of unexpected results to retest, if any
+
+        """
+        paths = [arg for arg in args if arg and arg != '']
+        paths += last_unexpected_results
+        if self._options.test_list:
+            paths += read_test_files(self._options.test_list)
         self._test_files = test_files.gather_test_files(self._port, paths)
+
+    def lint(self):
+        # Creating the expecations for each platform/configuration pair does
+        # all the test list parsing and ensures it's correct syntax (e.g. no
+        # dupes).
+        for platform_name in self._port.test_platform_names():
+            self.parse_expectations(platform_name, is_debug_mode=True)
+            self.parse_expectations(platform_name, is_debug_mode=False)
+        self._printer.write("")
+        _log.info("If there are no fail messages, errors or exceptions, "
+                  "then the lint succeeded.")
+        return 0
 
     def parse_expectations(self, test_platform_name, is_debug_mode):
         """Parse the expectations from the test_list files and return a data
@@ -335,8 +340,8 @@ class TestRunner:
         self._printer.print_expected("Found:  %d tests" %
                                      (len(self._test_files)))
         if not num_all_test_files:
-            _log.critical("No tests to run.")
-            sys.exit(1)
+            _log.critical('No tests to run.')
+            return None
 
         skipped = set()
         if num_all_test_files > 1 and not self._options.force:
@@ -365,7 +370,7 @@ class TestRunner:
                 assert(test_size > 0)
             except:
                 _log.critical("invalid chunk '%s'" % chunk_value)
-                sys.exit(1)
+                return None
 
             # Get the number of tests
             num_tests = len(test_files)
@@ -466,10 +471,6 @@ class TestRunner:
         self._printer.print_expected('')
 
         return result_summary
-
-    def add_test_type(self, test_type):
-        """Add a TestType to the TestRunner."""
-        self._test_types.append(test_type)
 
     def _get_dir_for_test_file(self, test_file):
         """Returns the highest-level directory by which to shard the given
@@ -577,8 +578,6 @@ class TestRunner:
         test_args.new_baseline = self._options.new_baseline
         test_args.reset_results = self._options.reset_results
 
-        test_args.show_sources = self._options.sources
-
         if self._options.startup_dialog:
             shell_args.append('--testshell-startup-dialog')
 
@@ -628,35 +627,12 @@ class TestRunner:
         """Returns whether we should run all the tests in the main thread."""
         return int(self._options.child_processes) == 1
 
-    def _dump_thread_states(self):
-        for thread_id, stack in sys._current_frames().items():
-            # FIXME: Python 2.6 has thread.ident which we could
-            # use to map from thread_id back to thread.name
-            print "\n# Thread: %d" % thread_id
-            for filename, lineno, name, line in traceback.extract_stack(stack):
-                print 'File: "%s", line %d, in %s' % (filename, lineno, name)
-                if line:
-                    print "  %s" % (line.strip())
-
-    def _dump_thread_states_if_necessary(self):
-        # HACK: Dump thread states every minute to figure out what's
-        # hanging on the bots.
-        if not self._options.verbose:
-            return
-        dump_threads_every = 60  # Dump every minute
-        if not self._last_thread_dump:
-            self._last_thread_dump = time.time()
-        time_since_last_dump = time.time() - self._last_thread_dump
-        if  time_since_last_dump > dump_threads_every:
-            self._dump_thread_states()
-            self._last_thread_dump = time.time()
-
     def _run_tests(self, file_list, result_summary):
         """Runs the tests in the file_list.
 
-        Return: A tuple (failures, thread_timings, test_timings,
+        Return: A tuple (keyboard_interrupted, thread_timings, test_timings,
             individual_test_timings)
-            failures is a map from test to list of failure types
+            keyboard_interrupted is whether someone typed Ctrl^C
             thread_timings is a list of dicts with the total runtime
               of each thread with 'name', 'num_tests', 'total_time' properties
             test_timings is a list of timings for each sharded subdirectory
@@ -667,7 +643,7 @@ class TestRunner:
         """
         # FIXME: We should use webkitpy.tool.grammar.pluralize here.
         plural = ""
-        if self._options.child_processes > 1:
+        if not self._is_single_threaded():
             plural = "s"
         self._printer.print_update('Starting %s%s ...' %
                                    (self._port.driver_name(), plural))
@@ -675,56 +651,110 @@ class TestRunner:
                                                              result_summary)
         self._printer.print_update("Starting testing ...")
 
-        # Wait for the threads to finish and collect test failures.
-        failures = {}
+        keyboard_interrupted = self._wait_for_threads_to_finish(threads,
+                                                                result_summary)
+        (thread_timings, test_timings, individual_test_timings) = \
+            self._collect_timing_info(threads)
+
+        return (keyboard_interrupted, thread_timings, test_timings,
+                individual_test_timings)
+
+    def _wait_for_threads_to_finish(self, threads, result_summary):
+        keyboard_interrupted = False
+        try:
+            # Loop through all the threads waiting for them to finish.
+            some_thread_is_alive = True
+            while some_thread_is_alive:
+                some_thread_is_alive = False
+                t = time.time()
+                for thread in threads:
+                    exception_info = thread.exception_info()
+                    if exception_info is not None:
+                        # Re-raise the thread's exception here to make it
+                        # clear that testing was aborted. Otherwise,
+                        # the tests that did not run would be assumed
+                        # to have passed.
+                        raise exception_info[0], exception_info[1], exception_info[2]
+
+                    if thread.isAlive():
+                        some_thread_is_alive = True
+                        next_timeout = thread.next_timeout()
+                        if (next_timeout and t > next_timeout):
+                            _log_wedged_thread(thread)
+                            thread.clear_next_timeout()
+
+                self.update_summary(result_summary)
+
+                if some_thread_is_alive:
+                    time.sleep(0.01)
+
+        except KeyboardInterrupt:
+            keyboard_interrupted = True
+            for thread in threads:
+                thread.cancel()
+
+        return keyboard_interrupted
+
+    def _collect_timing_info(self, threads):
         test_timings = {}
         individual_test_timings = []
         thread_timings = []
-        try:
-            # Loop through all the threads waiting for them to finish.
-            for thread in threads:
-                # FIXME: We'll end up waiting on the first thread the whole
-                # time.  That means we won't notice exceptions on other
-                # threads until the first one exits.
-                # We should instead while True: in the outer loop
-                # and then loop through threads joining and checking
-                # isAlive and get_exception_info.  Exiting on any exception.
-                while thread.isAlive():
-                    # Wake the main thread every 0.1 seconds so we
-                    # can call update_summary in a timely fashion.
-                    thread.join(0.1)
-                    # HACK: Used for debugging threads on the bots.
-                    self._dump_thread_states_if_necessary()
-                    self.update_summary(result_summary)
 
-                # This thread is done, save off the timing information.
-                thread_timings.append({'name': thread.getName(),
-                                       'num_tests': thread.get_num_tests(),
-                                       'total_time': thread.get_total_time()})
-                test_timings.update(thread.get_directory_timing_stats())
-                individual_test_timings.extend(thread.get_test_results())
-        except KeyboardInterrupt:
-            for thread in threads:
-                thread.cancel()
-            raise
         for thread in threads:
-            # Check whether a TestShellThread died before normal completion.
-            exception_info = thread.get_exception_info()
-            if exception_info is not None:
-                # Re-raise the thread's exception here to make it clear that
-                # testing was aborted. Otherwise, the tests that did not run
-                # would be assumed to have passed.
-                raise exception_info[0], exception_info[1], exception_info[2]
+            thread_timings.append({'name': thread.getName(),
+                                   'num_tests': thread.get_num_tests(),
+                                   'total_time': thread.get_total_time()})
+            test_timings.update(thread.get_directory_timing_stats())
+            individual_test_timings.extend(thread.get_test_results())
 
-        # FIXME: This update_summary call seems unecessary.
-        # Calls are already made right after join() above,
-        # as well as from the individual threads themselves.
-        self.update_summary(result_summary)
         return (thread_timings, test_timings, individual_test_timings)
 
     def needs_http(self):
         """Returns whether the test runner needs an HTTP server."""
         return self._contains_tests(self.HTTP_SUBDIR)
+
+    def set_up_run(self):
+        """Configures the system to be ready to run tests.
+
+        Returns a ResultSummary object if we should continue to run tests,
+        or None if we should abort.
+
+        """
+        # This must be started before we check the system dependencies,
+        # since the helper may do things to make the setup correct.
+        self._printer.print_update("Starting helper ...")
+        self._port.start_helper()
+
+        # Check that the system dependencies (themes, fonts, ...) are correct.
+        if not self._options.nocheck_sys_deps:
+            self._printer.print_update("Checking system dependencies ...")
+            if not self._port.check_sys_deps(self.needs_http()):
+                self._port.stop_helper()
+                return None
+
+        if self._options.clobber_old_results:
+            self._clobber_old_results()
+
+        # Create the output directory if it doesn't already exist.
+        self._port.maybe_make_directory(self._options.results_directory)
+
+        self._port.setup_test_run()
+
+        self._printer.print_update("Preparing tests ...")
+        result_summary = self.prepare_lists_and_print_output()
+        if not result_summary:
+            return None
+
+        if self.needs_http():
+            self._printer.print_update('Starting HTTP server ...')
+            self._port.start_http_server()
+
+        if self._contains_tests(self.WEBSOCKET_SUBDIR):
+            self._printer.print_update('Starting WebSocket server ...')
+            self._port.start_websocket_server()
+            # self._websocket_secure_server.Start()
+
+        return result_summary
 
     def run(self, result_summary):
         """Run all our tests on all our test files.
@@ -738,21 +768,15 @@ class TestRunner:
         Return:
           The number of unexpected results (0 == success)
         """
-        if not self._test_files:
-            return 0
+        # gather_test_files() must have been called first to initialize us.
+        # If we didn't find any files to test, we've errored out already in
+        # prepare_lists_and_print_output().
+        assert(len(self._test_files))
+
         start_time = time.time()
 
-        if self.needs_http():
-            self._printer.print_update('Starting HTTP server ...')
-
-            self._port.start_http_server()
-
-        if self._contains_tests(self.WEBSOCKET_SUBDIR):
-            self._printer.print_update('Starting WebSocket server ...')
-            self._port.start_websocket_server()
-            # self._websocket_secure_server.Start()
-
-        thread_timings, test_timings, individual_test_timings = (
+        keyboard_interrupted, thread_timings, test_timings, \
+            individual_test_timings = (
             self._run_tests(self._test_files_list, result_summary))
 
         # We exclude the crashes from the list of results to retry, because
@@ -760,12 +784,13 @@ class TestRunner:
         failures = self._get_failures(result_summary, include_crashes=False)
         retry_summary = result_summary
         while (len(failures) and self._options.retry_failures and
-            not self._retrying):
+            not self._retrying and not keyboard_interrupted):
             _log.info('')
             _log.info("Retrying %d unexpected failure(s) ..." % len(failures))
             _log.info('')
             self._retrying = True
             retry_summary = ResultSummary(self._expectations, failures.keys())
+            # Note that we intentionally ignore the return value here.
             self._run_tests(failures.keys(), retry_summary)
             failures = self._get_failures(retry_summary, include_crashes=True)
 
@@ -782,27 +807,48 @@ class TestRunner:
         sys.stderr.flush()
 
         self._printer.print_one_line_summary(result_summary.total,
-                                             result_summary.expected)
+                                             result_summary.expected,
+                                             result_summary.unexpected)
 
         unexpected_results = summarize_unexpected_results(self._port,
             self._expectations, result_summary, retry_summary)
         self._printer.print_unexpected_results(unexpected_results)
 
-        # Write the same data to log files.
-        self._write_json_files(unexpected_results, result_summary,
-                             individual_test_timings)
+        if self._options.record_results:
+            # Write the same data to log files.
+            self._write_json_files(unexpected_results, result_summary,
+                                   individual_test_timings)
 
-        # Upload generated JSON files to appengine server.
-        self._upload_json_files()
+            # Upload generated JSON files to appengine server.
+            self._upload_json_files()
 
         # Write the summary to disk (results.html) and display it if requested.
         wrote_results = self._write_results_html_file(result_summary)
         if self._options.show_results and wrote_results:
             self._show_results_html_file()
 
+        # Now that we've completed all the processing we can, we re-raise
+        # a KeyboardInterrupt if necessary so the caller can handle it.
+        if keyboard_interrupted:
+            raise KeyboardInterrupt
+
         # Ignore flaky failures and unexpected passes so we don't turn the
         # bot red for those.
         return unexpected_results['num_regressions']
+
+    def clean_up_run(self):
+        """Restores the system after we're done running tests."""
+
+        _log.debug("flushing stdout")
+        sys.stdout.flush()
+        _log.debug("flushing stderr")
+        sys.stderr.flush()
+        _log.debug("stopping http server")
+        self._port.stop_http_server()
+        _log.debug("stopping websocket server")
+        self._port.stop_websocket_server()
+        _log.debug("stopping helper")
+        self._port.stop_helper()
 
     def update_summary(self, result_summary):
         """Update the summary and print results with any completed tests."""
@@ -821,6 +867,20 @@ class TestRunner:
             self._printer.print_test_result(result, expected, exp_str, got_str)
             self._printer.print_progress(result_summary, self._retrying,
                                          self._test_files_list)
+
+    def _clobber_old_results(self):
+        # Just clobber the actual test results directories since the other
+        # files in the results directory are explicitly used for cross-run
+        # tracking.
+        self._printer.print_update("Clobbering old results in %s" %
+                                   self._options.results_directory)
+        layout_tests_dir = self._port.layout_tests_dir()
+        possible_dirs = os.listdir(layout_tests_dir)
+        for dirname in possible_dirs:
+            if os.path.isdir(os.path.join(layout_tests_dir, dirname)):
+                shutil.rmtree(os.path.join(self._options.results_directory,
+                                           dirname),
+                              ignore_errors=True)
 
     def _get_failures(self, result_summary, include_crashes):
         """Filters a dict of results and returns only the failures.
@@ -879,7 +939,9 @@ class TestRunner:
             self._port, self._options.builder_name, self._options.build_name,
             self._options.build_number, self._options.results_directory,
             BUILDER_BASE_URL, individual_test_timings,
-            self._expectations, result_summary, self._test_files_list)
+            self._expectations, result_summary, self._test_files_list,
+            not self._options.upload_full_results,
+            self._options.test_results_server)
 
         _log.debug("Finished writing JSON files.")
 
@@ -890,8 +952,12 @@ class TestRunner:
         _log.info("Uploading JSON files for builder: %s",
                    self._options.builder_name)
 
-        attrs = [('builder', self._options.builder_name)]
-        json_files = ["expectations.json", "results.json"]
+        attrs = [("builder", self._options.builder_name)]
+        json_files = ["expectations.json"]
+        if self._options.upload_full_results:
+            json_files.append("results.json")
+        else:
+            json_files.append("incremental_results.json")
 
         files = [(file, os.path.join(self._options.results_directory, file))
             for file in json_files]
@@ -907,6 +973,33 @@ class TestRunner:
             return
 
         _log.info("JSON files uploaded.")
+
+    def _print_config(self):
+        """Prints the configuration for the test run."""
+        p = self._printer
+        p.print_config("Using port '%s'" % self._port.name())
+        p.print_config("Placing test results in %s" %
+                       self._options.results_directory)
+        if self._options.new_baseline:
+            p.print_config("Placing new baselines in %s" %
+                           self._port.baseline_path())
+        p.print_config("Using %s build" % self._options.configuration)
+        if self._options.pixel_tests:
+            p.print_config("Pixel tests enabled")
+        else:
+            p.print_config("Pixel tests disabled")
+
+        p.print_config("Regular timeout: %s, slow test timeout: %s" %
+                       (self._options.time_out_ms,
+                        self._options.slow_time_out_ms))
+
+        if self._is_single_threaded():
+            p.print_config("Running one %s" % self._port.driver_name())
+        else:
+            p.print_config("Running %s %ss in parallel" %
+                           (self._options.child_processes,
+                            self._port.driver_name()))
+        p.print_config("")
 
     def _print_expected_results_of_type(self, result_summary,
                                         result_type, result_type_str):
@@ -1255,20 +1348,27 @@ class TestRunner:
 def read_test_files(files):
     tests = []
     for file in files:
-        # FIXME: This could be cleaner using a list comprehension.
-        for line in codecs.open(file, "r", "utf-8"):
-            line = test_expectations.strip_comments(line)
-            if line:
-                tests.append(line)
+        try:
+            with codecs.open(file, 'r', 'utf-8') as file_contents:
+                # FIXME: This could be cleaner using a list comprehension.
+                for line in file_contents:
+                    line = test_expectations.strip_comments(line)
+                    if line:
+                        tests.append(line)
+        except IOError, e:
+            if e.errno == errno.ENOENT:
+                _log.critical('')
+                _log.critical('--test-list file "%s" not found' % file)
+            raise
     return tests
 
 
-def run(port_obj, options, args, regular_output=sys.stderr,
+def run(port, options, args, regular_output=sys.stderr,
         buildbot_output=sys.stdout):
     """Run the tests.
 
     Args:
-      port_obj: Port object for port-specific behavior
+      port: Port object for port-specific behavior
       options: a dictionary of command line options
       args: a list of sub directories or files to test
       regular_output: a stream-like object that we can send logging/debug
@@ -1278,24 +1378,66 @@ def run(port_obj, options, args, regular_output=sys.stderr,
     Returns:
       the number of unexpected results that occurred, or -1 if there is an
           error.
-    """
 
-    # Configure the printing subsystem for printing output, logging debug
-    # info, and tracing tests.
+    """
+    _set_up_derived_options(port, options)
+
+    printer = printing.Printer(port, options, regular_output, buildbot_output,
+        int(options.child_processes), options.experimental_fully_parallel)
+    if options.help_printing:
+        printer.help_printing()
+        printer.cleanup()
+        return 0
+
+    last_unexpected_results = _gather_unexpected_results(options)
+    if options.print_last_failures:
+        printer.write("\n".join(last_unexpected_results) + "\n")
+        printer.cleanup()
+        return 0
+
+    # We wrap any parts of the run that are slow or likely to raise exceptions
+    # in a try/finally to ensure that we clean up the logging configuration.
+    num_unexpected_results = -1
+    try:
+        test_runner = TestRunner(port, options, printer)
+        test_runner._print_config()
+
+        printer.print_update("Collecting tests ...")
+        try:
+            test_runner.collect_tests(args, last_unexpected_results)
+        except IOError, e:
+            if e.errno == errno.ENOENT:
+                return -1
+            raise
+
+        printer.print_update("Parsing expectations ...")
+        if options.lint_test_files:
+            return test_runner.lint()
+        test_runner.parse_expectations(port.test_platform_name(),
+                                       options.configuration == 'Debug')
+
+        printer.print_update("Checking build ...")
+        if not port.check_build(test_runner.needs_http()):
+            return -1
+
+        result_summary = test_runner.set_up_run()
+        if result_summary:
+            num_unexpected_results = test_runner.run(result_summary)
+            test_runner.clean_up_run()
+            _log.debug("Testing completed, Exit status: %d" %
+                       num_unexpected_results)
+    finally:
+        printer.cleanup()
+
+    return num_unexpected_results
+
+
+def _set_up_derived_options(port_obj, options):
+    """Sets the options values that depend on other options values."""
 
     if not options.child_processes:
         # FIXME: Investigate perf/flakiness impact of using cpu_count + 1.
-        options.child_processes = port_obj.default_child_processes()
-
-    printer = printing.Printer(port_obj, options, regular_output=regular_output,
-        buildbot_output=buildbot_output,
-        child_processes=int(options.child_processes),
-        is_fully_parallel=options.experimental_fully_parallel)
-    if options.help_printing:
-        printer.help_printing()
-        return 0
-
-    executive = Executive()
+        options.child_processes = str(port_obj.default_child_processes())
 
     if not options.configuration:
         options.configuration = port_obj.default_configuration()
@@ -1315,30 +1457,6 @@ def run(port_obj, options, args, regular_output=sys.stderr,
         # Debug or Release.
         options.results_directory = port_obj.results_directory()
 
-    last_unexpected_results = []
-    if options.print_last_failures or options.retest_last_failures:
-        unexpected_results_filename = os.path.join(
-           options.results_directory, "unexpected_results.json")
-        with codecs.open(unexpected_results_filename, "r", "utf-8") as file:
-            results = simplejson.load(file)
-        last_unexpected_results = results['tests'].keys()
-        if options.print_last_failures:
-            printer.write("\n".join(last_unexpected_results) + "\n")
-            return 0
-
-    if options.clobber_old_results:
-        # Just clobber the actual test results directories since the other
-        # files in the results directory are explicitly used for cross-run
-        # tracking.
-        printer.print_update("Clobbering old results in %s" %
-                             options.results_directory)
-        layout_tests_dir = port_obj.layout_tests_dir()
-        possible_dirs = os.listdir(layout_tests_dir)
-        for dirname in possible_dirs:
-            if os.path.isdir(os.path.join(layout_tests_dir, dirname)):
-                shutil.rmtree(os.path.join(options.results_directory, dirname),
-                              ignore_errors=True)
-
     if not options.time_out_ms:
         if options.configuration == "Debug":
             options.time_out_ms = str(2 * TestRunner.DEFAULT_TEST_TIMEOUT_MS)
@@ -1346,94 +1464,18 @@ def run(port_obj, options, args, regular_output=sys.stderr,
             options.time_out_ms = str(TestRunner.DEFAULT_TEST_TIMEOUT_MS)
 
     options.slow_time_out_ms = str(5 * int(options.time_out_ms))
-    printer.print_config("Regular timeout: %s, slow test timeout: %s" %
-                   (options.time_out_ms, options.slow_time_out_ms))
 
-    if int(options.child_processes) == 1:
-        printer.print_config("Running one %s" % port_obj.driver_name())
-    else:
-        printer.print_config("Running %s %ss in parallel" % (
-                       options.child_processes, port_obj.driver_name()))
 
-    # Include all tests if none are specified.
-    new_args = []
-    for arg in args:
-        if arg and arg != '':
-            new_args.append(arg)
-
-    paths = new_args
-    if not paths:
-        paths = []
-    paths += last_unexpected_results
-    if options.test_list:
-        paths += read_test_files(options.test_list)
-
-    # Create the output directory if it doesn't already exist.
-    port_obj.maybe_make_directory(options.results_directory)
-    printer.print_update("Collecting tests ...")
-
-    test_runner = TestRunner(port_obj, options, printer)
-    test_runner.gather_file_paths(paths)
-
-    if options.lint_test_files:
-        # Creating the expecations for each platform/configuration pair does
-        # all the test list parsing and ensures it's correct syntax (e.g. no
-        # dupes).
-        for platform_name in port_obj.test_platform_names():
-            test_runner.parse_expectations(platform_name, is_debug_mode=True)
-            test_runner.parse_expectations(platform_name, is_debug_mode=False)
-        printer.write("")
-        _log.info("If there are no fail messages, errors or exceptions, "
-                  "then the lint succeeded.")
-        return 0
-
-    printer.print_config("Using port '%s'" % port_obj.name())
-    printer.print_config("Placing test results in %s" %
-                         options.results_directory)
-    if options.new_baseline:
-        printer.print_config("Placing new baselines in %s" %
-                             port_obj.baseline_path())
-    printer.print_config("Using %s build" % options.configuration)
-    if options.pixel_tests:
-        printer.print_config("Pixel tests enabled")
-    else:
-        printer.print_config("Pixel tests disabled")
-    printer.print_config("")
-
-    printer.print_update("Parsing expectations ...")
-    test_runner.parse_expectations(port_obj.test_platform_name(),
-                                   options.configuration == 'Debug')
-
-    printer.print_update("Checking build ...")
-    if not port_obj.check_build(test_runner.needs_http()):
-        return -1
-
-    printer.print_update("Starting helper ...")
-    port_obj.start_helper()
-
-    # Check that the system dependencies (themes, fonts, ...) are correct.
-    if not options.nocheck_sys_deps:
-        printer.print_update("Checking system dependencies ...")
-        if not port_obj.check_sys_deps(test_runner.needs_http()):
-            return -1
-
-    printer.print_update("Preparing tests ...")
-    result_summary = test_runner.prepare_lists_and_print_output()
-
-    port_obj.setup_test_run()
-
-    test_runner.add_test_type(text_diff.TestTextDiff)
-    if options.pixel_tests:
-        test_runner.add_test_type(image_diff.ImageDiff)
-        if options.fuzzy_pixel_tests:
-            test_runner.add_test_type(fuzzy_image_diff.FuzzyImageDiff)
-
-    num_unexpected_results = test_runner.run(result_summary)
-
-    port_obj.stop_helper()
-
-    _log.debug("Exit status: %d" % num_unexpected_results)
-    return num_unexpected_results
+def _gather_unexpected_results(options):
+    """Returns the unexpected results from the previous run, if any."""
+    last_unexpected_results = []
+    if options.print_last_failures or options.retest_last_failures:
+        unexpected_results_filename = os.path.join(
+        options.results_directory, "unexpected_results.json")
+        with codecs.open(unexpected_results_filename, "r", "utf-8") as file:
+            results = simplejson.load(file)
+        last_unexpected_results = results['tests'].keys()
+    return last_unexpected_results
 
 
 def _compat_shim_callback(option, opt_str, value, parser):
@@ -1509,9 +1551,6 @@ def parse_args(args=None):
             dest="pixel_tests", help="Enable pixel-to-pixel PNG comparisons"),
         optparse.make_option("--no-pixel-tests", action="store_false",
             dest="pixel_tests", help="Disable pixel-to-pixel PNG comparisons"),
-        optparse.make_option("--fuzzy-pixel-tests", action="store_true",
-            default=False,
-            help="Also use fuzzy matching to compare pixel test outputs."),
         # old-run-webkit-tests allows a specific tolerance: --tolerance t
         # Ignore image differences less than this percentage (default: 0.1)
         optparse.make_option("--results-directory",
@@ -1548,6 +1587,9 @@ def parse_args(args=None):
             default=False, help="Clobbers test results from previous runs."),
         optparse.make_option("--platform",
             help="Override the platform for expected results"),
+        optparse.make_option("--no-record-results", action="store_false",
+            default=True, dest="record_results",
+            help="Don't record the results."),
         # old-run-webkit-tests also has HTTP toggle options:
         # --[no-]http                     Run (or do not run) http tests
         #                                 (default: run)
@@ -1596,7 +1638,7 @@ def parse_args(args=None):
         #   Restart DumpRenderTree every n tests (default: 1000)
         optparse.make_option("--batch-size",
             help=("Run a the tests in batches (n), after every n tests, "
-                  "DumpRenderTree is relaunched.")),
+                  "DumpRenderTree is relaunched."), type="int", default=0),
         # old-run-webkit-tests calls --run-singly: -1|--singly
         # Isolate each test case run (implies --nthly 1 --verbose)
         optparse.make_option("--run-singly", action="store_true",
@@ -1609,6 +1651,8 @@ def parse_args(args=None):
             help="run all tests in parallel"),
         # FIXME: Need --exit-after-n-failures N
         #      Exit after the first N failures instead of running all tests
+        # FIXME: Need --exit-after-n-crashes N
+        #      Exit after the first N crashes instead of running all tests
         # FIXME: consider: --iterations n
         #      Number of times to run the set of tests (e.g. ABCABCABC)
         optparse.make_option("--print-last-failures", action="store_true",
@@ -1644,6 +1688,10 @@ def parse_args(args=None):
         optparse.make_option("--test-results-server", default="",
             help=("If specified, upload results json files to this appengine "
                   "server.")),
+        optparse.make_option("--upload-full-results",
+            action="store_true",
+            default=False,
+            help="If true, upload full json results to server."),
     ]
 
     option_list = (configuration_options + print_options +
@@ -1653,10 +1701,19 @@ def parse_args(args=None):
     option_parser = optparse.OptionParser(option_list=option_list)
 
     options, args = option_parser.parse_args(args)
-    if options.sources:
-        options.verbose = True
 
     return options, args
+
+
+def _log_wedged_thread(thread):
+    """Log information about the given thread state."""
+    id = thread.id()
+    stack = dump_render_tree_thread.find_thread_stack(id)
+    assert(stack is not None)
+    _log.error("")
+    _log.error("thread %s (%d) is wedged" % (thread.getName(), id))
+    dump_render_tree_thread.log_stack(stack)
+    _log.error("")
 
 
 def main():
@@ -1665,4 +1722,8 @@ def main():
     return run(port_obj, options, args)
 
 if '__main__' == __name__:
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        # this mirrors what the shell normally does
+        sys.exit(signal.SIGINT + 128)

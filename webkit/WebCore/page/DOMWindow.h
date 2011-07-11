@@ -40,6 +40,7 @@ namespace WebCore {
 
     class BarInfo;
     class BeforeUnloadEvent;
+    class Blob;
     class CSSRuleList;
     class CSSStyleDeclaration;
     class Console;
@@ -48,18 +49,26 @@ namespace WebCore {
     class DatabaseCallback;
     class Document;
     class Element;
+    class ErrorCallback;
     class Event;
     class EventListener;
+    class FileSystemCallback;
     class FloatRect;
     class Frame;
     class History;
-    class IndexedDatabaseRequest;
+    class IDBFactory;
     class InspectorTimelineAgent;
+    class LocalFileSystem;
     class Location;
     class StyleMedia;
     class Navigator;
     class Node;
     class NotificationCenter;
+
+#if ENABLE(WEB_TIMING)
+    class Performance;
+#endif
+
     class PostMessageTimer;
     class ScheduledAction;
     class SerializedScriptValue;
@@ -84,6 +93,7 @@ namespace WebCore {
         virtual DOMWindow* toDOMWindow() { return this; }
         virtual ScriptExecutionContext* scriptExecutionContext() const;
 
+        bool printDeferred() const { return m_printDeferred; }
         Frame* frame() const { return m_frame; }
         void disconnectFrame();
 
@@ -125,6 +135,9 @@ namespace WebCore {
         BarInfo* toolbar() const;
         Navigator* navigator() const;
         Navigator* clientInformation() const { return navigator(); }
+#if ENABLE(WEB_TIMING)
+        Performance* webkitPerformance() const;
+#endif
         Location* location() const;
 
         DOMSelection* getSelection();
@@ -225,8 +238,19 @@ namespace WebCore {
         NotificationCenter* webkitNotifications() const;
 #endif
 
+        void pageDestroyed();
+
 #if ENABLE(INDEXED_DATABASE)
-        IndexedDatabaseRequest* indexedDB() const;
+        IDBFactory* indexedDB() const;
+#endif
+
+#if ENABLE(FILE_SYSTEM)
+        // They are placed here and in all capital letters to enforce compile-time enum checking.
+        enum FileSystemType {
+            TEMPORARY,
+            PERSISTENT,
+        };
+        void requestFileSystem(int type, long long size, PassRefPtr<FileSystemCallback>, PassRefPtr<ErrorCallback>);
 #endif
 
         void postMessage(PassRefPtr<SerializedScriptValue> message, const MessagePortArray*, const String& targetOrigin, DOMWindow* source, ExceptionCode&);
@@ -331,6 +355,7 @@ namespace WebCore {
 #endif
 
 #if ENABLE(DEVICE_ORIENTATION)
+        DEFINE_ATTRIBUTE_EVENT_LISTENER(devicemotion);
         DEFINE_ATTRIBUTE_EVENT_LISTENER(deviceorientation);
 #endif
 
@@ -361,6 +386,9 @@ namespace WebCore {
         BarInfo* optionalToolbar() const { return m_toolbar.get(); }
         Console* optionalConsole() const { return m_console.get(); }
         Navigator* optionalNavigator() const { return m_navigator.get(); }
+#if ENABLE(WEB_TIMING)
+        Performance* optionalWebkitPerformance() const { return m_performance.get(); }
+#endif
         Location* optionalLocation() const { return m_location.get(); }
         StyleMedia* optionalMedia() const { return m_media.get(); }
 #if ENABLE(DOM_STORAGE)
@@ -369,6 +397,10 @@ namespace WebCore {
 #endif
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
         DOMApplicationCache* optionalApplicationCache() const { return m_applicationCache.get(); }
+#endif
+#if ENABLE(BLOB)
+        String createBlobURL(Blob*);
+        void revokeBlobURL(const String&);
 #endif
 
         using RefCounted<DOMWindow>::ref;
@@ -386,6 +418,7 @@ namespace WebCore {
         RefPtr<SecurityOrigin> m_securityOrigin;
         KURL m_url;
 
+        bool m_printDeferred;
         Frame* m_frame;
         mutable RefPtr<Screen> m_screen;
         mutable RefPtr<DOMSelection> m_selection;
@@ -398,6 +431,9 @@ namespace WebCore {
         mutable RefPtr<BarInfo> m_toolbar;
         mutable RefPtr<Console> m_console;
         mutable RefPtr<Navigator> m_navigator;
+#if ENABLE(WEB_TIMING)
+        mutable RefPtr<Performance> m_performance;
+#endif
         mutable RefPtr<Location> m_location;
         mutable RefPtr<StyleMedia> m_media;
 #if ENABLE(DOM_STORAGE)
@@ -411,11 +447,27 @@ namespace WebCore {
         mutable RefPtr<NotificationCenter> m_notifications;
 #endif
 #if ENABLE(INDEXED_DATABASE)
-        mutable RefPtr<IndexedDatabaseRequest> m_indexedDatabaseRequest;
+        mutable RefPtr<IDBFactory> m_idbFactory;
+#endif
+#if ENABLE(FILE_SYSTEM)
+        RefPtr<LocalFileSystem> m_localFileSystem;
 #endif
 
         EventTargetData m_eventTargetData;
+
+        String m_status;
+        String m_defaultStatus;
     };
+
+    inline String DOMWindow::status() const
+    {
+        return m_status;
+    }
+
+    inline String DOMWindow::defaultStatus() const
+    {
+        return m_defaultStatus;
+    } 
 
 } // namespace WebCore
 

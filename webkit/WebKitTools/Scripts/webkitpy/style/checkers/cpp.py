@@ -161,7 +161,7 @@ def up_to_unmatched_closing_paren(s):
 
     Returns:
       A pair of strings (prefix before first unmatched ')',
-      reminder of s after first unmatched ')'), e.g.,
+      remainder of s after first unmatched ')'), e.g.,
       up_to_unmatched_closing_paren("a == (b + c)) { ")
       returns "a == (b + c)", " {".
       Returns None, None if there is no unmatched ')'
@@ -1337,26 +1337,25 @@ def check_spacing(file_extension, clean_lines, line_number, error):
     # there should either be zero or one spaces inside the parens.
     # We don't want: "if ( foo)" or "if ( foo   )".
     # Exception: "for ( ; foo; bar)" and "for (foo; bar; )" are allowed.
-    matched = search(r'\b(?P<statement>if|for|foreach|while|switch)\s*\((?P<reminder>.*)$', line)
+    matched = search(r'\b(?P<statement>if|for|foreach|while|switch)\s*\((?P<remainder>.*)$', line)
     if matched:
         statement = matched.group('statement')
-        condition, rest = up_to_unmatched_closing_paren(matched.group('reminder'))
+        condition, rest = up_to_unmatched_closing_paren(matched.group('remainder'))
         if condition is not None:
             condition_match = search(r'(?P<leading>[ ]*)(?P<separator>.).*[^ ]+(?P<trailing>[ ]*)', condition)
             if condition_match:
                 n_leading = len(condition_match.group('leading'))
                 n_trailing = len(condition_match.group('trailing'))
-                if n_leading != n_trailing:
-                    for_exception = statement == 'for' and (
-                        (condition.startswith(' ;') and n_trailing == 0) or
-                        (condition.endswith('; ')   and n_leading == 0))
+                if n_leading != 0:
+                    for_exception = statement == 'for' and condition.startswith(' ;')
                     if not for_exception:
                         error(line_number, 'whitespace/parens', 5,
-                              'Mismatching spaces inside () in %s' % statement)
-                if n_leading > 1:
-                    error(line_number, 'whitespace/parens', 5,
-                          'Should have zero or one spaces inside ( and ) in %s' %
-                          statement)
+                              'Extra space after ( in %s' % statement)
+                if n_trailing != 0:
+                    for_exception = statement == 'for' and condition.endswith('; ')
+                    if not for_exception:
+                        error(line_number, 'whitespace/parens', 5,
+                              'Extra space before ) in %s' % statement)
 
             # Do not check for more than one command in macros
             in_macro = match(r'\s*#define', line)
@@ -1368,6 +1367,11 @@ def check_spacing(file_extension, clean_lines, line_number, error):
     if search(r',[^\s]', line):
         error(line_number, 'whitespace/comma', 3,
               'Missing space after ,')
+
+    matched = search(r'^\s*(?P<token1>[a-zA-Z0-9_\*&]+)\s\s+(?P<token2>[a-zA-Z0-9_\*&]+)', line)
+    if matched:
+        error(line_number, 'whitespace/declaration', 3,
+              'Extra space between %s and %s' % (matched.group('token1'), matched.group('token2')))
 
     if file_extension == 'cpp':
         # C++ should have the & or * beside the type not the variable name.
@@ -1868,12 +1872,20 @@ def check_for_null(file_extension, clean_lines, line_number, error):
 
     line = clean_lines.elided[line_number]
 
-    # Don't warn about NULL usage in g_object_{get,set}(). See Bug 32858
-    if search(r'\bg_object_[sg]et\b', line):
+    # Don't warn about NULL usage in g_*(). See Bug 32858 and 39372.
+    if search(r'\bg(_[a-z]+)+\b', line):
+        return
+
+    # Don't warn about NULL usage in gst_*_many(). See Bug 39740
+    if search(r'\bgst_\w+_many\b', line):
         return
 
     # Don't warn about NULL usage in g_str{join,concat}(). See Bug 34834
     if search(r'\bg_str(join|concat)\b', line):
+        return
+
+    # Don't warn about NULL usage in gdk_pixbuf_save_to_*{join,concat}(). See Bug 43090.
+    if search(r'\bgdk_pixbuf_save_to\w+\b', line):
         return
 
     if search(r'\bNULL\b', line):
@@ -1908,7 +1920,7 @@ def get_line_width(line):
     return len(line)
 
 
-def check_style(clean_lines, line_number, file_extension, file_state, error):
+def check_style(clean_lines, line_number, file_extension, class_state, file_state, error):
     """Checks rules from the 'C++ style rules' section of cppguide.html.
 
     Most of these rules are hard to test (naming, comment style), but we
@@ -1919,6 +1931,8 @@ def check_style(clean_lines, line_number, file_extension, file_state, error):
       clean_lines: A CleansedLines instance containing the file.
       line_number: The number of the line to check.
       file_extension: The extension (without the dot) of the filename.
+      class_state: A _ClassState instance which maintains information about
+                   the current stack of nested class declarations being parsed.
       file_state: A _FileState instance which maintains information about
                   the state of things in the file.
       error: The function to call with any errors found.
@@ -1979,6 +1993,10 @@ def check_style(clean_lines, line_number, file_extension, file_state, error):
         and not ((cleansed_line.find('case ') != -1
                   or cleansed_line.find('default:') != -1)
                  and cleansed_line.find('break;') != -1)
+        # Also it's ok to have many commands in trivial single-line accessors in class definitions.
+        and not (match(r'.*\(.*\).*{.*.}', line)
+                 and class_state.classinfo_stack
+                 and line.count('{') == line.count('}'))
         and not cleansed_line.startswith('#define ')):
         error(line_number, 'whitespace/newline', 4,
               'More than one command on the same line')
@@ -2433,6 +2451,9 @@ def check_identifier_name_in_declaration(filename, line_number, line, error):
     line = sub(r'(unsigned|signed) (?=char|short|int|long)', '', line)
     line = sub(r'\b(inline|using|static|const|volatile|auto|register|extern|typedef|restrict|struct|class|virtual)(?=\W)', '', line)
 
+    # Remove "new" and "new (expr)" to simplify, too.
+    line = sub(r'new\s*(\([^)]*\))?', '', line)
+
     # Remove all template parameters by removing matching < and >.
     # Loop until no templates are removed to remove nested templates.
     while True:
@@ -2494,6 +2515,9 @@ def check_identifier_name_in_declaration(filename, line_number, line, error):
             if (not (filename.find('JavaScriptCore') >= 0 and modified_identifier.find('_op_') >= 0)
                 and not modified_identifier.startswith('tst_')
                 and not modified_identifier.startswith('webkit_dom_object_')
+                and not modified_identifier.startswith('NPN_')
+                and not modified_identifier.startswith('NPP_')
+                and not modified_identifier.startswith('NP_')
                 and not modified_identifier.startswith('qt_')
                 and not modified_identifier.find('::qt_') >= 0
                 and not modified_identifier == "const_iterator"):
@@ -2833,7 +2857,7 @@ def process_line(filename, file_extension,
     if search(r'\bNOLINT\b', raw_lines[line]):  # ignore nolint lines
         return
     check_for_multiline_comments_and_strings(clean_lines, line, error)
-    check_style(clean_lines, line, file_extension, file_state, error)
+    check_style(clean_lines, line, file_extension, class_state, file_state, error)
     check_language(filename, clean_lines, line, file_extension, include_state,
                    error)
     check_for_non_standard_constructs(clean_lines, line, class_state, error)

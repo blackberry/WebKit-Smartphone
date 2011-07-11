@@ -34,67 +34,147 @@
 
 #include <CoreGraphics/CGBitmapContext.h>
 #include <CoreGraphics/CGContext.h>
+#include <CoreGraphics/CGDataProvider.h>
 #include <CoreGraphics/CGImage.h>
+
+#include <wtf/RetainPtr.h>
 
 namespace WebCore {
 
 bool GraphicsContext3D::getImageData(Image* image,
-                                     Vector<uint8_t>& outputVector,
+                                     unsigned int format,
+                                     unsigned int type,
                                      bool premultiplyAlpha,
-                                     bool* hasAlphaChannel,
-                                     AlphaOp* neededAlphaOp,
-                                     unsigned int* format)
+                                     Vector<uint8_t>& outputVector)
 {
     if (!image)
         return false;
-    CGImageRef cgImage = image->nativeImageForCurrentFrame();
+    CGImageRef cgImage;
+    RetainPtr<CGImageRef> decodedImage;
+    if (image->data()) {
+        ImageSource decoder(false);
+        decoder.setData(image->data(), true);
+        if (!decoder.frameCount())
+            return false;
+        decodedImage = decoder.createFrameAtIndex(0);
+        cgImage = decodedImage.get();
+    } else
+        cgImage = image->nativeImageForCurrentFrame();
     if (!cgImage)
         return false;
-    int width = CGImageGetWidth(cgImage);
-    int height = CGImageGetHeight(cgImage);
-    int rowBytes = width * 4;
-    CGImageAlphaInfo info = CGImageGetAlphaInfo(cgImage);
-    *hasAlphaChannel = (info != kCGImageAlphaNone
-                        && info != kCGImageAlphaNoneSkipLast
-                        && info != kCGImageAlphaNoneSkipFirst);
-    if (!premultiplyAlpha && *hasAlphaChannel)
-        // FIXME: must fetch the image data before the premultiplication step
-        *neededAlphaOp = kAlphaDoUnmultiply;
-    *format = RGBA;
-    outputVector.resize(height * rowBytes);
-    // Try to reuse the color space from the image to preserve its colors.
-    // Some images use a color space (such as indexed) unsupported by the bitmap context.
-    CGColorSpaceRef colorSpace = CGImageGetColorSpace(cgImage);
-    bool releaseColorSpace = false;
-    CGColorSpaceModel colorSpaceModel = CGColorSpaceGetModel(colorSpace);
-    switch (colorSpaceModel) {
-    case kCGColorSpaceModelMonochrome:
-    case kCGColorSpaceModelRGB:
-    case kCGColorSpaceModelCMYK:
-    case kCGColorSpaceModelLab:
-    case kCGColorSpaceModelDeviceN:
+    size_t width = CGImageGetWidth(cgImage);
+    size_t height = CGImageGetHeight(cgImage);
+    if (!width || !height || CGImageGetBitsPerComponent(cgImage) != 8)
+        return false;
+    size_t componentsPerPixel = CGImageGetBitsPerPixel(cgImage) / 8;
+    SourceDataFormat srcDataFormat = kSourceFormatRGBA8;
+    AlphaOp neededAlphaOp = kAlphaDoNothing;
+    switch (CGImageGetAlphaInfo(cgImage)) {
+    case kCGImageAlphaPremultipliedFirst:
+    case kCGImageAlphaFirst:
+    case kCGImageAlphaNoneSkipFirst:
+        return false;
+    case kCGImageAlphaPremultipliedLast:
+        // This is a special case for texImage2D with HTMLCanvasElement input,
+        // in which case image->data() should be null.
+        ASSERT(!image->data());
+        if (!premultiplyAlpha)
+            neededAlphaOp = kAlphaDoUnmultiply;
+        switch (componentsPerPixel) {
+        case 2:
+            srcDataFormat = kSourceFormatRA8;
+            break;
+        case 4:
+            srcDataFormat = kSourceFormatRGBA8;
+            break;
+        default:
+            return false;
+        }
+        break;
+    case kCGImageAlphaLast:
+        if (premultiplyAlpha)
+            neededAlphaOp = kAlphaDoPremultiply;
+        switch (componentsPerPixel) {
+        case 1:
+            srcDataFormat = kSourceFormatA8;
+            break;
+        case 2:
+            srcDataFormat = kSourceFormatRA8;
+            break;
+        case 4:
+            srcDataFormat = kSourceFormatRGBA8;
+            break;
+        default:
+            return false;
+        }
+        break;
+    case kCGImageAlphaNoneSkipLast:
+        switch (componentsPerPixel) {
+        case 2:
+            srcDataFormat = kSourceFormatRA8;
+            break;
+        case 4:
+            srcDataFormat = kSourceFormatRGBA8;
+            break;
+        default:
+            return false;
+        }
+        break;
+    case kCGImageAlphaNone:
+        switch (componentsPerPixel) {
+        case 1:
+            srcDataFormat = kSourceFormatR8;
+            break;
+        case 3:
+            srcDataFormat = kSourceFormatRGB8;
+            break;
+        default:
+            return false;
+        }
         break;
     default:
-        colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceGenericRGBLinear);
-        releaseColorSpace = true;
-        break;
-    }
-    CGContextRef tmpContext = CGBitmapContextCreate(outputVector.data(),
-                                                    width, height, 8, rowBytes,
-                                                    colorSpace,
-                                                    kCGImageAlphaPremultipliedLast);
-    if (releaseColorSpace)
-        CGColorSpaceRelease(colorSpace);
-    if (!tmpContext)
         return false;
-    CGContextSetBlendMode(tmpContext, kCGBlendModeCopy);
-    CGContextDrawImage(tmpContext,
-                       CGRectMake(0, 0, static_cast<CGFloat>(width), static_cast<CGFloat>(height)),
-                       cgImage);
-    CGContextRelease(tmpContext);
-    return true;
+    }
+    RetainPtr<CFDataRef> pixelData;
+    pixelData.adoptCF(CGDataProviderCopyData(CGImageGetDataProvider(cgImage)));
+    if (!pixelData)
+        return false;
+    const UInt8* rgba = CFDataGetBytePtr(pixelData.get());
+    outputVector.resize(width * height * 4);
+    unsigned int srcUnpackAlignment = 0;
+    size_t bytesPerRow = CGImageGetBytesPerRow(cgImage);
+    unsigned int padding = bytesPerRow - componentsPerPixel * width;
+    if (padding) {
+        srcUnpackAlignment = padding + 1;
+        while (bytesPerRow % srcUnpackAlignment)
+            ++srcUnpackAlignment;
+    }
+    bool rt = packPixels(rgba, srcDataFormat, width, height, srcUnpackAlignment,
+                         format, type, neededAlphaOp, outputVector.data());
+    return rt;
 }
 
+void GraphicsContext3D::paintToCanvas(const unsigned char* imagePixels, int imageWidth, int imageHeight, int canvasWidth, int canvasHeight, CGContextRef context)
+{
+    if (!imagePixels || imageWidth <= 0 || imageHeight <= 0 || canvasWidth <= 0 || canvasHeight <= 0 || !context)
+        return;
+    int rowBytes = imageWidth * 4;
+    RetainPtr<CGDataProviderRef> dataProvider(AdoptCF, CGDataProviderCreateWithData(0, imagePixels, rowBytes * imageHeight, 0));
+    RetainPtr<CGColorSpaceRef> colorSpace(AdoptCF, CGColorSpaceCreateDeviceRGB());
+    RetainPtr<CGImageRef> cgImage(AdoptCF, CGImageCreate(imageWidth, imageHeight, 8, 32, rowBytes, colorSpace.get(), kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host,
+        dataProvider.get(), 0, false, kCGRenderingIntentDefault));
+    // CSS styling may cause the canvas's content to be resized on
+    // the page. Go back to the Canvas to figure out the correct
+    // width and height to draw.
+    CGRect rect = CGRectMake(0, 0, canvasWidth, canvasHeight);
+    // We want to completely overwrite the previous frame's
+    // rendering results.
+    CGContextSaveGState(context);
+    CGContextSetBlendMode(context, kCGBlendModeCopy);
+    CGContextSetInterpolationQuality(context, kCGInterpolationNone);
+    CGContextDrawImage(context, rect, cgImage.get());
+    CGContextRestoreGState(context);
+}
 
 } // namespace WebCore
 

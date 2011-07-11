@@ -127,7 +127,7 @@ public:
     void setFillPattern(const PatternOpenVG&);
 
     bool shadowEnabled() const;
-    void setShadow(const IntSize& offset, float blur, const Color&);
+    void setShadow(const FloatSize& offset, float blur, const Color&);
     void clearShadow();
 
     // Low-level functions that can be used if shadowEnabled() == true and

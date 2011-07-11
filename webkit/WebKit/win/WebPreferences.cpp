@@ -32,10 +32,10 @@
 #include "WebNotificationCenter.h"
 #include "WebPreferenceKeysPrivate.h"
 
+#include <wtf/text/StringHash.h>
 #include <WebCore/FileSystem.h>
 #include <WebCore/Font.h>
 #include <WebCore/PlatformString.h>
-#include <WebCore/StringHash.h>
 #include <WebCore/WKCACFLayerRenderer.h>
 #include "WebLocalizableStrings.h"
 
@@ -102,7 +102,7 @@ static bool booleanValueForPreferencesValue(CFPropertyListRef value)
 
 static CFDictionaryRef defaultSettings;
 
-static HashMap<WebCore::String, COMPtr<WebPreferences> > webPreferencesInstances;
+static HashMap<WTF::String, COMPtr<WebPreferences> > webPreferencesInstances;
 
 WebPreferences* WebPreferences::sharedStandardPreferences()
 {
@@ -154,7 +154,7 @@ WebPreferences* WebPreferences::getInstanceForIdentifier(BSTR identifier)
     if (!identifier)
         return sharedStandardPreferences();
 
-    WebCore::String identifierString(identifier, SysStringLen(identifier));
+    WTF::String identifierString(identifier, SysStringLen(identifier));
     return webPreferencesInstances.get(identifierString).get();
 }
 
@@ -162,7 +162,7 @@ void WebPreferences::setInstance(WebPreferences* instance, BSTR identifier)
 {
     if (!identifier || !instance)
         return;
-    WebCore::String identifierString(identifier, SysStringLen(identifier));
+    WTF::String identifierString(identifier, SysStringLen(identifier));
     webPreferencesInstances.add(identifierString, instance);
 }
 
@@ -171,7 +171,7 @@ void WebPreferences::removeReferenceForIdentifier(BSTR identifier)
     if (!identifier || webPreferencesInstances.isEmpty())
         return;
 
-    WebCore::String identifierString(identifier, SysStringLen(identifier));
+    WTF::String identifierString(identifier, SysStringLen(identifier));
     WebPreferences* webPreference = webPreferencesInstances.get(identifierString).get();
     if (webPreference && webPreference->m_refCount == 1)
         webPreferencesInstances.remove(identifierString);
@@ -194,7 +194,7 @@ void WebPreferences::initializeDefaultSettings()
     CFDictionaryAddValue(defaults, CFSTR(WebKitMinimumLogicalFontSizePreferenceKey), CFSTR("9"));
     CFDictionaryAddValue(defaults, CFSTR(WebKitDefaultFontSizePreferenceKey), CFSTR("16"));
     CFDictionaryAddValue(defaults, CFSTR(WebKitDefaultFixedFontSizePreferenceKey), CFSTR("13"));
-    WebCore::String defaultDefaultEncoding(LPCTSTR_UI_STRING("ISO-8859-1", "The default, default character encoding"));
+    WTF::String defaultDefaultEncoding(LPCTSTR_UI_STRING("ISO-8859-1", "The default, default character encoding"));
     CFDictionaryAddValue(defaults, CFSTR(WebKitDefaultTextEncodingNamePreferenceKey), defaultDefaultEncoding.createCFString());
 
     CFDictionaryAddValue(defaults, CFSTR(WebKitUserStyleSheetEnabledPreferenceKey), kCFBooleanFalse);
@@ -260,6 +260,10 @@ void WebPreferences::initializeDefaultSettings()
     CFDictionaryAddValue(defaults, CFSTR(WebKitAcceleratedCompositingEnabledPreferenceKey), kCFBooleanFalse);
     
     CFDictionaryAddValue(defaults, CFSTR(WebKitShowDebugBordersPreferenceKey), kCFBooleanFalse);
+
+    CFDictionaryAddValue(defaults, CFSTR(WebKitDNSPrefetchingEnabledPreferenceKey), kCFBooleanTrue);
+
+    CFDictionaryAddValue(defaults, CFSTR(WebKitMemoryInfoEnabledPreferenceKey), kCFBooleanFalse);
 
     defaultSettings = defaults;
 }
@@ -1468,6 +1472,30 @@ HRESULT WebPreferences::setCustomDragCursorsEnabled(BOOL enabled)
 HRESULT WebPreferences::customDragCursorsEnabled(BOOL* enabled)
 {
     *enabled = boolValueForKey(CFSTR(WebKitCustomDragCursorsEnabledPreferenceKey));
+    return S_OK;
+}
+
+HRESULT WebPreferences::setDNSPrefetchingEnabled(BOOL enabled)
+{
+    setBoolValue(CFSTR(WebKitDNSPrefetchingEnabledPreferenceKey), enabled);
+    return S_OK;
+}
+
+HRESULT WebPreferences::isDNSPrefetchingEnabled(BOOL* enabled)
+{
+    *enabled = boolValueForKey(CFSTR(WebKitDNSPrefetchingEnabledPreferenceKey));
+    return S_OK;
+}
+
+HRESULT WebPreferences::memoryInfoEnabled(BOOL* enabled)
+{
+    *enabled = boolValueForKey(CFSTR(WebKitMemoryInfoEnabledPreferenceKey));
+    return S_OK;
+}
+
+HRESULT WebPreferences::setMemoryInfoEnabled(BOOL enabled)
+{
+    setBoolValue(CFSTR(WebKitMemoryInfoEnabledPreferenceKey), enabled);
     return S_OK;
 }
 

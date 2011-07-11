@@ -31,7 +31,6 @@
 #include "config.h"
 #include "WebKit.h"
 
-#include "AtomicString.h"
 #include "DOMTimer.h"
 #include "Logging.h"
 #include "Page.h"
@@ -43,21 +42,29 @@
 
 #include <wtf/Assertions.h>
 #include <wtf/Threading.h>
+#include <wtf/text/AtomicString.h>
 
 namespace WebKit {
+
+// Make sure we are not re-initialized in the same address space.
+// Doing so may cause hard to reproduce crashes.
+static bool s_webKitInitialized = false;
 
 static WebKitClient* s_webKitClient = 0;
 static bool s_layoutTestMode = false;
 
 void initialize(WebKitClient* webKitClient)
 {
+    ASSERT(!s_webKitInitialized);
+    s_webKitInitialized = true;
+
     ASSERT(webKitClient);
     ASSERT(!s_webKitClient);
     s_webKitClient = webKitClient;
 
     WTF::initializeThreading();
     WTF::initializeMainThread();
-    WebCore::AtomicString::init();
+    WTF::AtomicString::init();
 
     // Chromium sets the minimum interval timeout to 4ms, overriding the
     // default of 10ms.  We'd like to go lower, however there are poorly
@@ -94,6 +101,11 @@ void setLayoutTestMode(bool value)
 bool layoutTestMode()
 {
     return s_layoutTestMode;
+}
+
+bool areLayoutTestImagesOpaque()
+{
+    return true;
 }
 
 void enableLogChannel(const char* name)

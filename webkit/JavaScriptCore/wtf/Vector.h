@@ -24,6 +24,7 @@
 #include "FastAllocBase.h"
 #include "Noncopyable.h"
 #include "NotFound.h"
+#include "StdLibExtras.h"
 #include "ValueCheck.h"
 #include "VectorTraits.h"
 #include <limits>
@@ -49,7 +50,7 @@ namespace WTF {
         #error WTF_ALIGN macros need alignment control.
     #endif
 
-    #if COMPILER(GCC) && (((__GNUC__ * 100) + __GNUC_MINOR__) >= 303)
+    #if COMPILER(GCC) && !COMPILER(INTEL) && (((__GNUC__ * 100) + __GNUC_MINOR__) >= 303)
         typedef char __attribute__((__may_alias__)) AlignedBufferChar; 
     #else
         typedef char AlignedBufferChar; 
@@ -481,7 +482,7 @@ namespace WTF {
         using Base::m_capacity;
 
         static const size_t m_inlineBufferSize = inlineCapacity * sizeof(T);
-        T* inlineBuffer() { return reinterpret_cast<T*>(m_inlineBuffer.buffer); }
+        T* inlineBuffer() { return reinterpret_cast_ptr<T*>(m_inlineBuffer.buffer); }
 
         AlignedBuffer<m_inlineBufferSize, WTF_ALIGN_OF(T)> m_inlineBuffer;
     };
@@ -557,6 +558,7 @@ namespace WTF {
         const T& last() const { return at(size() - 1); }
 
         template<typename U> size_t find(const U&) const;
+        template<typename U> size_t reverseFind(const U&) const;
 
         void shrink(size_t size);
         void grow(size_t size);
@@ -699,13 +701,17 @@ namespace WTF {
         return *this;
     }
 
+    inline bool typelessPointersAreEqual(const void* a, const void* b) { return a == b; }
+
     template<typename T, size_t inlineCapacity>
     template<size_t otherCapacity> 
     Vector<T, inlineCapacity>& Vector<T, inlineCapacity>::operator=(const Vector<T, otherCapacity>& other)
     {
-        if (&other == this)
-            return *this;
-        
+        // If the inline capacities match, we should call the more specific
+        // template.  If the inline capacities don't match, the two objects
+        // shouldn't be allocated the same address.
+        ASSERT(!typelessPointersAreEqual(&other, this));
+
         if (size() > other.size())
             shrink(other.size());
         else if (other.size() > capacity()) {
@@ -735,6 +741,18 @@ namespace WTF {
         for (size_t i = 0; i < size(); ++i) {
             if (at(i) == value)
                 return i;
+        }
+        return notFound;
+    }
+
+    template<typename T, size_t inlineCapacity>
+    template<typename U>
+    size_t Vector<T, inlineCapacity>::reverseFind(const U& value) const
+    {
+        for (size_t i = 1; i <= size(); ++i) {
+            const size_t index = size() - i;
+            if (at(index) == value)
+                return index;
         }
         return notFound;
     }

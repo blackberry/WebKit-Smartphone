@@ -37,13 +37,13 @@
 #include "RenderBlock.h"
 #include "RenderLayer.h"
 #include "RenderView.h"
-#include "StringBuffer.h"
 #include "Text.h"
 #include "TextBreakIterator.h"
 #include "TextResourceDecoder.h"
 #include "VisiblePosition.h"
 #include "break_lines.h"
 #include <wtf/AlwaysInline.h>
+#include <wtf/text/StringBuffer.h>
 
 using namespace std;
 using namespace WTF;
@@ -148,9 +148,8 @@ bool RenderText::isWordBreak() const
 
 void RenderText::updateNeedsTranscoding()
 {
-    const AtomicString& fontFamily = style()->font().family().family();
     const TextEncoding* encoding = document()->decoder() ? &document()->decoder()->encoding() : 0;
-    m_needsTranscoding = fontTranscoder().needsTranscoding(fontFamily, encoding);
+    m_needsTranscoding = fontTranscoder().needsTranscoding(style()->font().fontDescription(), encoding);
 }
 
 void RenderText::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
@@ -322,7 +321,7 @@ void RenderText::absoluteRectsForRange(Vector<IntRect>& rects, unsigned start, u
 void RenderText::absoluteQuads(Vector<FloatQuad>& quads)
 {
     for (InlineTextBox* box = firstTextBox(); box; box = box->nextTextBox())
-        quads.append(localToAbsoluteQuad(FloatRect(box->x(), box->y(), box->width(), box->height())));
+        quads.append(localToAbsoluteQuad(FloatRect(box->calculateBoundaries())));
 }
 
 void RenderText::absoluteQuadsForRange(Vector<FloatQuad>& quads, unsigned start, unsigned end, bool useSelectionHeight)
@@ -340,7 +339,7 @@ void RenderText::absoluteQuadsForRange(Vector<FloatQuad>& quads, unsigned start,
     for (InlineTextBox* box = firstTextBox(); box; box = box->nextTextBox()) {
         // Note: box->end() returns the index of the last character, not the index past it
         if (start <= box->start() && box->end() < end) {
-            IntRect r = IntRect(box->x(), box->y(), box->width(), box->height());
+            IntRect r(box->calculateBoundaries());
             if (useSelectionHeight) {
                 IntRect selectionRect = box->selectionRect(0, 0, start, end);
                 r.setHeight(selectionRect.height());
@@ -1052,14 +1051,13 @@ void RenderText::setTextInternal(PassRefPtr<StringImpl> text)
     ASSERT(text);
     m_text = text;
     if (m_needsTranscoding) {
-        const AtomicString& fontFamily = style()->font().family().family();
         const TextEncoding* encoding = document()->decoder() ? &document()->decoder()->encoding() : 0;
-        fontTranscoder().convert(m_text, fontFamily, encoding);
+        fontTranscoder().convert(m_text, style()->font().fontDescription(), encoding);
     }
     ASSERT(m_text);
 
 #if ENABLE(SVG)
-    if (isSVGText()) {
+    if (isSVGInlineText()) {
         if (style() && style()->whiteSpace() == PRE) {
             // Spec: When xml:space="preserve", the SVG user agent will do the following using a
             // copy of the original character data content. It will convert all newline and tab

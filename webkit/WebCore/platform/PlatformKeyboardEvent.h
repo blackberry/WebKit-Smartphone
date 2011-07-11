@@ -71,7 +71,8 @@ class KeyboardEvent;
 #endif
 
 #if PLATFORM(EFL)
-#include <Evas.h>
+typedef struct _Evas_Event_Key_Down Evas_Event_Key_Down;
+typedef struct _Evas_Event_Key_Up Evas_Event_Key_Up;
 #endif
 
 #if PLATFORM(BREWMP)
@@ -240,6 +241,12 @@ namespace WebCore {
         QKeyEvent* m_qtEvent;
 #endif
     };
+    
+#if PLATFORM(QT)
+// Used by WebKit2.
+String keyIdentifierForQtKeyCode(int keyCode);
+int windowsKeyCodeForKeyEvent(unsigned int keycode, bool isKeypad = false);    
+#endif
 
 } // namespace WebCore
 

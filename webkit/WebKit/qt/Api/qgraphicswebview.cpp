@@ -67,12 +67,15 @@ public:
     void _q_contentsSizeChanged(const QSize&);
     void _q_scaleChanged();
 
+#if !defined(QT_NO_IM) && (defined(Q_WS_X11) || defined(Q_WS_QWS) || defined(Q_OS_SYMBIAN))
     void _q_updateMicroFocus();
+#endif
     void _q_pageDestroyed();
 
     QGraphicsWebView* q;
     QWebPage* page;
     bool resizesToContents;
+    QSize deviceSize;
 
     // Just a convenience to avoid using page->client->overlay always
     QSharedPointer<QGraphicsItemOverlay> overlay;
@@ -99,9 +102,9 @@ void QGraphicsWebViewPrivate::_q_doLoadFinished(bool success)
     emit q->loadFinished(success);
 }
 
+#if !defined(QT_NO_IM) && (defined(Q_WS_X11) || defined(Q_WS_QWS) || defined(Q_OS_SYMBIAN))
 void QGraphicsWebViewPrivate::_q_updateMicroFocus()
 {
-#if !defined(QT_NO_IM) && (defined(Q_WS_X11) || defined(Q_WS_QWS) || defined(Q_OS_SYMBIAN))
     // Ideally, this should be handled by a common call to an updateMicroFocus function
     // in QGraphicsItem. See http://bugreports.qt.nokia.com/browse/QTBUG-7578.
     QList<QGraphicsView*> views = q->scene()->views();
@@ -110,8 +113,8 @@ void QGraphicsWebViewPrivate::_q_updateMicroFocus()
         if (ic)
             ic->update();
     }
-#endif
 }
+#endif
 
 void QGraphicsWebViewPrivate::_q_pageDestroyed()
 {
@@ -122,7 +125,7 @@ void QGraphicsWebViewPrivate::_q_pageDestroyed()
 void QGraphicsWebViewPrivate::updateResizesToContentsForPage()
 {
     ASSERT(page);
-
+    static_cast<PageClientQGraphicsWidget*>(page->d->client)->viewResizesToContents = resizesToContents;
     if (resizesToContents) {
         // resizes to contents mode requires preferred contents size to be set
         if (!page->preferredContentsSize().isValid())
@@ -151,6 +154,8 @@ void QGraphicsWebViewPrivate::_q_contentsSizeChanged(const QSize& size)
 void QGraphicsWebViewPrivate::_q_scaleChanged()
 {
 #if ENABLE(TILED_BACKING_STORE)
+    if (!page)
+        return;
     static_cast<PageClientQGraphicsWidget*>(page->d->client)->updateTiledBackingStoreScale();
 #endif
 }
@@ -238,7 +243,7 @@ QGraphicsWebView::QGraphicsWebView(QGraphicsItem* parent)
     : QGraphicsWidget(parent)
     , d(new QGraphicsWebViewPrivate(this))
 {
-#if QT_VERSION >= 0x040600
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
     setFlag(QGraphicsItem::ItemUsesExtendedStyleOption, true);
 #endif
     setAcceptDrops(true);
@@ -316,8 +321,9 @@ bool QGraphicsWebView::sceneEvent(QEvent* event)
                 || event->type() == QEvent::TouchEnd
                 || event->type() == QEvent::TouchUpdate)) {
         d->page->event(event);
-        if (event->isAccepted())
-            return true;
+
+        // Always return true so that we'll receive also TouchUpdate and TouchEnd events
+        return true;
     }
 #endif
 
@@ -413,7 +419,7 @@ void QGraphicsWebViewPrivate::detachCurrentPage()
     if (!page)
         return;
 
-#if QT_VERSION >= 0x040600
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
     page->d->view.clear();
 #else
     page->d->view = 0;
@@ -484,10 +490,12 @@ void QGraphicsWebView::setPage(QWebPage* page)
             this, SIGNAL(statusBarMessage(QString)));
     connect(d->page, SIGNAL(linkClicked(QUrl)),
             this, SIGNAL(linkClicked(QUrl)));
-    connect(d->page, SIGNAL(microFocusChanged()),
-            this, SLOT(_q_updateMicroFocus()));
     connect(d->page, SIGNAL(destroyed()),
             this, SLOT(_q_pageDestroyed()));
+#if !defined(QT_NO_IM) && (defined(Q_WS_X11) || defined(Q_WS_QWS) || defined(Q_OS_SYMBIAN))
+    connect(d->page, SIGNAL(microFocusChanged()),
+            this, SLOT(_q_updateMicroFocus()));
+#endif
 }
 
 /*!
@@ -544,6 +552,24 @@ QIcon QGraphicsWebView::icon() const
         return d->page->mainFrame()->icon();
 
     return QIcon();
+}
+
+/*!
+    \property QGraphicsWebView::deviceSize
+    \brief the size of the device using the web view
+
+    The device size is used by the DOM window object methods
+    otherHeight(), otherWidth() as well as a page for the viewport
+    meta tag attributes device-width and device-height.
+*/
+void QGraphicsWebView::setDeviceSize(const QSize& size)
+{
+    d->deviceSize = size;
+}
+
+QSize QGraphicsWebView::deviceSize() const
+{
+    return d->deviceSize;
 }
 
 /*!
@@ -689,7 +715,12 @@ void QGraphicsWebView::load(const QNetworkRequest& request,
     through the charset attribute of the HTML script tag. Alternatively, the
     encoding can also be specified by the web server.
 
-    \sa load(), setContent(), QWebFrame::toHtml()
+    This is a convenience function equivalent to setContent(html, "text/html", baseUrl).
+
+    \warning This function works only for HTML, for other mime types (i.e. XHTML, SVG)
+    setContent() should be used instead.
+
+    \sa load(), setContent(), QWebFrame::toHtml(), QWebFrame::setContent()
 */
 void QGraphicsWebView::setHtml(const QString& html, const QUrl& baseUrl)
 {
@@ -821,10 +852,8 @@ void QGraphicsWebView::setResizesToContents(bool enabled)
     if (d->resizesToContents == enabled)
         return;
     d->resizesToContents = enabled;
-    if (d->page) {
-        static_cast<PageClientQGraphicsWidget*>(d->page->d->client)->viewResizesToContents = enabled;
+    if (d->page)
         d->updateResizesToContentsForPage();
-    }
 }
 
 bool QGraphicsWebView::resizesToContents() const

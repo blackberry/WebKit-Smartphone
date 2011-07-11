@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006 Eric Seidel (eric@webkit.org)
+ * Copyright (C) 2006 Eric Seidel <eric@webkit.org>
  * Copyright (C) 2008, 2009 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -11,10 +11,10 @@
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY APPLE COMPUTER, INC. ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY APPLE INC. ``AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL APPLE COMPUTER, INC. OR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL APPLE INC. OR
  * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
  * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
@@ -225,12 +225,13 @@ NativeImagePtr SVGImage::nativeImageForCurrentFrame()
     if (!m_frameCache) {
         if (!m_page)
             return 0;
-        m_frameCache = ImageBuffer::create(size());
-        if (!m_frameCache) // failed to allocate image
+        OwnPtr<ImageBuffer> buffer = ImageBuffer::create(size());
+        if (!buffer) // failed to allocate image
             return 0;
-        draw(m_frameCache->context(), rect(), rect(), DeviceColorSpace, CompositeSourceOver);
+        draw(buffer->context(), rect(), rect(), DeviceColorSpace, CompositeSourceOver);
+        m_frameCache = buffer->copyImage();
     }
-    return m_frameCache->image()->nativeImageForCurrentFrame();
+    return m_frameCache->nativeImageForCurrentFrame();
 }
 
 bool SVGImage::dataChanged(bool allDataReceived)
@@ -241,25 +242,33 @@ bool SVGImage::dataChanged(bool allDataReceived)
 
     if (allDataReceived) {
         static FrameLoaderClient* dummyFrameLoaderClient =  new EmptyFrameLoaderClient;
-        static EditorClient* dummyEditorClient = new EmptyEditorClient;
+
+        Page::PageClients pageClients;
+        m_chromeClient = adoptPtr(new SVGImageChromeClient(this));
+        pageClients.chromeClient = m_chromeClient.get();
 #if ENABLE(CONTEXT_MENUS)
         static ContextMenuClient* dummyContextMenuClient = new EmptyContextMenuClient;
-#else
-        static ContextMenuClient* dummyContextMenuClient = 0;
+        pageClients.contextMenuClient = dummyContextMenuClient;
 #endif
+        static EditorClient* dummyEditorClient = new EmptyEditorClient;
+        pageClients.editorClient = dummyEditorClient;
 #if ENABLE(DRAG_SUPPORT)
         static DragClient* dummyDragClient = new EmptyDragClient;
-#else
-        static DragClient* dummyDragClient = 0;
+        pageClients.dragClient = dummyDragClient;
 #endif
         static InspectorClient* dummyInspectorClient = new EmptyInspectorClient;
+        pageClients.inspectorClient = dummyInspectorClient;
+#if ENABLE(DEVICE_ORIENTATION)
+        static DeviceMotionClient* dummyDeviceMotionClient = new EmptyDeviceMotionClient;
+        pageClients.deviceMotionClient = dummyDeviceMotionClient;
+        static DeviceOrientationClient* dummyDeviceOrientationClient = new EmptyDeviceOrientationClient;
+        pageClients.deviceOrientationClient = dummyDeviceOrientationClient;
+#endif
 
-        m_chromeClient.set(new SVGImageChromeClient(this));
-        
         // FIXME: If this SVG ends up loading itself, we might leak the world.
         // The comment said that the Cache code does not know about CachedImages
         // holding Frames and won't know to break the cycle. But 
-        m_page.set(new Page(m_chromeClient.get(), dummyContextMenuClient, dummyEditorClient, dummyDragClient, dummyInspectorClient, 0, 0, 0));
+        m_page.set(new Page(pageClients));
         m_page->settings()->setMediaEnabled(false);
         m_page->settings()->setJavaScriptEnabled(false);
         m_page->settings()->setPluginsEnabled(false);
@@ -272,7 +281,7 @@ bool SVGImage::dataChanged(bool allDataReceived)
         loader->setForcedSandboxFlags(SandboxAll);
         loader->load(fakeRequest, false); // Make sure the DocumentLoader is created
         loader->policyChecker()->cancelCheck(); // cancel any policy checks
-        loader->commitProvisionalLoad(0);
+        loader->commitProvisionalLoad();
         loader->writer()->setMIMEType("image/svg+xml");
         loader->writer()->begin(KURL()); // create the empty document
         loader->writer()->addData(data()->data(), data()->size());

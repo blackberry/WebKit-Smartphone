@@ -55,6 +55,9 @@ extern NSString *WebPreferencesRemovedNotification;
 
 // Preferences that might be public in a future release
 
+- (BOOL)isDNSPrefetchingEnabled;
+- (void)setDNSPrefetchingEnabled:(BOOL)flag;
+
 - (BOOL)developerExtrasEnabled;
 - (void)setDeveloperExtrasEnabled:(BOOL)flag;
 
@@ -131,6 +134,12 @@ extern NSString *WebPreferencesRemovedNotification;
 - (float)PDFScaleFactor;
 - (void)setPDFScaleFactor:(float)scale;
 
+- (int64_t)applicationCacheTotalQuota;
+- (void)setApplicationCacheTotalQuota:(int64_t)quota;
+
+- (int64_t)applicationCacheDefaultOriginQuota;
+- (void)setApplicationCacheDefaultOriginQuota:(int64_t)quota;
+
 - (WebKitEditableLinkBehavior)editableLinkBehavior;
 - (void)setEditableLinkBehavior:(WebKitEditableLinkBehavior)behavior;
 
@@ -175,11 +184,14 @@ extern NSString *WebPreferencesRemovedNotification;
 - (BOOL)webGLEnabled;
 - (void)setWebGLEnabled:(BOOL)enabled;
 
-- (BOOL)html5ParserEnabled;
-- (void)setHTML5ParserEnabled:(BOOL)flag;
+- (BOOL)paginateDuringLayoutEnabled;
+- (void)setPaginateDuringLayoutEnabled:(BOOL)flag;
 
 - (BOOL)usesProxiedOpenPanel;
 - (void)setUsesProxiedOpenPanel:(BOOL)enabled;
+
+- (BOOL)memoryInfoEnabled;
+- (void)setMemoryInfoEnabled:(BOOL)enabled;
 
 // Other private methods
 - (void)_postPreferencesChangesNotification;
@@ -194,4 +206,10 @@ extern NSString *WebPreferencesRemovedNotification;
 // For WebView's use only.
 - (void)willAddToWebView;
 - (void)didRemoveFromWebView;
+
+// Full screen support is dependent on WebCore/WebKit being
+// compiled with ENABLE_FULLSCREEN_API. 
+- (void)setFullScreenEnabled:(BOOL)flag;
+- (BOOL)fullScreenEnabled;
+
 @end

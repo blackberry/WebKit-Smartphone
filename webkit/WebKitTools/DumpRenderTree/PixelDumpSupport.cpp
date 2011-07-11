@@ -30,9 +30,9 @@
 #include "DumpRenderTree.h"
 #include "LayoutTestController.h"
 #include "PixelDumpSupport.h"
+#include <cstdio>
 #include <wtf/Assertions.h>
 #include <wtf/RefPtr.h>
-#include <wtf/RetainPtr.h>
 
 #if PLATFORM(CG)
 #include "PixelDumpSupportCG.h"
@@ -42,7 +42,13 @@
 
 void dumpWebViewAsPixelsAndCompareWithExpected(const std::string& expectedHash)
 {
-    RefPtr<BitmapContext> context = createBitmapContextFromWebView(gLayoutTestController->testOnscreen(), gLayoutTestController->testRepaint(), gLayoutTestController->testRepaintSweepHorizontally(), gLayoutTestController->dumpSelectionRect());
+    RefPtr<BitmapContext> context;
+#if PLATFORM(MAC)
+    if (gLayoutTestController->isPrinting())
+        context = createPagedBitmapContext();
+    else
+#endif
+        context = createBitmapContextFromWebView(gLayoutTestController->testOnscreen(), gLayoutTestController->testRepaint(), gLayoutTestController->testRepaintSweepHorizontally(), gLayoutTestController->dumpSelectionRect());
     ASSERT(context);
     
     // Compute the hash of the bitmap context pixels

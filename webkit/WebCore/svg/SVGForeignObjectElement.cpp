@@ -1,24 +1,22 @@
 /*
-    Copyright (C) 2006 Apple Computer, Inc.
-              (C) 2008 Nikolas Zimmermann <zimmermann@kde.org>
-
-    This file is part of the WebKit project
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2006 Apple Inc. All rights reserved.
+ * Copyright (C) 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -28,17 +26,15 @@
 #include "Attribute.h"
 #include "CSSPropertyNames.h"
 #include "RenderForeignObject.h"
+#include "RenderSVGResource.h"
 #include "SVGLength.h"
 #include "SVGNames.h"
 #include <wtf/Assertions.h>
 
 namespace WebCore {
 
-SVGForeignObjectElement::SVGForeignObjectElement(const QualifiedName& tagName, Document *doc)
-    : SVGStyledTransformableElement(tagName, doc)
-    , SVGTests()
-    , SVGLangSpace()
-    , SVGExternalResourcesRequired()
+SVGForeignObjectElement::SVGForeignObjectElement(const QualifiedName& tagName, Document* document)
+    : SVGStyledTransformableElement(tagName, document)
     , m_x(LengthModeWidth)
     , m_y(LengthModeHeight)
     , m_width(LengthModeWidth)
@@ -46,8 +42,9 @@ SVGForeignObjectElement::SVGForeignObjectElement(const QualifiedName& tagName, D
 {
 }
 
-SVGForeignObjectElement::~SVGForeignObjectElement()
+PassRefPtr<SVGForeignObjectElement> SVGForeignObjectElement::create(const QualifiedName& tagName, Document* document)
 {
+    return adoptRef(new SVGForeignObjectElement(tagName, document));
 }
 
 void SVGForeignObjectElement::parseMappedAttribute(Attribute* attr)
@@ -76,24 +73,29 @@ void SVGForeignObjectElement::svgAttributeChanged(const QualifiedName& attrName)
 {
     SVGStyledTransformableElement::svgAttributeChanged(attrName);
 
+    bool isLengthAttribute = attrName == SVGNames::xAttr
+                          || attrName == SVGNames::yAttr
+                          || attrName == SVGNames::widthAttr
+                          || attrName == SVGNames::heightAttr;
+
+    if (isLengthAttribute)
+        updateRelativeLengthsInformation();
+
     RenderObject* renderer = this->renderer();
     if (!renderer)
         return;
 
     if (SVGStyledTransformableElement::isKnownAttribute(attrName)) {
         renderer->setNeedsTransformUpdate();
-        renderer->setNeedsLayout(true);
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
         return;
     }
 
-    if (attrName == SVGNames::xAttr
-        || attrName == SVGNames::yAttr
-        || attrName == SVGNames::widthAttr
-        || attrName == SVGNames::heightAttr
+    if (isLengthAttribute
         || SVGTests::isKnownAttribute(attrName)
         || SVGLangSpace::isKnownAttribute(attrName)
         || SVGExternalResourcesRequired::isKnownAttribute(attrName))
-        renderer->setNeedsLayout(true);
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
 }
 
 void SVGForeignObjectElement::synchronizeProperty(const QualifiedName& attrName)
@@ -120,8 +122,6 @@ void SVGForeignObjectElement::synchronizeProperty(const QualifiedName& attrName)
         synchronizeHeight();
     else if (SVGExternalResourcesRequired::isKnownAttribute(attrName))
         synchronizeExternalResourcesRequired();
-    else if (SVGURIReference::isKnownAttribute(attrName))
-        synchronizeHref();
 }
 
 RenderObject* SVGForeignObjectElement::createRenderer(RenderArena* arena, RenderStyle*)
@@ -131,8 +131,20 @@ RenderObject* SVGForeignObjectElement::createRenderer(RenderArena* arena, Render
 
 bool SVGForeignObjectElement::childShouldCreateRenderer(Node* child) const
 {
+    // Disallow arbitary SVG content. Only allow proper <svg xmlns="svgNS"> subdocuments.
+    if (child->isSVGElement())
+        return child->hasTagName(SVGNames::svgTag);
+
     // Skip over SVG rules which disallow non-SVG kids
     return StyledElement::childShouldCreateRenderer(child);
+}
+
+bool SVGForeignObjectElement::selfHasRelativeLengths() const
+{
+    return x().isRelative()
+        || y().isRelative()
+        || width().isRelative()
+        || height().isRelative();
 }
 
 }

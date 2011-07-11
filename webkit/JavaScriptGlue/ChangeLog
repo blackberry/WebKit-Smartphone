@@ -1,3 +1,172 @@
+2010-09-09  Michael Saboff  <msaboff@apple.com>
+
+        Reviewed by Gavin Barraclough.
+
+        Added ListHashSet.h as an exported header in support of RegExp tracing.
+        https://bugs.webkit.org/show_bug.cgi?id=45401
+
+        * ForwardingHeaders/wtf/ListHashSet.h: Added.
+
+2010-09-07  Anders Carlsson  <andersca@apple.com>
+
+        Reviewed by Darin Adler.
+
+        <rdar://problem/8381749> -Wcast-align warning emitted when building with clang
+
+        Remove the -Wcast-align-warning since it isn't really useful, and clang is more aggressive about warning than gcc.
+
+        * Configurations/Base.xcconfig:
+
+2010-08-26  Sam Weinig  <sam@webkit.org>
+
+        Reviewed by Darin Adler.
+
+        Add PassOwnArrayPtr
+        https://bugs.webkit.org/show_bug.cgi?id=44627
+
+        Add new forwarding header.
+
+        * ForwardingHeaders/wtf/OwnArrayPtrCommon.h: Added.
+
+2010-08-23  Gavin Barraclough  <barraclough@apple.com>
+
+        Reviewed by Oliver Hunt.
+
+        https://bugs.webkit.org/show_bug.cgi?id=44487
+
+        * ForwardingHeaders/wtf/text/WTFString.h: Added.
+
+2010-08-24  Oliver Hunt  <oliver@apple.com>
+
+        Reviewed by Geoff Garen.
+
+        Don't seed the JS random number generator from time()
+        https://bugs.webkit.org/show_bug.cgi?id=41868
+        <rdar://problem/8171025>
+
+        Add forwarding header for RandomNumber in JavaScriptGlue
+
+        * ForwardingHeaders/wtf/RandomNumber.h: Added.
+
+2010-08-11  Gavin Barraclough  <barraclough@apple.com>
+
+        Rubber stamps by Darin Adler & Sam Weinig.
+
+        Bug 43867 - Some UString cleanup
+
+        Change JSC::UString data(), size(), and from(), to characters(), length(), and number() to match WTF::String.
+        Move string concatenation methods to a new header to simplify down UString.h.  Remove is8Bit().
+
+        * JSUtils.cpp:
+        (UStringToCFString):
+        (KJSValueToCFTypeInternal):
+        * JavaScriptGlue.xcodeproj/project.pbxproj:
+
+2010-08-04  Gavin Barraclough  <barraclough@apple.com>
+
+        Reviewed by Sam Weinig.
+
+        Bug 43515 - Fix small design issues with PageAllocation, split out PageReservation.
+        (add forwarding headers)
+
+        * ForwardingHeaders/wtf/Bitmap.h: Added.
+        * ForwardingHeaders/wtf/PageReservation.h: Added.
+
+2010-08-04  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r64655.
+        http://trac.webkit.org/changeset/64655
+        https://bugs.webkit.org/show_bug.cgi?id=43496
+
+        JavaScriptCore references patch seems to have caused
+        regressions in QT and GTK builds (Requested by nlawrence on
+        #webkit).
+
+        * JSValueWrapper.cpp:
+        (JSValueWrapper::JSObjectMark):
+
+2010-08-04  Nathan Lawrence  <nlawrence@apple.com>
+
+        Reviewed by Darin Adler.
+
+        Removed unneeded marking.  We need to remove this marking in order to have
+        MarkStack::append take references for updating movable objects.
+
+        https://bugs.webkit.org/show_bug.cgi?id=41177
+
+        * JSValueWrapper.cpp:
+        (JSValueWrapper::JSObjectMark):
+
+2010-08-03  Gavin Barraclough  <barraclough@apple.com>
+
+        Build fix following r64624.
+
+        * ForwardingHeaders/wtf/BitMap.h: Added.
+
+2010-07-27  Gavin Barraclough  <barraclough@apple.com>
+
+        Reviewed by Oliver Hunt.
+
+        Bug 42621 - Add a bump allocator for the YARR interpreter
+
+        The regex engine requires lifo allocation, however currently uses the general purpose
+        malloc/free memory allocation.  A simple bump pointer allocator should provide a lower
+        overhead allocation solution.
+
+        * ForwardingHeaders/wtf/BumpPointerAllocator.h: Added.
+
+2010-07-26  Gavin Barraclough  <barraclough@apple.com>
+
+        Reviewed by Oliver Hunt.
+
+        Bug 43009 - Abstract out page allocation from executable allocators
+
+        * ForwardingHeaders/wtf/PageAllocation.h: Added.
+
+2010-07-01  Oliver Hunt  <oliver@apple.com>
+
+        Reviewed by Maciej Stachowiak.
+
+        Add a FixedArray template to encapsulate fixed length arrays
+        https://bugs.webkit.org/show_bug.cgi?id=41506
+
+        Add forwarding header.
+
+        * ForwardingHeaders/wtf/FixedArray.h: Added.
+
+2010-06-02  Gavin Barraclough  <barraclough@apple.com>
+
+        Reviewed by Oliver Hunt.
+
+        Bug 40094 - The return type of NativeFunction should be EncodedJSValue
+        On Windows & Linux, using JSVALUE32_64, EncodedJSValue is returned in registers, but JSValue is not.
+
+        * JSObject.cpp:
+        (nativeCallFunction):
+
+2010-05-28  Geoffrey Garen  <ggaren@apple.com>
+
+        Reviewed by Sam Weinig, Gavin Barraclough, Oliver Hunt.
+
+        Simplified the host calling convention.
+
+        PART ONE: Functional code changes.
+        
+        [ None in JavaScriptGlue ]
+        
+        PART TWO: Global search and replace.
+        
+        In the areas below, I used global search-and-replace to change
+            (ExecState*, JSObject*, JSValue, const ArgList&) => (ExecState*)
+            args.size() => exec->argumentCount()
+            args.at(i) => exec->argument(i)
+
+        * JSObject.cpp:
+        (nativeCallFunction):
+        * UserObjectImp.cpp:
+        (UserObjectImp::callAsFunction):
+        * UserObjectImp.h:
+
 2010-04-23  Sam Weinig  <sam@webkit.org>
 
         Reviewed by David Levin.

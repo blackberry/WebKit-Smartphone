@@ -27,6 +27,7 @@
 #include "Frame.h"
 #include "FrameView.h"
 #include "GraphicsContext.h"
+#include "HTMLFrameOwnerElement.h"
 #include "HitTestResult.h"
 #include "RenderLayer.h"
 #include "RenderSelectionInfo.h"
@@ -55,6 +56,7 @@ RenderView::RenderView(Node* node, FrameView* view)
     , m_forcedPageBreak(false)
     , m_layoutState(0)
     , m_layoutStateDisableCount(0)
+    , m_bodyIsLTR(true)
 #if ENABLE(VIEWPORT_REFLOW)
     , m_reflowWidth(0)
 #endif
@@ -101,6 +103,11 @@ void RenderView::calcPrefWidths()
     m_maxPrefWidth = m_minPrefWidth;
 }
 
+bool RenderView::isChildAllowed(RenderObject* child, RenderStyle*) const
+{
+    return child->isBox();
+}
+
 void RenderView::layout()
 {
     m_absoluteOverflow.clear();
@@ -133,8 +140,8 @@ void RenderView::layout()
 
     // Reset overflow and then replace it with docWidth and docHeight.
     m_overflow.clear();
-    addLayoutOverflow(IntRect(0, 0, docWidth(), docHeight()));
-
+    int leftOverflow = docLeft();
+    addLayoutOverflow(IntRect(leftOverflow, 0, docWidth(leftOverflow), docHeight()));
 
     ASSERT(layoutDelta() == IntSize());
     ASSERT(m_layoutStateDisableCount == 0);
@@ -165,16 +172,24 @@ void RenderView::paint(PaintInfo& paintInfo, int tx, int ty)
     ASSERT(!needsLayout());
 
     // Cache the print rect because the dirty rect could get changed during painting.
-    if (printing())
+    if (document()->paginated())
         setPrintRect(paintInfo.rect);
     else
         setPrintRect(IntRect());
     paintObject(paintInfo, tx, ty);
 }
 
+static inline bool isComposited(RenderObject* object)
+{
+    return object->hasLayer() && toRenderBoxModelObject(object)->layer()->isComposited();
+}
+
 static inline bool rendererObscuresBackground(RenderObject* object)
 {
-    return object && object->style()->visibility() == VISIBLE && object->style()->opacity() == 1 && !object->style()->hasTransform();
+    return object && object->style()->visibility() == VISIBLE
+        && object->style()->opacity() == 1
+        && !object->style()->hasTransform()
+        && !isComposited(object);
 }
     
 void RenderView::paintBoxDecorations(PaintInfo& paintInfo, int, int)
@@ -202,15 +217,26 @@ void RenderView::paintBoxDecorations(PaintInfo& paintInfo, int, int)
 #endif
     }
 
+    if (document()->ownerElement() || !view())
+        return;
+
+    bool rootFillsViewport = false;
+    Node* documentElement = document()->documentElement();
+    if (RenderObject* rootRenderer = documentElement ? documentElement->renderer() : 0) {
+        // The document element's renderer is currently forced to be a block, but may not always be.
+        RenderBox* rootBox = rootRenderer->isBox() ? toRenderBox(rootRenderer) : 0;
+        rootFillsViewport = rootBox && !rootBox->x() && !rootBox->y() && rootBox->width() >= width() && rootBox->height() >= height();
+    }
+    
     // If painting will entirely fill the view, no need to fill the background.
-    if (elt || rendererObscuresBackground(firstChild()) || !view())
+    if (rootFillsViewport && rendererObscuresBackground(firstChild()))
         return;
 
     // This code typically only executes if the root element's visibility has been set to hidden,
     // or there is a transform on the <html>.
     // Only fill with the base background color (typically white) if we're the root document, 
     // since iframes/frames with no background in the child document should show the parent's background.
-    if (view()->isTransparent()) // FIXME: This needs to be dynamic.  We should be able to go back to blitting if we ever stop being transparent.
+    if (frameView()->isTransparent()) // FIXME: This needs to be dynamic.  We should be able to go back to blitting if we ever stop being transparent.
         frameView()->setUseSlowRepaints(); // The parent must show behind the child.
     else {
         Color baseColor = frameView()->baseBackgroundColor();
@@ -407,13 +433,15 @@ void RenderView::setSelection(RenderObject* start, int startPos, RenderObject* e
         if ((os->canBeSelectionLeaf() || os == m_selectionStart || os == m_selectionEnd) && os->selectionState() != SelectionNone) {
             // Blocks are responsible for painting line gaps and margin gaps.  They must be examined as well.
             oldSelectedObjects.set(os, new RenderSelectionInfo(os, true));
-            RenderBlock* cb = os->containingBlock();
-            while (cb && !cb->isRenderView()) {
-                RenderBlockSelectionInfo* blockInfo = oldSelectedBlocks.get(cb);
-                if (blockInfo)
-                    break;
-                oldSelectedBlocks.set(cb, new RenderBlockSelectionInfo(cb));
-                cb = cb->containingBlock();
+            if (blockRepaintMode == RepaintNewXOROld) {
+                RenderBlock* cb = os->containingBlock();
+                while (cb && !cb->isRenderView()) {
+                    RenderBlockSelectionInfo* blockInfo = oldSelectedBlocks.get(cb);
+                    if (blockInfo)
+                        break;
+                    oldSelectedBlocks.set(cb, new RenderBlockSelectionInfo(cb));
+                    cb = cb->containingBlock();
+                }
             }
         }
 
@@ -516,8 +544,7 @@ void RenderView::setSelection(RenderObject* start, int startPos, RenderObject* e
         RenderBlockSelectionInfo* newInfo = newSelectedBlocks.get(block);
         RenderBlockSelectionInfo* oldInfo = i->second;
         if (!newInfo || oldInfo->rects() != newInfo->rects() || oldInfo->state() != newInfo->state()) {
-            if (blockRepaintMode == RepaintNewXOROld)
-                oldInfo->repaint();
+            oldInfo->repaint();
             if (newInfo) {
                 newInfo->repaint();
                 newSelectedBlocks.remove(block);
@@ -618,9 +645,15 @@ int RenderView::docHeight() const
     return h;
 }
 
-int RenderView::docWidth() const
+int RenderView::docLeft() const
 {
-    int w = rightmostPosition();
+    // Clip out left overflow in LTR page.
+    return m_bodyIsLTR ? 0 : std::min(0, leftmostPosition());
+}
+
+int RenderView::docWidth(int leftOverflow) const
+{
+    int w = m_bodyIsLTR ? rightmostPosition() : width() - leftOverflow;
 
     for (RenderBox* c = firstChildBox(); c; c = c->nextSiblingBox()) {
         int dw = c->width() + c->marginLeft() + c->marginRight();
@@ -653,9 +686,7 @@ int RenderView::viewWidth() const
 
 float RenderView::zoomFactor() const
 {
-    if (!m_frameView->shouldApplyPageZoom())
-        return 1;
-    return m_frameView->zoomFactor();
+    return m_frameView->pageZoomFactor();
 }
 
 // The idea here is to take into account what object is moving the pagination point, and

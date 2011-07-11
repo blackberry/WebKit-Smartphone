@@ -39,13 +39,13 @@
 namespace WebCore {
 
 // Most renderers in the SVG rendering tree will inherit from this class
-// but not all. (e.g. RenderSVGForeignObject, RenderSVGBlock, RenderSVGImage) thus methods
+// but not all. (e.g. RenderSVGForeignObject, RenderSVGBlock) thus methods
 // required by SVG renders need to be declared on RenderObject, but shared
-// logic can go in this class or in SVGRenderBase.
+// logic can go in this class or in SVGRenderSupport.
 
 class SVGStyledElement;
 
-class RenderSVGModelObject : public RenderObject, protected SVGRenderBase {
+class RenderSVGModelObject : public RenderObject {
 public:
     RenderSVGModelObject(SVGStyledElement*);
 
@@ -55,12 +55,15 @@ public:
     virtual void computeRectForRepaint(RenderBoxModelObject* repaintContainer, IntRect&, bool fixed = false);
     virtual IntRect outlineBoundsForRepaint(RenderBoxModelObject* repaintContainer, IntPoint*) const;
 
-    virtual void absoluteRects(Vector<IntRect>& rects, int tx, int ty);
+    virtual void absoluteRects(Vector<IntRect>&, int tx, int ty);
     virtual void absoluteQuads(Vector<FloatQuad>&);
 
     virtual void destroy();
 
     virtual void mapLocalToContainer(RenderBoxModelObject* repaintContainer, bool useTransforms, bool fixed, TransformState&) const;
+    virtual void styleWillChange(StyleDifference, const RenderStyle* newStyle);
+    virtual void styleDidChange(StyleDifference, const RenderStyle* oldStyle);
+    virtual void updateFromElement();
 
 private:
     // This method should never be called, SVG uses a different nodeAtPoint method

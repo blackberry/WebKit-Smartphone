@@ -26,18 +26,21 @@
 #ifndef WebPreferences_h
 #define WebPreferences_h
 
+#include "APIObject.h"
+#include "FontSmoothingLevel.h"
 #include "WebPreferencesStore.h"
 #include <wtf/HashSet.h>
 #include <wtf/PassRefPtr.h>
-#include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 
 namespace WebKit {
 
 class WebContext;
 
-class WebPreferences : public RefCounted<WebPreferences> {
+class WebPreferences : public APIObject {
 public:
+    static const Type APIType = TypePreferences;
+
     static WebPreferences* shared();
 
     static PassRefPtr<WebPreferences> create()
@@ -61,9 +64,23 @@ public:
     void setLoadsImagesAutomatically(bool);
     bool loadsImagesAutomatically() const;
 
+    void setOfflineWebApplicationCacheEnabled(bool);
+    bool offlineWebApplicationCacheEnabled() const;
+
+    void setLocalStorageEnabled(bool);
+    bool localStorageEnabled() const;
+
+    void setXSSAuditorEnabled(bool);
+    bool xssAuditorEnabled() const;
+
+    void setFontSmoothingLevel(FontSmoothingLevel);
+    FontSmoothingLevel fontSmoothingLevel() const;
+
 private:
     WebPreferences();
     WebPreferences(WebPreferences*);
+
+    virtual Type type() const { return APIType; }
 
     void update();
 

@@ -31,7 +31,7 @@
 #include "CString.h"
 #include "ChromeClient.h"
 #include "CookieJarSoup.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "FileSystem.h"
 #include "Frame.h"
 #include "GOwnPtrSoup.h"
@@ -188,9 +188,9 @@ static void restartedCallback(SoupMessage* msg, gpointer data)
     char* uri = soup_uri_to_string(soup_message_get_uri(msg), false);
     String location = String(uri);
     g_free(uri);
-    KURL newURL = KURL(handle->request().url(), location);
+    KURL newURL = KURL(handle->firstRequest().url(), location);
 
-    ResourceRequest request = handle->request();
+    ResourceRequest request = handle->firstRequest();
     ResourceResponse response;
     request.setURL(newURL);
     request.setHTTPMethod(msg->method);
@@ -354,7 +354,7 @@ static gboolean parseDataUrl(gpointer callbackData)
     if (!client)
         return false;
 
-    String url = handle->request().url().string();
+    String url = handle->firstRequest().url().string();
     ASSERT(url.startsWith("data:", false));
 
     int index = url.find(',');
@@ -377,7 +377,7 @@ static gboolean parseDataUrl(gpointer callbackData)
     String charset = extractCharsetFromMediaType(mediaType);
 
     ResourceResponse response;
-    response.setURL(handle->request().url());
+    response.setURL(handle->firstRequest().url());
     response.setMimeType(mimeType);
 
     if (isBase64) {
@@ -478,7 +478,7 @@ static bool startHttp(ResourceHandle* handle)
 
     ResourceHandleInternal* d = handle->getInternal();
 
-    ResourceRequest request(handle->request());
+    ResourceRequest request(handle->firstRequest());
     KURL url(request.url());
     url.removeFragmentIdentifier();
     request.setURL(url);
@@ -504,7 +504,7 @@ static bool startHttp(ResourceHandle* handle)
 #endif
     g_object_set_data(G_OBJECT(d->m_msg), "resourceHandle", reinterpret_cast<void*>(handle));
 
-    FormData* httpBody = d->m_request.httpBody();
+    FormData* httpBody = d->m_firstRequest.httpBody();
     if (httpBody && !httpBody->isEmpty()) {
         size_t numElements = httpBody->elements().size();
 
@@ -512,7 +512,7 @@ static bool startHttp(ResourceHandle* handle)
         if (numElements < 2) {
             Vector<char> body;
             httpBody->flatten(body);
-            soup_message_set_request(d->m_msg, d->m_request.httpContentType().utf8().data(),
+            soup_message_set_request(d->m_msg, d->m_firstRequest.httpContentType().utf8().data(),
                                      SOUP_MEMORY_COPY, body.data(), body.size());
         } else {
             /*
@@ -533,10 +533,8 @@ static bool startHttp(ResourceHandle* handle)
                      * libsoup's simple-httpd test
                      */
                     GError* error = 0;
-                    gchar* fileName = filenameFromString(element.m_filename);
-                    GMappedFile* fileMapping = g_mapped_file_new(fileName, false, &error);
-
-                    g_free(fileName);
+                    CString fileName = fileSystemRepresentation(element.m_filename);
+                    GMappedFile* fileMapping = g_mapped_file_new(fileName.data(), false, &error);
 
                     if (error) {
                         g_error_free(error);
@@ -580,24 +578,24 @@ static bool startHttp(ResourceHandle* handle)
     return true;
 }
 
-bool ResourceHandle::start(Frame* frame)
+bool ResourceHandle::start(NetworkingContext* context)
 {
     ASSERT(!d->m_msg);
-
 
     // The frame could be null if the ResourceHandle is not associated to any
     // Frame, e.g. if we are downloading a file.
     // If the frame is not null but the page is null this must be an attempted
-    // load from an onUnload handler, so let's just block it.
-    if (frame && !frame->page())
+    // load from an unload handler, so let's just block it.
+    // If both the frame and the page are not null the context is valid.
+    if (context && !context->isValid())
         return false;
 
-    KURL url = request().url();
+    KURL url = firstRequest().url();
     String urlString = url.string();
     String protocol = url.protocol();
 
     // Used to set the authentication dialog toplevel; may be NULL
-    d->m_frame = frame;
+    d->m_context = context;
 
     if (equalIgnoringCase(protocol, "data"))
         return startData(this, urlString);
@@ -639,9 +637,8 @@ bool ResourceHandle::supportsBufferedData()
     return false;
 }
 
-void ResourceHandle::setDefersLoading(bool defers)
+void ResourceHandle::platformSetDefersLoading(bool)
 {
-    d->m_defersLoading = defers;
     notImplemented();
 }
 
@@ -658,12 +655,15 @@ bool ResourceHandle::willLoadFromCache(ResourceRequest&, Frame*)
     return false;
 }
 
-void ResourceHandle::loadResourceSynchronously(const ResourceRequest& request, StoredCredentials /*storedCredentials*/, ResourceError& error, ResourceResponse& response, Vector<char>& data, Frame* frame)
+void ResourceHandle::loadResourceSynchronously(NetworkingContext* context, const ResourceRequest& request, StoredCredentials /*storedCredentials*/, ResourceError& error, ResourceResponse& response, Vector<char>& data)
 {
     WebCoreSynchronousLoader syncLoader(error, response, data);
-    ResourceHandle handle(request, &syncLoader, true, false);
+    // FIXME: we should use the ResourceHandle::create method here,
+    // but it makes us timeout in a couple of tests. See
+    // https://bugs.webkit.org/show_bug.cgi?id=41823
+    RefPtr<ResourceHandle> handle = adoptRef(new ResourceHandle(request, &syncLoader, true, false));
+    handle->start(context);
 
-    handle.start(frame);
     syncLoader.run();
 }
 
@@ -889,7 +889,7 @@ static bool startGio(ResourceHandle* handle, KURL url)
 
     ResourceHandleInternal* d = handle->getInternal();
 
-    if (handle->request().httpMethod() != "GET" && handle->request().httpMethod() != "POST")
+    if (handle->firstRequest().httpMethod() != "GET" && handle->firstRequest().httpMethod() != "POST")
         return false;
 
     // GIO doesn't know how to handle refs and queries, so remove them
@@ -932,4 +932,3 @@ SoupSession* ResourceHandle::defaultSession()
 }
 
 }
-

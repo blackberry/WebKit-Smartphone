@@ -37,6 +37,7 @@ import unittest
 import logging
 
 from webkitpy.common import array_stream
+from webkitpy.common.system import logtesting
 from webkitpy.layout_tests import port
 from webkitpy.layout_tests.layout_package import printing
 from webkitpy.layout_tests.layout_package import dump_render_tree_thread
@@ -51,48 +52,26 @@ def get_options(args):
     return option_parser.parse_args(args)
 
 
-def get_result(filename, result_type=test_expectations.PASS, run_time=0):
-    failures = []
-    if result_type == test_expectations.TIMEOUT:
-        failures = [test_failures.FailureTimeout()]
-    elif result_type == test_expectations.CRASH:
-        failures = [test_failures.FailureCrash()]
-    return dump_render_tree_thread.TestResult(filename, failures, run_time,
-                                              total_time_for_all_diffs=0,
-                                              time_for_diffs=0)
-
-
-def get_result_summary(port_obj, test_files, expectations_str):
-    expectations = test_expectations.TestExpectations(
-        port_obj, test_files, expectations_str,
-        port_obj.test_platform_name(), is_debug_mode=False,
-        is_lint_mode=False, tests_are_present=False)
-
-    rs = run_webkit_tests.ResultSummary(expectations, test_files)
-    return rs, expectations
-
-
 class TestUtilityFunctions(unittest.TestCase):
     def test_configure_logging(self):
-        # FIXME: We need to figure out how to reset the basic logger.
-        # FIXME: If other testing classes call logging.basicConfig() then
-        # FIXME: these calls become no-ops and we can't control the
-        # FIXME: configuration to test things properly.
         options, args = get_options([])
         stream = array_stream.ArrayStream()
-        printing.configure_logging(options, stream)
+        handler = printing._configure_logging(stream, options.verbose)
         logging.info("this should be logged")
-        # self.assertFalse(stream.empty())
+        self.assertFalse(stream.empty())
 
         stream.reset()
         logging.debug("this should not be logged")
-        # self.assertTrue(stream.empty())
+        self.assertTrue(stream.empty())
+
+        printing._restore_logging(handler)
 
         stream.reset()
         options, args = get_options(['--verbose'])
-        printing.configure_logging(options, stream)
+        handler = printing._configure_logging(stream, options.verbose)
         logging.debug("this should be logged")
-        # self.assertFalse(stream.empty())
+        self.assertFalse(stream.empty())
+        printing._restore_logging(handler)
 
     def test_print_options(self):
         options, args = get_options([])
@@ -155,6 +134,28 @@ class  Testprinter(unittest.TestCase):
                                    is_fully_parallel)
         return printer, regular_output, buildbot_output
 
+    def get_result(self, test, result_type=test_expectations.PASS, run_time=0):
+        failures = []
+        if result_type == test_expectations.TIMEOUT:
+            failures = [test_failures.FailureTimeout()]
+        elif result_type == test_expectations.CRASH:
+            failures = [test_failures.FailureCrash()]
+        path = os.path.join(self._port.layout_tests_dir(), test)
+        return dump_render_tree_thread.TestResult(path, failures, run_time,
+                                                  total_time_for_all_diffs=0,
+                                                  time_for_diffs=0)
+
+    def get_result_summary(self, tests, expectations_str):
+        test_paths = [os.path.join(self._port.layout_tests_dir(), test) for
+                      test in tests]
+        expectations = test_expectations.TestExpectations(
+            self._port, test_paths, expectations_str,
+            self._port.test_platform_name(), is_debug_mode=False,
+            is_lint_mode=False, tests_are_present=False)
+
+        rs = run_webkit_tests.ResultSummary(expectations, test_paths)
+        return test_paths, rs, expectations
+
     def test_help_printer(self):
         # Here and below we'll call the "regular" printer err and the
         # buildbot printer out; this corresponds to how things run on the
@@ -189,6 +190,14 @@ class  Testprinter(unittest.TestCase):
         do_helper(method_name, switch, 'hello', exp_err, exp_bot)
         do_helper(method_name, 'everything', 'hello', exp_err, exp_bot)
 
+    def test_configure_and_cleanup(self):
+        # This test verifies that calling cleanup repeatedly and deleting
+        # the object is safe.
+        printer, err, out = self.get_printer(['--print', 'everything'])
+        printer.cleanup()
+        printer.cleanup()
+        printer = None
+
     def test_print_actual(self):
         # Actual results need to be logged to the buildbot's stream.
         self.do_switch_tests('print_actual', 'actual', to_buildbot=True)
@@ -215,32 +224,47 @@ class  Testprinter(unittest.TestCase):
 
     def test_print_one_line_summary(self):
         printer, err, out = self.get_printer(['--print', 'nothing'])
-        printer.print_one_line_summary(1, 1)
+        printer.print_one_line_summary(1, 1, 0)
         self.assertTrue(err.empty())
 
         printer, err, out = self.get_printer(['--print', 'one-line-summary'])
-        printer.print_one_line_summary(1, 1)
+        printer.print_one_line_summary(1, 1, 0)
         self.assertEquals(err.get(), ["All 1 tests ran as expected.\n", "\n"])
 
         printer, err, out = self.get_printer(['--print', 'everything'])
-        printer.print_one_line_summary(1, 1)
+        printer.print_one_line_summary(1, 1, 0)
         self.assertEquals(err.get(), ["All 1 tests ran as expected.\n", "\n"])
 
         err.reset()
-        printer.print_one_line_summary(2, 1)
+        printer.print_one_line_summary(2, 1, 1)
         self.assertEquals(err.get(),
                           ["1 test ran as expected, 1 didn't:\n", "\n"])
 
         err.reset()
-        printer.print_one_line_summary(3, 2)
+        printer.print_one_line_summary(3, 2, 1)
         self.assertEquals(err.get(),
                           ["2 tests ran as expected, 1 didn't:\n", "\n"])
 
+        err.reset()
+        printer.print_one_line_summary(3, 2, 0)
+        self.assertEquals(err.get(),
+                          ['\n', "2 tests ran as expected (1 didn't run).\n",
+                           '\n'])
+
+
     def test_print_test_result(self):
-        result = get_result('foo.html')
+        # Note here that we don't use meaningful exp_str and got_str values;
+        # the actual contents of the string are treated opaquely by
+        # print_test_result() when tracing, and usually we don't want
+        # to test what exactly is printed, just that something
+        # was printed (or that nothing was printed).
+        #
+        # FIXME: this is actually some goofy layering; it would be nice
+        # we could refactor it so that the args weren't redundant. Maybe
+        # the TestResult should contain what was expected, and the
+        # strings could be derived from the TestResult?
         printer, err, out = self.get_printer(['--print', 'nothing'])
-        result = get_result(os.path.join(self._port.layout_tests_dir(),
-                                         'foo.html'))
+        result = self.get_result('passes/image.html')
         printer.print_test_result(result, expected=False, exp_str='',
                                   got_str='')
         self.assertTrue(err.empty())
@@ -252,7 +276,7 @@ class  Testprinter(unittest.TestCase):
         printer.print_test_result(result, expected=False, exp_str='',
                                   got_str='')
         self.assertEquals(err.get(),
-                          ['  foo.html -> unexpected pass\n'])
+                          ['  passes/image.html -> unexpected pass\n'])
 
         printer, err, out = self.get_printer(['--print', 'everything'])
         printer.print_test_result(result, expected=True, exp_str='',
@@ -262,7 +286,7 @@ class  Testprinter(unittest.TestCase):
         printer.print_test_result(result, expected=False, exp_str='',
                                   got_str='')
         self.assertEquals(err.get(),
-                          ['  foo.html -> unexpected pass\n'])
+                          ['  passes/image.html -> unexpected pass\n'])
 
         printer, err, out = self.get_printer(['--print', 'nothing'])
         printer.print_test_result(result, expected=False, exp_str='',
@@ -270,10 +294,23 @@ class  Testprinter(unittest.TestCase):
         self.assertTrue(err.empty())
 
         printer, err, out = self.get_printer(['--print',
-                                                 'trace-unexpected'])
+                                              'trace-unexpected'])
         printer.print_test_result(result, expected=True, exp_str='',
                                   got_str='')
         self.assertTrue(err.empty())
+
+        printer, err, out = self.get_printer(['--print',
+                                              'trace-unexpected'])
+        printer.print_test_result(result, expected=False, exp_str='',
+                                  got_str='')
+        self.assertFalse(err.empty())
+
+        printer, err, out = self.get_printer(['--print',
+                                              'trace-unexpected'])
+        result = self.get_result("passes/text.html")
+        printer.print_test_result(result, expected=False, exp_str='',
+                                  got_str='')
+        self.assertFalse(err.empty())
 
         err.reset()
         printer.print_test_result(result, expected=False, exp_str='',
@@ -290,111 +327,114 @@ class  Testprinter(unittest.TestCase):
                                   got_str='')
 
     def test_print_progress(self):
-        test_files = ['foo.html', 'bar.html']
         expectations = ''
 
         # test that we print nothing
         printer, err, out = self.get_printer(['--print', 'nothing'])
-        rs, exp = get_result_summary(self._port, test_files, expectations)
+        tests = ['passes/text.html', 'failures/expected/timeout.html',
+                 'failures/expected/crash.html']
+        paths, rs, exp = self.get_result_summary(tests, expectations)
 
-        printer.print_progress(rs, False, test_files)
+        printer.print_progress(rs, False, paths)
         self.assertTrue(out.empty())
         self.assertTrue(err.empty())
 
-        printer.print_progress(rs, True, test_files)
+        printer.print_progress(rs, True, paths)
         self.assertTrue(out.empty())
         self.assertTrue(err.empty())
 
         # test regular functionality
         printer, err, out = self.get_printer(['--print',
                                               'one-line-progress'])
-        printer.print_progress(rs, False, test_files)
+        printer.print_progress(rs, False, paths)
         self.assertTrue(out.empty())
         self.assertFalse(err.empty())
 
         err.reset()
         out.reset()
-        printer.print_progress(rs, True, test_files)
+        printer.print_progress(rs, True, paths)
         self.assertFalse(err.empty())
         self.assertTrue(out.empty())
 
     def test_print_progress__detailed(self):
-        test_files = ['pass/pass.html', 'pass/timeout.html', 'fail/crash.html']
-        expectations = 'pass/timeout.html = TIMEOUT'
+        tests = ['passes/text.html', 'failures/expected/timeout.html',
+                 'failures/expected/crash.html']
+        expectations = 'failures/expected/timeout.html = TIMEOUT'
 
         # first, test that it is disabled properly
         # should still print one-line-progress
         printer, err, out = self.get_printer(
             ['--print', 'detailed-progress'], single_threaded=False)
-        rs, exp = get_result_summary(self._port, test_files, expectations)
-        printer.print_progress(rs, False, test_files)
+        paths, rs, exp = self.get_result_summary(tests, expectations)
+        printer.print_progress(rs, False, paths)
         self.assertFalse(err.empty())
         self.assertTrue(out.empty())
 
         # now test the enabled paths
         printer, err, out = self.get_printer(
             ['--print', 'detailed-progress'], single_threaded=True)
-        rs, exp = get_result_summary(self._port, test_files, expectations)
-        printer.print_progress(rs, False, test_files)
+        paths, rs, exp = self.get_result_summary(tests, expectations)
+        printer.print_progress(rs, False, paths)
         self.assertFalse(err.empty())
         self.assertTrue(out.empty())
 
         err.reset()
         out.reset()
-        printer.print_progress(rs, True, test_files)
+        printer.print_progress(rs, True, paths)
         self.assertFalse(err.empty())
         self.assertTrue(out.empty())
 
-        rs.add(get_result('pass/pass.html', test_expectations.TIMEOUT), False)
-        rs.add(get_result('pass/timeout.html'), True)
-        rs.add(get_result('fail/crash.html', test_expectations.CRASH), True)
+        rs.add(self.get_result('passes/text.html', test_expectations.TIMEOUT), False)
+        rs.add(self.get_result('failures/expected/timeout.html'), True)
+        rs.add(self.get_result('failures/expected/crash.html', test_expectations.CRASH), True)
         err.reset()
         out.reset()
-        printer.print_progress(rs, False, test_files)
+        printer.print_progress(rs, False, paths)
         self.assertFalse(err.empty())
         self.assertTrue(out.empty())
 
         # We only clear the meter when retrying w/ detailed-progress.
         err.reset()
         out.reset()
-        printer.print_progress(rs, True, test_files)
-        self.assertEqual(err.get(), [''])
+        printer.print_progress(rs, True, paths)
+        self.assertFalse(err.empty())
         self.assertTrue(out.empty())
 
         printer, err, out = self.get_printer(
             ['--print', 'detailed-progress,unexpected'], single_threaded=True)
-        rs, exp = get_result_summary(self._port, test_files, expectations)
-        printer.print_progress(rs, False, test_files)
+        paths, rs, exp = self.get_result_summary(tests, expectations)
+        printer.print_progress(rs, False, paths)
         self.assertFalse(err.empty())
         self.assertTrue(out.empty())
 
         err.reset()
         out.reset()
-        printer.print_progress(rs, True, test_files)
+        printer.print_progress(rs, True, paths)
         self.assertFalse(err.empty())
         self.assertTrue(out.empty())
 
-        rs.add(get_result('pass/pass.html', test_expectations.TIMEOUT), False)
-        rs.add(get_result('pass/timeout.html'), True)
-        rs.add(get_result('fail/crash.html', test_expectations.CRASH), True)
+        rs.add(self.get_result('passes/text.html', test_expectations.TIMEOUT), False)
+        rs.add(self.get_result('failures/expected/timeout.html'), True)
+        rs.add(self.get_result('failures/expected/crash.html', test_expectations.CRASH), True)
         err.reset()
         out.reset()
-        printer.print_progress(rs, False, test_files)
+        printer.print_progress(rs, False, paths)
         self.assertFalse(err.empty())
         self.assertTrue(out.empty())
 
         # We only clear the meter when retrying w/ detailed-progress.
         err.reset()
         out.reset()
-        printer.print_progress(rs, True, test_files)
-        self.assertEqual(err.get(), [''])
+        printer.print_progress(rs, True, paths)
+        self.assertFalse(err.empty())
         self.assertTrue(out.empty())
 
-    def test_write(self):
+    def test_write_nothing(self):
         printer, err, out = self.get_printer(['--print', 'nothing'])
         printer.write("foo")
         self.assertTrue(err.empty())
 
+    def test_write_misc(self):
         printer, err, out = self.get_printer(['--print', 'misc'])
         printer.write("foo")
         self.assertFalse(err.empty())
@@ -402,6 +442,7 @@ class  Testprinter(unittest.TestCase):
         printer.write("foo", "config")
         self.assertTrue(err.empty())
 
+    def test_write_everything(self):
         printer, err, out = self.get_printer(['--print', 'everything'])
         printer.write("foo")
         self.assertFalse(err.empty())
@@ -409,42 +450,71 @@ class  Testprinter(unittest.TestCase):
         printer.write("foo", "config")
         self.assertFalse(err.empty())
 
+    def test_write_verbose(self):
+        printer, err, out = self.get_printer(['--verbose'])
+        printer.write("foo")
+        self.assertTrue(not err.empty() and "foo" in err.get()[0])
+        self.assertTrue(out.empty())
+
     def test_print_unexpected_results(self):
         # This routine is the only one that prints stuff that the bots
         # care about.
+        #
+        # FIXME: there's some weird layering going on here. It seems
+        # like we shouldn't be both using an expectations string and
+        # having to specify whether or not the result was expected.
+        # This whole set of tests should probably be rewritten.
+        #
+        # FIXME: Plus, the fact that we're having to call into
+        # run_webkit_tests is clearly a layering inversion.
         def get_unexpected_results(expected, passing, flaky):
-            rs, exp = get_result_summary(self._port, test_files, expectations)
+            """Return an unexpected results summary matching the input description.
+
+            There are a lot of different combinations of test results that
+            can be tested; this routine produces various combinations based
+            on the values of the input flags.
+
+            Args
+                expected: whether the tests ran as expected
+                passing: whether the tests should all pass
+                flaky: whether the tests should be flaky (if False, they
+                    produce the same results on both runs; if True, they
+                    all pass on the second run).
+
+            """
+            paths, rs, exp = self.get_result_summary(tests, expectations)
             if expected:
-                rs.add(get_result('pass/pass.html', test_expectations.PASS),
+                rs.add(self.get_result('passes/text.html', test_expectations.PASS),
                        expected)
-                rs.add(get_result('pass/timeout.html',
+                rs.add(self.get_result('failures/expected/timeout.html',
                        test_expectations.TIMEOUT), expected)
-                rs.add(get_result('fail/crash.html', test_expectations.CRASH),
+                rs.add(self.get_result('failures/expected/crash.html', test_expectations.CRASH),
                    expected)
             elif passing:
-                rs.add(get_result('pass/pass.html'), expected)
-                rs.add(get_result('pass/timeout.html'), expected)
-                rs.add(get_result('fail/crash.html'), expected)
+                rs.add(self.get_result('passes/text.html'), expected)
+                rs.add(self.get_result('failures/expected/timeout.html'), expected)
+                rs.add(self.get_result('failures/expected/crash.html'), expected)
             else:
-                rs.add(get_result('pass/pass.html', test_expectations.TIMEOUT),
+                rs.add(self.get_result('passes/text.html', test_expectations.TIMEOUT),
                        expected)
-                rs.add(get_result('pass/timeout.html',
+                rs.add(self.get_result('failures/expected/timeout.html',
                        test_expectations.CRASH), expected)
-                rs.add(get_result('fail/crash.html',
+                rs.add(self.get_result('failures/expected/crash.html',
                                   test_expectations.TIMEOUT),
                    expected)
             retry = rs
             if flaky:
-                retry, exp = get_result_summary(self._port, test_files,
+                paths, retry, exp = self.get_result_summary(tests,
                                                 expectations)
-                retry.add(get_result('pass/pass.html'), True)
-                retry.add(get_result('pass/timeout.html'), True)
-                retry.add(get_result('fail/crash.html'), True)
+                retry.add(self.get_result('passes/text.html'), True)
+                retry.add(self.get_result('failures/expected/timeout.html'), True)
+                retry.add(self.get_result('failures/expected/crash.html'), True)
             unexpected_results = run_webkit_tests.summarize_unexpected_results(
                 self._port, exp, rs, retry)
             return unexpected_results
 
-        test_files = ['pass/pass.html', 'pass/timeout.html', 'fail/crash.html']
+        tests = ['passes/text.html', 'failures/expected/timeout.html',
+                 'failures/expected/crash.html']
         expectations = ''
 
         printer, err, out = self.get_printer(['--print', 'nothing'])
@@ -489,6 +559,33 @@ class  Testprinter(unittest.TestCase):
         err.reset()
         out.reset()
         printer, err, out = self.get_printer(['--print', 'everything'])
+        ur = get_unexpected_results(expected=False, passing=False, flaky=False)
+        printer.print_unexpected_results(ur)
+        self.assertTrue(err.empty())
+        self.assertFalse(out.empty())
+
+        expectations = """
+failures/expected/crash.html = CRASH
+failures/expected/timeout.html = TIMEOUT
+"""
+        err.reset()
+        out.reset()
+        ur = get_unexpected_results(expected=False, passing=False, flaky=False)
+        printer.print_unexpected_results(ur)
+        self.assertTrue(err.empty())
+        self.assertFalse(out.empty())
+
+        err.reset()
+        out.reset()
+        ur = get_unexpected_results(expected=False, passing=True, flaky=False)
+        printer.print_unexpected_results(ur)
+        self.assertTrue(err.empty())
+        self.assertFalse(out.empty())
+
+        # Test handling of --verbose as well.
+        err.reset()
+        out.reset()
+        printer, err, out = self.get_printer(['--verbose'])
         ur = get_unexpected_results(expected=False, passing=False, flaky=False)
         printer.print_unexpected_results(ur)
         self.assertTrue(err.empty())

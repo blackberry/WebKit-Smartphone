@@ -50,9 +50,9 @@ class SheriffIRCBotTest(unittest.TestCase):
         expected_stderr = 'MOCK: irc.post: "Only you can prevent forest fires." -- Smokey the Bear\n'
         OutputCapture().assert_outputs(self, run, args=["hi"], expected_stderr=expected_stderr)
 
-    def test_bogus(self):
-        expected_stderr = "MOCK: irc.post: mock_nick: Available commands: rollout, hi, restart, last-green-revision\n"
-        OutputCapture().assert_outputs(self, run, args=["bogus"], expected_stderr=expected_stderr)
+    def test_help(self):
+        expected_stderr = "MOCK: irc.post: mock_nick: Available commands: rollout, hi, help, restart, last-green-revision\n"
+        OutputCapture().assert_outputs(self, run, args=["help"], expected_stderr=expected_stderr)
 
     def test_lgr(self):
         expected_stderr = "MOCK: irc.post: mock_nick: http://trac.webkit.org/changeset/9479\n"
@@ -61,6 +61,10 @@ class SheriffIRCBotTest(unittest.TestCase):
     def test_rollout(self):
         expected_stderr = "MOCK: irc.post: Preparing rollout for r21654...\nMOCK: irc.post: mock_nick: Created rollout: http://example.com/36936\n"
         OutputCapture().assert_outputs(self, run, args=["rollout 21654 This patch broke the world"], expected_stderr=expected_stderr)
+
+    def test_rollout_with_r_in_svn_revision(self):
+        expected_stderr = "MOCK: irc.post: Preparing rollout for r21654...\nMOCK: irc.post: mock_nick: Created rollout: http://example.com/36936\n"
+        OutputCapture().assert_outputs(self, run, args=["rollout r21654 This patch broke the world"], expected_stderr=expected_stderr)
 
     def test_rollout_bananas(self):
         expected_stderr = "MOCK: irc.post: mock_nick: Usage: SVN_REVISION REASON\n"

@@ -43,6 +43,9 @@ ResourceResponseBase::ResourceResponseBase()
     : m_expectedContentLength(0)
     , m_httpStatusCode(0)
     , m_lastModifiedDate(0)
+    , m_wasCached(false)
+    , m_connectionID(0)
+    , m_connectionReused(false)
     , m_isNull(true)
     , m_haveParsedCacheControlHeader(false)
     , m_haveParsedAgeHeader(false)
@@ -68,6 +71,9 @@ ResourceResponseBase::ResourceResponseBase(const KURL& url, const String& mimeTy
     , m_suggestedFilename(filename)
     , m_httpStatusCode(0)
     , m_lastModifiedDate(0)
+    , m_wasCached(false)
+    , m_connectionID(0)
+    , m_connectionReused(false)
     , m_isNull(false)
     , m_haveParsedCacheControlHeader(false)
     , m_haveParsedAgeHeader(false)
@@ -100,6 +106,7 @@ PassOwnPtr<ResourceResponse> ResourceResponseBase::adopt(PassOwnPtr<CrossThreadR
     response->lazyInit();
     response->m_httpHeaderFields.adopt(data->m_httpHeaders.release());
     response->setLastModifiedDate(data->m_lastModifiedDate);
+    response->setResourceLoadTiming(data->m_resourceLoadTiming.release());
 
     return response.release();
 }
@@ -116,6 +123,8 @@ PassOwnPtr<CrossThreadResourceResponseData> ResourceResponseBase::copyData() con
     data->m_httpStatusText = httpStatusText().crossThreadString();
     data->m_httpHeaders = httpHeaderFields().copyData();
     data->m_lastModifiedDate = lastModifiedDate();
+    if (m_resourceLoadTiming)
+        data->m_resourceLoadTiming = m_resourceLoadTiming->deepCopy();
     return data.release();
 }
 
@@ -430,8 +439,8 @@ bool ResourceResponseBase::isAttachment() const
 
     DEFINE_STATIC_LOCAL(const AtomicString, headerName, ("content-disposition"));
     String value = m_httpHeaderFields.get(headerName);
-    int loc = value.find(';');
-    if (loc != -1)
+    size_t loc = value.find(';');
+    if (loc != notFound)
         value = value.left(loc);
     value = value.stripWhiteSpace();
     DEFINE_STATIC_LOCAL(const AtomicString, attachmentString, ("attachment"));
@@ -450,6 +459,60 @@ time_t ResourceResponseBase::lastModifiedDate() const
     lazyInit();
 
     return m_lastModifiedDate;
+}
+
+bool ResourceResponseBase::wasCached() const
+{
+    lazyInit();
+
+    return m_wasCached;
+}
+
+void ResourceResponseBase::setWasCached(bool value)
+{
+    m_wasCached = value;
+}
+
+bool ResourceResponseBase::connectionReused() const
+{
+    lazyInit();
+
+    return m_connectionReused;
+}
+
+void ResourceResponseBase::setConnectionReused(bool connectionReused)
+{
+    lazyInit();
+
+    m_connectionReused = connectionReused;
+}
+
+unsigned ResourceResponseBase::connectionID() const
+{
+    lazyInit();
+
+    return m_connectionID;
+}
+
+void ResourceResponseBase::setConnectionID(unsigned connectionID)
+{
+    lazyInit();
+
+    m_connectionID = connectionID;
+}
+
+ResourceLoadTiming* ResourceResponseBase::resourceLoadTiming() const
+{
+    lazyInit();
+
+    return m_resourceLoadTiming.get();
+}
+
+void ResourceResponseBase::setResourceLoadTiming(PassRefPtr<ResourceLoadTiming> resourceLoadTiming)
+{
+    lazyInit();
+
+    m_resourceLoadTiming = resourceLoadTiming;
 }
 
 void ResourceResponseBase::lazyInit() const
@@ -476,6 +539,10 @@ bool ResourceResponseBase::compare(const ResourceResponse& a, const ResourceResp
     if (a.httpStatusText() != b.httpStatusText())
         return false;
     if (a.httpHeaderFields() != b.httpHeaderFields())
+        return false;
+    if (a.resourceLoadTiming() && b.resourceLoadTiming() && *a.resourceLoadTiming() == *b.resourceLoadTiming())
+        return ResourceResponse::platformCompare(a, b);
+    if (a.resourceLoadTiming() != b.resourceLoadTiming())
         return false;
     return ResourceResponse::platformCompare(a, b);
 }
@@ -524,9 +591,9 @@ static void parseCacheHeader(const String& header, Vector<pair<String, String> >
     const String safeHeader = header.removeCharacters(isControlCharacter);
     unsigned max = safeHeader.length();
     for (unsigned pos = 0; pos < max; /* pos incremented in loop */) {
-        int nextCommaPosition = safeHeader.find(',', pos);
-        int nextEqualSignPosition = safeHeader.find('=', pos);
-        if (nextEqualSignPosition >= 0 && (nextEqualSignPosition < nextCommaPosition || nextCommaPosition < 0)) {
+        size_t nextCommaPosition = safeHeader.find(',', pos);
+        size_t nextEqualSignPosition = safeHeader.find('=', pos);
+        if (nextEqualSignPosition != notFound && (nextEqualSignPosition < nextCommaPosition || nextCommaPosition == notFound)) {
             // Get directive name, parse right hand side of equal sign, then add to map
             String directive = trimToNextSeparator(safeHeader.substring(pos, nextEqualSignPosition - pos).stripWhiteSpace());
             pos += nextEqualSignPosition - pos + 1;
@@ -534,14 +601,14 @@ static void parseCacheHeader(const String& header, Vector<pair<String, String> >
             String value = safeHeader.substring(pos, max - pos).stripWhiteSpace();
             if (value[0] == '"') {
                 // The value is a quoted string
-                int nextDoubleQuotePosition = value.find('"', 1);
-                if (nextDoubleQuotePosition >= 0) {
+                size_t nextDoubleQuotePosition = value.find('"', 1);
+                if (nextDoubleQuotePosition != notFound) {
                     // Store the value as a quoted string without quotes
                     result.append(pair<String, String>(directive, value.substring(1, nextDoubleQuotePosition - 1).stripWhiteSpace()));
                     pos += (safeHeader.find('"', pos) - pos) + nextDoubleQuotePosition + 1;
                     // Move past next comma, if there is one
-                    int nextCommaPosition2 = safeHeader.find(',', pos);
-                    if (nextCommaPosition2 >= 0)
+                    size_t nextCommaPosition2 = safeHeader.find(',', pos);
+                    if (nextCommaPosition2 != notFound)
                         pos += nextCommaPosition2 - pos + 1;
                     else
                         return; // Parse error if there is anything left with no comma
@@ -552,8 +619,8 @@ static void parseCacheHeader(const String& header, Vector<pair<String, String> >
                 }
             } else {
                 // The value is a token until the next comma
-                int nextCommaPosition2 = value.find(',', 0);
-                if (nextCommaPosition2 >= 0) {
+                size_t nextCommaPosition2 = value.find(',', 0);
+                if (nextCommaPosition2 != notFound) {
                     // The value is delimited by the next comma
                     result.append(pair<String, String>(directive, trimToNextSeparator(value.substring(0, nextCommaPosition2).stripWhiteSpace())));
                     pos += (safeHeader.find(',', pos) - pos) + 1;
@@ -563,7 +630,7 @@ static void parseCacheHeader(const String& header, Vector<pair<String, String> >
                     return;
                 }
             }
-        } else if (nextCommaPosition >= 0 && (nextCommaPosition < nextEqualSignPosition || nextEqualSignPosition < 0)) {
+        } else if (nextCommaPosition != notFound && (nextCommaPosition < nextEqualSignPosition || nextEqualSignPosition == notFound)) {
             // Add directive to map with empty string as value
             result.append(pair<String, String>(trimToNextSeparator(safeHeader.substring(pos, nextCommaPosition - pos).stripWhiteSpace()), ""));
             pos += nextCommaPosition - pos + 1;

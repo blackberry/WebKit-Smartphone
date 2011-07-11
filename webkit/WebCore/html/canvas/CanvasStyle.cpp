@@ -33,6 +33,7 @@
 #include "CanvasGradient.h"
 #include "CanvasPattern.h"
 #include "GraphicsContext.h"
+#include <wtf/Assertions.h>
 #include <wtf/PassRefPtr.h>
 
 #if PLATFORM(CG)
@@ -51,12 +52,6 @@ namespace WebCore {
 CanvasStyle::CanvasStyle(RGBA32 rgba)
     : m_type(RGBA)
     , m_rgba(rgba)
-{
-}
-
-CanvasStyle::CanvasStyle(float grayLevel)
-    : m_type(RGBA)
-    , m_rgba(makeRGBA32FromFloats(grayLevel, grayLevel, grayLevel, 1.0f))
 {
 }
 
@@ -91,7 +86,7 @@ CanvasStyle::CanvasStyle(PassRefPtr<CanvasPattern> pattern)
 {
 }
 
-PassRefPtr<CanvasStyle> CanvasStyle::create(const String& color)
+PassRefPtr<CanvasStyle> CanvasStyle::createFromString(const String& color)
 {
     RGBA32 rgba;
     if (!CSSParser::parseColor(rgba, color))
@@ -99,7 +94,7 @@ PassRefPtr<CanvasStyle> CanvasStyle::create(const String& color)
     return adoptRef(new CanvasStyle(rgba));
 }
 
-PassRefPtr<CanvasStyle> CanvasStyle::create(const String& color, float alpha)
+PassRefPtr<CanvasStyle> CanvasStyle::createFromStringWithOverrideAlpha(const String& color, float alpha)
 {
     RGBA32 rgba;
     if (!CSSParser::parseColor(rgba, color))
@@ -107,17 +102,60 @@ PassRefPtr<CanvasStyle> CanvasStyle::create(const String& color, float alpha)
     return adoptRef(new CanvasStyle(colorWithOverrideAlpha(rgba, alpha)));
 }
 
-PassRefPtr<CanvasStyle> CanvasStyle::create(PassRefPtr<CanvasGradient> gradient)
+PassRefPtr<CanvasStyle> CanvasStyle::createFromGradient(PassRefPtr<CanvasGradient> gradient)
 {
     if (!gradient)
         return 0;
     return adoptRef(new CanvasStyle(gradient));
 }
-PassRefPtr<CanvasStyle> CanvasStyle::create(PassRefPtr<CanvasPattern> pattern)
+PassRefPtr<CanvasStyle> CanvasStyle::createFromPattern(PassRefPtr<CanvasPattern> pattern)
 {
     if (!pattern)
         return 0;
     return adoptRef(new CanvasStyle(pattern));
+}
+
+bool CanvasStyle::isEquivalentColor(const CanvasStyle& other) const
+{
+    if (m_type != other.m_type)
+        return false;
+
+    switch (m_type) {
+    case CanvasStyle::RGBA:
+        return m_rgba == other.m_rgba;
+    case CanvasStyle::CMYKA:
+        return m_cmyka.c == other.m_cmyka.c
+            && m_cmyka.m == other.m_cmyka.m
+            && m_cmyka.y == other.m_cmyka.y
+            && m_cmyka.k == other.m_cmyka.k
+            && m_cmyka.a == other.m_cmyka.a;
+    case CanvasStyle::Gradient:
+    case CanvasStyle::ImagePattern:
+        return false;
+    }
+
+    ASSERT_NOT_REACHED();
+    return false;
+}
+
+bool CanvasStyle::isEquivalentRGBA(float r, float g, float b, float a) const
+{
+    if (m_type != RGBA)
+        return false;
+
+    return m_rgba == makeRGBA32FromFloats(r, g, b, a);
+}
+
+bool CanvasStyle::isEquivalentCMYKA(float c, float m, float y, float k, float a) const
+{
+    if (m_type != CMYKA)
+        return false;
+
+    return c == m_cmyka.c
+        && m == m_cmyka.m
+        && y == m_cmyka.y
+        && k == m_cmyka.k
+        && a == m_cmyka.a;
 }
 
 void CanvasStyle::applyStrokeColor(GraphicsContext* context)

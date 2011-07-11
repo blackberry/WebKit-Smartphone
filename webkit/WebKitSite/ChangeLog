@@ -1,3 +1,185 @@
+2010-09-06  Robin Qiu  <robin.qiu@torchmobile.com.cn>
+
+        Reviewed by Adam Barth.
+
+        https://bugs.webkit.org/show_bug.cgi?id=43982
+        This js file seems to be a popular script for detecting mobile WebKit but
+        it has a flaw that makes it fail on Android and BlackBerry.  
+
+        The issue is that it looks for "Mobile/" but Android and BlackBerry
+        use "Mobile" with no numbering after it.
+        Changed RegExp pattern " Mobile/" to " Mobile\\b".
+
+        * misc/WebKitDetect.js:
+        (WebKitDetect.isMobile):
+
+2010-08-27  Darin Adler  <darin@apple.com>
+
+        * coding/RefPtr.html: Minor revision, improve clarity and mention some
+        recent developments.
+
+2010-08-26  Daniel Bates  <dbates@rim.com>
+
+        Reviewed by Dumitru Daniliuc.
+
+        Fix misspelled words on WebKit.org contact.html,
+        demos/index.html, and quality/leakhunting.html
+        https://bugs.webkit.org/show_bug.cgi?id=44747
+
+        Fix some misspelled words on the WebKit.org site.
+
+        * contact.html: Change "bugreports" [sic] to "bug reports".
+        * demos/index.html: Change "testcase" [sic] to "test case".
+        * quality/leakhunting.html: Change "formating" [sic] to "formatting".
+
+2010-08-23  David Kilzer  <ddkilzer@apple.com>
+
+        Clean up some HTML typos in crashlogs.html
+
+        Rubber-stamped by Maciej Stachowiak.
+
+        * quality/crashlogs.html: Fixed "</code>>" typos added in
+        r56300.  Changed "<tt>" tag with style attribute to "<code>"
+        that was missed in r56300.
+
+2010-08-17  Beth Dakin  <bdakin@apple.com>
+
+        Rubber-stamped by Adele.
+
+        Adding a MathML Demo and screenshot.
+
+        * blog-files/riemann-screenshot.png: Added.
+        * demos/mathml: Added.
+        * demos/mathml/MathMLDemo.xhtml: Added.
+
+2010-08-17  Adam Roben  <aroben@apple.com>
+
+        Instruct developers to (optionally) install Debugging Tools for
+        Windows
+
+        These tools are used by some of our scripts, so are useful for
+        developers to have installed.
+
+        Fixes <http://webkit.org/b/44128> webkit.org building instructions
+        should recommend installing Debugging Tools for Windows
+
+        Reviewed by Sam Weinig.
+
+        * building/tools.html:
+
+2010-07-30  Renata Hodovan  <reni@inf.u-szeged.hu>
+
+        Reviewed by Nikolas Zimmermann.
+
+        Update SVG implementation status.
+
+        * projects/svg/status.xml:
+
+2010-07-21  Dimitri Glazkov  <dglazkov@chromium.org>
+
+        Reviewed by Darin Adler.
+
+        Add a diagram explaining how a DOM element is attached to the site.
+        https://bugs.webkit.org/show_bug.cgi?id=42763
+
+        * coding/dom-element-attach.html: Added.
+        * coding/images/dom-element-attach-large.png: Added.
+        * coding/images/dom-element-attach-small.png: Added.
+        * coding/images/dom-element-attach.graffle: Added.
+        * coding/technical-articles.html: Added a link to the page with the diragram.
+
+2010-06-16  Jeremy Moskovich  <jeremy@chromium.org>
+
+        Reviewed by Darin Adler.
+
+        Improve assertion macro documentation.
+
+        https://bugs.webkit.org/show_bug.cgi?id=40565
+
+        * coding/assertion-guidelines.html:
+
+2010-06-16  Jeremy Moskovich  <jeremy@chromium.org>
+
+        Reviewed by Geoffrey Garen.
+
+        Add an index of technical articles to the WebKit site.  This makes the
+        links to the RefPtr and Assertion documentation discoverable and
+        provides an easy way to find some useful blog posts.
+
+        https://bugs.webkit.org/show_bug.cgi?id=40561
+
+        * coding/technical-articles.html: Added.
+        * nav.inc: Add link to technical articles.
+
+2010-06-15  Adam Roben  <aroben@apple.com>
+
+        Remove some unnecessary steps for setting up the debugger on Windows
+
+        Apparently update-webkit does this for you now.
+
+        Rubber-stamped by Steve Falkenburg.
+
+        * building/debug.html: Removed the first two Windows steps, which are
+        now unnecessary, and updated the third to reflect reality.
+
+2010-06-14  Adam Roben  <aroben@apple.com>
+
+        Improve instructions for debugging on Windows
+
+        Fixes <http://webkit.org/b/40585>.
+
+        Reviewed by Steve Falkenburg.
+
+        * building/debug.html: Improved the Windows instructions. We now
+        instruct users to set things up so that hitting F5 from WebKit.sln
+        will launch Safari with the WEBKITNIGHTLY environment variable
+        pointing to the location of the built WebKit.dll.
+
+        * building/console_vs2005.jpg: Removed.
+        * building/debug_vs2005.jpg: Removed.
+
+        * building/launch-debugger-vs2005.png: Added.
+        * building/set-as-startup-project-vs2005.png: Added.
+        * building/set-debugging-properties-vs2005.png: Added.
+
+2010-06-07  Jeremy Moskovich  <jeremy@chromium.org>
+
+        Reviewed by Darin Adler.
+
+        Add documentation on the various assertion macros in WebKit.
+
+        https://bugs.webkit.org/show_bug.cgi?id=39950
+
+        * coding/assertion-guidelines.html: Added.
+
+2010-05-29  Sterling Swigart  <sswigart@google.com>
+
+        Reviewed by David Levin.
+
+        Adding tests to canvas.html performance test
+        https://bugs.webkit.org/show_bug.cgi?id=39883
+
+        * demos/canvas-perf/canvas.html:
+        Added tests for:
+            strokeText
+            fillText
+            strokeLine
+
+2010-05-25  Jeremy Orlow  <jorlow@chromium.org>
+
+        Reviewed by Darin Adler.
+
+        Update the style guide re: static member variables and structs
+        https://bugs.webkit.org/show_bug.cgi?id=39663
+
+        Per Darin Adler's proposal on webkit-dev.
+
+        All static member variables should be prefixed with s_.
+        m_ should not be used for public data members in structs.
+        Only structs should have public data members.
+
+        * coding/coding-style.html:
+
 2010-05-24  David Levin  <levin@chromium.org>
 
         Reviewed by Maciej Stachowiak.

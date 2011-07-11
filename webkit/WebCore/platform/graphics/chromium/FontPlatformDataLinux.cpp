@@ -35,15 +35,17 @@
 #include "HarfbuzzSkia.h"
 #include "NotImplemented.h"
 #include "PlatformString.h"
-#include "StringImpl.h"
 
 #include "SkPaint.h"
 #include "SkTypeface.h"
 
+#include <wtf/text/StringImpl.h> 
+
 namespace WebCore {
 
 static SkPaint::Hinting skiaHinting = SkPaint::kNormal_Hinting;
-static bool isSkiaAntiAlias = true, isSkiaSubpixelGlyphs;
+static bool isSkiaAntiAlias = true;
+static bool isSkiaSubpixelGlyphs = false;
 
 void FontPlatformData::setHinting(SkPaint::Hinting hinting)
 {
@@ -143,10 +145,12 @@ void FontPlatformData::setupPaint(SkPaint* paint) const
         break;
     }
 
+    paint->setEmbeddedBitmapText(m_style.useBitmaps);
     paint->setTextSize(SkFloatToScalar(ts));
     paint->setTypeface(m_typeface);
     paint->setFakeBoldText(m_fakeBold);
     paint->setTextSkewX(m_fakeItalic ? -SK_Scalar1 / 4 : 0);
+    paint->setAutohinted(m_style.useAutoHint);
 
     if (m_style.useAntiAlias == 1 || (m_style.useAntiAlias == FontRenderStyle::NoPreference && isSkiaAntiAlias))
         paint->setLCDRenderText(m_style.useSubpixel == FontRenderStyle::NoPreference ? isSkiaSubpixelGlyphs : m_style.useSubpixel);
@@ -174,7 +178,8 @@ bool FontPlatformData::operator==(const FontPlatformData& a) const
     return typefacesEqual 
         && m_textSize == a.m_textSize
         && m_fakeBold == a.m_fakeBold
-        && m_fakeItalic == a.m_fakeItalic;
+        && m_fakeItalic == a.m_fakeItalic
+        && m_style == a.m_style;
 }
 
 unsigned FontPlatformData::hash() const

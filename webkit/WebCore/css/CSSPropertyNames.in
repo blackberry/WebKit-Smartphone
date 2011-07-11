@@ -19,6 +19,8 @@ font-size
 font-style
 font-variant
 font-weight
+text-rendering
+-webkit-font-smoothing
 -webkit-text-size-adjust
 zoom
 
@@ -134,7 +136,6 @@ text-overline-color
 text-overline-mode
 text-overline-style
 text-overline-width
-text-rendering
 text-shadow
 text-transform
 text-underline
@@ -172,15 +173,21 @@ z-index
 # a single value: -webkit-background-size: l; is equivalent to background-size: l l;
 # whereas background-size: l; is equivalent to background-size: l auto;
 -webkit-background-size
--webkit-binding
+-webkit-border-end
+-webkit-border-end-color
+-webkit-border-end-style
+-webkit-border-end-width
 -webkit-border-fit
 -webkit-border-horizontal-spacing
 -webkit-border-image
-
 # -webkit-border-radius differs from border-radius only in the interpretation of
 # a value consisting of two lengths: "-webkit-border-radius: l1 l2;" is equivalent
 # to "border-radius: l1 / l2;"
 -webkit-border-radius
+-webkit-border-start
+-webkit-border-start-color
+-webkit-border-start-style
+-webkit-border-start-width
 -webkit-border-vertical-spacing
 -webkit-box-align
 -webkit-box-direction
@@ -207,12 +214,15 @@ z-index
 -webkit-column-width
 -webkit-columns
 -webkit-font-size-delta
--webkit-font-smoothing
 -webkit-highlight
+-webkit-hyphenate-character
+-webkit-hyphenate-locale
+-webkit-hyphens
 -webkit-line-break
 -webkit-line-clamp
 -webkit-margin-bottom-collapse
 -webkit-margin-collapse
+-webkit-margin-end
 -webkit-margin-start
 -webkit-margin-top-collapse
 -webkit-marquee
@@ -237,6 +247,7 @@ z-index
 -webkit-mask-size
 -webkit-match-nearest-mail-blockquote-color
 -webkit-nbsp-mode
+-webkit-padding-end
 -webkit-padding-start
 -webkit-perspective
 -webkit-perspective-origin

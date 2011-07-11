@@ -95,8 +95,6 @@ namespace WebCore {
         virtual bool doTextFieldCommandFromEvent(Element*, KeyboardEvent*);
         virtual void textWillBeDeletedInTextField(Element*);
         virtual void textDidChangeInTextArea(Element*);
-        // Note: This code is under review for upstreaming.
-        virtual bool focusedElementsAreRichlyEditable();
 
         virtual void ignoreWordInSpellDocument(const String&);
         virtual void learnWord(const String&);
@@ -110,6 +108,7 @@ namespace WebCore {
         virtual void showSpellingUI(bool show);
         virtual bool spellingUIIsShowing();
         virtual void getGuessesForWord(const String&, Vector<String>& guesses);
+        virtual void willSetInputMethodState();
         virtual void setInputMethodState(bool enabled);
 
         bool isEditing() const;
@@ -123,4 +122,3 @@ namespace WebCore {
 } // namespace WebCore
 
 #endif // EditorClientHaiku_h
-

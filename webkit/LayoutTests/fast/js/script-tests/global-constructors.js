@@ -18,14 +18,6 @@ for (var x in constructorNames) {
 
     // Ignore these properties because they do not exist in all implementations. They will be tested separately
     if (name == "WebGLRenderingContext" ||
-        name == "WebGLArrayBuffer" ||
-        name =="WebGLByteArray" ||
-        name =="WebGLFloatArray" ||
-        name =="WebGLIntArray" ||
-        name =="WebGLShortArray" ||
-        name =="WebGLUnsignedByteArray" ||
-        name =="WebGLUnsignedIntArray" ||
-        name =="WebGLUnsignedShortArray" ||
         name == "ArrayBuffer" ||
         name == "Int8Array" ||
         name == "Uint8Array" ||
@@ -33,7 +25,7 @@ for (var x in constructorNames) {
         name == "Uint16Array" ||
         name == "Int32Array" ||
         name == "Uint32Array" ||
-        name == "FloatArray" ||
+        name == "Float32Array" ||
         name == "FileError" ||
         name == "FileReader")
         continue;

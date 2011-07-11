@@ -26,11 +26,12 @@
 #ifndef WebFrameProxy_h
 #define WebFrameProxy_h
 
-#include "WebFramePolicyListenerProxy.h"
+#include "APIObject.h"
+#include "WebFrameListenerProxy.h"
 #include <WebCore/FrameLoaderTypes.h>
-#include <WebCore/PlatformString.h>
+#include <wtf/Forward.h>
 #include <wtf/PassRefPtr.h>
-#include <wtf/RefCounted.h>
+#include <wtf/text/WTFString.h>
 
 namespace CoreIPC {
     class ArgumentDecoder;
@@ -38,16 +39,16 @@ namespace CoreIPC {
     class MessageID;
 }
 
-namespace WebCore {
-    class String;
-}
-
 namespace WebKit {
 
 class WebPageProxy;
+class WebFramePolicyListenerProxy;
+class WebFormSubmissionListenerProxy;
 
-class WebFrameProxy : public RefCounted<WebFrameProxy> {
+class WebFrameProxy : public APIObject {
 public:
+    static const Type APIType = TypeFrame;
+
     static PassRefPtr<WebFrameProxy> create(WebPageProxy* page, uint64_t frameID)
     {
         return adoptRef(new WebFrameProxy(page, frameID));
@@ -61,31 +62,36 @@ public:
     };
 
     uint64_t frameID() const { return m_frameID; }
+    WebPageProxy* page() { return m_page; }
 
     void disconnect();
 
     bool isMainFrame() const;
     LoadState loadState() const { return m_loadState; }
 
-    const WebCore::String& url() const { return m_url; }
-    const WebCore::String& provisionalURL() const { return m_provisionalURL; }
+    const WTF::String& url() const { return m_url; }
+    const WTF::String& provisionalURL() const { return m_provisionalURL; }
 
-    void didStartProvisionalLoad(const WebCore::String& url);
+    void didStartProvisionalLoad(const String& url);
+    void didReceiveServerRedirectForProvisionalLoad(const String& url);
     void didCommitLoad();
     void didFinishLoad();
-    void didReceiveTitle(const WebCore::String&);
+    void didReceiveTitle(const WTF::String&);
 
     void receivedPolicyDecision(WebCore::PolicyAction, uint64_t listenerID);
     WebFramePolicyListenerProxy* setUpPolicyListenerProxy(uint64_t listenerID);
+    WebFormSubmissionListenerProxy* setUpFormSubmissionListenerProxy(uint64_t listenerID);
 
 private:
     WebFrameProxy(WebPageProxy* page, uint64_t frameID);
 
+    virtual Type type() const { return APIType; }
+
     WebPageProxy* m_page;
     LoadState m_loadState;
-    WebCore::String m_url;
-    WebCore::String m_provisionalURL;
-    RefPtr<WebFramePolicyListenerProxy> m_policyListener;
+    WTF::String m_url;
+    WTF::String m_provisionalURL;
+    RefPtr<WebFrameListenerProxy> m_activeListener;
     uint64_t m_frameID;
 };
 

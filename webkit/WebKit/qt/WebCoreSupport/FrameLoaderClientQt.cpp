@@ -4,7 +4,7 @@
  * Copyright (C) 2009 Nokia Corporation and/or its subsidiary(-ies)
  * Copyright (C) 2008 Collabora Ltd. All rights reserved.
  * Coypright (C) 2008 Holger Hans Peter Freyther
- * Coypright (C) 2009 Girish Ramakrishnan <girish@forwardbias.in>
+ * Coypright (C) 2009, 2010 Girish Ramakrishnan <girish@forwardbias.in>
  *
  * All rights reserved.
  *
@@ -35,10 +35,18 @@
 #include "CSSPropertyNames.h"
 #include "FormState.h"
 #include "FrameLoaderClientQt.h"
+#include "FrameNetworkingContextQt.h"
 #include "FrameTree.h"
 #include "FrameView.h"
 #include "DocumentLoader.h"
+#include "HitTestResult.h"
+#if USE(JSC)
+#include "JSDOMWindowBase.h"
+#elif USE(V8)
+#include "V8DOMWindow.h"
+#endif
 #include "MIMETypeRegistry.h"
+#include "MouseEvent.h"
 #include "ResourceResponse.h"
 #include "Page.h"
 #include "PluginData.h"
@@ -59,6 +67,7 @@
 #include "ScriptString.h"
 #include "Settings.h"
 #include "QWebPageClient.h"
+#include "ViewportArguments.h"
 
 #include "qwebpage.h"
 #include "qwebpage_p.h"
@@ -127,6 +136,25 @@ static QString drtDescriptionSuitableForTestResult(const WebCore::ResourceRespon
     return QString::fromLatin1("<NSURLResponse %1, http status code %2>").arg(url).arg(httpStatusCode);
 }
 
+static QString drtDescriptionSuitableForTestResult(const RefPtr<WebCore::Node> node, int exception)
+{
+    QString result;
+    if (exception) {
+        result.append("ERROR");
+        return result;
+    }
+    if (!node) {
+        result.append("NULL");
+        return result;
+    }
+    result.append(node->nodeName());
+    RefPtr<WebCore::Node> parent = node->parentNode();
+    if (parent) {
+        result.append(" > ");
+        result.append(drtDescriptionSuitableForTestResult(parent, 0));
+    }
+    return result;
+}
 
 namespace WebCore
 {
@@ -135,16 +163,41 @@ bool FrameLoaderClientQt::dumpFrameLoaderCallbacks = false;
 bool FrameLoaderClientQt::dumpResourceLoadCallbacks = false;
 bool FrameLoaderClientQt::sendRequestReturnsNullOnRedirect = false;
 bool FrameLoaderClientQt::sendRequestReturnsNull = false;
+bool FrameLoaderClientQt::dumpResourceResponseMIMETypes = false;
+bool FrameLoaderClientQt::deferMainResourceDataLoad = true;
+
 QStringList FrameLoaderClientQt::sendRequestClearHeaders;
 QString FrameLoaderClientQt::dumpResourceLoadCallbacksPath;
+bool FrameLoaderClientQt::policyDelegateEnabled = false;
+bool FrameLoaderClientQt::policyDelegatePermissive = false;
+
+// Taken from DumpRenderTree/chromium/WebViewHost.cpp
+static const char* navigationTypeToString(NavigationType type)
+{
+    switch (type) {
+    case NavigationTypeLinkClicked:
+        return "link clicked";
+    case NavigationTypeFormSubmitted:
+        return "form submitted";
+    case NavigationTypeBackForward:
+        return "back/forward";
+    case NavigationTypeReload:
+        return "reload";
+    case NavigationTypeFormResubmitted:
+        return "form resubmitted";
+    case NavigationTypeOther:
+        return "other";
+    }
+    return "illegal value";
+}
 
 FrameLoaderClientQt::FrameLoaderClientQt()
     : m_frame(0)
     , m_webFrame(0)
-    , m_firstData(false)
     , m_pluginView(0)
     , m_hasSentResponseToPlugin(false)
-    , m_loadError (ResourceError())
+    , m_hasRepresentation(false)
+    , m_loadError(ResourceError())
 {
 }
 
@@ -157,6 +210,7 @@ void FrameLoaderClientQt::setFrame(QWebFrame* webFrame, Frame* frame)
 {
     m_webFrame = webFrame;
     m_frame = frame;
+
     if (!m_webFrame || !m_webFrame->page()) {
         qWarning("FrameLoaderClientQt::setFrame frame without Page!");
         return;
@@ -228,7 +282,7 @@ void FrameLoaderClientQt::transitionToCommittedForNewPage()
 
 void FrameLoaderClientQt::makeRepresentation(DocumentLoader*)
 {
-    // don't need this for now I think.
+    m_hasRepresentation = true;
 }
 
 
@@ -308,6 +362,18 @@ void FrameLoaderClientQt::dispatchDidChangeLocationWithinPage()
     m_webFrame->page()->d->updateNavigationActions();
 }
 
+#if USE(V8)
+void FrameLoaderClientQt::didCreateScriptContextForFrame()
+{
+}
+void FrameLoaderClientQt::didDestroyScriptContextForFrame()
+{
+}
+void FrameLoaderClientQt::didCreateIsolatedScriptContext()
+{
+}
+#endif
+
 void FrameLoaderClientQt::dispatchDidPushStateWithinPage()
 {
     if (dumpFrameLoaderCallbacks)
@@ -380,6 +446,9 @@ void FrameLoaderClientQt::dispatchDidCommitLoad()
     if (m_frame->tree()->parent() || !m_webFrame)
         return;
 
+    // Clear the viewport arguments.
+    m_webFrame->d->viewportArguments = WebCore::ViewportArguments();
+
     emit m_webFrame->urlChanged(m_webFrame->url());
     m_webFrame->page()->d->updateNavigationActions();
 
@@ -387,6 +456,12 @@ void FrameLoaderClientQt::dispatchDidCommitLoad()
     // will be called very soon with the correct title.
     // This properly resets the title when we navigate to a URI without a title.
     emit titleChanged(String());
+
+    bool isMainFrame = (m_frame == m_frame->page()->mainFrame());
+    if (!isMainFrame)
+        return;
+
+    emit m_webFrame->page()->viewportChangeRequested();
 }
 
 
@@ -424,7 +499,6 @@ void FrameLoaderClientQt::dispatchDidFinishLoad()
 
 void FrameLoaderClientQt::dispatchDidFirstLayout()
 {
-    notImplemented();
 }
 
 void FrameLoaderClientQt::dispatchDidFirstVisuallyNonEmptyLayout()
@@ -461,7 +535,7 @@ void FrameLoaderClientQt::dispatchDidLoadMainResource(DocumentLoader*)
 
 void FrameLoaderClientQt::revertToProvisionalState(DocumentLoader*)
 {
-    notImplemented();
+    m_hasRepresentation = true;
 }
 
 
@@ -525,31 +599,37 @@ void FrameLoaderClientQt::didChangeTitle(DocumentLoader*)
 void FrameLoaderClientQt::finishedLoading(DocumentLoader* loader)
 {
     if (!m_pluginView) {
-        if(m_firstData) {
-            FrameLoader *fl = loader->frameLoader();
-            fl->writer()->setEncoding(m_response.textEncodingName(), false);
-            m_firstData = false; 
-        }
+        // This is necessary to create an empty document. See bug 634004.
+        // However, we only want to do this if makeRepresentation has been called, to
+        // match the behavior on the Mac.
+        if (m_hasRepresentation)
+            loader->frameLoader()->writer()->setEncoding("", false);
+        return;
     }
-    else {
-        if (m_pluginView->isPluginView())
-            m_pluginView->didFinishLoading();
-        m_pluginView = 0;
-        m_hasSentResponseToPlugin = false;
-    }
+    if (m_pluginView->isPluginView())
+        m_pluginView->didFinishLoading();
+    m_pluginView = 0;
+    m_hasSentResponseToPlugin = false;
 }
 
-
+bool FrameLoaderClientQt::canShowMIMETypeAsHTML(const String& MIMEType) const
+{
+    notImplemented();
+    return false;
+}
+    
 bool FrameLoaderClientQt::canShowMIMEType(const String& MIMEType) const
 {
-    if (MIMETypeRegistry::isSupportedImageMIMEType(MIMEType))
+    String type = MIMEType;
+    type.makeLower();
+    if (MIMETypeRegistry::isSupportedImageMIMEType(type))
         return true;
 
-    if (MIMETypeRegistry::isSupportedNonImageMIMEType(MIMEType))
+    if (MIMETypeRegistry::isSupportedNonImageMIMEType(type))
         return true;
 
     if (m_frame && m_frame->settings()  && m_frame->settings()->arePluginsEnabled()
-        && PluginDatabase::installedPlugins()->isMIMETypeRegistered(MIMEType))
+        && PluginDatabase::installedPlugins()->isMIMETypeRegistered(type))
         return true;
 
     return false;
@@ -638,8 +718,9 @@ void FrameLoaderClientQt::dispatchDidClearWindowObjectInWorld(DOMWrapperWorld* w
     if (world != mainThreadNormalWorld())
         return;
 
-    if (m_webFrame)
+    if (m_webFrame) {
         emit m_webFrame->javaScriptWindowObjectCleared();
+    }
 }
 
 void FrameLoaderClientQt::documentElementAvailable()
@@ -716,31 +797,19 @@ bool FrameLoaderClientQt::canCachePage() const
 
 void FrameLoaderClientQt::setMainDocumentError(WebCore::DocumentLoader* loader, const WebCore::ResourceError& error)
 {
-    if (!m_pluginView) {
-        if (m_firstData) {
-            loader->frameLoader()->writer()->setEncoding(m_response.textEncodingName(), false);
-            m_firstData = false;
-        }
-    } else {
-        if (m_pluginView->isPluginView())
-            m_pluginView->didFail(error);
-        m_pluginView = 0;
-        m_hasSentResponseToPlugin = false;
-    }
+    if (!m_pluginView)
+        return;
+    if (m_pluginView->isPluginView())
+        m_pluginView->didFail(error);
+    m_pluginView = 0;
+    m_hasSentResponseToPlugin = false;
 }
 
+// FIXME: This function should be moved into WebCore.
 void FrameLoaderClientQt::committedLoad(WebCore::DocumentLoader* loader, const char* data, int length)
 {
-    if (!m_pluginView) {
-        if (!m_frame)
-            return;
-        FrameLoader *fl = loader->frameLoader();
-        if (m_firstData) {
-            fl->writer()->setEncoding(m_response.textEncodingName(), false);
-            m_firstData = false;
-        }
-        fl->addData(data, length);
-    }
+    if (!m_pluginView)
+        loader->commitData(data, length);
     
     // We re-check here as the plugin can have been created
     if (m_pluginView && m_pluginView->isPluginView()) {
@@ -778,26 +847,26 @@ enum {
 
 WebCore::ResourceError FrameLoaderClientQt::blockedError(const WebCore::ResourceRequest& request)
 {
-    return ResourceError("WebKit", WebKitErrorCannotUseRestrictedPort, request.url().prettyURL(),
+    return ResourceError("WebKitErrorDomain", WebKitErrorCannotUseRestrictedPort, request.url().prettyURL(),
             QCoreApplication::translate("QWebFrame", "Request blocked", 0, QCoreApplication::UnicodeUTF8));
 }
 
 
 WebCore::ResourceError FrameLoaderClientQt::cannotShowURLError(const WebCore::ResourceRequest& request)
 {
-    return ResourceError("WebKit", WebKitErrorCannotShowURL, request.url().string(),
+    return ResourceError("WebKitErrorDomain", WebKitErrorCannotShowURL, request.url().string(),
             QCoreApplication::translate("QWebFrame", "Cannot show URL", 0, QCoreApplication::UnicodeUTF8));
 }
 
 WebCore::ResourceError FrameLoaderClientQt::interruptForPolicyChangeError(const WebCore::ResourceRequest& request)
 {
-    return ResourceError("WebKit", WebKitErrorFrameLoadInterruptedByPolicyChange, request.url().string(),
+    return ResourceError("WebKitErrorDomain", WebKitErrorFrameLoadInterruptedByPolicyChange, request.url().string(),
             QCoreApplication::translate("QWebFrame", "Frame load interrupted by policy change", 0, QCoreApplication::UnicodeUTF8));
 }
 
 WebCore::ResourceError FrameLoaderClientQt::cannotShowMIMETypeError(const WebCore::ResourceResponse& response)
 {
-    return ResourceError("WebKit", WebKitErrorCannotShowMIMEType, response.url().string(),
+    return ResourceError("WebKitErrorDomain", WebKitErrorCannotShowMIMEType, response.url().string(),
             QCoreApplication::translate("QWebFrame", "Cannot show mimetype", 0, QCoreApplication::UnicodeUTF8));
 }
 
@@ -822,8 +891,20 @@ bool FrameLoaderClientQt::shouldFallBack(const WebCore::ResourceError&)
 WTF::PassRefPtr<WebCore::DocumentLoader> FrameLoaderClientQt::createDocumentLoader(const WebCore::ResourceRequest& request, const SubstituteData& substituteData)
 {
     RefPtr<DocumentLoader> loader = DocumentLoader::create(request, substituteData);
-    if (substituteData.isValid())
+    if (!deferMainResourceDataLoad || substituteData.isValid()) {
         loader->setDeferMainResourceDataLoad(false);
+        // Use the default timeout interval for JS as the HTML tokenizer delay. This ensures
+        // that long-running JavaScript will still allow setHtml() to be synchronous, while
+        // still giving a reasonable timeout to prevent deadlock.
+#if USE(JSC)
+        double delay = JSDOMWindowBase::commonJSGlobalData()->timeoutChecker.timeoutInterval() / 1000.0f;
+#elif USE(V8)
+        // FIXME: Hard coded for now.
+        double delay = 10000 / 1000.0f;
+#endif
+        m_frame->page()->setCustomHTMLTokenizerTimeDelay(delay);
+    } else
+        m_frame->page()->setCustomHTMLTokenizerTimeDelay(-1);
     return loader.release();
 }
 
@@ -894,12 +975,16 @@ void FrameLoaderClientQt::dispatchDidReceiveResponse(WebCore::DocumentLoader*, u
 {
 
     m_response = response;
-    m_firstData = true;
     if (dumpResourceLoadCallbacks)
         printf("%s - didReceiveResponse %s\n",
                qPrintable(dumpAssignedUrls[identifier]),
                qPrintable(drtDescriptionSuitableForTestResult(response)));
-    //qDebug() << "    got response from" << response.url().string();
+
+    if (dumpResourceResponseMIMETypes) {
+        printf("%s has MIME type %s\n",
+               qPrintable(QFileInfo(drtDescriptionSuitableForTestResult(response.url())).fileName()),
+               qPrintable(QString(response.mimeType())));
+    }
 }
 
 void FrameLoaderClientQt::dispatchDidReceiveContentLength(WebCore::DocumentLoader*, unsigned long, int)
@@ -919,12 +1004,6 @@ void FrameLoaderClientQt::dispatchDidFailLoading(WebCore::DocumentLoader* loader
         printf("%s - didFailLoadingWithError: %s\n",
                (dumpAssignedUrls.contains(identifier) ? qPrintable(dumpAssignedUrls[identifier]) : "<unknown>"),
                qPrintable(drtDescriptionSuitableForTestResult(error)));
-
-    if (m_firstData) {
-        FrameLoader *fl = loader->frameLoader();
-        fl->writer()->setEncoding(m_response.textEncodingName(), false);
-        m_firstData = false;
-    }
 }
 
 bool FrameLoaderClientQt::dispatchDidLoadResourceFromMemoryCache(WebCore::DocumentLoader*, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&, int)
@@ -997,7 +1076,7 @@ WebCore::Frame* FrameLoaderClientQt::dispatchCreatePage()
     return newPage->mainFrame()->d->frame;
 }
 
-void FrameLoaderClientQt::dispatchDecidePolicyForMIMEType(FramePolicyFunction function, const WebCore::String& MIMEType, const WebCore::ResourceRequest&)
+void FrameLoaderClientQt::dispatchDecidePolicyForMIMEType(FramePolicyFunction function, const WTF::String& MIMEType, const WebCore::ResourceRequest&)
 {
     // we need to call directly here
     const ResourceResponse& response = m_frame->loader()->activeDocumentLoader()->response();
@@ -1009,7 +1088,7 @@ void FrameLoaderClientQt::dispatchDecidePolicyForMIMEType(FramePolicyFunction fu
         callPolicyFunction(function, PolicyDownload);
 }
 
-void FrameLoaderClientQt::dispatchDecidePolicyForNewWindowAction(FramePolicyFunction function, const WebCore::NavigationAction& action, const WebCore::ResourceRequest& request, PassRefPtr<WebCore::FormState>, const WebCore::String&)
+void FrameLoaderClientQt::dispatchDecidePolicyForNewWindowAction(FramePolicyFunction function, const WebCore::NavigationAction& action, const WebCore::ResourceRequest& request, PassRefPtr<WebCore::FormState>, const WTF::String&)
 {
     Q_ASSERT(m_webFrame);
     QNetworkRequest r(request.toNetworkRequest(m_webFrame));
@@ -1035,6 +1114,32 @@ void FrameLoaderClientQt::dispatchDecidePolicyForNavigationAction(FramePolicyFun
     Q_ASSERT(m_webFrame);
     QNetworkRequest r(request.toNetworkRequest(m_webFrame));
     QWebPage*page = m_webFrame->page();
+    PolicyAction result;
+
+    // Currently, this is only enabled by DRT
+    if (policyDelegateEnabled) {
+        RefPtr<Node> node;
+        for (const Event* event = action.event(); event; event = event->underlyingEvent()) {
+            if (event->isMouseEvent()) {
+                const MouseEvent* mouseEvent =  static_cast<const MouseEvent*>(event);
+                node = QWebFramePrivate::core(m_webFrame)->eventHandler()->hitTestResultAtPoint(
+                    mouseEvent->absoluteLocation(), false).innerNonSharedNode();
+                break;
+            }
+        }
+
+        printf("Policy delegate: attempt to load %s with navigation type '%s'%s\n",
+               qPrintable(drtDescriptionSuitableForTestResult(request.url())), navigationTypeToString(action.type()),
+               (node) ? qPrintable(QString(" originating from " + drtDescriptionSuitableForTestResult(node, 0))) : "");
+
+        if (policyDelegatePermissive)
+            result = PolicyUse;
+        else
+            result = PolicyIgnore;
+
+        callPolicyFunction(function, result);
+        return;
+    }
 
     if (!page->d->acceptNavigationRequest(m_webFrame, r, QWebPage::NavigationType(action.type()))) {
         if (action.type() == NavigationTypeFormSubmitted || action.type() == NavigationTypeFormResubmitted)
@@ -1094,7 +1199,7 @@ PassRefPtr<Frame> FrameLoaderClientQt::createFrame(const KURL& url, const String
 
     // ### set override encoding if we have one
 
-    frameData.frame->loader()->loadURLIntoChildFrame(frameData.url, frameData.referrer, frameData.frame.get());
+    m_frame->loader()->loadURLIntoChildFrame(frameData.url, frameData.referrer, frameData.frame.get());
 
     // The frame's onload handler may have removed it from the document.
     if (!frameData.frame->tree()->parent())
@@ -1225,7 +1330,7 @@ private:
     }
 };
 
-#if QT_VERSION >= 0x040600
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
 class QtPluginGraphicsWidget: public Widget
 {
 public:
@@ -1343,7 +1448,7 @@ PassRefPtr<Widget> FrameLoaderClientQt::createPlugin(const IntSize& pluginSize, 
                 w->setFrameRect(IntRect(0, 0, 0, 0));
                 return w;
             }
-#if QT_VERSION >= 0x040600
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
             QGraphicsWidget* graphicsWidget = qobject_cast<QGraphicsWidget*>(object);
             if (graphicsWidget) {
                 QGraphicsObject* parentWidget = 0;
@@ -1360,12 +1465,26 @@ PassRefPtr<Widget> FrameLoaderClientQt::createPlugin(const IntSize& pluginSize, 
 #endif
             // FIXME: make things work for widgetless plugins as well
             delete object;
-    } else { // NPAPI Plugins
+    }
+#if ENABLE(NETSCAPE_PLUGIN_API)
+    else { // NPAPI Plugins
         Vector<String> params = paramNames;
         Vector<String> values = paramValues;
         if (mimeType == "application/x-shockwave-flash") {
             QWebPageClient* client = m_webFrame->page()->d->client;
-            if (!client || !qobject_cast<QWidget*>(client->pluginParent())) {
+            const bool isQWebView = client && qobject_cast<QWidget*>(client->pluginParent());
+#if defined(MOZ_PLATFORM_MAEMO) && (MOZ_PLATFORM_MAEMO == 5)
+            size_t wmodeIndex = params.find("wmode");
+            if (wmodeIndex == -1) {
+                // Disable XEmbed mode and force it to opaque mode
+                params.append("wmode");
+                values.append("opaque");
+            } else if (!isQWebView) {
+                // Disable transparency if client is not a QWebView
+                values[wmodeIndex] = "opaque";
+            }
+#else
+            if (!isQWebView) {
                 // inject wmode=opaque when there is no client or the client is not a QWebView
                 size_t wmodeIndex = params.find("wmode");
                 if (wmodeIndex == -1) {
@@ -1374,12 +1493,14 @@ PassRefPtr<Widget> FrameLoaderClientQt::createPlugin(const IntSize& pluginSize, 
                 } else
                     values[wmodeIndex] = "opaque";
             }
+#endif
         }
 
         RefPtr<PluginView> pluginView = PluginView::create(m_frame, pluginSize, element, url,
             params, values, mimeType, loadManually);
         return pluginView;
     }
+#endif // ENABLE(NETSCAPE_PLUGIN_API)
 
     return 0;
 }
@@ -1405,6 +1526,11 @@ String FrameLoaderClientQt::overrideMediaType() const
 QString FrameLoaderClientQt::chooseFile(const QString& oldFile)
 {
     return webFrame()->page()->chooseFile(webFrame(), oldFile);
+}
+
+PassRefPtr<FrameNetworkingContext> FrameLoaderClientQt::createNetworkingContext()
+{
+    return FrameNetworkingContextQt::create(m_frame, m_webFrame, m_webFrame->page()->networkAccessManager());
 }
 
 }

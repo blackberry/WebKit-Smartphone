@@ -34,9 +34,10 @@
 #define EditorClientEfl_h
 
 #include "EditorClient.h"
-#include <Evas.h>
 
 #include <wtf/Forward.h>
+
+typedef struct _Evas_Object Evas_Object;
 
 namespace WebCore {
 class Page;
@@ -110,6 +111,7 @@ public:
     virtual void showSpellingUI(bool show);
     virtual bool spellingUIIsShowing();
     virtual void getGuessesForWord(const String&, WTF::Vector<String>& guesses);
+    virtual void willSetInputMethodState();
     virtual void setInputMethodState(bool enabled);
 
 private:

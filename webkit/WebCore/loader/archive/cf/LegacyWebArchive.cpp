@@ -198,7 +198,7 @@ PassRefPtr<ArchiveResource> LegacyWebArchive::createResource(CFDictionaryRef dic
     }
     
     CFStringRef mimeType = static_cast<CFStringRef>(CFDictionaryGetValue(dictionary, LegacyWebArchiveResourceMIMETypeKey));
-    if (mimeType && CFGetTypeID(mimeType) != CFStringGetTypeID()) {
+    if (!mimeType || CFGetTypeID(mimeType) != CFStringGetTypeID()) {
         LOG(Archives, "LegacyWebArchive - MIME type is not of type CFString, cannot create invalid resource");
         return 0;
     }
@@ -233,7 +233,7 @@ PassRefPtr<ArchiveResource> LegacyWebArchive::createResource(CFDictionaryRef dic
         response = createResourceResponseFromPropertyListData(resourceResponseData, resourceResponseVersion);
     }
     
-    return ArchiveResource::create(SharedBuffer::create(CFDataGetBytePtr(resourceData), CFDataGetLength(resourceData)), KURL(ParsedURLString, url), mimeType, textEncoding, frameName, response);
+    return ArchiveResource::create(SharedBuffer::wrapCFData(resourceData), KURL(KURL(), url), mimeType, textEncoding, frameName, response);
 }
 
 PassRefPtr<LegacyWebArchive> LegacyWebArchive::create()

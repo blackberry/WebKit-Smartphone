@@ -1,24 +1,24 @@
 /*
-    Copyright (C) 2004, 2005 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006 Rob Buis <buis@kde.org>
-    Copyright (C) 2009 Google, Inc.  All rights reserved.
-    Copyright (C) Research In Motion Limited 2010. All rights reserved.
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006 Rob Buis <buis@kde.org>
+ * Copyright (C) 2009 Google, Inc.  All rights reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -30,14 +30,6 @@
 #include "SVGException.h"
 
 namespace WebCore {
-
-SVGLocatable::SVGLocatable()
-{
-}
-
-SVGLocatable::~SVGLocatable()
-{
-}
 
 static bool isViewportElement(Node* node)
 {
@@ -71,10 +63,11 @@ SVGElement* SVGLocatable::farthestViewportElement(const SVGElement* element)
     return farthest;
 }
 
-FloatRect SVGLocatable::getBBox(const SVGElement* element)
+FloatRect SVGLocatable::getBBox(const SVGElement* element, StyleUpdateStrategy styleUpdateStrategy)
 {
     ASSERT(element);
-    element->document()->updateLayoutIgnorePendingStylesheets();
+    if (styleUpdateStrategy == AllowStyleUpdate)
+        element->document()->updateLayoutIgnorePendingStylesheets();
 
     // FIXME: Eventually we should support getBBox for detached elements.
     if (!element->renderer())
@@ -83,33 +76,38 @@ FloatRect SVGLocatable::getBBox(const SVGElement* element)
     return element->renderer()->objectBoundingBox();
 }
 
-AffineTransform SVGLocatable::computeCTM(const SVGElement* element, CTMScope mode)
+AffineTransform SVGLocatable::computeCTM(const SVGElement* element, CTMScope mode, StyleUpdateStrategy styleUpdateStrategy)
 {
     ASSERT(element);
-    element->document()->updateLayoutIgnorePendingStylesheets();
+    if (styleUpdateStrategy == AllowStyleUpdate)
+        element->document()->updateLayoutIgnorePendingStylesheets();
 
     AffineTransform ctm;
 
     SVGElement* stopAtElement = mode == NearestViewportScope ? nearestViewportElement(element) : 0;
-    for (const Node* current = element; current && current->isSVGElement(); current = current->parentNode()) {
-        const SVGElement* currentElement = static_cast<const SVGElement*>(current);
+
+    Node* current = const_cast<SVGElement*>(element);
+    while (current && current->isSVGElement()) {
+        SVGElement* currentElement = static_cast<SVGElement*>(current);
         if (currentElement->isStyled())
-            ctm = static_cast<const SVGStyledElement*>(currentElement)->localCoordinateSpaceTransform(mode).multLeft(ctm);
+            ctm = static_cast<SVGStyledElement*>(currentElement)->localCoordinateSpaceTransform(mode).multLeft(ctm);
 
         // For getCTM() computation, stop at the nearest viewport element
         if (currentElement == stopAtElement)
             break;
+
+        current = current->isShadowNode() ? current->shadowParentNode() : current->parentNode();
     }
 
     return ctm;
 }
 
-AffineTransform SVGLocatable::getTransformToElement(SVGElement* target, ExceptionCode& ec) const
+AffineTransform SVGLocatable::getTransformToElement(SVGElement* target, ExceptionCode& ec, StyleUpdateStrategy styleUpdateStrategy) const
 {
-    AffineTransform ctm = getCTM();
+    AffineTransform ctm = getCTM(styleUpdateStrategy);
 
     if (target && target->isStyledLocatable()) {
-        AffineTransform targetCTM = static_cast<SVGStyledLocatableElement*>(target)->getCTM();
+        AffineTransform targetCTM = static_cast<SVGStyledLocatableElement*>(target)->getCTM(styleUpdateStrategy);
         if (!targetCTM.isInvertible()) {
             ec = SVGException::SVG_MATRIX_NOT_INVERTABLE;
             return ctm;

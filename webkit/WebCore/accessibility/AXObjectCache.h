@@ -27,9 +27,9 @@
 #define AXObjectCache_h
 
 #include "AccessibilityObject.h"
-#include "EventHandler.h"
 #include "Timer.h"
 #include <limits.h>
+#include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/RefPtr.h>
@@ -46,7 +46,6 @@ class HTMLAreaElement;
 class Node;
 class Page;
 class RenderObject;
-class String;
 class VisiblePosition;
 
 struct TextMarkerData {
@@ -88,7 +87,8 @@ public:
     void handleAriaRoleChanged(RenderObject*);
     void handleFocusedUIElementChanged(RenderObject* oldFocusedRenderer, RenderObject* newFocusedRenderer);
     void handleScrolledToAnchor(const Node* anchorNode);
-
+    void handleAriaExpandedChange(RenderObject*);
+    
     static void enableAccessibility() { gAccessibilityEnabled = true; }
     static void enableEnhancedUserInterfaceAccessibility() { gAccessibilityEnhancedUserInterfaceEnabled = true; }
     
@@ -107,6 +107,7 @@ public:
     enum AXNotification {
         AXActiveDescendantChanged,
         AXCheckedStateChanged,
+        AXChildrenChanged,
         AXFocusedUIElementChanged,
         AXLayoutComplete,
         AXLoadComplete,
@@ -116,12 +117,13 @@ public:
         AXScrolledToAnchor,
         AXLiveRegionChanged,
         AXMenuListValueChanged,
+        AXRowCountChanged,
+        AXRowCollapsed,
+        AXRowExpanded,
     };
 
     void postNotification(RenderObject*, AXNotification, bool postToElement, PostType = PostAsynchronously);
     void postNotification(AccessibilityObject*, Document*, AXNotification, bool postToElement, PostType = PostAsynchronously);
-
-    bool nodeHasRole(Node*, const AtomicString& role);
 
 protected:
     void postPlatformNotification(AccessibilityObject*, AXNotification);
@@ -143,6 +145,8 @@ private:
     AXID getAXID(AccessibilityObject*);
 };
 
+bool nodeHasRole(Node*, const String& role);
+
 #if !HAVE(ACCESSIBILITY)
 inline void AXObjectCache::handleActiveDescendantChanged(RenderObject*) { }
 inline void AXObjectCache::handleAriaRoleChanged(RenderObject*) { }
@@ -150,10 +154,12 @@ inline void AXObjectCache::detachWrapper(AccessibilityObject*) { }
 inline void AXObjectCache::attachWrapper(AccessibilityObject*) { }
 inline void AXObjectCache::selectedChildrenChanged(RenderObject*) { }
 inline void AXObjectCache::postNotification(RenderObject*, AXNotification, bool postToElement, PostType) { }
+inline void AXObjectCache::postNotification(AccessibilityObject*, Document*, AXNotification, bool postToElement, PostType) { }
 inline void AXObjectCache::postPlatformNotification(AccessibilityObject*, AXNotification) { }
 inline void AXObjectCache::handleFocusedUIElementChanged(RenderObject*, RenderObject*) { }
 inline void AXObjectCache::handleScrolledToAnchor(const Node*) { }
 inline void AXObjectCache::contentChanged(RenderObject*) { }
+inline void AXObjectCache::handleAriaExpandedChange(RenderObject*) { }
 #endif
 
 }

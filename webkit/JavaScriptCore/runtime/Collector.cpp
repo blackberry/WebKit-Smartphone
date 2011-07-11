@@ -25,6 +25,7 @@
 #include "CallFrame.h"
 #include "CodeBlock.h"
 #include "CollectorHeapIterator.h"
+#include "GCActivityCallback.h"
 #include "Interpreter.h"
 #include "JSArray.h"
 #include "JSGlobalObject.h"
@@ -64,7 +65,6 @@
 
 #elif PLATFORM(OLYMPIA)
 
-#include "OlympiaPlatformMemory.h"
 #include "OlympiaPlatformMisc.h"
 
 #elif OS(UNIX)
@@ -104,7 +104,13 @@ namespace JSC {
 
 const size_t GROWTH_FACTOR = 2;
 const size_t LOW_WATER_FACTOR = 4;
+#if OS(OLYMPIA)
+const size_t MIN_ALLOCATIONS_PER_COLLECTION = 1024;
+const size_t MAX_ALLOCATIONS_PER_COLLECTION = HeapConstants::cellsPerBlock * 2;
+#else
 const size_t ALLOCATIONS_PER_COLLECTION = 3600;
+#endif
+
 // This value has to be a macro to be used in max() without introducing
 // a PIC branch in Mach-O binaries, see <rdar://problem/5971391>.
 #define MIN_ARRAY_SIZE (static_cast<size_t>(14))
@@ -140,14 +146,13 @@ Heap::Heap(JSGlobalData* globalData)
     , m_registeredThreads(0)
     , m_currentThreadRegistrar(0)
 #endif
-#if OS(SYMBIAN)
-    , m_blockallocator(JSCCOLLECTOR_VIRTUALMEM_RESERVATION, BLOCK_SIZE)
-#endif
     , m_globalData(globalData)
 {
     ASSERT(globalData);
     memset(&m_heap, 0, sizeof(CollectorHeap));
     allocateBlock();
+    m_activityCallback = DefaultGCActivityCallback::create(this);
+    (*m_activityCallback)();
 }
 
 Heap::~Heap()
@@ -175,6 +180,9 @@ void Heap::destroy()
 
     freeBlocks();
 
+    for (unsigned i = 0; i < m_weakGCHandlePools.size(); ++i)
+        m_weakGCHandlePools[i].deallocate();
+
 #if ENABLE(JSC_MULTIPLE_THREADS)
     if (m_currentThreadRegistrar) {
         int error = pthread_key_delete(m_currentThreadRegistrar);
@@ -188,85 +196,38 @@ void Heap::destroy()
         t = next;
     }
 #endif
-#if OS(SYMBIAN)
     m_blockallocator.destroy();
-#endif
     m_globalData = 0;
 }
 
 NEVER_INLINE CollectorBlock* Heap::allocateBlock()
 {
-#if OS(DARWIN)
-    vm_address_t address = 0;
-    vm_map(current_task(), &address, BLOCK_SIZE, BLOCK_OFFSET_MASK, VM_FLAGS_ANYWHERE | VM_TAG_FOR_COLLECTOR_MEMORY, MEMORY_OBJECT_NULL, 0, FALSE, VM_PROT_DEFAULT, VM_PROT_DEFAULT, VM_INHERIT_DEFAULT);
-#elif OS(SYMBIAN)
-    void* address = m_blockallocator.alloc();  
-    if (!address)
+    AlignedCollectorBlock allocation = m_blockallocator.allocate();
+    CollectorBlock* block = static_cast<CollectorBlock*>(allocation.base());
+    if (!block)
         CRASH();
-#elif OS(WINCE)
-    void* address = VirtualAlloc(NULL, BLOCK_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-#elif OS(WINDOWS)
-#if COMPILER(MINGW) && !COMPILER(MINGW64)
-    void* address = __mingw_aligned_malloc(BLOCK_SIZE, BLOCK_SIZE);
-#else
-    void* address = _aligned_malloc(BLOCK_SIZE, BLOCK_SIZE);
-#endif
-    memset(address, 0, BLOCK_SIZE);
-#elif PLATFORM(OLYMPIA)
-    void* address = Olympia::Platform::allocateJSBlock(BLOCK_SIZE);
-    memset(address, 0, BLOCK_SIZE);
-#elif HAVE(POSIX_MEMALIGN)
-    void* address;
-    posix_memalign(&address, BLOCK_SIZE, BLOCK_SIZE);
-#else
-
-#if ENABLE(JSC_MULTIPLE_THREADS)
-#error Need to initialize pagesize safely.
-#endif
-    static size_t pagesize = getpagesize();
-
-    size_t extra = 0;
-    if (BLOCK_SIZE > pagesize)
-        extra = BLOCK_SIZE - pagesize;
-
-    void* mmapResult = mmap(NULL, BLOCK_SIZE + extra, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
-    uintptr_t address = reinterpret_cast<uintptr_t>(mmapResult);
-
-    size_t adjust = 0;
-    if ((address & BLOCK_OFFSET_MASK) != 0)
-        adjust = BLOCK_SIZE - (address & BLOCK_OFFSET_MASK);
-
-    if (adjust > 0)
-        munmap(reinterpret_cast<char*>(address), adjust);
-
-    if (adjust < extra)
-        munmap(reinterpret_cast<char*>(address + adjust + BLOCK_SIZE), extra - adjust);
-
-    address += adjust;
-#endif
 
     // Initialize block.
 
-    CollectorBlock* block = reinterpret_cast<CollectorBlock*>(address);
     block->heap = this;
     clearMarkBits(block);
 
     Structure* dummyMarkableCellStructure = m_globalData->dummyMarkableCellStructure.get();
     for (size_t i = 0; i < HeapConstants::cellsPerBlock; ++i)
-        new (block->cells + i) JSCell(dummyMarkableCellStructure);
+        new (&block->cells[i]) JSCell(dummyMarkableCellStructure);
     
     // Add block to blocks vector.
 
     size_t numBlocks = m_heap.numBlocks;
     if (m_heap.usedBlocks == numBlocks) {
-        static const size_t maxNumBlocks = ULONG_MAX / sizeof(CollectorBlock*) / GROWTH_FACTOR;
+        static const size_t maxNumBlocks = ULONG_MAX / sizeof(AlignedCollectorBlock) / GROWTH_FACTOR;
         if (numBlocks > maxNumBlocks)
             CRASH();
         numBlocks = max(MIN_ARRAY_SIZE, numBlocks * GROWTH_FACTOR);
         m_heap.numBlocks = numBlocks;
-        m_heap.blocks = static_cast<CollectorBlock**>(fastRealloc(m_heap.blocks, numBlocks * sizeof(CollectorBlock*)));
+        m_heap.blocks = static_cast<AlignedCollectorBlock*>(fastRealloc(m_heap.blocks, numBlocks * sizeof(AlignedCollectorBlock)));
     }
-    m_heap.blocks[m_heap.usedBlocks++] = block;
+    m_heap.blocks[m_heap.usedBlocks++] = allocation;
 
     return block;
 }
@@ -279,7 +240,7 @@ NEVER_INLINE void Heap::freeBlock(size_t block)
     ObjectIterator end(m_heap, block + 1);
     for ( ; it != end; ++it)
         (*it)->~JSCell();
-    freeBlockPtr(m_heap.blocks[block]);
+    m_heap.blocks[block].deallocate();
 
     // swap with the last block so we compact as we go
     m_heap.blocks[block] = m_heap.blocks[m_heap.usedBlocks - 1];
@@ -287,31 +248,8 @@ NEVER_INLINE void Heap::freeBlock(size_t block)
 
     if (m_heap.numBlocks > MIN_ARRAY_SIZE && m_heap.usedBlocks < m_heap.numBlocks / LOW_WATER_FACTOR) {
         m_heap.numBlocks = m_heap.numBlocks / GROWTH_FACTOR; 
-        m_heap.blocks = static_cast<CollectorBlock**>(fastRealloc(m_heap.blocks, m_heap.numBlocks * sizeof(CollectorBlock*)));
+        m_heap.blocks = static_cast<AlignedCollectorBlock*>(fastRealloc(m_heap.blocks, m_heap.numBlocks * sizeof(AlignedCollectorBlock)));
     }
-}
-
-NEVER_INLINE void Heap::freeBlockPtr(CollectorBlock* block)
-{
-#if OS(DARWIN)    
-    vm_deallocate(current_task(), reinterpret_cast<vm_address_t>(block), BLOCK_SIZE);
-#elif OS(SYMBIAN)
-    m_blockallocator.free(reinterpret_cast<void*>(block));
-#elif OS(WINCE)
-    VirtualFree(block, 0, MEM_RELEASE);
-#elif OS(WINDOWS)
-#if COMPILER(MINGW) && !COMPILER(MINGW64)
-    __mingw_aligned_free(block);
-#else
-    _aligned_free(block);
-#endif
-#elif PLATFORM(OLYMPIA)
-    Olympia::Platform::freeJSBlock(block);
-#elif HAVE(POSIX_MEMALIGN)
-    free(block);
-#else
-    munmap(reinterpret_cast<char*>(block), BLOCK_SIZE);
-#endif
 }
 
 void Heap::freeBlocks()
@@ -337,7 +275,7 @@ void Heap::freeBlocks()
         it->first->~JSCell();
 
     for (size_t block = 0; block < m_heap.usedBlocks; ++block)
-        freeBlockPtr(m_heap.blocks[block]);
+        m_heap.blocks[block].deallocate();
 
     fastFree(m_heap.blocks);
 
@@ -390,11 +328,11 @@ allocate:
 
     do {
         ASSERT(m_heap.nextBlock < m_heap.usedBlocks);
-        Block* block = reinterpret_cast<Block*>(m_heap.blocks[m_heap.nextBlock]);
+        Block* block = m_heap.collectorBlock(m_heap.nextBlock);
         do {
             ASSERT(m_heap.nextCell < HeapConstants::cellsPerBlock);
             if (!block->marked.get(m_heap.nextCell)) { // Always false for the last cell in the block
-                Cell* cell = block->cells + m_heap.nextCell;
+                Cell* cell = &block->cells[m_heap.nextCell];
 
                 m_heap.operationInProgress = Allocation;
                 JSCell* imp = reinterpret_cast<JSCell*>(cell);
@@ -420,10 +358,17 @@ void Heap::resizeBlocks()
     m_heap.didShrink = false;
 
     size_t usedCellCount = markedCells();
+#if OS(OLYMPIA)
+    size_t minCellCount = usedCellCount + std::min(MAX_ALLOCATIONS_PER_COLLECTION, max(MIN_ALLOCATIONS_PER_COLLECTION, usedCellCount));
+#else
     size_t minCellCount = usedCellCount + max(ALLOCATIONS_PER_COLLECTION, usedCellCount);
+#endif
     size_t minBlockCount = (minCellCount + HeapConstants::cellsPerBlock - 1) / HeapConstants::cellsPerBlock;
 
     size_t maxCellCount = 1.25f * minCellCount;
+#if OS(OLYMPIA)
+    maxCellCount = std::min(maxCellCount, minCellCount + MAX_ALLOCATIONS_PER_COLLECTION);
+#endif
     size_t maxBlockCount = (maxCellCount + HeapConstants::cellsPerBlock - 1) / HeapConstants::cellsPerBlock;
 
     if (m_heap.usedBlocks < minBlockCount)
@@ -445,10 +390,10 @@ void Heap::shrinkBlocks(size_t neededBlocks)
     
     // Clear the always-on last bit, so isEmpty() isn't fooled by it.
     for (size_t i = 0; i < m_heap.usedBlocks; ++i)
-        m_heap.blocks[i]->marked.clear(HeapConstants::cellsPerBlock - 1);
+        m_heap.collectorBlock(i)->marked.clear(HeapConstants::cellsPerBlock - 1);
 
     for (size_t i = 0; i != m_heap.usedBlocks && m_heap.usedBlocks != neededBlocks; ) {
-        if (m_heap.blocks[i]->marked.isEmpty()) {
+        if (m_heap.collectorBlock(i)->marked.isEmpty()) {
             freeBlock(i);
         } else
             ++i;
@@ -456,7 +401,7 @@ void Heap::shrinkBlocks(size_t neededBlocks)
 
     // Reset the always-on last bit.
     for (size_t i = 0; i < m_heap.usedBlocks; ++i)
-        m_heap.blocks[i]->marked.set(HeapConstants::cellsPerBlock - 1);
+        m_heap.collectorBlock(i)->marked.set(HeapConstants::cellsPerBlock - 1);
 }
 
 #if OS(WINCE)
@@ -753,7 +698,6 @@ void Heap::markConservatively(MarkStack& markStack, void* start, void* end)
     char** p = static_cast<char**>(start);
     char** e = static_cast<char**>(end);
 
-    CollectorBlock** blocks = m_heap.blocks;
     while (p != e) {
         char* x = *p++;
         if (isPossibleCell(x)) {
@@ -769,7 +713,7 @@ void Heap::markConservatively(MarkStack& markStack, void* start, void* end)
             CollectorBlock* blockAddr = reinterpret_cast<CollectorBlock*>(xAsBits - offset);
             usedBlocks = m_heap.usedBlocks;
             for (size_t block = 0; block < usedBlocks; block++) {
-                if (blocks[block] != blockAddr)
+                if (m_heap.collectorBlock(block) != blockAddr)
                     continue;
                 markStack.append(reinterpret_cast<JSCell*>(xAsBits));
                 markStack.drain();
@@ -984,6 +928,36 @@ void Heap::markStackObjectsConservatively(MarkStack& markStack)
 #endif
 }
 
+void Heap::updateWeakGCHandles()
+{
+    for (unsigned i = 0; i < m_weakGCHandlePools.size(); ++i)
+        weakGCHandlePool(i)->update();
+}
+
+void WeakGCHandlePool::update()
+{
+    for (unsigned i = 1; i < WeakGCHandlePool::numPoolEntries; ++i) {
+        if (m_entries[i].isValidPtr()) {
+            JSCell* cell = m_entries[i].get();
+            if (!cell || !Heap::isCellMarked(cell))
+                m_entries[i].invalidate();
+        }
+    }
+}
+
+WeakGCHandle* Heap::addWeakGCHandle(JSCell* ptr)
+{
+    for (unsigned i = 0; i < m_weakGCHandlePools.size(); ++i)
+        if (!weakGCHandlePool(i)->isFull())
+            return weakGCHandlePool(i)->allocate(ptr);
+
+    AlignedMemory<WeakGCHandlePool::poolSize> allocation = m_weakGCHandlePoolAllocator.allocate();
+    m_weakGCHandlePools.append(allocation);
+
+    WeakGCHandlePool* pool = new (allocation) WeakGCHandlePool();
+    return pool->allocate(ptr);
+}
+
 void Heap::protect(JSValue k)
 {
     ASSERT(k);
@@ -1015,10 +989,37 @@ void Heap::markProtectedObjects(MarkStack& markStack)
     }
 }
 
+void Heap::pushTempSortVector(Vector<ValueStringPair>* tempVector)
+{
+    m_tempSortingVectors.append(tempVector);
+}
+
+void Heap::popTempSortVector(Vector<ValueStringPair>* tempVector)
+{
+    ASSERT_UNUSED(tempVector, tempVector == m_tempSortingVectors.last());
+    m_tempSortingVectors.removeLast();
+}
+    
+void Heap::markTempSortVectors(MarkStack& markStack)
+{
+    typedef Vector<Vector<ValueStringPair>* > VectorOfValueStringVectors;
+
+    VectorOfValueStringVectors::iterator end = m_tempSortingVectors.end();
+    for (VectorOfValueStringVectors::iterator it = m_tempSortingVectors.begin(); it != end; ++it) {
+        Vector<ValueStringPair>* tempSortingVector = *it;
+
+        Vector<ValueStringPair>::iterator vectorEnd = tempSortingVector->end();
+        for (Vector<ValueStringPair>::iterator vectorIt = tempSortingVector->begin(); vectorIt != vectorEnd; ++vectorIt)
+            if (vectorIt->first)
+                markStack.append(vectorIt->first);
+        markStack.drain();
+    }
+}
+    
 void Heap::clearMarkBits()
 {
     for (size_t i = 0; i < m_heap.usedBlocks; ++i)
-        clearMarkBits(m_heap.blocks[i]);
+        clearMarkBits(m_heap.collectorBlock(i));
 }
 
 void Heap::clearMarkBits(CollectorBlock* block)
@@ -1037,9 +1038,9 @@ size_t Heap::markedCells(size_t startBlock, size_t startCell) const
         return 0;
 
     size_t result = 0;
-    result += m_heap.blocks[startBlock]->marked.count(startCell);
+    result += m_heap.collectorBlock(startBlock)->marked.count(startCell);
     for (size_t i = startBlock + 1; i < m_heap.usedBlocks; ++i)
-        result += m_heap.blocks[i]->marked.count();
+        result += m_heap.collectorBlock(i)->marked.count();
 
     return result;
 }
@@ -1102,6 +1103,9 @@ void Heap::markRoots()
 
     // Mark explicitly registered roots.
     markProtectedObjects(markStack);
+    
+    // Mark temporary vector for Array sorting
+    markTempSortVectors(markStack);
 
     // Mark misc. other roots.
     if (m_markListSet && m_markListSet->size())
@@ -1119,6 +1123,8 @@ void Heap::markRoots()
 
     markStack.drain();
     markStack.compact();
+
+    updateWeakGCHandles();
 
     m_heap.operationInProgress = NoOperation;
 }
@@ -1248,6 +1254,8 @@ void Heap::reset()
     resizeBlocks();
 
     JAVASCRIPTCORE_GC_END();
+
+    (*m_activityCallback)();
 }
 
 void Heap::collectAllGarbage()
@@ -1282,6 +1290,11 @@ LiveObjectIterator Heap::primaryHeapBegin()
 LiveObjectIterator Heap::primaryHeapEnd()
 {
     return LiveObjectIterator(m_heap, m_heap.usedBlocks);
+}
+
+void Heap::setActivityCallback(PassOwnPtr<GCActivityCallback> activityCallback)
+{
+    m_activityCallback = activityCallback;
 }
 
 } // namespace JSC

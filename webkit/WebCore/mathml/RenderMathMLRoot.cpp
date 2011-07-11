@@ -42,26 +42,26 @@ const int gRadicalLeftMargin = 3;
 // Bottom padding of the radical (px)
 const int gRadicalBasePad = 3;
 // Threshold above which the radical shape is modified to look nice with big bases (%)
-const float gThresholdBaseHeight = 1.5;
+const float gThresholdBaseHeight = 1.5f;
 // Radical width (%)
-const float gRadicalWidth = 0.75;
+const float gRadicalWidth = 0.75f;
 // Horizontal position of the bottom point of the radical (%)
-const float gRadicalBottomPointXPos= 0.5;
+const float gRadicalBottomPointXPos= 0.5f;
 // Horizontal position of the top left point of the radical (%)
-const float gRadicalTopLeftPointXPos = 0.8;
+const float gRadicalTopLeftPointXPos = 0.8f;
 // Vertical position of the top left point of the radical (%)
-const float gRadicalTopLeftPointYPos = 0.625; 
+const float gRadicalTopLeftPointYPos = 0.625f; 
 // Vertical shift of the left end point of the radical (%)
-const float gRadicalLeftEndYShift = 0.05;
+const float gRadicalLeftEndYShift = 0.05f;
 // Root padding around the base (%)
-const float gRootPadding = 0.2;
+const float gRootPadding = 0.2f;
 // Additional bottom root padding (%)
-const float gRootBottomPadding = 0.2;
+const float gRootBottomPadding = 0.2f;
     
 // Radical line thickness (%)
-const float gRadicalLineThickness = 0.02;
+const float gRadicalLineThickness = 0.02f;
 // Radical thick line thickness (%)
-const float gRadicalThickLineThickness = 0.1;
+const float gRadicalThickLineThickness = 0.1f;
     
 RenderMathMLRoot::RenderMathMLRoot(Node *expression) 
 : RenderMathMLBlock(expression) 
@@ -97,6 +97,12 @@ void RenderMathMLRoot::paint(PaintInfo& info, int tx, int ty)
 {
     RenderMathMLBlock::paint(info , tx , ty);
     
+    if (info.context->paintingDisabled())
+        return;
+
+    if (!firstChild() || !lastChild())
+        return;
+
     tx += x();
     ty += y();
     
@@ -126,7 +132,7 @@ void RenderMathMLRoot::paint(PaintInfo& info, int tx, int ty)
     if (maxHeight > thresholdHeight && thresholdHeight) {
         float shift = (maxHeight - thresholdHeight) / static_cast<float>(thresholdHeight);
         if (shift > 1.)
-            shift = 1.;
+            shift = 1.0f;
         topStartShift = static_cast<int>(gRadicalBottomPointXPos * frontWidth * shift);
     }
     
@@ -145,7 +151,7 @@ void RenderMathMLRoot::paint(PaintInfo& info, int tx, int ty)
     
     info.context->setStrokeThickness(gRadicalLineThickness * style()->fontSize());
     info.context->setStrokeStyle(SolidStroke);
-    info.context->setStrokeColor(style()->color(), sRGBColorSpace);
+    info.context->setStrokeColor(style()->visitedDependentColor(CSSPropertyColor), DeviceColorSpace);
     info.context->setLineJoin(MiterJoin);
     info.context->setMiterLimit(style()->fontSize());
     
@@ -200,12 +206,15 @@ void RenderMathMLRoot::paint(PaintInfo& info, int tx, int ty)
 void RenderMathMLRoot::layout()
 {
     RenderBlock::layout();
-    
+
+    if (!firstChild() || !lastChild())
+        return;
+
     int maxHeight = toRenderBoxModelObject(lastChild())->offsetHeight();
     
     RenderObject* current = lastChild()->firstChild();
-    
-    toRenderMathMLBlock(current)->style()->setVerticalAlign(BASELINE);
+    if (current)
+        current->style()->setVerticalAlign(BASELINE);
     
     if (!maxHeight)
         maxHeight = style()->fontSize();
@@ -217,7 +226,7 @@ void RenderMathMLRoot::layout()
     if (maxHeight > thresholdHeight && thresholdHeight) {
         float shift = (maxHeight - thresholdHeight) / static_cast<float>(thresholdHeight);
         if (shift > 1.)
-            shift = 1.;
+            shift = 1.0f;
         int frontWidth = static_cast<int>(style()->fontSize() * gRadicalWidth);
         topStartShift = static_cast<int>(gRadicalBottomPointXPos * frontWidth * shift);
         
@@ -226,6 +235,8 @@ void RenderMathMLRoot::layout()
     
     // Positioning of the index
     RenderBoxModelObject* indexBox = toRenderBoxModelObject(firstChild()->firstChild());
+    if (!indexBox)
+        return;
     
     int indexShift = indexBox->offsetWidth() + topStartShift;
     int radicalHeight = static_cast<int>((1 - gRadicalTopLeftPointYPos) * maxHeight);
@@ -238,9 +249,11 @@ void RenderMathMLRoot::layout()
     setNeedsLayoutAndPrefWidthsRecalc();
     markContainingBlocksForLayout();
     RenderBlock::layout();
-    
+
     indexBox->style()->setBottom(Length(radicalHeight + style()->paddingBottom().value(), Fixed));
-    
+
+    // Now that we've potentially changed its position, we need layout the index again.
+    indexBox->setNeedsLayoutAndPrefWidthsRecalc();
     indexBox->layout();
 }
     

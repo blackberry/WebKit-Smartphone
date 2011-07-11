@@ -29,7 +29,7 @@
 from webkitpy.thirdparty.mock import Mock
 from webkitpy.tool.commands.commandtest import CommandsTest
 from webkitpy.tool.commands.upload import *
-from webkitpy.tool.mocktool import MockTool
+from webkitpy.tool.mocktool import MockOptions, MockTool
 
 class UploadCommandsTest(CommandsTest):
     def test_commit_message_for_current_diff(self):
@@ -51,13 +51,11 @@ class UploadCommandsTest(CommandsTest):
         self.assert_execute_outputs(ObsoleteAttachments(), [42], expected_stderr=expected_stderr)
 
     def test_post(self):
-        options = Mock()
+        options = MockOptions()
         options.description = "MOCK description"
         options.request_commit = False
         options.review = True
         options.comment = None
-        # Rietveld upload code requires a real SCM checkout.
-        options.fancy_review = False
         options.cc = None
         expected_stderr = """Running check-webkit-style
 MOCK: user.open_url: file://...
@@ -82,13 +80,11 @@ MOCK: user.open_url: http://example.com/42
         self.assert_execute_outputs(Prepare(), [], expected_stderr=expected_stderr)
 
     def test_upload(self):
-        options = Mock()
+        options = MockOptions()
         options.description = "MOCK description"
         options.request_commit = False
         options.review = True
         options.comment = None
-        # Rietveld upload code requires a real SCM checkout.
-        options.fancy_review = False
         options.cc = None
         expected_stderr = """Running check-webkit-style
 MOCK: user.open_url: file://...

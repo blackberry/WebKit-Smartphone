@@ -270,15 +270,24 @@ public:
             if (!frameBuffer->setSize(m_w, m_h))
                 return m_decoder->setFailed();
             frameBuffer->setStatus(RGBA32Buffer::FramePartial);
-            frameBuffer->setHasAlpha(false);
 
+            if ( fmt == RxIImageDecoder::FormatRpi ) {
+                // RPI format has alpha which we must support.
+                frameBuffer->setHasAlpha(true);
+            } else {
+                frameBuffer->setHasAlpha(false);
+            }
             // the frame always fills the entire image.
             frameBuffer->setRect(IntRect(IntPoint(0, 0), m_decoder->size()));
         }
 
         // note that we don't cleanup frameBuffer at all since we didn't allocate it.
-        if (fmt != RxIImageDecoder::FormatRdi && fmt != RxIImageDecoder::FormatRwi)
+        if ( fmt == RxIImageDecoder::FormatRgi ) {
             rgbData = (unsigned char*) malloc(m_w * m_h * 3);
+        } else if ( fmt == RxIImageDecoder::FormatRpi ) {
+            // extra channel is for alpha
+            rgbData = (unsigned char*) malloc(m_w * m_h * 4);
+        }
 
         MemWriter mw(m_w * m_h * 3);
         switch (fmt) {
@@ -309,13 +318,18 @@ public:
             for (i = 0; i < m_h; ++i) {
                 for (j = 0; j < m_w; ++j) {
                     unsigned char r, g, b;
+                    unsigned char a = 0xFF;
                     r = *ptr;
                     ptr++;
                     g = *ptr;
                     ptr++;
                     b = *ptr;
                     ptr++;
-                    frameBuffer->setRGBA(j, i, r, g, b, 0xFF);
+                    if ( fmt == RxIImageDecoder::FormatRpi ) {
+                        a = *ptr;
+                        ptr++;
+                    }
+                    frameBuffer->setRGBA(j, i, r, g, b, a);
                 }
             }
         }
@@ -362,6 +376,7 @@ private:
 };
 
 RxIImageDecoder::RxIImageDecoder(RxIFormat fmt)
+    : ImageDecoder(false /*premultiplyAlpha*/)
 {
     m_format = fmt;
 }

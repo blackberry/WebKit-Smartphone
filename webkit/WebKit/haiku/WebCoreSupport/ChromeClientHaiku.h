@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2006 Zack Rusin <zack@kde.org>
  * Copyright (C) 2007 Ryan Leavengood <leavengood@gmail.com> All rights reserved.
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  *
  * Redistribution and use in source and binary forms, with or without
@@ -98,7 +99,7 @@ namespace WebCore {
         bool runJavaScriptPrompt(Frame*, const String& message, const String& defaultValue, String& result);
         bool shouldInterruptJavaScript();
 
-        void setStatusbarText(const WebCore::String&);
+        void setStatusbarText(const WTF::String&);
         bool tabsToLinks() const;
         IntRect windowResizerRect() const;
 
@@ -128,8 +129,13 @@ namespace WebCore {
 
         void exceededDatabaseQuota(Frame*, const String& databaseName);
 
+        virtual bool selectItemWritingDirectionIsNatural();
+        virtual PassRefPtr<PopupMenu> createPopupMenu(PopupMenuClient*) const;
+        virtual PassRefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient*) const;
+
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
         virtual void reachedMaxAppCacheSize(int64_t spaceNeeded);
+        virtual void reachedApplicationCacheOriginQuota(SecurityOrigin*);
 #endif
 
         // This is an asynchronous call. The ChromeClient can display UI asking the user for permission
@@ -140,7 +146,7 @@ namespace WebCore {
         void runOpenPanel(Frame*, PassRefPtr<FileChooser>);
         void chooseIconForFiles(const Vector<String>&, FileChooser*);
 
-        bool setCursor(PlatformCursorHandle);
+        void setCursor(const Cursor&);
 
         // Notification that the given form element has changed. This function
         // will be called frequently, so handling should be very fast.

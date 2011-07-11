@@ -39,6 +39,9 @@ public:
         , m_len(len)
         , m_xpos(xpos)
         , m_padding(padding)
+#if ENABLE(SVG)
+        , m_horizontalGlyphStretch(1)
+#endif
         , m_allowTabs(allowTabs)
         , m_rtl(rtl)
         , m_directionalOverride(directionalOverride)
@@ -58,6 +61,9 @@ public:
         , m_len(s.length())
         , m_xpos(xpos)
         , m_padding(padding)
+#if ENABLE(SVG)
+        , m_horizontalGlyphStretch(1)
+#endif
         , m_allowTabs(allowTabs)
         , m_rtl(rtl)
         , m_directionalOverride(directionalOverride)
@@ -78,6 +84,11 @@ public:
     int length() const { return m_len; }
 
     void setText(const UChar* c, int len) { m_characters = c; m_len = len; }
+
+#if ENABLE(SVG)
+    float horizontalGlyphStretch() const { return m_horizontalGlyphStretch; }
+    void setHorizontalGlyphStretch(float scale) { m_horizontalGlyphStretch = scale; }
+#endif
 
     bool allowTabs() const { return m_allowTabs; }
     int xPos() const { return m_xpos; }
@@ -108,6 +119,9 @@ private:
 
     int m_xpos;
     int m_padding;
+#if ENABLE(SVG)
+    float m_horizontalGlyphStretch;
+#endif
     bool m_allowTabs;
     bool m_rtl;
     bool m_directionalOverride;

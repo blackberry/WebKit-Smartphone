@@ -28,6 +28,7 @@
 #include "GraphicsContext.h"
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
+#include "ShadowElement.h"
 #include "Icon.h"
 #include "LocalizedStrings.h"
 #include "Page.h"
@@ -50,20 +51,8 @@ const int iconFilenameSpacing = 2;
 const int defaultWidthNumChars = 34;
 const int buttonShadowHeight = 2;
 
-class HTMLFileUploadInnerButtonElement : public HTMLInputElement {
-public:
-    HTMLFileUploadInnerButtonElement(Document*, Node* shadowParent);
-
-    virtual bool isShadowNode() const { return true; }
-    virtual Node* shadowParentNode() { return m_shadowParent; }
-
-private:
-    Node* m_shadowParent;    
-};
-
 RenderFileUploadControl::RenderFileUploadControl(HTMLInputElement* input)
     : RenderBlock(input)
-    , m_button(0)
 {
     FileList* list = input->files();
     Vector<String> filenames;
@@ -105,9 +94,22 @@ void RenderFileUploadControl::valueChanged()
 
 bool RenderFileUploadControl::allowsMultipleFiles()
 {
+#if ENABLE(DIRECTORY_UPLOAD)
+    if (allowsDirectoryUpload())
+      return true;
+#endif
+
     HTMLInputElement* input = static_cast<HTMLInputElement*>(node());
     return !input->getAttribute(multipleAttr).isNull();
 }
+
+#if ENABLE(DIRECTORY_UPLOAD)
+bool RenderFileUploadControl::allowsDirectoryUpload()
+{
+    HTMLInputElement* input = static_cast<HTMLInputElement*>(node());
+    return !input->getAttribute(webkitdirectoryAttr).isNull();
+}
+#endif
 
 String RenderFileUploadControl::acceptTypes()
 {
@@ -143,7 +145,7 @@ void RenderFileUploadControl::updateFromElement()
     ASSERT(inputElement->inputType() == HTMLInputElement::FILE);
     
     if (!m_button) {
-        m_button = new HTMLFileUploadInnerButtonElement(document(), inputElement);
+        m_button = ShadowInputElement::create(inputElement);
         m_button->setInputType("button");
         m_button->setValue(fileButtonChooseFileLabel());
         RefPtr<RenderStyle> buttonStyle = createButtonStyle(style());
@@ -313,10 +315,4 @@ String RenderFileUploadControl::fileTextValue() const
     return m_fileChooser->basenameForWidth(style()->font(), maxFilenameWidth());
 }
     
-HTMLFileUploadInnerButtonElement::HTMLFileUploadInnerButtonElement(Document* doc, Node* shadowParent)
-    : HTMLInputElement(inputTag, doc)
-    , m_shadowParent(shadowParent)
-{
-}
-
 } // namespace WebCore

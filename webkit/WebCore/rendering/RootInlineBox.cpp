@@ -47,11 +47,11 @@ void RootInlineBox::destroy(RenderArena* arena)
 
 void RootInlineBox::detachEllipsisBox(RenderArena* arena)
 {
-    if (m_hasEllipsisBox) {
+    if (hasEllipsisBox()) {
         EllipsisBox* box = gEllipsisBoxMap->take(this);
         box->setParent(0);
         box->destroy(arena);
-        m_hasEllipsisBox = false;
+        setHasEllipsisBox(false);
     }
 }
 
@@ -62,7 +62,7 @@ RenderLineBoxList* RootInlineBox::rendererLineBoxes() const
 
 void RootInlineBox::clearTruncation()
 {
-    if (m_hasEllipsisBox) {
+    if (hasEllipsisBox()) {
         detachEllipsisBox(renderer()->renderArena());
         InlineFlowBox::clearTruncation();
     }
@@ -92,7 +92,7 @@ void RootInlineBox::placeEllipsis(const AtomicString& ellipsisStr,  bool ltr, in
     if (!gEllipsisBoxMap)
         gEllipsisBoxMap = new EllipsisBoxMap();
     gEllipsisBoxMap->add(this, ellipsisBox);
-    m_hasEllipsisBox = true;
+    setHasEllipsisBox(true);
 
     // FIXME: Do we need an RTL version of this?
     if (ltr && (x() + width() + ellipsisWidth) <= blockRightEdge) {
@@ -115,10 +115,10 @@ int RootInlineBox::placeEllipsisBox(bool ltr, int blockLeftEdge, int blockRightE
     return result;
 }
 
-void RootInlineBox::paintEllipsisBox(RenderObject::PaintInfo& paintInfo, int tx, int ty) const
+void RootInlineBox::paintEllipsisBox(PaintInfo& paintInfo, int tx, int ty) const
 {
-    if (m_hasEllipsisBox && renderer()->shouldPaintWithinRoot(paintInfo) && renderer()->style()->visibility() == VISIBLE &&
-            paintInfo.phase == PaintPhaseForeground)
+    if (hasEllipsisBox() && paintInfo.shouldPaintWithinRoot(renderer()) && renderer()->style()->visibility() == VISIBLE
+            && paintInfo.phase == PaintPhaseForeground)
         ellipsisBox()->paint(paintInfo, tx, ty);
 }
 
@@ -126,7 +126,7 @@ void RootInlineBox::paintEllipsisBox(RenderObject::PaintInfo& paintInfo, int tx,
 
 void RootInlineBox::addHighlightOverflow()
 {
-    Frame* frame = renderer()->document()->frame();
+    Frame* frame = renderer()->frame();
     if (!frame)
         return;
     Page* page = frame->page();
@@ -140,12 +140,12 @@ void RootInlineBox::addHighlightOverflow()
     setVerticalOverflowPositions(topLayoutOverflow(), bottomLayoutOverflow(), min(topVisualOverflow(), inflatedRect.y()), max(bottomVisualOverflow(), inflatedRect.bottom()), height());
 }
 
-void RootInlineBox::paintCustomHighlight(RenderObject::PaintInfo& paintInfo, int tx, int ty, const AtomicString& highlightType)
+void RootInlineBox::paintCustomHighlight(PaintInfo& paintInfo, int tx, int ty, const AtomicString& highlightType)
 {
-    if (!renderer()->shouldPaintWithinRoot(paintInfo) || renderer()->style()->visibility() != VISIBLE || paintInfo.phase != PaintPhaseForeground)
+    if (!paintInfo.shouldPaintWithinRoot(renderer()) || renderer()->style()->visibility() != VISIBLE || paintInfo.phase != PaintPhaseForeground)
         return;
 
-    Frame* frame = renderer()->document()->frame();
+    Frame* frame = renderer()->frame();
     if (!frame)
         return;
     Page* page = frame->page();
@@ -161,7 +161,7 @@ void RootInlineBox::paintCustomHighlight(RenderObject::PaintInfo& paintInfo, int
 
 #endif
 
-void RootInlineBox::paint(RenderObject::PaintInfo& paintInfo, int tx, int ty)
+void RootInlineBox::paint(PaintInfo& paintInfo, int tx, int ty)
 {
     InlineFlowBox::paint(paintInfo, tx, ty);
     paintEllipsisBox(paintInfo, tx, ty);
@@ -174,7 +174,7 @@ void RootInlineBox::paint(RenderObject::PaintInfo& paintInfo, int tx, int ty)
 
 bool RootInlineBox::nodeAtPoint(const HitTestRequest& request, HitTestResult& result, int x, int y, int tx, int ty)
 {
-    if (m_hasEllipsisBox && visibleToHitTesting()) {
+    if (hasEllipsisBox() && visibleToHitTesting()) {
         if (ellipsisBox()->nodeAtPoint(request, result, x, y, tx, ty)) {
             renderer()->updateHitTestResult(result, IntPoint(x - tx, y - ty));
             return true;
@@ -204,19 +204,21 @@ void RootInlineBox::childRemoved(InlineBox* box)
 
 int RootInlineBox::verticallyAlignBoxes(int heightOfBlock, GlyphOverflowAndFallbackFontsMap& textBoxDataMap)
 {
+#if ENABLE(SVG)
+    // SVG will handle vertical alignment on its own.
+    if (isSVGRootInlineBox())
+        return 0;
+#endif
+
     int maxPositionTop = 0;
     int maxPositionBottom = 0;
     int maxAscent = 0;
     int maxDescent = 0;
 
-    // Figure out if we're in strict mode.  Note that we can't simply use !style()->htmlHacks(),
-    // because that would match almost strict mode as well.
-    RenderObject* curr = renderer();
-    while (curr && !curr->node())
-        curr = curr->container();
-    bool strictMode = (curr && curr->document()->inStrictMode());
+    // Figure out if we're in no-quirks mode.
+    bool noQuirksMode = renderer()->document()->inNoQuirksMode();
 
-    computeLogicalBoxHeights(maxPositionTop, maxPositionBottom, maxAscent, maxDescent, strictMode, textBoxDataMap);
+    computeLogicalBoxHeights(maxPositionTop, maxPositionBottom, maxAscent, maxDescent, noQuirksMode, textBoxDataMap);
 
     if (maxAscent + maxDescent < max(maxPositionTop, maxPositionBottom))
         adjustMaxAscentAndDescent(maxAscent, maxDescent, maxPositionTop, maxPositionBottom);
@@ -224,8 +226,8 @@ int RootInlineBox::verticallyAlignBoxes(int heightOfBlock, GlyphOverflowAndFallb
     int maxHeight = maxAscent + maxDescent;
     int lineTop = heightOfBlock;
     int lineBottom = heightOfBlock;
-    placeBoxesVertically(heightOfBlock, maxHeight, maxAscent, strictMode, lineTop, lineBottom);
-    computeVerticalOverflow(lineTop, lineBottom, strictMode, textBoxDataMap);
+    placeBoxesVertically(heightOfBlock, maxHeight, maxAscent, noQuirksMode, lineTop, lineBottom);
+    computeVerticalOverflow(lineTop, lineBottom, noQuirksMode, textBoxDataMap);
     setLineTopBottomPositions(lineTop, lineBottom);
     
     heightOfBlock += maxHeight;
@@ -234,7 +236,7 @@ int RootInlineBox::verticallyAlignBoxes(int heightOfBlock, GlyphOverflowAndFallb
 }
 
 GapRects RootInlineBox::fillLineSelectionGap(int selTop, int selHeight, RenderBlock* rootBlock, int blockX, int blockY, int tx, int ty,
-                                             const RenderObject::PaintInfo* paintInfo)
+                                             const PaintInfo* paintInfo)
 {
     RenderObject::SelectionState lineState = selectionState();
 
@@ -410,8 +412,8 @@ void RootInlineBox::setLineBreakInfo(RenderObject* obj, unsigned breakPos, const
 
 EllipsisBox* RootInlineBox::ellipsisBox() const
 {
-    if (!m_hasEllipsisBox)
-        return false;
+    if (!hasEllipsisBox())
+        return 0;
     return gEllipsisBoxMap->get(this);
 }
 

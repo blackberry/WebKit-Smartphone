@@ -24,6 +24,7 @@
 #include "Assertions.h"
 #include "HashSet.h"
 #include "OwnPtr.h"
+#include "StdLibExtras.h"
 
 namespace WTF {
 
@@ -116,14 +117,14 @@ namespace WTF {
         ImplType m_impl;
         Node* m_head;
         Node* m_tail;
-#if PLATFORM(OLYMPIA)
+#if ENABLE(OLYMPIA_OBJECT_ALLOCATOR)
         NodeAllocator m_allocator;
 #else
         OwnPtr<NodeAllocator> m_allocator;
 #endif
     };
 
-#if PLATFORM(OLYMPIA)
+#if ENABLE(OLYMPIA_OBJECT_ALLOCATOR)
     template<typename ValueArg> struct ListHashSetNodeAllocatorBase {
         static void* allocate();
         static void deallocate(void* node);
@@ -185,7 +186,7 @@ namespace WTF {
         }
 
     private:
-        Node* pool() { return reinterpret_cast<Node*>(m_pool.pool); }
+        Node* pool() { return reinterpret_cast_ptr<Node*>(m_pool.pool); }
         Node* pastPool() { return pool() + m_poolSize; }
 
         bool inPool(Node* node)
@@ -201,7 +202,7 @@ namespace WTF {
             double forAlignment;
         } m_pool;
     };
-#endif // PLATFORM(OLYMPIA)
+#endif // ENABLE(OLYMPIA_OBJECT_ALLOCATOR)
 
     template<typename ValueArg, size_t inlineCapacity> struct ListHashSetNode {
         typedef ListHashSetNodeAllocator<ValueArg, inlineCapacity> NodeAllocator;
@@ -374,7 +375,7 @@ namespace WTF {
     inline ListHashSet<T, inlineCapacity, U>::ListHashSet()
         : m_head(0)
         , m_tail(0)
-#if !PLATFORM(OLYMPIA)
+#if !ENABLE(OLYMPIA_OBJECT_ALLOCATOR)
         , m_allocator(new NodeAllocator)
 #endif
     {
@@ -384,7 +385,7 @@ namespace WTF {
     inline ListHashSet<T, inlineCapacity, U>::ListHashSet(const ListHashSet& other)
         : m_head(0)
         , m_tail(0)
-#if !PLATFORM(OLYMPIA)
+#if !ENABLE(OLYMPIA_OBJECT_ALLOCATOR)
         , m_allocator(new NodeAllocator)
 #endif
     {
@@ -407,7 +408,7 @@ namespace WTF {
         m_impl.swap(other.m_impl);
         std::swap(m_head, other.m_head);
         std::swap(m_tail, other.m_tail);
-#if !PLATFORM(OLYMPIA)
+#if !ENABLE(OLYMPIA_OBJECT_ALLOCATOR)
         m_allocator.swap(other.m_allocator);
 #endif
     }

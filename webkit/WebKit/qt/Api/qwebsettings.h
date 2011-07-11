@@ -55,7 +55,7 @@ public:
         PluginsEnabled,
         PrivateBrowsingEnabled,
         JavascriptCanOpenWindows,
-        DOMPasteAllowed,
+        JavascriptCanAccessClipboard,
         DeveloperExtrasEnabled,
         LinksIncludedInFocusChain,
         ZoomTextOnly,
@@ -68,13 +68,13 @@ public:
 #endif
         LocalContentCanAccessRemoteUrls,
         DnsPrefetchEnabled,
-        JavaScriptCanAccessClipboard,
         XSSAuditingEnabled,
         AcceleratedCompositingEnabled,
         SpatialNavigationEnabled,
         LocalContentCanAccessFileUrls,
         TiledBackingStoreEnabled,
         FrameFlatteningEnabled,
+        SiteSpecificQuirksEnabled,
         WebGLEnabled
     };
     enum WebGraphic {
@@ -82,7 +82,8 @@ public:
         MissingPluginGraphic,
         DefaultFrameIconGraphic,
         TextAreaSizeGripCornerGraphic,
-        DeleteButtonGraphic
+        DeleteButtonGraphic,
+        InputSpeechButtonGraphic
     };
     enum FontSize {
         MinimumFontSize,

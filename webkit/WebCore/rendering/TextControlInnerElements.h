@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2006, 2008 Apple Inc.  All rights reserved.
+ * Copyright (C) 2006, 2008, 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,62 +28,133 @@
 #define TextControlInnerElements_h
 
 #include "HTMLDivElement.h"
+#include "SpeechInputListener.h"
+#include "Timer.h"
+#include <wtf/Forward.h>
 
 namespace WebCore {
 
-class String;
+class SpeechInput;
 
 class TextControlInnerElement : public HTMLDivElement {
 public:
-    TextControlInnerElement(Document*, Node* shadowParent = 0);
-    
+    static PassRefPtr<TextControlInnerElement> create(HTMLElement* shadowParent);
+
+    void attachInnerElement(Node*, PassRefPtr<RenderStyle>, RenderArena*);
+
+protected:
+    TextControlInnerElement(Document*, HTMLElement* shadowParent = 0);
+
+private:
     virtual bool isMouseFocusable() const { return false; } 
     virtual bool isShadowNode() const { return m_shadowParent; }
-    virtual Node* shadowParentNode() { return m_shadowParent; }
-    void setShadowParentNode(Node* node) { m_shadowParent = node; }
-    void attachInnerElement(Node*, PassRefPtr<RenderStyle>, RenderArena*);
-    
-private:
-    Node* m_shadowParent;
+    virtual ContainerNode* shadowParentNode() { return m_shadowParent; }
+    void setShadowParentNode(HTMLElement* shadowParent) { m_shadowParent = shadowParent; }
+
+    HTMLElement* m_shadowParent;
 };
 
 class TextControlInnerTextElement : public TextControlInnerElement {
 public:
-    TextControlInnerTextElement(Document*, Node* shadowParent);
-    virtual RenderObject* createRenderer(RenderArena*, RenderStyle*);  
+    static PassRefPtr<TextControlInnerTextElement> create(Document*, HTMLElement* shadowParent);
+
     virtual void defaultEventHandler(Event*);
+
+private:
+    TextControlInnerTextElement(Document*, HTMLElement* shadowParent);
+    virtual RenderObject* createRenderer(RenderArena*, RenderStyle*);  
 };
 
 class SearchFieldResultsButtonElement : public TextControlInnerElement {
 public:
-    SearchFieldResultsButtonElement(Document*);
+    static PassRefPtr<SearchFieldResultsButtonElement> create(Document*);
+
     virtual void defaultEventHandler(Event*);
+
+private:
+    SearchFieldResultsButtonElement(Document*);
 };
 
 class SearchFieldCancelButtonElement : public TextControlInnerElement {
 public:
-    SearchFieldCancelButtonElement(Document*);
+    static PassRefPtr<SearchFieldCancelButtonElement> create(Document*);
+
     virtual void defaultEventHandler(Event*);
-    virtual void detach();
+
 private:
+    SearchFieldCancelButtonElement(Document*);
+
+    virtual void detach();
+
     bool m_capturing;
 };
 
 class SpinButtonElement : public TextControlInnerElement {
 public:
-    SpinButtonElement(Document*, Node*);
-    virtual bool isSpinButtonElement() const { return true; }
-    virtual bool isEnabledFormControl() { return static_cast<Element*>(shadowAncestorNode())->isEnabledFormControl(); }
-    virtual void defaultEventHandler(Event*);
+    enum UpDownState {
+        Indeterminate, // Hovered, but the event is not handled.
+        Down,
+        Up,
+    };
 
-    bool onUpButton() const { return m_onUpButton; }
-    static const AtomicString& spinButtonNodeName();
+    static PassRefPtr<SpinButtonElement> create(HTMLElement*);
+    UpDownState upDownState() const { return m_upDownState; }
 
 private:
+    SpinButtonElement(HTMLElement*);
+
+    virtual bool isSpinButtonElement() const { return true; }
+    // FIXME: shadowAncestorNode() should be const.
+    virtual bool isEnabledFormControl() const { return static_cast<Element*>(const_cast<SpinButtonElement*>(this)->shadowAncestorNode())->isEnabledFormControl(); }
+    virtual bool isReadOnlyFormControl() const { return static_cast<Element*>(const_cast<SpinButtonElement*>(this)->shadowAncestorNode())->isReadOnlyFormControl(); }
+    virtual void defaultEventHandler(Event*);
+    void startRepeatingTimer();
+    void stopRepeatingTimer();
+    void repeatingTimerFired(Timer<SpinButtonElement>*);
+    virtual void setHovered(bool = true);
+
     bool m_capturing;
-    bool m_onUpButton;
+    UpDownState m_upDownState;
+    UpDownState m_pressStartingState;
+    Timer<SpinButtonElement> m_repeatingTimer;
 };
 
-} //namespace
+#if ENABLE(INPUT_SPEECH)
+
+class InputFieldSpeechButtonElement
+    : public TextControlInnerElement,
+      public SpeechInputListener {
+public:
+    enum SpeechInputState {
+        Idle,
+        Recording,
+        Recognizing,
+    };
+
+    static PassRefPtr<InputFieldSpeechButtonElement> create(HTMLElement*);
+    virtual ~InputFieldSpeechButtonElement();
+
+    virtual void detach();
+    virtual void defaultEventHandler(Event*);
+    SpeechInputState state() const { return m_state; }
+
+    // SpeechInputListener methods.
+    void didCompleteRecording(int);
+    void didCompleteRecognition(int);
+    void setRecognitionResult(int, const String& result);
+
+private:
+    InputFieldSpeechButtonElement(HTMLElement*);
+    SpeechInput* speechInput();
+    void setState(SpeechInputState state);
+
+    bool m_capturing;
+    SpeechInputState m_state;
+    int m_listenerId;
+};
+
+#endif // ENABLE(INPUT_SPEECH)
+
+} // namespace
 
 #endif

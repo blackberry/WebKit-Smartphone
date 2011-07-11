@@ -79,37 +79,37 @@ GraphicsContext::GraphicsContext(HDC hdc, bool hasAlpha)
 // suitable for all clients?
 void GraphicsContext::releaseWindowsContext(HDC hdc, const IntRect& dstRect, bool supportAlphaBlend, bool mayCreateBitmap)
 {
-    if (mayCreateBitmap && hdc && inTransparencyLayer()) {
-        if (dstRect.isEmpty())
-            return;
-
-        HBITMAP bitmap = static_cast<HBITMAP>(GetCurrentObject(hdc, OBJ_BITMAP));
-
-        // Need to make a CGImage out of the bitmap's pixel buffer and then draw
-        // it into our context.
-        BITMAP info;
-        GetObject(bitmap, sizeof(info), &info);
-        ASSERT(info.bmBitsPixel == 32);
-
-        CGColorSpaceRef deviceRGB = CGColorSpaceCreateDeviceRGB();
-        CGContextRef bitmapContext = CGBitmapContextCreate(info.bmBits, info.bmWidth, info.bmHeight, 8,
-                                                           info.bmWidthBytes, deviceRGB, kCGBitmapByteOrder32Little | 
-                                                           (supportAlphaBlend ? kCGImageAlphaPremultipliedFirst : kCGImageAlphaNoneSkipFirst));
-        CGColorSpaceRelease(deviceRGB);
-
-        CGImageRef image = CGBitmapContextCreateImage(bitmapContext);
-        CGContextDrawImage(m_data->m_cgContext.get(), dstRect, image);
-        
-        // Delete all our junk.
-        CGImageRelease(image);
-        CGContextRelease(bitmapContext);
-        ::DeleteDC(hdc);
-        ::DeleteObject(bitmap);
-
+    bool createdBitmap = mayCreateBitmap && (!m_data->m_hdc || inTransparencyLayer());
+    if (!createdBitmap) {
+        m_data->restore();
         return;
     }
 
-    m_data->restore();
+    if (dstRect.isEmpty())
+        return;
+
+    HBITMAP bitmap = static_cast<HBITMAP>(GetCurrentObject(hdc, OBJ_BITMAP));
+
+    // Need to make a CGImage out of the bitmap's pixel buffer and then draw
+    // it into our context.
+    BITMAP info;
+    GetObject(bitmap, sizeof(info), &info);
+    ASSERT(info.bmBitsPixel == 32);
+
+    CGColorSpaceRef deviceRGB = CGColorSpaceCreateDeviceRGB();
+    CGContextRef bitmapContext = CGBitmapContextCreate(info.bmBits, info.bmWidth, info.bmHeight, 8,
+                                                       info.bmWidthBytes, deviceRGB, kCGBitmapByteOrder32Little | 
+                                                       (supportAlphaBlend ? kCGImageAlphaPremultipliedFirst : kCGImageAlphaNoneSkipFirst));
+    CGColorSpaceRelease(deviceRGB);
+
+    CGImageRef image = CGBitmapContextCreateImage(bitmapContext);
+    CGContextDrawImage(m_data->m_cgContext.get(), dstRect, image);
+    
+    // Delete all our junk.
+    CGImageRelease(image);
+    CGContextRelease(bitmapContext);
+    ::DeleteDC(hdc);
+    ::DeleteObject(bitmap);
 }
 
 void GraphicsContext::drawWindowsBitmap(WindowsBitmap* image, const IntPoint& point)
@@ -176,9 +176,12 @@ static const Color& grammarPatternColor() {
     return grammarColor;
 }
 
-void GraphicsContext::drawLineForMisspellingOrBadGrammar(const IntPoint& point, int width, bool grammar)
+void GraphicsContext::drawLineForTextChecking(const IntPoint& point, int width, TextCheckingLineStyle style)
 {
     if (paintingDisabled())
+        return;
+
+    if (style != TextCheckingSpellingLineStyle && style != TextCheckingGrammarLineStyle)
         return;
 
     // These are the same for misspelling or bad grammar
@@ -201,7 +204,7 @@ void GraphicsContext::drawLineForMisspellingOrBadGrammar(const IntPoint& point, 
     CGContextRef context = platformContext();
     CGContextSaveGState(context);
 
-    const Color& patternColor = grammar ? grammarPatternColor() : spellingPatternColor();
+    const Color& patternColor = style == TextCheckingGrammarLineStyle ? grammarPatternColor() : spellingPatternColor();
     setCGStrokeColor(context, patternColor);
 
     wkSetPatternPhaseInUserSpace(context, point);

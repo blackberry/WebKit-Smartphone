@@ -26,6 +26,7 @@
 #ifndef AccessibilityUIElement_h
 #define AccessibilityUIElement_h
 
+#include "AccessibilityTextMarker.h"
 #include <JavaScriptCore/JSObjectRef.h>
 #include <wtf/Platform.h>
 #include <wtf/Vector.h>
@@ -40,8 +41,8 @@ typedef struct objc_object* PlatformUIElement;
 #undef _WINSOCKAPI_
 #define _WINSOCKAPI_ // Prevent inclusion of winsock.h in windows.h
 
-#include <oleacc.h>
 #include <WebCore/COMPtr.h>
+#include <oleacc.h>
 
 typedef COMPtr<IAccessible> PlatformUIElement;
 #elif PLATFORM(GTK)
@@ -91,6 +92,8 @@ public:
     // Methods - platform-independent implementations
     JSStringRef allAttributes();
     JSStringRef attributesOfLinkedUIElements();
+    AccessibilityUIElement linkedUIElementAtIndex(unsigned);
+    
     JSStringRef attributesOfDocumentLinks();
     JSStringRef attributesOfChildren();
     JSStringRef parameterizedAttributeNames();
@@ -135,6 +138,7 @@ public:
     bool isVisible() const;
     bool isOffScreen() const;
     bool isCollapsed() const;
+    bool isIgnored() const;
     bool hasPopup() const;
     int hierarchicalLevel() const;
     double clickPointX();
@@ -175,10 +179,21 @@ public:
     JSStringRef boundsForRange(unsigned location, unsigned length);
     void setSelectedTextRange(unsigned location, unsigned length);
     JSStringRef stringForRange(unsigned location, unsigned length);
+    JSStringRef attributedStringForRange(unsigned location, unsigned length);
+    bool attributedStringRangeIsMisspelled(unsigned location, unsigned length);
     
     // Table-specific
     AccessibilityUIElement cellForColumnAndRow(unsigned column, unsigned row);
 
+    // Text markers.
+    AccessibilityTextMarkerRange textMarkerRangeForElement(AccessibilityUIElement*);    
+    AccessibilityTextMarkerRange textMarkerRangeForMarkers(AccessibilityTextMarker* startMarker, AccessibilityTextMarker* endMarker);
+    AccessibilityTextMarker startTextMarkerForTextMarkerRange(AccessibilityTextMarkerRange*);
+    AccessibilityTextMarker endTextMarkerForTextMarkerRange(AccessibilityTextMarkerRange*);
+    AccessibilityTextMarker textMarkerForPoint(int x, int y);
+    AccessibilityUIElement accessibilityElementForTextMarker(AccessibilityTextMarker*);
+    int textMarkerRangeLength(AccessibilityTextMarkerRange*);
+    
     // Notifications
     // Function callback should take one argument, the name of the notification.
     bool addNotificationListener(JSObjectRef functionCallback);

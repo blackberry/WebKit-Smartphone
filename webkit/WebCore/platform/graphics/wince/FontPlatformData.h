@@ -22,12 +22,13 @@
  *
  */
 
-#ifndef FontPlatformDataWince_H
-#define FontPlatformDataWince_H
+#ifndef FontPlatformData_h
+#define FontPlatformData_h
 
 #include "FontDescription.h"
-#include "StringImpl.h"
+#include <wtf/Forward.h>
 #include <wtf/Noncopyable.h>
+#include <wtf/text/StringImpl.h>
 
 typedef struct tagTEXTMETRICW TEXTMETRIC;
 typedef struct tagLOGFONTW LOGFONT;
@@ -35,7 +36,6 @@ typedef struct tagLOGFONTW LOGFONT;
 namespace WebCore {
 
     class FontPlatformPrivateData;
-    class String;
 
     class FontPlatformData {
 

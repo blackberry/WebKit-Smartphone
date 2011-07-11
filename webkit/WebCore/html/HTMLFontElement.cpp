@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Simon Hausmann <hausmann@kde.org>
- * Copyright (C) 2003, 2006, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2003, 2006, 2008, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -38,6 +38,11 @@ HTMLFontElement::HTMLFontElement(const QualifiedName& tagName, Document* documen
     : HTMLElement(tagName, document)
 {
     ASSERT(hasTagName(fontTag));
+}
+
+PassRefPtr<HTMLFontElement> HTMLFontElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new HTMLFontElement(tagName, document));
 }
 
 // Allows leading spaces.
@@ -142,36 +147,6 @@ void HTMLFontElement::parseMappedAttribute(Attribute* attr)
         addCSSProperty(attr, CSSPropertyFontFamily, attr->value());
     } else
         HTMLElement::parseMappedAttribute(attr);
-}
-
-String HTMLFontElement::color() const
-{
-    return getAttribute(colorAttr);
-}
-
-void HTMLFontElement::setColor(const String& value)
-{
-    setAttribute(colorAttr, value);
-}
-
-String HTMLFontElement::face() const
-{
-    return getAttribute(faceAttr);
-}
-
-void HTMLFontElement::setFace(const String& value)
-{
-    setAttribute(faceAttr, value);
-}
-
-String HTMLFontElement::size() const
-{
-    return getAttribute(sizeAttr);
-}
-
-void HTMLFontElement::setSize(const String& value)
-{
-    setAttribute(sizeAttr, value);
 }
 
 }

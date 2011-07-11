@@ -26,23 +26,20 @@
 #ifndef WebView_h
 #define WebView_h
 
+#include "APIObject.h"
 #include "PageClient.h"
 #include "WebPageProxy.h"
 #include <WebCore/WindowMessageListener.h>
+#include <wtf/Forward.h>
 #include <wtf/PassRefPtr.h>
-#include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
-
-namespace WebCore {
-    class String;
-}
 
 namespace WebKit {
 
 class DrawingAreaProxy;
 class WebPageNamespace;
 
-class WebView : public RefCounted<WebView>, public PageClient, WebCore::WindowMessageListener {
+class WebView : public APIObject, public PageClient, WebCore::WindowMessageListener {
 public:
     static PassRefPtr<WebView> create(RECT rect, WebPageNamespace* pageNamespace, HWND hostWindow)
     {
@@ -54,15 +51,15 @@ public:
 
     HWND window() const { return m_window; }
     HWND hostWindow() const { return m_hostWindow; }
-
-    // FIXME: This needs to be exposed as API in WKView along with a way
-    // to change the hostWindow.
+    void setHostWindow(HWND);
     void windowAncestryDidChange();
 
     WebPageProxy* page() const { return m_page.get(); }
 
 private:
     WebView(RECT, WebPageNamespace*, HWND hostWindow);
+
+    virtual Type type() const { return TypeView; }
 
     static bool registerWebViewWindowClass();
     static LRESULT CALLBACK WebViewWndProc(HWND, UINT, WPARAM, LPARAM);
@@ -72,12 +69,14 @@ private:
     LRESULT onWheelEvent(HWND hWnd, UINT message, WPARAM, LPARAM, bool& handled);
     LRESULT onKeyEvent(HWND hWnd, UINT message, WPARAM, LPARAM, bool& handled);
     LRESULT onPaintEvent(HWND hWnd, UINT message, WPARAM, LPARAM, bool& handled);
+    LRESULT onPrintClientEvent(HWND hWnd, UINT message, WPARAM, LPARAM, bool& handled);
     LRESULT onSizeEvent(HWND hWnd, UINT message, WPARAM, LPARAM, bool& handled);
     LRESULT onWindowPositionChangedEvent(HWND hWnd, UINT message, WPARAM, LPARAM, bool& handled);
     LRESULT onSetFocusEvent(HWND hWnd, UINT message, WPARAM, LPARAM, bool& handled);
     LRESULT onKillFocusEvent(HWND hWnd, UINT message, WPARAM, LPARAM, bool& handled);
     LRESULT onTimerEvent(HWND hWnd, UINT message, WPARAM, LPARAM, bool& handled);
     LRESULT onShowWindowEvent(HWND hWnd, UINT message, WPARAM, LPARAM, bool& handled);
+    LRESULT onSetCursor(HWND hWnd, UINT message, WPARAM, LPARAM, bool& handled);
 
     bool isActive();
     void updateActiveState();
@@ -88,11 +87,21 @@ private:
     void startTrackingMouseLeave();
     void stopTrackingMouseLeave();
 
+    void close();
+
     // PageClient
     virtual void processDidExit();
     virtual void processDidRevive();
     virtual void takeFocus(bool direction);
-    virtual void toolTipChanged(const WebCore::String&, const WebCore::String&);
+    virtual void toolTipChanged(const WTF::String&, const WTF::String&);
+    virtual void setCursor(const WebCore::Cursor&);
+    virtual void registerEditCommand(PassRefPtr<WebEditCommandProxy>, UndoOrRedo);
+    virtual void clearAllEditCommands();
+
+#if USE(ACCELERATED_COMPOSITING)
+    virtual void pageDidEnterAcceleratedCompositing();
+    virtual void pageDidLeaveAcceleratedCompositing();
+#endif
 
     // WebCore::WindowMessageListener
     virtual void windowReceivedMessage(HWND, UINT message, WPARAM, LPARAM);
@@ -103,7 +112,10 @@ private:
     HWND m_topLevelParentWindow;
     HWND m_toolTipWindow;
 
+    HCURSOR m_lastCursorSet;
+
     bool m_trackingMouseLeave;
+    bool m_isBeingDestroyed;
 
     RefPtr<WebPageProxy> m_page;
 };

@@ -763,6 +763,7 @@ IconDatabase::IconDatabase()
     , m_threadTerminationRequested(false)
     , m_removeIconsRequested(false)
     , m_iconURLImportComplete(false)
+    , m_disabledSuddenTerminationForSyncThread(false)
     , m_initialPruningComplete(false)
     , m_client(defaultClient())
     , m_imported(false)
@@ -801,13 +802,17 @@ void IconDatabase::notifyPendingLoadDecisions()
 
 void IconDatabase::wakeSyncThread()
 {
-    // The following is balanced by the call to enableSuddenTermination in the
-    // syncThreadMainLoop function.
-    // FIXME: It would be better to only disable sudden termination if we have
-    // something to write, not just if we have something to read.
-    disableSuddenTermination();
-
     MutexLocker locker(m_syncLock);
+
+    if (!m_disabledSuddenTerminationForSyncThread) {
+        m_disabledSuddenTerminationForSyncThread = true;
+        // The following is balanced by the call to enableSuddenTermination in the
+        // syncThreadMainLoop function.
+        // FIXME: It would be better to only disable sudden termination if we have
+        // something to write, not just if we have something to read.
+        disableSuddenTermination();
+    }
+
     m_syncCondition.signal();
 }
 
@@ -1310,7 +1315,7 @@ void IconDatabase::performURLImport()
         }
     }
 
-    LOG(IconDatabase, "Notifying %zu interested page URLs that their icon URL is known due to the import", urlsToNotify.size());
+    LOG(IconDatabase, "Notifying %lu interested page URLs that their icon URL is known due to the import", static_cast<unsigned long>(urlsToNotify.size()));
     // Now that we don't hold any locks, perform the actual notifications
     for (unsigned i = 0; i < urlsToNotify.size(); ++i) {
         LOG(IconDatabase, "Notifying icon info known for pageURL %s", urlsToNotify[i].ascii().data());
@@ -1406,7 +1411,9 @@ void* IconDatabase::syncThreadMainLoop()
             // The following is balanced by the call to disableSuddenTermination in the
             // wakeSyncThread function. Any time we wait on the condition, we also have
             // to enableSuddenTermation, after doing the next batch of work.
+            ASSERT(m_disabledSuddenTerminationForSyncThread);
             enableSuddenTermination();
+            m_disabledSuddenTerminationForSyncThread = false;
         }
 
         m_syncCondition.wait(m_syncLock);
@@ -1423,7 +1430,9 @@ void* IconDatabase::syncThreadMainLoop()
         // The following is balanced by the call to disableSuddenTermination in the
         // wakeSyncThread function. Any time we wait on the condition, we also have
         // to enableSuddenTermation, after doing the next batch of work.
+        ASSERT(m_disabledSuddenTerminationForSyncThread);
         enableSuddenTermination();
+        m_disabledSuddenTerminationForSyncThread = false;
     }
 
     return 0;
@@ -1634,11 +1643,19 @@ void IconDatabase::pruneUnretainedIcons()
         SQLiteStatement pageDeleteSQL(m_syncDB, "DELETE FROM PageURL WHERE rowid = (?);");
         pageDeleteSQL.prepare();
         for (size_t i = 0; i < numToDelete; ++i) {
+#if OS(WINDOWS)
+            LOG(IconDatabase, "Pruning page with rowid %I64i from disk", static_cast<long long>(pageIDsToDelete[i]));
+#else
             LOG(IconDatabase, "Pruning page with rowid %lli from disk", static_cast<long long>(pageIDsToDelete[i]));
+#endif
             pageDeleteSQL.bindInt64(1, pageIDsToDelete[i]);
             int result = pageDeleteSQL.step();
             if (result != SQLResultDone)
+#if OS(WINDOWS)
+                LOG_ERROR("Unabled to delete page with id %I64i from disk", static_cast<long long>(pageIDsToDelete[i]));
+#else
                 LOG_ERROR("Unabled to delete page with id %lli from disk", static_cast<long long>(pageIDsToDelete[i]));
+#endif
             pageDeleteSQL.reset();
             
             // If the thread was asked to terminate, we should commit what pruning we've done so far, figuring we can
@@ -1824,7 +1841,7 @@ inline void readySQLiteStatement(OwnPtr<SQLiteStatement>& statement, SQLiteDatab
         statement.set(0);
     }
     if (!statement) {
-        statement.set(new SQLiteStatement(db, str));
+        statement = adoptPtr(new SQLiteStatement(db, str));
         if (statement->prepare() != SQLResultOk)
             LOG_ERROR("Preparing statement %s failed", str.ascii().data());
     }

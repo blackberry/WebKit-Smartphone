@@ -1,0 +1,10 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x95
+  RenderBlock {HTML} at (0,0) size 800x95
+    RenderBody {BODY} at (8,16) size 784x63
+      RenderBlock {P} at (0,0) size 176x63 [bgcolor=#FFFFFF] [border: (16px solid #008000)]
+        RenderText {#text} at (16,1) size 152x61
+          text run at (16,1) width 152: "There should be a green"
+          text run at (16,22) width 142: "block to the left of this"
+          text run at (16,43) width 27: "text."

@@ -20,38 +20,44 @@
  * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
  * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
 
 #ifndef ScriptExecutionContext_h
 #define ScriptExecutionContext_h
 
+#include "ActiveDOMObject.h"
 #include "Console.h"
 #include "KURL.h"
+#include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/PassOwnPtr.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Threading.h>
+#include <wtf/text/StringHash.h>
+
+#if USE(JSC)
+#include <runtime/JSGlobalData.h>
+#endif
 
 namespace WebCore {
 
-    class ActiveDOMObject;
+    class Blob;
 #if ENABLE(DATABASE)
     class Database;
     class DatabaseTaskSynchronizer;
     class DatabaseThread;
 #endif
     class DOMTimer;
-#if ENABLE(FILE_READER) || ENABLE(FILE_WRITER)
+#if ENABLE(BLOB) || ENABLE(FILE_WRITER)
     class FileThread;
 #endif
     class MessagePort;
     class SecurityOrigin;
     class ScriptString;
-    class String;
 #if ENABLE(INSPECTOR)
     class InspectorController;
 #endif
@@ -70,8 +76,6 @@ namespace WebCore {
         DatabaseThread* databaseThread();
         void setHasOpenDatabases() { m_hasOpenDatabases = true; }
         bool hasOpenDatabases() const { return m_hasOpenDatabases; }
-        void addOpenDatabase(Database*);
-        void removeOpenDatabase(Database*);
         // When the database cleanup is done, cleanupSync will be signalled.
         void stopDatabases(DatabaseTaskSynchronizer*);
 #endif
@@ -90,12 +94,12 @@ namespace WebCore {
 
         virtual void reportException(const String& errorMessage, int lineNumber, const String& sourceURL) = 0;
         virtual void addMessage(MessageSource, MessageType, MessageLevel, const String& message, unsigned lineNumber, const String& sourceURL) = 0;
-        
+
         // Active objects are not garbage collected even if inaccessible, e.g. because their activity may result in callbacks being invoked.
         bool canSuspendActiveDOMObjects();
         // Active objects can be asked to suspend even if canSuspendActiveDOMObjects() returns 'false' -
         // step-by-step JS debugging is one example.
-        void suspendActiveDOMObjects();
+        void suspendActiveDOMObjects(ActiveDOMObject::ReasonForSuspension);
         void resumeActiveDOMObjects();
         void stopActiveDOMObjects();
         void createdActiveDOMObject(ActiveDOMObject*, void* upcastPointer);
@@ -127,11 +131,16 @@ namespace WebCore {
         void removeTimeout(int timeoutId);
         DOMTimer* findTimeout(int timeoutId);
 
+#if ENABLE(BLOB)
+        KURL createPublicBlobURL(Blob*);
+        void revokePublicBlobURL(const KURL&);
+#endif
+
 #if USE(JSC)
         JSC::JSGlobalData* globalData();
 #endif
 
-#if ENABLE(FILE_READER) || ENABLE(FILE_WRITER)
+#if ENABLE(BLOB) || ENABLE(FILE_WRITER)
         FileThread* fileThread();
         void stopFileThread();
 #endif
@@ -150,6 +159,8 @@ namespace WebCore {
         virtual const KURL& virtualURL() const = 0;
         virtual KURL virtualCompleteURL(const String&) const = 0;
 
+        void closeMessagePorts();
+
         RefPtr<SecurityOrigin> m_securityOrigin;
 
         HashSet<MessagePort*> m_messagePorts;
@@ -158,17 +169,19 @@ namespace WebCore {
 
         HashMap<int, DOMTimer*> m_timeouts;
 
+#if ENABLE(BLOB)
+        HashSet<String> m_publicBlobURLs;
+#endif
+
         virtual void refScriptExecutionContext() = 0;
         virtual void derefScriptExecutionContext() = 0;
 
 #if ENABLE(DATABASE)
         RefPtr<DatabaseThread> m_databaseThread;
         bool m_hasOpenDatabases; // This never changes back to false, even after the database thread is closed.
-        typedef HashSet<Database* > DatabaseSet;
-        OwnPtr<DatabaseSet> m_openDatabaseSet;
 #endif
 
-#if ENABLE(FILE_READER) || ENABLE(FILE_WRITER)
+#if ENABLE(BLOB) || ENABLE(FILE_WRITER)
         RefPtr<FileThread> m_fileThread;
 #endif
     };

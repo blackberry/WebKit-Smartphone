@@ -26,25 +26,29 @@
 #ifndef WebNavigationData_h
 #define WebNavigationData_h
 
+#include "APIObject.h"
 #include "WebNavigationDataStore.h"
 #include <wtf/PassRefPtr.h>
-#include <wtf/RefCounted.h>
 
 namespace WebKit {
 
-class WebNavigationData : public RefCounted<WebNavigationData> {
+class WebNavigationData : public APIObject {
 public:
+    static const Type APIType = TypeNavigationData;
+
     static PassRefPtr<WebNavigationData> create(const WebNavigationDataStore& store)
     {
         return adoptRef(new WebNavigationData(store));
     }
     ~WebNavigationData();
 
-    WebCore::String title() const { return m_store.title; }
-    WebCore::String url() const { return m_store.url; }
+    WTF::String title() const { return m_store.title; }
+    WTF::String url() const { return m_store.url; }
 
 private:
     WebNavigationData(const WebNavigationDataStore&);
+
+    virtual Type type() const { return APIType; }
 
     WebNavigationDataStore m_store;
 };

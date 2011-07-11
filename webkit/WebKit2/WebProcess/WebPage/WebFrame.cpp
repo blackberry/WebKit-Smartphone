@@ -25,15 +25,30 @@
 
 #include "WebFrame.h"
 
+#include "InjectedBundleNodeHandle.h"
+#include "InjectedBundleScriptWorld.h"
+#include "WebChromeClient.h"
 #include "WebPage.h"
+#include "WebProcess.h"
+#include <JavaScriptCore/APICast.h>
+#include <JavaScriptCore/JSLock.h>
+#include <WebCore/AnimationController.h>
+#include <WebCore/CSSComputedStyleDeclaration.h>
+#include <WebCore/Chrome.h>
+#include <WebCore/DocumentLoader.h>
 #include <WebCore/Frame.h>
 #include <WebCore/HTMLFrameOwnerElement.h>
-#include <WebCore/PlatformString.h>
+#include <WebCore/JSCSSStyleDeclaration.h>
+#include <WebCore/JSElement.h>
+#include <WebCore/Page.h>
+#include <WebCore/RenderTreeAsText.h>
+#include <WebCore/TextResourceDecoder.h>
 
 #ifndef NDEBUG
 #include <wtf/RefCountedLeakCounter.h>
 #endif
 
+using namespace JSC;
 using namespace WebCore;
 
 namespace WebKit {
@@ -56,26 +71,33 @@ static uint64_t generateListenerID()
 
 PassRefPtr<WebFrame> WebFrame::createMainFrame(WebPage* page)
 {
-    return adoptRef(new WebFrame(page, String(), 0));
+    return create(page, String(), 0);
 }
 
 PassRefPtr<WebFrame> WebFrame::createSubframe(WebPage* page, const String& frameName, HTMLFrameOwnerElement* ownerElement)
 {
-    return adoptRef(new WebFrame(page, frameName, ownerElement));
+    return create(page, frameName, ownerElement);
+}
+
+PassRefPtr<WebFrame> WebFrame::create(WebPage* page, const String& frameName, HTMLFrameOwnerElement* ownerElement)
+{
+    RefPtr<WebFrame> frame = adoptRef(new WebFrame(page, frameName, ownerElement));
+    
+    // Add explict ref() that will be balanced in WebFrameLoaderClient::frameLoaderDestroyed().
+    frame->ref();
+    
+    return frame.release();
 }
 
 WebFrame::WebFrame(WebPage* page, const String& frameName, HTMLFrameOwnerElement* ownerElement)
-    : m_page(page)
-    , m_coreFrame(0)
+    : m_coreFrame(0)
     , m_policyListenerID(0)
     , m_policyFunction(0)
     , m_frameLoaderClient(this)
+    , m_loadListener(0)
     , m_frameID(generateFrameID())
 {
-    // Add explict ref() that will be balanced in WebFrameLoaderClient::frameLoaderDestroyed().
-    ref();
-
-    m_page->addWebFrame(m_frameID, this);
+    WebProcess::shared().addWebFrame(m_frameID, this);
 
     RefPtr<Frame> frame = Frame::create(page->corePage(), ownerElement, &m_frameLoaderClient);
     m_coreFrame = frame.get();
@@ -103,9 +125,20 @@ WebFrame::~WebFrame()
 #endif
 }
 
+WebPage* WebFrame::page() const
+{ 
+    if (!m_coreFrame)
+        return 0;
+    
+    if (WebCore::Page* page = m_coreFrame->page())
+        return static_cast<WebChromeClient*>(page->chrome()->client())->page();
+
+    return 0;
+}
+
 void WebFrame::invalidate()
 {
-    m_page->removeWebFrame(m_frameID);
+    WebProcess::shared().removeWebFrame(m_frameID);
     m_coreFrame = 0;
 }
 
@@ -147,6 +180,171 @@ void WebFrame::didReceivePolicyDecision(uint64_t listenerID, PolicyAction action
     invalidatePolicyListener();
 
     (m_coreFrame->loader()->policyChecker()->*function)(action);
+}
+
+String WebFrame::source() const 
+{
+    if (!m_coreFrame)
+        return String();
+    Document* document = m_coreFrame->document();
+    if (!document)
+        return String();
+    TextResourceDecoder* decoder = document->decoder();
+    if (!decoder)
+        return String();
+    DocumentLoader* documentLoader = m_coreFrame->loader()->activeDocumentLoader();
+    if (!documentLoader)
+        return String();
+    RefPtr<SharedBuffer> mainResourceData = documentLoader->mainResourceData();
+    if (!mainResourceData)
+        return String();
+    return decoder->encoding().decode(mainResourceData->data(), mainResourceData->size());
+}
+
+bool WebFrame::isMainFrame() const
+{
+    if (WebPage* p = page())
+        return p->mainFrame() == this;
+
+    return false;
+}
+
+String WebFrame::name() const
+{
+    if (!m_coreFrame)
+        return String();
+
+    return m_coreFrame->tree()->name();
+}
+
+String WebFrame::url() const
+{
+    if (!m_coreFrame)
+        return String();
+
+    return m_coreFrame->loader()->url().string();
+}
+
+String WebFrame::innerText() const
+{
+    if (!m_coreFrame)
+        return String();
+
+    if (!m_coreFrame->document()->documentElement())
+        return String();
+
+    return m_coreFrame->document()->documentElement()->innerText();
+}
+
+PassRefPtr<ImmutableArray> WebFrame::childFrames()
+{
+    if (!m_coreFrame)
+        return ImmutableArray::create();
+
+    size_t size = m_coreFrame->tree()->childCount();
+    if (!size)
+        return ImmutableArray::create();
+
+    Vector<RefPtr<APIObject> > vector;
+    vector.reserveInitialCapacity(size);
+
+    for (Frame* child = m_coreFrame->tree()->firstChild(); child; child = child->tree()->nextSibling()) {
+        WebFrame* webFrame = static_cast<WebFrameLoaderClient*>(child->loader()->client())->webFrame();
+        vector.uncheckedAppend(webFrame);
+    }
+
+    return ImmutableArray::adopt(vector);
+}
+
+unsigned WebFrame::numberOfActiveAnimations()
+{
+    if (!m_coreFrame)
+        return 0;
+
+    AnimationController* controller = m_coreFrame->animation();
+    if (!controller)
+        return 0;
+
+    return controller->numberOfActiveAnimations();
+}
+
+bool WebFrame::pauseAnimationOnElementWithId(const String& animationName, const String& elementID, double time)
+{
+    if (!m_coreFrame)
+        return false;
+
+    AnimationController* controller = m_coreFrame->animation();
+    if (!controller)
+        return false;
+
+    if (!m_coreFrame->document())
+        return false;
+
+    Node* coreNode = m_coreFrame->document()->getElementById(elementID);
+    if (!coreNode || !coreNode->renderer())
+        return false;
+
+    return controller->pauseAnimationAtTime(coreNode->renderer(), animationName, time);
+}
+
+unsigned WebFrame::pendingUnloadCount()
+{
+    if (!m_coreFrame)
+        return 0;
+
+    return m_coreFrame->domWindow()->pendingUnloadEventListeners();
+}
+
+JSGlobalContextRef WebFrame::jsContext()
+{
+    return toGlobalRef(m_coreFrame->script()->globalObject(mainThreadNormalWorld())->globalExec());
+}
+
+JSGlobalContextRef WebFrame::jsContextForWorld(InjectedBundleScriptWorld* world)
+{
+    return toGlobalRef(m_coreFrame->script()->globalObject(world->coreWorld())->globalExec());
+}
+
+JSValueRef WebFrame::jsWrapperForWorld(InjectedBundleNodeHandle* nodeHandle, InjectedBundleScriptWorld* world)
+{
+    JSDOMWindow* globalObject = m_coreFrame->script()->globalObject(world->coreWorld());
+    ExecState* exec = globalObject->globalExec();
+
+    JSLock lock(SilenceAssertionsOnly);
+    return toRef(exec, toJS(exec, globalObject, nodeHandle->coreNode()));
+}
+
+JSValueRef WebFrame::computedStyleIncludingVisitedInfo(JSObjectRef element)
+{
+    if (!m_coreFrame)
+        return 0;
+
+    JSDOMWindow* globalObject = m_coreFrame->script()->globalObject(mainThreadNormalWorld());
+    ExecState* exec = globalObject->globalExec();
+
+    if (!toJS(element)->inherits(&JSElement::s_info))
+        return JSValueMakeUndefined(toRef(exec));
+
+    RefPtr<CSSComputedStyleDeclaration> style = computedStyle(static_cast<JSElement*>(toJS(element))->impl(), true);
+
+    JSLock lock(SilenceAssertionsOnly);
+    return toRef(exec, toJS(exec, globalObject, style.get()));
+}
+
+String WebFrame::counterValue(JSObjectRef element)
+{
+    if (!toJS(element)->inherits(&JSElement::s_info))
+        return String();
+
+    return counterValueForElement(static_cast<JSElement*>(toJS(element))->impl());
+}
+
+String WebFrame::markerText(JSObjectRef element)
+{
+    if (!toJS(element)->inherits(&JSElement::s_info))
+        return String();
+
+    return markerTextForListItem(static_cast<JSElement*>(toJS(element))->impl());
 }
 
 } // namespace WebKit

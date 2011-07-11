@@ -41,14 +41,14 @@ public:
     RenderPath(SVGStyledTransformableElement*);
 
     const Path& path() const { return m_path; }
-    void setNeedsBoundariesUpdate() { m_needsBoundariesUpdate = true; }
     void setNeedsPathUpdate() { m_needsPathUpdate = true; }
+    virtual void setNeedsBoundariesUpdate() { m_needsBoundariesUpdate = true; }
     virtual void setNeedsTransformUpdate() { m_needsTransformUpdate = true; }
 
 private:
     // Hit-detection seperated for the fill and the stroke
-    bool fillContains(const FloatPoint&, bool requiresFill = true) const;
-    bool strokeContains(const FloatPoint&, bool requiresStroke = true) const;
+    bool fillContains(const FloatPoint&, bool requiresFill = true, WindRule fillRule = RULE_NONZERO);
+    bool strokeContains(const FloatPoint&, bool requiresStroke = true);
 
     virtual FloatRect objectBoundingBox() const { return m_fillBoundingBox; }
     virtual FloatRect strokeBoundingBox() const { return m_strokeAndMarkerBoundingBox; }
@@ -63,13 +63,13 @@ private:
     virtual void addFocusRingRects(Vector<IntRect>&, int tx, int ty);
 
     virtual bool nodeAtFloatPoint(const HitTestRequest&, HitTestResult&, const FloatPoint& pointInParent, HitTestAction);
-    virtual void styleWillChange(StyleDifference, const RenderStyle*);
 
     FloatRect calculateMarkerBoundsIfNeeded();
     void updateCachedBoundaries();
 
 private:
     virtual AffineTransform localTransform() const { return m_localTransform; }
+    void fillAndStrokePath(GraphicsContext*);
 
     bool m_needsBoundariesUpdate : 1;
     bool m_needsPathUpdate : 1;

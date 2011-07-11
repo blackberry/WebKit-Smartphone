@@ -26,10 +26,9 @@
 #ifndef WebPageNamespace_h
 #define WebPageNamespace_h
 
+#include "APIObject.h"
 #include "WebContext.h"
-#include "WebProcessProxy.h"
 #include <wtf/PassRefPtr.h>
-#include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 
 struct WKContextStatistics;
@@ -38,8 +37,10 @@ namespace WebKit {
 
 class WebContext;
 
-class WebPageNamespace : public RefCounted<WebPageNamespace> {
+class WebPageNamespace : public APIObject {
 public:
+    static const Type APIType = TypePageNamespace;
+
     static PassRefPtr<WebPageNamespace> create(WebContext* context)
     {
         return adoptRef(new WebPageNamespace(context));
@@ -50,9 +51,8 @@ public:
     WebPageProxy* createWebPage();    
 
     WebContext* context() const { return m_context.get(); }
-    WebProcessProxy* process() const { return m_process.get(); }
-
-    void reviveIfNecessary();
+    WebProcessProxy* process() const { return m_context->process(); }
+    void reviveIfNecessary() { m_context->reviveIfNecessary(); }
 
     void preferencesDidChange();
 
@@ -60,11 +60,10 @@ public:
 
 private:
     WebPageNamespace(WebContext*);
-    
-    void ensureWebProcess();
-    
+
+    virtual Type type() const { return APIType; }
+
     RefPtr<WebContext> m_context;
-    RefPtr<WebProcessProxy> m_process;
 };
 
 } // namespace WebKit

@@ -1,3 +1,6 @@
+
+include(../common.pri)
+
 CONFIG(standalone_package) {
     isEmpty(WC_GENERATED_SOURCES_DIR):WC_GENERATED_SOURCES_DIR = $$PWD/generated
 } else {
@@ -7,6 +10,9 @@ CONFIG(standalone_package) {
 CONFIG(minimal) {
   DEFINES += ENABLE_NETSCAPE_PLUGIN_API=0
 }
+
+## load mobilityconfig if mobility is available 
+load(mobilityconfig, true)
 
 ## Define default features macros for optional components
 ## (look for defs in config.h and included files!)
@@ -51,8 +57,7 @@ DEFINES += \
     ENABLE_VIDEO=1 \
     ENABLE_PLUGIN_PROXY_FOR_VIDEO=1 \
     ENABLE_NETSCAPE_PLUGIN_API=0 \
-    ENABLE_XSLT=1 \
-    ENABLE_TOUCH_EVENTS=1
+    ENABLE_XSLT=1
 
 !contains(DEFINES, ENABLE_JAVASCRIPT_DEBUGGER=.): DEFINES += ENABLE_JAVASCRIPT_DEBUGGER=1
 !contains(DEFINES, ENABLE_DATABASE=.): DEFINES += ENABLE_DATABASE=1
@@ -62,8 +67,12 @@ DEFINES += \
 !contains(DEFINES, ENABLE_ICONDATABASE=.): DEFINES += ENABLE_ICONDATABASE=1
 !contains(DEFINES, ENABLE_CHANNEL_MESSAGING=.): DEFINES += ENABLE_CHANNEL_MESSAGING=1
 !contains(DEFINES, ENABLE_ORIENTATION_EVENTS=.): DEFINES += ENABLE_ORIENTATION_EVENTS=1
+!contains(DEFINES, ENABLE_DIRECTORY_UPLOAD=.): DEFINES += ENABLE_DIRECTORY_UPLOAD=0
 !contains(DEFINES, ENABLE_GEOLOCATION=.): DEFINES += ENABLE_GEOLOCATION=1
 olympia-*:!contains(DEFINES, ENABLE_REPAINT_THROTTLING=.): DEFINES += ENABLE_REPAINT_THROTTLING=1
+olympia-*|win32-msvc-fledge: {
+    !contains(DEFINES, ENABLE_FIXED_REPORTED_SIZE=.): DEFINES += ENABLE_FIXED_REPORTED_SIZE=1
+}
 
 # Blur is too slow currently, we prefer to make it a no-op and be performant.
 olympia-*:DEFINES += WTF_USE_OPENVG_BLUR=0
@@ -95,6 +104,8 @@ olympia-*:DEFINES += WTF_USE_OPENVG_BLUR=0
 !contains(DEFINES, ENABLE_PROGRESS_TAG=.): DEFINES += ENABLE_PROGRESS_TAG=1
 !contains(DEFINES, ENABLE_BLOB_SLICE=.): DEFINES += ENABLE_BLOB_SLICE=0
 !contains(DEFINES, ENABLE_NOTIFICATIONS=.): DEFINES += ENABLE_NOTIFICATIONS=1
+!contains(DEFINES, ENABLE_IMAGE_RESIZER=.): DEFINES += ENABLE_IMAGE_RESIZER=0
+!contains(DEFINES, ENABLE_INPUT_SPEECH=.): DEFINES += ENABLE_INPUT_SPEECH=0
 
 greaterThan(QT_MINOR_VERSION, 5) {
     !contains(DEFINES, ENABLE_3D_RENDERING=.): DEFINES += ENABLE_3D_RENDERING=1
@@ -111,9 +122,6 @@ greaterThan(QT_MINOR_VERSION, 5) {
 } else {
     DEFINES += ENABLE_SVG_FONTS=0 ENABLE_SVG_FOREIGN_OBJECT=0 ENABLE_SVG_ANIMATION=0 ENABLE_SVG_AS_IMAGE=0 ENABLE_SVG_USE=0
 }
-
-# HTML5 media support
-!contains(DEFINES, ENABLE_VIDEO=.): DEFINES += ENABLE_VIDEO=1
 
 # HTML5 datalist support
 !contains(DEFINES, ENABLE_DATALIST=.): DEFINES += ENABLE_DATALIST=1
@@ -135,23 +143,33 @@ greaterThan(QT_MINOR_VERSION, 5) {
 # Web Socket support.
 !contains(DEFINES, ENABLE_WEB_SOCKETS=.): DEFINES += ENABLE_WEB_SOCKETS=1
 
+# Web Timing support.
+!contains(DEFINES, ENABLE_WEB_TIMING=.): DEFINES += ENABLE_WEB_TIMING=0
+
 # XSLT support with QtXmlPatterns
 !contains(DEFINES, ENABLE_XSLT=.) {
     contains(QT_CONFIG, xmlpatterns):DEFINES += ENABLE_XSLT=1
     else:DEFINES += ENABLE_XSLT=0
 }
 
-!CONFIG(QTDIR_build):!contains(DEFINES, ENABLE_QT_BEARER=.) {
-    symbian: {
-        exists($${EPOCROOT}epoc32/release/winscw/udeb/QtBearer.lib)| \
-        exists($${EPOCROOT}epoc32/release/armv5/lib/QtBearer.lib) {
-            DEFINES += ENABLE_QT_BEARER=1
-        }
+# geolocation support if QtMobility exists
+!CONFIG(QTDIR_build):!contains(DEFINES, ENABLE_GEOLOCATION=.) {
+    contains(MOBILITY_CONFIG, location) {
+       DEFINES += ENABLE_GEOLOCATION=1
     }
 }
 
 # Bearer management is part of Qt 4.7
-!lessThan(QT_MINOR_VERSION, 7):!contains(DEFINES, ENABLE_QT_BEARER=.):DEFINES += ENABLE_QT_BEARER=1
+# for older version, check for mobility with bearer 
+!contains(DEFINES, ENABLE_QT_BEARER=.) {
+     !lessThan(QT_MINOR_VERSION, 7) {
+        DEFINES += ENABLE_QT_BEARER=1
+     } else {
+        contains(MOBILITY_CONFIG, bearer) {
+            DEFINES += ENABLE_QT_BEARER=1
+        }
+    }
+}
 
 # Used to compute defaults for the build-webkit script
 CONFIG(compute_defaults) {
@@ -203,6 +221,7 @@ contains(DEFINES, ENABLE_SVG=1): FEATURE_DEFINES_BINDINGS += ENABLE_SVG=1
 contains(DEFINES, ENABLE_JAVASCRIPT_DEBUGGER=1): FEATURE_DEFINES_BINDINGS += ENABLE_JAVASCRIPT_DEBUGGER=1
 contains(DEFINES, ENABLE_OFFLINE_WEB_APPLICATIONS=1): FEATURE_DEFINES_BINDINGS += ENABLE_OFFLINE_WEB_APPLICATIONS=1
 contains(DEFINES, ENABLE_WEB_SOCKETS=1): FEATURE_DEFINES_BINDINGS += ENABLE_WEB_SOCKETS=1
+contains(DEFINES, ENABLE_WEB_TIMING=1): FEATURE_DEFINES_BINDINGS += ENABLE_WEB_TIMING=1
 contains(DEFINES, ENABLE_TOUCH_EVENTS=1): FEATURE_DEFINES_BINDINGS += ENABLE_TOUCH_EVENTS=1
 contains(DEFINES, ENABLE_TILED_BACKING_STORE=1): FEATURE_DEFINES_BINDINGS += ENABLE_TILED_BACKING_STORE=1
 contains(DEFINES, ENABLE_NOTIFICATIONS=1): FEATURE_DEFINES_BINDINGS += ENABLE_NOTIFICATIONS=1
@@ -221,7 +240,7 @@ XLINK_NAMES = $$PWD/svg/xlinkattrs.in
 
 TOKENIZER = $$PWD/css/tokenizer.flex
 
-DOCTYPESTRINGS = $$PWD/html/DocTypeStrings.gperf
+DOCTYPESTRINGS_GPERF = $$PWD/html/DocTypeStrings.gperf
 
 CSSBISON = $$PWD/css/CSSGrammar.y
 
@@ -231,9 +250,9 @@ XML_NAMES = $$PWD/xml/xmlattrs.in
 
 XMLNS_NAMES = $$PWD/xml/xmlnsattrs.in
 
-ENTITIES_GPERF = $$PWD/html/HTMLEntityNames.gperf
+HTML_ENTITIES = $$PWD/html/parser/HTMLEntityNames.in
 
-COLORDAT_GPERF = $$PWD/platform/ColorData.gperf
+COLORDATA_GPERF = $$PWD/platform/ColorData.gperf
 
 WALDOCSSPROPS = $$PWD/css/CSSPropertyNames.in
 
@@ -261,7 +280,7 @@ STYLESHEETS_EMBED = \
     $$PWD/css/view-source.css \
     $$PWD/css/wml.css \
     $$PWD/css/mediaControls.css \
-    $$PWD/css/themeOlympia.css
+    $$PWD/css/themeBlackBerry.css
 
 CPP_IDL_BINDINGS += \
     dom/EventListener.idl \
@@ -297,6 +316,7 @@ IDL_BINDINGS += \
     css/WebKitCSSTransformValue.idl \
     dom/Attr.idl \
     dom/BeforeLoadEvent.idl \
+    dom/BeforeProcessEvent.idl \
     dom/CharacterData.idl \
     dom/ClientRect.idl \
     dom/ClientRectList.idl \
@@ -305,6 +325,7 @@ IDL_BINDINGS += \
     dom/Comment.idl \
     dom/CompositionEvent.idl \
     dom/CustomEvent.idl \
+    dom/DeviceMotionEvent.idl \
     dom/DeviceOrientationEvent.idl \
     dom/DocumentFragment.idl \
     dom/Document.idl \
@@ -312,6 +333,7 @@ IDL_BINDINGS += \
     dom/DOMCoreException.idl \
     dom/DOMImplementation.idl \
     dom/DOMStringList.idl \
+    dom/DOMStringMap.idl \
     dom/Element.idl \
     dom/Entity.idl \
     dom/EntityReference.idl \
@@ -349,11 +371,32 @@ IDL_BINDINGS += \
     dom/WebKitAnimationEvent.idl \
     dom/WebKitTransitionEvent.idl \
     dom/WheelEvent.idl \
-    html/Blob.idl \
+    fileapi/Blob.idl \
+    fileapi/BlobBuilder.idl \
+    fileapi/DirectoryEntry.idl \
+    fileapi/DirectoryReader.idl \
+    fileapi/DOMFileSystem.idl \
+    fileapi/EntriesCallback.idl \
+    fileapi/Entry.idl \
+    fileapi/EntryArray.idl \
+    fileapi/EntryCallback.idl \
+    fileapi/ErrorCallback.idl \
+    fileapi/File.idl \
+    fileapi/FileCallback.idl \
+    fileapi/FileEntry.idl \
+    fileapi/FileError.idl \
+    fileapi/FileList.idl \
+    fileapi/FileReader.idl \
+    fileapi/FileSystemCallback.idl \
+    fileapi/FileWriter.idl \
+    fileapi/FileWriterCallback.idl \
+    fileapi/Flags.idl \
+    fileapi/Metadata.idl \
+    fileapi/MetadataCallback.idl \
     html/canvas/ArrayBufferView.idl \
     html/canvas/ArrayBuffer.idl \
     html/canvas/Int8Array.idl \
-    html/canvas/FloatArray.idl \
+    html/canvas/Float32Array.idl \
     html/canvas/CanvasGradient.idl \
     html/canvas/Int32Array.idl \
     html/canvas/CanvasPattern.idl \
@@ -377,10 +420,6 @@ IDL_BINDINGS += \
     html/DataGridColumn.idl \
     html/DataGridColumnList.idl \
     html/DOMFormData.idl \
-    html/File.idl \
-    html/FileError.idl \
-    html/FileList.idl \
-    html/FileReader.idl \
     html/HTMLAllCollection.idl \
     html/HTMLAudioElement.idl \
     html/HTMLAnchorElement.idl \
@@ -460,7 +499,6 @@ IDL_BINDINGS += \
     html/ValidityState.idl \
     html/VoidCallback.idl \
     inspector/InjectedScriptHost.idl \
-    inspector/InspectorBackend.idl \
     inspector/InspectorFrontendHost.idl \
     inspector/JavaScriptCallFrame.idl \
     inspector/ScriptProfile.idl \
@@ -478,31 +516,41 @@ IDL_BINDINGS += \
     page/Geoposition.idl \
     page/History.idl \
     page/Location.idl \
+    page/MemoryInfo.idl \
+    page/Navigation.idl \
     page/Navigator.idl \
+    page/Performance.idl \
     page/PositionError.idl \
     page/Screen.idl \
+    page/Timing.idl \
     page/WebKitPoint.idl \
     page/WorkerNavigator.idl \
-    plugins/Plugin.idl \
-    plugins/MimeType.idl \
-    plugins/PluginArray.idl \
-    plugins/MimeTypeArray.idl \
+    plugins/DOMPlugin.idl \
+    plugins/DOMMimeType.idl \
+    plugins/DOMPluginArray.idl \
+    plugins/DOMMimeTypeArray.idl \
     storage/Database.idl \
     storage/DatabaseCallback.idl \
     storage/DatabaseSync.idl \
     storage/IDBAny.idl \
+    storage/IDBCursor.idl \
     storage/IDBDatabaseError.idl \
     storage/IDBDatabaseException.idl \
-    storage/IDBDatabaseRequest.idl \
+    storage/IDBDatabase.idl \
     storage/IDBErrorEvent.idl \
     storage/IDBEvent.idl \
-    storage/IDBObjectStoreRequest.idl \
+    storage/IDBFactory.idl \
+    storage/IDBIndex.idl \
+    storage/IDBKey.idl \
+    storage/IDBKeyRange.idl \
+    storage/IDBObjectStore.idl \
     storage/IDBRequest.idl \
     storage/IDBSuccessEvent.idl \
-    storage/IndexedDatabaseRequest.idl \
+    storage/IDBTransaction.idl \
     storage/Storage.idl \
     storage/StorageEvent.idl \
     storage/SQLError.idl \
+    storage/SQLException.idl \
     storage/SQLResultSet.idl \
     storage/SQLResultSetRowList.idl \
     storage/SQLStatementCallback.idl \
@@ -573,6 +621,7 @@ contains(DEFINES, ENABLE_SVG=1) {
     svg/SVGFEColorMatrixElement.idl \
     svg/SVGFEComponentTransferElement.idl \
     svg/SVGFECompositeElement.idl \
+    svg/SVGFEConvolveMatrixElement.idl \
     svg/SVGFEDiffuseLightingElement.idl \
     svg/SVGFEDisplacementMapElement.idl \
     svg/SVGFEDistantLightElement.idl \
@@ -672,23 +721,112 @@ contains(DEFINES, ENABLE_SVG=1) {
     svg/SVGVKernElement.idl
 }
 
+INSPECTOR_INTERFACES = inspector/Inspector.idl
+INSPECTOR_BACKEND_STUB_QRC = inspector/front-end/InspectorBackendStub.qrc
+
+WEBCORE_HEADERS_FOR_WEBKIT2 += \
+    bindings/js/DOMWrapperWorld.h \
+    platform/FileChooser.h \
+    platform/network/qt/ResourceError.h \
+    platform/network/qt/ResourceRequest.h \
+    platform/network/qt/ResourceResponse.h \
+    dom/KeyboardEvent.h \
+    editing/EditCommand.h \
+    history/BackForwardList.h \
+    history/BackForwardControllerClient.h \
+    history/HistoryItem.h \
+    html/HTMLFormElement.h \
+    html/HTMLFrameOwnerElement.h \
+    inspector/InspectorClient.h \
+    loader/DocumentLoader.h \
+    loader/FormState.h \
+    loader/FrameLoader.h \
+    loader/FrameLoaderClient.h \
+    loader/FrameLoaderTypes.h \
+    loader/PolicyChecker.h \
+    loader/ProgressTracker.h \
+    page/animation/AnimationController.h \
+    page/Chrome.h \
+    page/ChromeClient.h \
+    page/ContextMenuClient.h \
+    page/DragClient.h \
+    page/EditorClient.h \
+    page/EventHandler.h \
+    page/FocusController.h \
+    page/Frame.h \
+    page/FrameLoadRequest.h \
+    page/FrameView.h \
+    page/Page.h \
+    page/Settings.h \
+    page/WindowFeatures.h \
+    platform/PlatformKeyboardEvent.h \
+    platform/PlatformMouseEvent.h \
+    platform/PlatformWheelEvent.h \
+    platform/Widget.h \
+    platform/KURL.h \
+    platform/graphics/FloatRect.h \
+    platform/graphics/GraphicsContext.h \
+    platform/graphics/GraphicsLayerClient.h \
+    platform/graphics/IntPoint.h \
+    platform/graphics/IntRect.h \
+    platform/graphics/IntSize.h \
+    platform/graphics/Tile.h \
+    platform/graphics/TiledBackingStore.h \
+    platform/graphics/TiledBackingStoreClient.h \
+    platform/text/PlatformString.h \
+    platform/text/StringImpl.h \
+    platform/MIMETypeRegistry.h \
+    rendering/RenderTreeAsText.h \
+    plugins/PluginData.h \
+
+JSC_HEADERS_FOR_WEBKIT2 += \
+    ../JavaScriptCore/runtime/JSObject.h \
+
+WEBKIT2_API_HEADERS += \
+    ../WebKit2/UIProcess/API/C/WKAPICast.h \
+    ../WebKit2/UIProcess/API/C/WKBase.h \
+    ../WebKit2/UIProcess/API/C/WKContext.h \
+    ../WebKit2/UIProcess/API/C/WKContextPrivate.h \
+    ../WebKit2/UIProcess/API/C/WKFrame.h \
+    ../WebKit2/UIProcess/API/C/WKFramePolicyListener.h \
+    ../WebKit2/UIProcess/API/C/WKNavigationData.h \
+    ../WebKit2/UIProcess/API/C/WKPage.h \
+    ../WebKit2/UIProcess/API/C/WKPageNamespace.h \
+    ../WebKit2/UIProcess/API/C/WKPagePrivate.h \
+    ../WebKit2/UIProcess/API/C/WKPreferences.h \
+    ../WebKit2/UIProcess/API/C/WKString.h \
+    ../WebKit2/UIProcess/API/C/WKURL.h \
+    ../WebKit2/UIProcess/API/C/WebKit2.h \
+    ../WebKit2/UIProcess/API/cpp/WKRetainPtr.h \
+    ../WebKit2/UIProcess/API/qt/qgraphicswkview.h \
+    ../WebKit2/UIProcess/API/qt/qwkpage.h \
+    ../WebKit2/WebProcess/InjectedBundle/API/c/WKBundleBase.h \
+    ../WebKit2/WebProcess/InjectedBundle/API/c/WKBundlePage.h \
+
+mathmlnames.output = $${WC_GENERATED_SOURCES_DIR}/MathMLNames.cpp
+mathmlnames.input = MATHML_NAMES
+mathmlnames.wkScript = $$PWD/dom/make_names.pl
+mathmlnames.commands = perl -I$$PWD/bindings/scripts $$mathmlnames.wkScript --tags $$PWD/mathml/mathtags.in --attrs $$PWD/mathml/mathattrs.in --extraDefines \"$${DEFINES}\" --preprocessor \"$${QMAKE_MOC} -E\" --factory --wrapperFactory --outputDir $$WC_GENERATED_SOURCES_DIR
+mathmlnames.wkExtraSources = $${WC_GENERATED_SOURCES_DIR}/MathMLElementFactory.cpp 
+addExtraCompiler(mathmlnames)
+
 JSDOM_CPP_NO_IDL_BINDINGS += \
     dom/CustomEvent.idl \
     dom/PopStateEvent.idl \
     inspector/ScriptProfile.idl \
     inspector/ScriptProfileNode.idl \
-    storage/Database.idl \
-    storage/DatabaseCallback.idl \
-    storage/SQLError.idl \
-    storage/SQLResultSet.idl \
-    storage/SQLResultSetRowList.idl \
-    storage/SQLStatementCallback.idl \
-    storage/SQLStatementErrorCallback.idl \
-    storage/SQLTransaction.idl \
-    storage/SQLTransactionCallback.idl \
-    storage/SQLTransactionErrorCallback.idl \
-    storage/SQLTransactionSync.idl \
-    storage/SQLTransactionSyncCallback.idl
+#    storage/Database.idl \
+#    storage/DatabaseCallback.idl \
+#    storage/SQLError.idl \
+#    storage/SQLResultSet.idl \
+#    storage/SQLResultSetRowList.idl \
+#    storage/SQLStatementCallback.idl \
+#    storage/SQLStatementErrorCallback.idl \
+#    storage/SQLTransaction.idl \
+#    storage/SQLTransactionCallback.idl \
+#    storage/SQLTransactionErrorCallback.idl \
+#    storage/SQLTransactionSync.idl \
+#    storage/SQLTransactionSyncCallback.idl
 
 JSDOM_IDL_BINDINGS += $$IDL_BINDINGS
 
@@ -716,15 +854,14 @@ contains(DEFINES, ENABLE_WML=1) {
     addExtraCompiler(wmlnames)
 }
 
-contains(DEFINES, ENABLE_SVG=1) {
-    # GENERATOR 5-C:
-    svgnames.output = $${WC_GENERATED_SOURCES_DIR}/SVGNames.cpp
-    svgnames.input = SVG_NAMES
-    svgnames.wkScript = $$PWD/dom/make_names.pl
-    svgnames.commands = perl -I$$PWD/bindings/scripts $$svgnames.wkScript --tags $$PWD/svg/svgtags.in --attrs $$PWD/svg/svgattrs.in --extraDefines \"$${DEFINES}\" --preprocessor \"$${QMAKE_MOC} -E\" --factory --wrapperFactory --outputDir $$WC_GENERATED_SOURCES_DIR
-    svgnames.wkExtraSources = $${WC_GENERATED_SOURCES_DIR}/SVGElementFactory.cpp $${WC_GENERATED_SOURCES_DIR}/JSSVGElementWrapperFactory.cpp
-    addExtraCompiler(svgnames)
-}
+# GENERATOR 5-C:
+svgnames.output = $${WC_GENERATED_SOURCES_DIR}/SVGNames.cpp
+svgnames.input = SVG_NAMES
+svgnames.depends = $$PWD/svg/svgattrs.in
+svgnames.wkScript = $$PWD/dom/make_names.pl
+svgnames.commands = perl -I$$PWD/bindings/scripts $$svgnames.wkScript --tags $$PWD/svg/svgtags.in --attrs $$PWD/svg/svgattrs.in --extraDefines \"$${DEFINES}\" --preprocessor \"$${QMAKE_MOC} -E\" --factory --wrapperFactory --outputDir $$WC_GENERATED_SOURCES_DIR
+svgnames.wkExtraSources = $${WC_GENERATED_SOURCES_DIR}/SVGElementFactory.cpp $${WC_GENERATED_SOURCES_DIR}/JSSVGElementWrapperFactory.cpp
+addExtraCompiler(svgnames)
 
 # GENERATOR 5-D:
 xlinknames.output = $${WC_GENERATED_SOURCES_DIR}/XLinkNames.cpp
@@ -734,17 +871,17 @@ xlinknames.input = XLINK_NAMES
 addExtraCompiler(xlinknames)
 
 # GENERATOR 6-A:
-cssprops.output = $${WC_GENERATED_SOURCES_DIR}/${QMAKE_FILE_BASE}.cpp
-cssprops.input = WALDOCSSPROPS
 cssprops.wkScript = $$PWD/css/makeprop.pl
+cssprops.output = $${WC_GENERATED_SOURCES_DIR}/CSSPropertyNames.cpp
+cssprops.input = WALDOCSSPROPS
 cssprops.commands = perl -ne \"print lc\" ${QMAKE_FILE_NAME} $${DASHBOARDSUPPORTCSSPROPERTIES} $${EXTRACSSPROPERTIES} > $${WC_GENERATED_SOURCES_DIR}/${QMAKE_FILE_BASE}.in && cd $$WC_GENERATED_SOURCES_DIR && perl $$cssprops.wkScript && $(DEL_FILE) ${QMAKE_FILE_BASE}.in ${QMAKE_FILE_BASE}.gperf
 cssprops.depends = ${QMAKE_FILE_NAME} $${DASHBOARDSUPPORTCSSPROPERTIES} $${EXTRACSSPROPERTIES}
 addExtraCompiler(cssprops)
 
 # GENERATOR 6-B:
-cssvalues.output = $${WC_GENERATED_SOURCES_DIR}/${QMAKE_FILE_BASE}.c
-cssvalues.input = WALDOCSSVALUES
 cssvalues.wkScript = $$PWD/css/makevalues.pl
+cssvalues.output = $${WC_GENERATED_SOURCES_DIR}/CSSValueKeywords.cpp
+cssvalues.input = WALDOCSSVALUES
 cssvalues.commands = perl -ne \"print lc\" ${QMAKE_FILE_NAME} $$EXTRACSSVALUES > $${WC_GENERATED_SOURCES_DIR}/${QMAKE_FILE_BASE}.in && cd $$WC_GENERATED_SOURCES_DIR && perl $$cssvalues.wkScript && $(DEL_FILE) ${QMAKE_FILE_BASE}.in ${QMAKE_FILE_BASE}.gperf
 cssvalues.depends = ${QMAKE_FILE_NAME} $${EXTRACSSVALUES}
 cssvalues.clean = ${QMAKE_FILE_OUT} ${QMAKE_VAR_WC_GENERATED_SOURCES_DIR}/${QMAKE_FILE_BASE}.h
@@ -764,6 +901,25 @@ idl.depends = $$PWD/bindings/scripts/CodeGenerator.pm \
               $$PWD/bindings/scripts/InFilesParser.pm
 addExtraCompiler(idl)
 
+# GENERATOR 2: inspector idl compiler
+inspectorIDL.output = $${WC_GENERATED_SOURCES_DIR}/${QMAKE_FILE_BASE}Frontend.cpp $${WC_GENERATED_SOURCES_DIR}/${QMAKE_FILE_BASE}BackendDispatcher.cpp
+inspectorIDL.input = INSPECTOR_INTERFACES
+inspectorIDL.wkScript = $$PWD/bindings/scripts/generate-bindings.pl
+inspectorIDL.commands = perl -I$$PWD/bindings/scripts -I$$PWD/inspector $$inspectorIDL.wkScript --defines \"$${FEATURE_DEFINES_JAVASCRIPT}\" --generator Inspector --outputDir $$WC_GENERATED_SOURCES_DIR --preprocessor \"$${QMAKE_MOC} -E\" ${QMAKE_FILE_NAME}
+inspectorIDL.depends = $$PWD/bindings/scripts/CodeGenerator.pm \
+              $$PWD/inspector/CodeGeneratorInspector.pm \
+              $$PWD/bindings/scripts/IDLParser.pm \
+              $$PWD/bindings/scripts/IDLStructure.pm \
+              $$PWD/bindings/scripts/InFilesParser.pm
+addExtraCompiler(inspectorIDL)
+
+inspectorBackendStub.wkAddOutputToSources = false
+inspectorBackendStub.output = generated/InspectorBackendStub.qrc
+inspectorBackendStub.input = INSPECTOR_BACKEND_STUB_QRC
+inspectorBackendStub.tempNames = $$PWD/$$INSPECTOR_BACKEND_STUB_QRC $${WC_GENERATED_SOURCES_DIR}/InspectorBackendStub.qrc
+inspectorBackendStub.commands = $$QMAKE_COPY $$replace(inspectorBackendStub.tempNames, "/", $$QMAKE_DIR_SEP)
+addExtraCompiler(inspectorBackendStub)
+
 # GENERATOR 1-B: JSC <-> DOM converters
 jscidl.wkExtraSources = $${WC_GENERATED_SOURCES_DIR}/JSCDOMConverters.cpp
 jscidl.output = $${WC_GENERATED_SOURCES_DIR}/JSCDOMConverters.cpp
@@ -775,7 +931,7 @@ jscidl.depends = $$PWD/bindings/scripts/generate-jscdom.pl \
                  $$PWD/bindings/scripts/InFilesParser.pm
 addExtraCompiler(jscidl)
 
-# GENERATOR 2: DOM C++ bindings
+# GENERATOR 2-B: DOM C++ bindings
 FEATURE_DEFINES_CPP_BINDINGS += $${FEATURE_DEFINES_BINDINGS}
 domidl.output = $${WC_GENERATED_SOURCES_DIR}$${QMAKE_DIR_SEP}WebDOM${QMAKE_FILE_BASE}.cpp
 DOMIDL_SOURCES = $$eval(CPP_IDL_BINDINGS)
@@ -828,23 +984,30 @@ xmlnames.commands = perl -I$$PWD/bindings/scripts $$xmlnames.wkScript --attrs $$
 addExtraCompiler(xmlnames)
 
 # GENERATOR 8-A:
-entities.output = $${WC_GENERATED_SOURCES_DIR}/HTMLEntityNames.c
-entities.input = ENTITIES_GPERF
-entities.commands = gperf -a -L ANSI-C -C -G -c -o -t --includes --key-positions="*" -N findEntity -D -s 2 < $$PWD/html/HTMLEntityNames.gperf > $${WC_GENERATED_SOURCES_DIR}/HTMLEntityNames.c
+entities.output = $${WC_GENERATED_SOURCES_DIR}/HTMLEntityTable.cpp
+entities.input = HTML_ENTITIES
+entities.wkScript = $$PWD/html/parser/create-html-entity-table
+entities.commands = python $$entities.wkScript -o $${WC_GENERATED_SOURCES_DIR}/HTMLEntityTable.cpp $$HTML_ENTITIES
 entities.clean = ${QMAKE_FILE_OUT}
+entities.depends = $$PWD/html/parser/create-html-entity-table
 addExtraCompiler(entities)
 
 # GENERATOR 8-B:
-doctypestrings.output = $${WC_GENERATED_SOURCES_DIR}/${QMAKE_FILE_BASE}.cpp
-doctypestrings.input = DOCTYPESTRINGS
-doctypestrings.commands = gperf -CEot -L ANSI-C --includes --key-positions="*" -N findDoctypeEntry -F ,PubIDInfo::eAlmostStandards,PubIDInfo::eAlmostStandards < ${QMAKE_FILE_NAME} >> ${QMAKE_FILE_OUT}
+doctypestrings.output = $${WC_GENERATED_SOURCES_DIR}/DocTypeStrings.cpp
+doctypestrings.input = DOCTYPESTRINGS_GPERF
+doctypestrings.wkScript = $$PWD/make-hash-tools.pl
+doctypestrings.commands = perl $$doctypestrings.wkScript $${WC_GENERATED_SOURCES_DIR} $$DOCTYPESTRINGS_GPERF
 doctypestrings.clean = ${QMAKE_FILE_OUT}
+doctypestrings.depends = $$PWD/make-hash-tools.pl
 addExtraCompiler(doctypestrings)
 
 # GENERATOR 8-C:
-colordata.output = $${WC_GENERATED_SOURCES_DIR}/ColorData.c
-colordata.input = COLORDAT_GPERF
-colordata.commands = gperf -CDEot -L ANSI-C --includes --key-positions="*" -N findColor -D -s 2 < ${QMAKE_FILE_NAME} >> ${QMAKE_FILE_OUT}
+colordata.output = $${WC_GENERATED_SOURCES_DIR}/ColorData.cpp
+colordata.input = COLORDATA_GPERF
+colordata.wkScript = $$PWD/make-hash-tools.pl
+colordata.commands = perl $$colordata.wkScript $${WC_GENERATED_SOURCES_DIR} $$COLORDATA_GPERF
+colordata.clean = ${QMAKE_FILE_OUT}
+colordata.depends = $$PWD/make-hash-tools.pl
 addExtraCompiler(colordata)
 
 # GENERATOR 9:
@@ -888,4 +1051,3 @@ buildinfofilehook.depends = buildinfofile
 CONFIG(debug,debug|release):buildinfofilehook.target = Makefile.Debug
 CONFIG(release,debug|release):buildinfofilehook.target = Makefile.Release
 QMAKE_EXTRA_TARGETS += buildinfofilehook
-

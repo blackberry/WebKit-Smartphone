@@ -26,12 +26,7 @@
 #define CachedResourceClient_h
 
 #include <wtf/FastAllocBase.h>
-
-#if ENABLE(XBL)
-namespace XBL {
-    class XBLDocument;
-}
-#endif
+#include <wtf/Forward.h>
 
 namespace WebCore {
 
@@ -39,7 +34,6 @@ namespace WebCore {
     class CachedFont;
     class CachedResource;
     class CachedImage;
-    class String;
     class Image;
     class IntRect;
     class KURL;
@@ -68,13 +62,7 @@ namespace WebCore {
 
         virtual void setCSSStyleSheet(const String& /* href */, const KURL& /* baseURL */, const String& /* charset */, const CachedCSSStyleSheet*) { }
         virtual void setXSLStyleSheet(const String& /* href */, const KURL& /* baseURL */, const String& /* sheet */) { }
-
         virtual void fontLoaded(CachedFont*) {};
-
-#if ENABLE(XBL)
-        virtual void setXBLDocument(const String& /*URL*/, XBL::XBLDocument*) { }
-#endif
-
         virtual void notifyFinished(CachedResource*) { }
     };
 

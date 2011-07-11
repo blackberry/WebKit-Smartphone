@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2006, 2008 Apple Inc. All rights reserved.
  * Copyright (C) 2007 Nicholas Shanks <webkit@nickshanks.com>
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,10 +35,10 @@
 #include "FontFallbackList.h"
 #include "FontPlatformData.h"
 #include "FontSelector.h"
-#include "StringHash.h"
 #include <wtf/HashMap.h>
 #include <wtf/ListHashSet.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/text/StringHash.h>
 
 using namespace WTF;
 
@@ -55,11 +56,12 @@ FontCache::FontCache()
 
 struct FontPlatformDataCacheKey : FastAllocBase {
     FontPlatformDataCacheKey(const AtomicString& family = AtomicString(), unsigned size = 0, unsigned weight = 0, bool italic = false,
-                             bool isPrinterFont = false, FontRenderingMode renderingMode = NormalRenderingMode)
+                             bool smallCaps = false, bool isPrinterFont = false, FontRenderingMode renderingMode = NormalRenderingMode)
         : m_size(size)
         , m_weight(weight)
         , m_family(family)
         , m_italic(italic)
+        , m_smallCaps(smallCaps)
         , m_printerFont(isPrinterFont)
         , m_renderingMode(renderingMode)
     {
@@ -70,15 +72,16 @@ struct FontPlatformDataCacheKey : FastAllocBase {
 
     bool operator==(const FontPlatformDataCacheKey& other) const
     {
-        return equalIgnoringCase(m_family, other.m_family) && m_size == other.m_size && 
-               m_weight == other.m_weight && m_italic == other.m_italic && m_printerFont == other.m_printerFont &&
-               m_renderingMode == other.m_renderingMode;
+        return equalIgnoringCase(m_family, other.m_family) && m_size == other.m_size
+               && m_weight == other.m_weight && m_italic == other.m_italic && m_smallCaps == other.m_smallCaps
+               && m_printerFont == other.m_printerFont && m_renderingMode == other.m_renderingMode;
     }
 
     unsigned m_size;
     unsigned m_weight;
     AtomicString m_family;
     bool m_italic;
+    bool m_smallCaps;
     bool m_printerFont;
     FontRenderingMode m_renderingMode;
 
@@ -92,7 +95,7 @@ inline unsigned computeHash(const FontPlatformDataCacheKey& fontKey)
         CaseFoldingHash::hash(fontKey.m_family),
         fontKey.m_size,
         fontKey.m_weight,
-        static_cast<unsigned>(fontKey.m_italic) << 2 | static_cast<unsigned>(fontKey.m_printerFont) << 1 | static_cast<unsigned>(fontKey.m_renderingMode)
+        static_cast<unsigned>(fontKey.m_smallCaps) << 3 | static_cast<unsigned>(fontKey.m_italic) << 2 | static_cast<unsigned>(fontKey.m_printerFont) << 1 | static_cast<unsigned>(fontKey.m_renderingMode)
     };
     return StringImpl::computeHash(reinterpret_cast<UChar*>(hashCodes), sizeof(hashCodes) / sizeof(UChar));
 }
@@ -191,7 +194,8 @@ FontPlatformData* FontCache::getCachedFontPlatformData(const FontDescription& fo
     }
 
     FontPlatformDataCacheKey key(familyName, fontDescription.computedPixelSize(), fontDescription.weight(), fontDescription.italic(),
-                                 fontDescription.usePrinterFont(), fontDescription.renderingMode());
+                                 fontDescription.smallCaps(), fontDescription.usePrinterFont(),
+                                 fontDescription.renderingMode());
     FontPlatformData* result = 0;
     bool foundResult;
     FontPlatformDataCache::iterator it = gFontPlatformDataCache->find(key);

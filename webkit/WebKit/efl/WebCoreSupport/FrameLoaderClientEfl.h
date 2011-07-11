@@ -55,6 +55,9 @@ class FrameLoaderClientEfl : public FrameLoaderClient {
     void setCustomUserAgent(const String &agent);
     const String& customUserAgent() const;
 
+    void setInitLayoutCompleted(bool completed) { m_initLayoutCompleted = completed; }
+    bool getInitLayoutCompleted() { return m_initLayoutCompleted; }
+
     virtual bool hasWebView() const;
     virtual bool hasFrameView() const;
 
@@ -178,6 +181,7 @@ class FrameLoaderClientEfl : public FrameLoaderClient {
 
     virtual bool canHandleRequest(const ResourceRequest&) const;
     virtual bool canShowMIMEType(const String&) const;
+    virtual bool canShowMIMETypeAsHTML(const String& MIMEType) const;
     virtual bool representationExistsForURLScheme(const String&) const;
     virtual String generatedMIMETypeForURLScheme(const String&) const;
 
@@ -199,12 +203,13 @@ class FrameLoaderClientEfl : public FrameLoaderClient {
 
     virtual bool canCachePage() const;
     virtual void download(ResourceHandle*, const ResourceRequest&, const ResourceRequest&, const ResourceResponse&);
+
+    virtual PassRefPtr<WebCore::FrameNetworkingContext> createNetworkingContext();
  private:
     Evas_Object *m_view;
     Evas_Object *m_frame;
 
     ResourceResponse m_response;
-    bool m_firstData;
     String m_userAgent;
     String m_customUserAgent;
 
@@ -213,6 +218,8 @@ class FrameLoaderClientEfl : public FrameLoaderClient {
     // Plugin view to redirect data to
     PluginView* m_pluginView;
     bool m_hasSentResponseToPlugin;
+
+    bool m_initLayoutCompleted;
 };
 
 }

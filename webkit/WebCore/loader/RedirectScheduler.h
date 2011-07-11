@@ -33,6 +33,7 @@
 
 #include "Event.h"
 #include "Timer.h"
+#include <wtf/Forward.h>
 #include <wtf/OwnPtr.h>
 #include <wtf/PassOwnPtr.h>
 #include <wtf/PassRefPtr.h>
@@ -40,8 +41,8 @@
 namespace WebCore {
 
 class FormState;
+class FormSubmission;
 class Frame;
-class String;
 
 struct FrameLoadRequest;
 class ScheduledNavigation;
@@ -56,7 +57,7 @@ public:
 
     void scheduleRedirect(double delay, const String& url);
     void scheduleLocationChange(const String& url, const String& referrer, bool lockHistory = true, bool lockBackForwardList = true, bool userGesture = false);
-    void scheduleFormSubmission(const FrameLoadRequest&, bool lockHistory, PassRefPtr<Event>, PassRefPtr<FormState>);
+    void scheduleFormSubmission(PassRefPtr<FormSubmission>);
     void scheduleRefresh(bool userGesture = false);
     void scheduleHistoryNavigation(int steps);
 

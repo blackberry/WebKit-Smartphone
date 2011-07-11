@@ -46,9 +46,19 @@ JSC::JSValue toJS(JSC::ExecState* exec, JSDOMGlobalObject* globalObject, Uint32A
     return getDOMObjectWrapper<JSUint32Array>(exec, globalObject, object);
 }
 
-JSC::JSValue JSUint32Array::set(JSC::ExecState* exec, JSC::ArgList const& args)
+JSC::JSValue JSUint32Array::set(JSC::ExecState* exec)
 {
-    return setWebGLArrayHelper(exec, impl(), args, toUint32Array);
+    return setWebGLArrayHelper(exec, impl(), toUint32Array);
+}
+
+EncodedJSValue JSC_HOST_CALL JSUint32ArrayConstructor::constructJSUint32Array(ExecState* exec)
+{
+    JSUint32ArrayConstructor* jsConstructor = static_cast<JSUint32ArrayConstructor*>(exec->callee());
+    RefPtr<Uint32Array> array = static_cast<Uint32Array*>(constructArrayBufferView<Uint32Array, unsigned int>(exec).get());
+    if (!array.get())
+        // Exception has already been thrown.
+        return JSValue::encode(JSValue());
+    return JSValue::encode(asObject(toJS(exec, jsConstructor->globalObject(), array.get())));
 }
 
 } // namespace WebCore

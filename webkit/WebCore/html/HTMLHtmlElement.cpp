@@ -1,9 +1,9 @@
-/**
+/*
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Simon Hausmann (hausmann@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004, 2006 Apple Computer, Inc.
+ * Copyright (C) 2004, 2006, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -20,6 +20,7 @@
  * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301, USA.
  */
+
 #include "config.h"
 #include "HTMLHtmlElement.h"
 
@@ -33,30 +34,25 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-HTMLHtmlElement::HTMLHtmlElement(const QualifiedName& tagName, Document* doc)
-    : HTMLElement(tagName, doc)
+HTMLHtmlElement::HTMLHtmlElement(const QualifiedName& tagName, Document* document)
+    : HTMLElement(tagName, document)
 {
     ASSERT(hasTagName(htmlTag));
 }
 
-HTMLHtmlElement::~HTMLHtmlElement()
+PassRefPtr<HTMLHtmlElement> HTMLHtmlElement::create(Document* document)
 {
+    return adoptRef(new HTMLHtmlElement(htmlTag, document));
 }
 
-String HTMLHtmlElement::version() const
+PassRefPtr<HTMLHtmlElement> HTMLHtmlElement::create(const QualifiedName& tagName, Document* document)
 {
-    return getAttribute(versionAttr);
+    return adoptRef(new HTMLHtmlElement(tagName, document));
 }
 
-void HTMLHtmlElement::setVersion(const String &value)
+bool HTMLHtmlElement::isURLAttribute(Attribute* attribute) const
 {
-    setAttribute(versionAttr, value);
-}
-
-bool HTMLHtmlElement::checkDTD(const Node* newChild)
-{
-    return newChild->hasTagName(headTag) || newChild->hasTagName(bodyTag) ||
-           newChild->hasTagName(framesetTag) || newChild->hasTagName(noframesTag);
+    return attribute->name() == manifestAttr;
 }
 
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
@@ -77,8 +73,8 @@ void HTMLHtmlElement::insertedIntoDocument()
     // Check the manifest attribute
     // FIXME: Revisit this when we get a clarification from whatwg on how to handle empty
     // manifest attributes. As spec'd, and coded here, the system will initiate an update
-    // passing in the document url as the manifest url. That's not a good thing.
-    AtomicString manifest = getAttribute(manifestAttr);
+    // passing in the document URL as the manifest URL. That's not a good thing.
+    const AtomicString& manifest = getAttribute(manifestAttr);
     if (manifest.isNull())
         documentLoader->applicationCacheHost()->selectCacheWithoutManifest();
     else

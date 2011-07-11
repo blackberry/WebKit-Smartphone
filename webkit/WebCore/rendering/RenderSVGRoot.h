@@ -33,12 +33,16 @@ namespace WebCore {
 class SVGStyledElement;
 class AffineTransform;
 
-class RenderSVGRoot : public RenderBox, protected SVGRenderBase {
+class RenderSVGRoot : public RenderBox {
 public:
     RenderSVGRoot(SVGStyledElement*);
 
     const RenderObjectChildList* children() const { return &m_children; }
     RenderObjectChildList* children() { return &m_children; }
+
+    bool isLayoutSizeChanged() const { return m_isLayoutSizeChanged; }
+    virtual void setNeedsBoundariesUpdate() { m_needsBoundariesOrTransformUpdate = true; }
+    virtual void setNeedsTransformUpdate() { m_needsBoundariesOrTransformUpdate = true; }
 
 private:
     virtual RenderObjectChildList* virtualChildren() { return children(); }
@@ -56,28 +60,30 @@ private:
     virtual void paint(PaintInfo&, int parentX, int parentY);
 
     virtual void destroy();
+    virtual void styleWillChange(StyleDifference, const RenderStyle* newStyle);
+    virtual void styleDidChange(StyleDifference, const RenderStyle* oldStyle);
+    virtual void updateFromElement();
 
     virtual const AffineTransform& localToParentTransform() const;
 
     bool fillContains(const FloatPoint&) const;
     bool strokeContains(const FloatPoint&) const;
 
-    virtual FloatRect objectBoundingBox() const;
-    virtual FloatRect strokeBoundingBox() const { return computeContainerBoundingBox(this, true); }
-    virtual FloatRect repaintRectInLocalCoordinates() const;
-
-    // FIXME: This override should be removed.
-    virtual AffineTransform localTransform() const;
+    virtual FloatRect objectBoundingBox() const { return m_objectBoundingBox; }
+    virtual FloatRect strokeBoundingBox() const { return m_strokeBoundingBox; }
+    virtual FloatRect repaintRectInLocalCoordinates() const { return m_repaintBoundingBox; }
 
     virtual bool nodeAtPoint(const HitTestRequest&, HitTestResult&, int x, int y, int tx, int ty, HitTestAction);
 
+    virtual IntRect clippedOverflowRectForRepaint(RenderBoxModelObject* repaintContainer);
     virtual void computeRectForRepaint(RenderBoxModelObject* repaintContainer, IntRect& repaintRect, bool fixed);
 
     virtual void mapLocalToContainer(RenderBoxModelObject* repaintContainer, bool useTransforms, bool fixed, TransformState&) const;
 
     void calcViewport();
 
-    bool selfWillPaint() const;
+    bool selfWillPaint();
+    void updateCachedBoundaries();
 
     IntSize parentOriginToBorderBox() const;
     IntSize borderOriginToContentBox() const;
@@ -86,7 +92,12 @@ private:
 
     RenderObjectChildList m_children;
     FloatSize m_viewportSize;
+    FloatRect m_objectBoundingBox;
+    FloatRect m_strokeBoundingBox;
+    FloatRect m_repaintBoundingBox;
     mutable AffineTransform m_localToParentTransform;
+    bool m_isLayoutSizeChanged : 1;
+    bool m_needsBoundariesOrTransformUpdate : 1;
 };
 
 inline RenderSVGRoot* toRenderSVGRoot(RenderObject* object)
@@ -108,5 +119,3 @@ void toRenderSVGRoot(const RenderSVGRoot*);
 
 #endif // ENABLE(SVG)
 #endif // RenderSVGRoot_h
-
-// vim:ts=4:noet

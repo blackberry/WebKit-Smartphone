@@ -30,10 +30,14 @@
 
 using namespace WebKit;
 
+WKTypeID WKFrameGetTypeID()
+{
+    return toRef(WebFrameProxy::APIType);
+}
+
 bool WKFrameIsMainFrame(WKFrameRef frameRef)
 {
-    WebFrameProxy* frame = toWK(frameRef);
-    return frame->isMainFrame();
+    return toWK(frameRef)->isMainFrame();
 }
 
 WKFrameLoadState WKFrameGetFrameLoadState(WKFrameRef frameRef)
@@ -52,27 +56,17 @@ WKFrameLoadState WKFrameGetFrameLoadState(WKFrameRef frameRef)
     return kWKFrameLoadStateFinished;
 }
 
-WKURLRef WKFrameGetProvisionalURL(WKFrameRef frameRef)
+WKURLRef WKFrameCopyProvisionalURL(WKFrameRef frameRef)
 {
-    WebFrameProxy* frame = toWK(frameRef);
-    return toURLRef(frame->provisionalURL().impl());
+    return toCopiedURLRef(toWK(frameRef)->provisionalURL());
 }
 
-WKURLRef WKFrameGetURL(WKFrameRef frameRef)
+WKURLRef WKFrameCopyURL(WKFrameRef frameRef)
 {
-    WebFrameProxy* frame = toWK(frameRef);
-    return toURLRef(frame->url().impl());
+    return toCopiedURLRef(toWK(frameRef)->url());
 }
 
-WKFrameRef WKFrameRetain(WKFrameRef frameRef)
+WKPageRef WKFrameGetPage(WKFrameRef frameRef)
 {
-    WebFrameProxy* frame = toWK(frameRef);
-    frame->ref();
-    return frameRef;
-}
-
-void WKFrameRelease(WKFrameRef frameRef)
-{
-    WebFrameProxy* frame = toWK(frameRef);
-    frame->deref();
+    return toRef(toWK(frameRef)->page());
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2008 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,19 +23,19 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#ifndef SMILTimeContainer_H
-#define SMILTimeContainer_H
+#ifndef SMILTimeContainer_h
+#define SMILTimeContainer_h
 
 #if ENABLE(SVG)
 
 #include "PlatformString.h"
 #include "SMILTime.h"
-#include "StringHash.h"
 #include "Timer.h"
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
+#include <wtf/text/StringHash.h>
 
 namespace WebCore {
     

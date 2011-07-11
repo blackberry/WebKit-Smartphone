@@ -39,13 +39,13 @@ namespace WebCore {
 using namespace WMLNames;
 
 WMLElement::WMLElement(const QualifiedName& tagName, Document* document)
-    : StyledElement(tagName, document, CreateStyledElementZeroRefCount)
+    : StyledElement(tagName, document, CreateStyledElement)
 {
 }
 
 PassRefPtr<WMLElement> WMLElement::create(const QualifiedName& tagName, Document* document)
 {
-    return new WMLElement(tagName, document);
+    return adoptRef(new WMLElement(tagName, document));
 }
 
 bool WMLElement::mapToEntry(const QualifiedName& attrName, MappedAttributeEntry& result) const
@@ -60,7 +60,7 @@ bool WMLElement::mapToEntry(const QualifiedName& attrName, MappedAttributeEntry&
     
 void WMLElement::parseMappedAttribute(Attribute* attr)
 {
-    if (attr->name() == idAttributeName()
+    if (isIdAttributeName(attr->name())
         || attr->name() == HTMLNames::classAttr
         || attr->name() == HTMLNames::styleAttr)
         return StyledElement::parseMappedAttribute(attr);

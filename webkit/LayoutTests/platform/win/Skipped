@@ -137,16 +137,10 @@ fast/js/kde/Number.html
 http/tests/navigation/anchor-frames.html
 
 # No built-in plugin in DRT <rdar://problem/5074411>
-plugins/call-as-function-test.html
 plugins/get-url-that-the-resource-load-delegate-will-disallow.html
 plugins/get-url-with-blank-target.html
-plugins/jsobjc-dom-wrappers.html
-plugins/jsobjc-simple.html
 plugins/open-and-close-window-with-plugin.html
 plugins/plugin-javascript-access.html
-plugins/root-object-premature-delete-crash.html
-plugins/throw-on-dealloc.html
-plugins/undefined-property-crash.html
 
 # String::Number prints floating point numbers differently on Win than X. <rdar://problem/5127993>
 svg/hixie/perf/001.xml
@@ -192,6 +186,7 @@ http/tests/webarchive
 
 # <rdar://problem/5230396> eventSender.beginDragWithFiles is unimplemented
 editing/pasteboard/dataTransfer-setData-getData.html
+editing/pasteboard/file-drag-to-editable.html
 editing/pasteboard/file-input-files-access.html
 fast/events/drag-to-navigate.html
 fast/events/prevent-drag-to-navigate.html
@@ -200,7 +195,11 @@ fast/forms/input-file-re-render.html
 http/tests/security/clipboard/clipboard-file-access.html
 fast/events/drag-file-crash.html
 fast/dom/Window/window-postmessage-clone.html
-fast/files/file-reader.html
+fast/files/read-blob-async.html
+fast/files/read-file-async.html
+fast/files/apply-blob-url-to-img.html
+fast/files/apply-blob-url-to-xhr.html
+fast/files/workers
 
 # Need to add functionality to DumpRenderTree to test IDN <rdar://problem/5301954>
 fast/encoding/idn-security.html
@@ -293,6 +292,9 @@ fast/loader/frame-creation-removal.html
 fast/text/international/danda-space.html
 fast/text/international/thai-baht-space.html
 
+# Sensitive to load timing or PHP behavior (https://bugs.webkit.org/show_bug.cgi?id=44873) 
+http/tests/css/css-image-loading.html
+
 ################################################################################
 ####################### No bugs filed about the below yet#######################
 ################################################################################
@@ -353,7 +355,6 @@ editing/deleting/deletionUI-single-instance.html
 editing/pasteboard/input-field-1.html
 editing/selection/contains-boundaries.html
 editing/undo/5378473.html
-http/tests/xmlhttprequest/failed-auth.html
 http/tests/xmlhttprequest/connection-error-sync.html
 plugins/netscape-plugin-setwindow-size.html
 svg/custom/gradient-stop-style-change.svg
@@ -374,6 +375,7 @@ accessibility/aria-combobox.html
 accessibility/aria-controls-with-tabs.html
 accessibility/aria-describedby-on-input.html
 accessibility/aria-disabled.html
+accessibility/aria-help.html
 accessibility/aria-hidden.html
 accessibility/aria-hidden-with-elements.html
 accessibility/aria-label.html
@@ -538,7 +540,7 @@ http/tests/security/local-iFrame-from-remote.html
 http/tests/security/local-image-from-remote.html
 http/tests/security/local-user-CSS-from-remote.html
 http/tests/security/originHeader/origin-header-for-https.html
-plugins/npruntime.html
+plugins/npruntime/npruntime.html
 
 ################################################################################
 ######################### End list of r41995 failures ##########################
@@ -642,6 +644,7 @@ fast/dom/Geolocation
 
 # This port doesn't support Notifications.
 fast/notifications
+http/tests/notifications
 
 # MediaPlayerPrivateQuickTimeWin doesn't return to NETWORK_IDLE and hence doesn't fire a suspend event
 # https://bugs.webkit.org/show_bug.cgi?id=37035
@@ -677,9 +680,16 @@ fast/forms/input-selectedoption.html
 # <https://bugs.webkit.org/show_bug.cgi?id=29287>
 http/tests/local/send-dragged-file.html
 http/tests/local/send-sliced-dragged-file.html
+http/tests/local/blob/send-hybrid-blob.html
 http/tests/local/formdata/send-form-data.html
 http/tests/local/formdata/send-form-data-with-sliced-file.html
 http/tests/local/formdata/upload-events.html
+
+# Need Blob.slice support
+http/tests/local/blob/send-sliced-data-blob.html
+
+# BlodBuilder is not enabled
+http/tests/local/blob/send-data-blob.html
 
 # <https://bugs.webkit.org/show_bug.cgi?id=29289>
 plugins/destroy-during-npp-new.html
@@ -709,16 +719,6 @@ fast/history/nested-visited-test.html
 fast/history/self-is-visited.html
 fast/history/sibling-visited-test.html
 
-# ACCELERATED_COMPOSITING tests that crash
-compositing/layers-inside-overflow-scroll.html
-compositing/self-painting-layers.html
-compositing/geometry/clipped-video-controller.html
-compositing/geometry/video-fixed-scrolling.html
-compositing/geometry/video-opacity-overlay.html
-compositing/overflow/scroll-ancestor-update.html
-compositing/reflections/load-video-in-reflection.html
-compositing/video/video-background-color.html
-
 # ACCELERATED_COMPOSITING tests that have incorrect layout
 compositing/webgl/webgl-background-color.html
 compositing/webgl/webgl-reflection.html
@@ -729,9 +729,6 @@ fast/forms/validationMessage.html
 # Need to implement this in plugins code in WebKit
 plugins/reloadplugins-and-pages.html
 plugins/reloadplugins-no-pages.html
-
-# These tests require Qt Widgets
-plugins/qt-qwidget-plugin.html
 
 # This test requires ogg codecs
 media/media-can-play-ogg.html
@@ -834,9 +831,15 @@ fast/dom/HTMLProgressElement/progress-bar-value-pseudo-element.html
 # meter element is not supported
 fast/dom/HTMLMeterElement/meter-element.html
 fast/dom/HTMLMeterElement/set-meter-properties.html
+fast/dom/HTMLMeterElement/meter-appearances-capacity.html
+fast/dom/HTMLMeterElement/meter-appearances-rating-relevancy.html
+fast/dom/HTMLMeterElement/meter-optimums.html
+fast/dom/HTMLMeterElement/meter-percent-size.html
+fast/dom/HTMLMeterElement/meter-styles.html
+fast/dom/HTMLMeterElement/meter-styles-changing-pseudo.html
 
-# No Widgets 1.0 support
-fast/media/media-feature-wgt-view-mode.html
+# view mode media feature
+fast/media/view-mode-media-feature.html
 
 # Need expectations. See https://bugs.webkit.org/show_bug.cgi?id=36461
 fast/repaint/overflow-scroll-body-appear.html
@@ -844,26 +847,11 @@ fast/repaint/overflow-scroll-body-appear.html
 # Need to add functionality to DumpRenderTree to handle scrollbar police changes
 fast/overflow/scrollbar-restored-and-then-locked.html
 
-# Need to handle getting text/html in ClipboardWin::getData.
-editing/pasteboard/onpaste-text-html.html
-fast/events/ondrop-text-html.html
-
 # <http://webkit.org/b/37096> http/tests/security/xss-DENIED-iframe-src-alias.html sometimes times out on Windows
 http/tests/security/xss-DENIED-iframe-src-alias.html
 
-# Missing an implementation of LayoutTestController::markerTextForListItem()
-fast/lists/ol-nested-items-dynamic-insert.html
-fast/lists/ol-nested-items-dynamic-remove.html
-fast/lists/ol-nested-items.html
-fast/lists/ol-nested-list-dynamic-insert.html
-fast/lists/ol-nested-list-dynamic-remove.html
-fast/lists/ol-nested-list.html
-
 # Doesn't support WOFF yet.
 fast/css/font-face-woff.html
-
-# multiple tests fail on different platforms, need to find the cause(s)
-fast/js/sputnik
 
 # https://bugs.webkit.org/show_bug.cgi?id=38376
 media/media-document-audio-size.html
@@ -881,9 +869,114 @@ canvas/philip
 # https://bugs.webkit.org/show_bug.cgi?id=39104
 editing/spelling/context-menu-suggestions.html
 
+# textInputController.hasSpellingMarkers() is not implemented.
+editing/spelling/spelling-contenteditable.html
+editing/spelling/spelling-textarea.html
+
 # IndexedDB is not yet enabled.
 storage/indexeddb
 
-# This port doesn't support DeviceOrientation.
+# This port doesn't support DeviceMotion or DeviceOrientation.
+fast/dom/DeviceMotion
 fast/dom/DeviceOrientation
-fast/dom/Window/window-properties-on-device-orientation.html
+fast/dom/Window/window-properties-device-orientation.html
+
+# Link prefetch is disabled by default
+fast/dom/HTMLLinkElement/prefetch.html
+
+# LayoutTestController::pageProperty is not implemented for WIN yet.
+printing/page-rule-selection.html
+
+# Hyphenation is not implemented yet.
+fast/text/hyphenate-character.html
+fast/text/hyphens.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=35350
+fast/events/show-modal-dialog-onblur-onfocus.html
+fast/harness/show-modal-dialog.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.2_T10.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.1_T11.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.1_T2.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.2_T2.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.1_T4.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.2_T4.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.1_T6.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.2_T6.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.1_T8.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.2_T8.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.1_T10.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.2_T11.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.1_T1.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.2_T1.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.1_T3.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.2_T3.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.1_T5.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.2_T5.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.1_T7.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.2_T7.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.1_T9.html
+fast/js/sputnik/Conformance/10_Execution_Contexts/10.2_Entering_An_Execution_Context/10.2.2_Eval_Code/S10.2.2_A1.2_T9.html
+
+# LayoutTestController::isPageBoxVisible, pageAreaRectInPixels, and preferredPageSizeInPixels are not implemented yet for WIN.
+printing/page-format-data.html
+
+# Need to implement inner-spin-button
+# https://bugs.webkit.org/show_bug.cgi?id=38381
+fast/forms/input-appearance-spinbutton-disabled-readonly.html
+fast/forms/input-number-events.html
+fast/forms/input-spinbutton-capturing.html
+
+# Speech input is not yet enabled.
+fast/speech
+
+# Needs to be fixed at image decoder layer for Safari.
+fast/images/large-size-image-crash.html
+
+# Disable until the windows WebKit API supports injecting in the top frame only.
+# https://bugs.webkit.org/show_bug.cgi?id=41800
+userscripts/user-script-all-frames.html
+userscripts/user-script-top-frame-only.html
+userscripts/user-style-all-frames.html
+userscripts/user-style-top-frame-only.html
+
+# Directory upload is not enabled.
+fast/forms/input-file-directory-upload.html
+
+# Need setPrinting. See https://bugs.webkit.org/show_bug.cgi?id=20011
+printing/setPrinting.html
+
+# The feature was disabled due to a compatibility issue.
+# https://bugs.webkit.org/show_bug.cgi?id=40520
+fast/forms/interactive-validation-lost-focusable.html
+fast/forms/interactive-validation-prevented.html
+
+# Web Timing is not enabled.
+# https://bugs.webkit.org/show_bug.cgi?id=42435
+fast/dom/Window/window-properties-performance.html
+fast/dom/navigation-type-back-forward.html
+fast/dom/navigation-type-navigate.html
+fast/dom/navigation-type-reload.html
+fast/dom/webtiming.html
+fast/dom/webtiming-navigate-within-document.html
+http/tests/misc/webtiming-one-redirect.php
+http/tests/misc/webtiming-two-redirects.php
+
+# Still working out flakiness issues with the perf tests.
+# https://bugs.webkit.org/show_bug.cgi?id=44199
+perf/
+
+# Application Cache Quotas
+# https://bugs.webkit.org/show_bug.cgi?id=43458
+http/tests/appcache/origin-quota.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=43332
+inspector/dom-breakpoints.html
+
+# <https://bugs.webkit.org/show_bug.cgi?id=44484>
+svg/batik/paints/patternRegions-positioned-objects.svg
+
+# Full Screen support is not yet enabled.
+fullscreen/
+
+# viewport meta tag support
+fast/viewport

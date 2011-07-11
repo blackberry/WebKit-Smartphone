@@ -47,6 +47,7 @@ import sys
 import thread
 import threading
 import time
+import traceback
 
 import test_failures
 
@@ -54,9 +55,26 @@ _log = logging.getLogger("webkitpy.layout_tests.layout_package."
                          "dump_render_tree_thread")
 
 
-def process_output(port, test_info, test_types, test_args, configuration,
-                   output_dir, crash, timeout, test_run_time, actual_checksum,
-                   output, error):
+def find_thread_stack(id):
+    """Returns a stack object that can be used to dump a stack trace for
+    the given thread id (or None if the id is not found)."""
+    for thread_id, stack in sys._current_frames().items():
+        if thread_id == id:
+            return stack
+    return None
+
+
+def log_stack(stack):
+    """Log a stack trace to log.error()."""
+    for filename, lineno, name, line in traceback.extract_stack(stack):
+        _log.error('File: "%s", line %d, in %s' % (filename, lineno, name))
+        if line:
+            _log.error('  %s' % line.strip())
+
+
+def _process_output(port, test_info, test_types, test_args, configuration,
+                    output_dir, crash, timeout, test_run_time, actual_checksum,
+                    output, error):
     """Receives the output from a DumpRenderTree process, subjects it to a
     number of tests, and returns a list of failure types the test produced.
 
@@ -118,6 +136,21 @@ def process_output(port, test_info, test_types, test_args, configuration,
                       total_time_for_all_diffs, time_for_diffs)
 
 
+def _pad_timeout(timeout):
+    """Returns a safe multiple of the per-test timeout value to use
+    to detect hung test threads.
+
+    """
+    # When we're running one test per DumpRenderTree process, we can
+    # enforce a hard timeout.  The DumpRenderTree watchdog uses 2.5x
+    # the timeout; we want to be larger than that.
+    return timeout * 3
+
+
+def _milliseconds_to_seconds(msecs):
+    return float(msecs) / 1000.0
+
+
 class TestResult(object):
 
     def __init__(self, filename, failures, test_run_time,
@@ -152,28 +185,69 @@ class SingleTestThread(threading.Thread):
         self._test_args = test_args
         self._configuration = configuration
         self._output_dir = output_dir
+        self._driver = None
 
     def run(self):
+        self._covered_run()
+
+    def _covered_run(self):
+        # FIXME: this is a separate routine to work around a bug
+        # in coverage: see http://bitbucket.org/ned/coveragepy/issue/85.
         test_info = self._test_info
-        driver = self._port.create_driver(self._image_path, self._shell_args)
-        driver.start()
+        self._driver = self._port.create_driver(self._image_path,
+                                                self._shell_args)
+        self._driver.start()
         start = time.time()
         crash, timeout, actual_checksum, output, error = \
-            driver.run_test(test_info.uri.strip(), test_info.timeout,
-                            test_info.image_hash())
+            self._driver.run_test(test_info.uri.strip(), test_info.timeout,
+                                  test_info.image_hash())
         end = time.time()
-        self._test_result = process_output(self._port,
+        self._test_result = _process_output(self._port,
             test_info, self._test_types, self._test_args,
             self._configuration, self._output_dir, crash, timeout, end - start,
             actual_checksum, output, error)
-        driver.stop()
+        self._driver.stop()
 
     def get_test_result(self):
         return self._test_result
 
 
-class TestShellThread(threading.Thread):
+class WatchableThread(threading.Thread):
+    """This class abstracts an interface used by
+    run_webkit_tests.TestRunner._wait_for_threads_to_finish for thread
+    management."""
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self._canceled = False
+        self._exception_info = None
+        self._next_timeout = None
+        self._thread_id = None
 
+    def cancel(self):
+        """Set a flag telling this thread to quit."""
+        self._canceled = True
+
+    def clear_next_timeout(self):
+        """Mark a flag telling this thread to stop setting timeouts."""
+        self._timeout = 0
+
+    def exception_info(self):
+        """If run() terminated on an uncaught exception, return it here
+        ((type, value, traceback) tuple).
+        Returns None if run() terminated normally. Meant to be called after
+        joining this thread."""
+        return self._exception_info
+
+    def id(self):
+        """Return a thread identifier."""
+        return self._thread_id
+
+    def next_timeout(self):
+        """Return the time the test is supposed to finish by."""
+        return self._next_timeout
+
+
+class TestShellThread(WatchableThread):
     def __init__(self, port, filename_list_queue, result_queue,
                  test_types, test_args, image_path, shell_args, options):
         """Initialize all the local state for this DumpRenderTree thread.
@@ -192,7 +266,7 @@ class TestShellThread(threading.Thread):
               command-line options should match those expected by
               run_webkit_tests; they are typically passed via the
               run_webkit_tests.TestRunner class."""
-        threading.Thread.__init__(self)
+        WatchableThread.__init__(self)
         self._port = port
         self._filename_list_queue = filename_list_queue
         self._result_queue = result_queue
@@ -203,8 +277,6 @@ class TestShellThread(threading.Thread):
         self._image_path = image_path
         self._shell_args = shell_args
         self._options = options
-        self._canceled = False
-        self._exception_info = None
         self._directory_timing_stats = {}
         self._test_results = []
         self._num_tests = 0
@@ -231,17 +303,6 @@ class TestShellThread(threading.Thread):
         """
         return self._test_results
 
-    def cancel(self):
-        """Set a flag telling this thread to quit."""
-        self._canceled = True
-
-    def get_exception_info(self):
-        """If run() terminated on an uncaught exception, return it here
-        ((type, value, traceback) tuple).
-        Returns None if run() terminated normally. Meant to be called after
-        joining this thread."""
-        return self._exception_info
-
     def get_total_time(self):
         return max(self._stop_time - self._start_time, 0.0)
 
@@ -251,6 +312,12 @@ class TestShellThread(threading.Thread):
     def run(self):
         """Delegate main work to a helper method and watch for uncaught
         exceptions."""
+        self._covered_run()
+
+    def _covered_run(self):
+        # FIXME: this is a separate routine to work around a bug
+        # in coverage: see http://bitbucket.org/ned/coveragepy/issue/85.
+        self._thread_id = thread.get_ident()
         self._start_time = time.time()
         self._num_tests = 0
         try:
@@ -258,14 +325,15 @@ class TestShellThread(threading.Thread):
             self._run(test_runner=None, result_summary=None)
             _log.debug('%s done (%d tests)' % (self.getName(),
                        self.get_num_tests()))
+        except KeyboardInterrupt:
+            self._exception_info = sys.exc_info()
+            _log.debug("%s interrupted" % self.getName())
         except:
             # Save the exception for our caller to see.
             self._exception_info = sys.exc_info()
             self._stop_time = time.time()
-            # Re-raise it and die.
-            _log.error('%s dying: %s' % (self.getName(),
-                       self._exception_info))
-            raise
+            _log.error('%s dying, exception raised' % self.getName())
+
         self._stop_time = time.time()
 
     def run_in_main_thread(self, test_runner, result_summary):
@@ -281,14 +349,8 @@ class TestShellThread(threading.Thread):
 
         If test_runner is not None, then we call test_runner.UpdateSummary()
         with the results of each test."""
-        batch_size = 0
+        batch_size = self._options.batch_size
         batch_count = 0
-        if self._options.batch_size:
-            try:
-                batch_size = int(self._options.batch_size)
-            except:
-                _log.info("Ignoring invalid batch size '%s'" %
-                          self._options.batch_size)
 
         # Append tests we're running to the existing tests_run.txt file.
         # This is created in run_webkit_tests.py:_PrepareListsAndPrintOutput.
@@ -298,7 +360,7 @@ class TestShellThread(threading.Thread):
 
         while True:
             if self._canceled:
-                _log.info('Testing canceled')
+                _log.debug('Testing cancelled')
                 tests_run_file.close()
                 return
 
@@ -381,10 +443,10 @@ class TestShellThread(threading.Thread):
 
         worker.start()
 
-        # When we're running one test per DumpRenderTree process, we can
-        # enforce a hard timeout.  The DumpRenderTree watchdog uses 2.5x
-        # the timeout; we want to be larger than that.
-        worker.join(int(test_info.timeout) * 3.0 / 1000.0)
+        thread_timeout = _milliseconds_to_seconds(
+            _pad_timeout(int(test_info.timeout)))
+        thread._next_timeout = time.time() + thread_timeout
+        worker.join(thread_timeout)
         if worker.isAlive():
             # If join() returned with the thread still running, the
             # DumpRenderTree is completely hung and there's nothing
@@ -395,11 +457,13 @@ class TestShellThread(threading.Thread):
             # that tradeoff in order to avoid losing the rest of this
             # thread's results.
             _log.error('Test thread hung: killing all DumpRenderTrees')
-            worker._driver.stop()
+            if worker._driver:
+                worker._driver.stop()
 
         try:
             result = worker.get_test_result()
         except AttributeError, e:
+            # This gets raised if the worker thread has already exited.
             failures = []
             _log.error('Cannot get results of test: %s' %
                        test_info.filename)
@@ -426,14 +490,20 @@ class TestShellThread(threading.Thread):
         # previous run will be copied into the baseline.)
         image_hash = test_info.image_hash()
         if (image_hash and
-            (self._test_args.new_baseline or self._test_args.reset_results)):
+            (self._test_args.new_baseline or self._test_args.reset_results or
+            not self._options.pixel_tests)):
             image_hash = ""
         start = time.time()
+
+        thread_timeout = _milliseconds_to_seconds(
+             _pad_timeout(int(test_info.timeout)))
+        self._next_timeout = start + thread_timeout
+
         crash, timeout, actual_checksum, output, error = \
            self._driver.run_test(test_info.uri, test_info.timeout, image_hash)
         end = time.time()
 
-        result = process_output(self._port, test_info, self._test_types,
+        result = _process_output(self._port, test_info, self._test_types,
                                 self._test_args, self._options.configuration,
                                 self._options.results_directory, crash,
                                 timeout, end - start, actual_checksum,

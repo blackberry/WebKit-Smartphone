@@ -22,11 +22,14 @@
 
 #include "Base64.h"
 #include "BitmapImage.h"
+#include "FloatSize.h"
 #include "GraphicsContext.h"
 #include "ImageData.h"
 #include "ImageDecoder.h"
+#include "IntSize.h"
 #include "JPEGImageEncoder.h"
 #include "NotImplemented.h"
+#include "PaintOpenVG.h"
 #include "PainterOpenVG.h"
 #include "PNGImageEncoder.h"
 #include "SurfaceOpenVG.h"
@@ -34,10 +37,13 @@
 
 #if PLATFORM(EGL)
 #include "EGLDisplayOpenVG.h"
+#include <egl.h>
 #endif
 
 #include <openvg.h>
 #include <wtf/Assertions.h>
+#include <wtf/RefPtr.h>
+#include <wtf/UnusedParam.h>
 
 // ImageData is RGBA on big endian and ABGR on little endian.
 // VGImageFormat always works on the same bit order no matter the endianness.
@@ -70,16 +76,41 @@ ImageBufferData::ImageBufferData(const IntSize& size, int colorSpace, bool& succ
 
     switch ((ImageColorSpace) colorSpace) {
     case DeviceRGB:
-        m_format = VG_sARGB_8888; break;
+        m_format = WEBKIT_OPENVG_NATIVE_IMAGE_FORMAT_s_8888;
+        break;
     case GrayScale:
-        m_format = VG_sL_8; break;
+        m_format = VG_sL_8;
+        break;
     case LinearRGB:
-        m_format = VG_lARGB_8888; break;
+        m_format = WEBKIT_OPENVG_NATIVE_IMAGE_FORMAT_l_8888;
+        break;
+    }
+
+    const IntSize vgMaxImageSize(vgGeti(VG_MAX_IMAGE_WIDTH), vgGeti(VG_MAX_IMAGE_HEIGHT));
+    ASSERT_VG_NO_ERROR();
+
+    if (size.width() <= vgMaxImageSize.width() && size.height() <= vgMaxImageSize.height()) {
+        VGImage image = vgCreateImage(m_format, size.width(), size.height(), VG_IMAGE_QUALITY_FASTER);
+
+        if (image == VG_INVALID_HANDLE) {
+            // Clear VG error so that subsequent assertions don't trigger.
+            // We can fall back to pbuffer surfaces, so let's not error out.
+            vgGetError();
+        } else {
+            ASSERT_VG_NO_ERROR();
+            m_tiledImage = adoptRef(new TiledImageOpenVG(size, vgMaxImageSize));
+            m_tiledImage->setTile(0, 0, image);
+        }
     }
 
 #if PLATFORM(EGL)
     EGLint errorCode;
-    m_surface = new SurfaceOpenVG(size, EGLDisplayOpenVG::current()->display(), 0, &errorCode);
+    if (m_tiledImage) {
+        m_surface = new SurfaceOpenVG(
+            (EGLClientBuffer*) m_tiledImage->tile(0, 0), EGL_OPENVG_IMAGE,
+            EGLDisplayOpenVG::current()->display(), 0, &errorCode);
+    } else
+        m_surface = new SurfaceOpenVG(size, EGLDisplayOpenVG::current()->display(), 0, &errorCode);
 #else
     ASSERT_NOT_REACHED();
     return;
@@ -88,6 +119,7 @@ ImageBufferData::ImageBufferData(const IntSize& size, int colorSpace, bool& succ
     if (!m_surface->isValid()) {
         delete m_surface;
         m_surface = 0;
+        m_tiledImage.clear();
         return;
     }
     m_surface->makeCurrent();
@@ -118,12 +150,18 @@ PassRefPtr<ImageData> ImageBufferData::getImageData(const IntRect& rect, const I
     if (rect.x() < 0 || rect.y() < 0 || (rect.right()) > size.width() || (rect.bottom()) > size.height())
         memset(data, 0, result->data()->length());
 
-    m_surface->makeCurrent();
+    if (!m_tiledImage)
+        m_surface->makeCurrent();
 
     // OpenVG ignores pixels that are out of bounds, so we can just
     // call vgReadPixels() without any further safety assurances.
-    vgReadPixels(data, rect.width() * 4, format,
-        rect.x(), rect.y(), rect.width(), rect.height());
+    if (m_surface->isCurrent()) {
+        vgReadPixels(data, rect.width() * 4, format,
+            rect.x(), rect.y(), rect.width(), rect.height());
+    } else {
+        vgGetImageSubData(m_tiledImage->tile(0, 0), data, rect.width() * 4, format,
+            rect.x(), rect.y(), rect.width(), rect.height());
+    }
     ASSERT_VG_NO_ERROR();
 
     return result;
@@ -154,10 +192,16 @@ void ImageBufferData::putImageData(ImageData*& source, const IntRect& sourceRect
     unsigned const char* data = source->data()->data()->data();
     int dataOffset = (sourceRect.y() * source->width() * 4) + (sourceRect.x() * 4);
 
-    m_surface->makeCurrent();
+    if (!m_tiledImage)
+        m_surface->makeCurrent();
 
-    vgWritePixels(data + dataOffset, source->width() * 4, format,
-        destx, desty, sourceRect.width(), sourceRect.height());
+    if (m_surface->isCurrent()) {
+        vgWritePixels(data + dataOffset, source->width() * 4, format,
+            destx, desty, sourceRect.width(), sourceRect.height());
+    } else {
+        vgImageSubData(m_tiledImage->tile(0, 0), data + dataOffset, source->width() * 4, format,
+            destx, desty, sourceRect.width(), sourceRect.height());
+    }
     ASSERT_VG_NO_ERROR();
 }
 
@@ -171,9 +215,14 @@ void ImageBufferData::transformColorSpace(const Vector<int>& lookUpTable)
     VGubyte* data = new VGubyte[width * height * 4];
     VGubyte* currentPixel = data;
 
-    m_surface->makeCurrent();
+    if (!m_tiledImage)
+        m_surface->makeCurrent();
 
-    vgReadPixels(data, width * 4, IMAGEBUFFER_VG_EXCHANGE_FORMAT, 0, 0, width, height);
+    if (m_surface->isCurrent())
+        vgReadPixels(data, width * 4, IMAGEBUFFER_VG_EXCHANGE_FORMAT, 0, 0, width, height);
+    else
+        vgGetImageSubData(m_tiledImage->tile(0, 0), data, width * 4, IMAGEBUFFER_VG_EXCHANGE_FORMAT, 0, 0, width, height);
+
     ASSERT_VG_NO_ERROR();
 
     for (int y = 0; y < height; y++) {
@@ -185,7 +234,11 @@ void ImageBufferData::transformColorSpace(const Vector<int>& lookUpTable)
         }
     }
 
-    vgWritePixels(data, width * 4, IMAGEBUFFER_VG_EXCHANGE_FORMAT, 0, 0, width, height);
+    if (m_surface->isCurrent())
+        vgWritePixels(data, width * 4, IMAGEBUFFER_VG_EXCHANGE_FORMAT, 0, 0, width, height);
+    else
+        vgImageSubData(m_tiledImage->tile(0, 0), data, width * 4, IMAGEBUFFER_VG_EXCHANGE_FORMAT, 0, 0, width, height);
+
     ASSERT_VG_NO_ERROR();
 
     delete[] data;
@@ -210,21 +263,80 @@ GraphicsContext* ImageBuffer::context() const
     return m_context.get();
 }
 
-Image* ImageBuffer::image() const
+bool ImageBuffer::drawsUsingCopy() const
 {
-    if (!m_image) {
-        // It's assumed that if image() is called, the actual rendering to the
-        // GraphicsContext must be done.
-        ASSERT(context());
+    return !m_data.m_tiledImage;
+}
 
-        // As the original VGImage might be modified in the future, we copy its
-        // contents into a new image and return that one.
-        NativeImagePtr image = context()->platformContext()->activePainter()->asNewNativeImage(
-            IntRect(IntPoint(0, 0), m_size), m_data.m_format);
+PassRefPtr<Image> ImageBuffer::copyImage() const
+{
+    NativeImagePtr image = context()->platformContext()->activePainter()->asNewNativeImage(
+        IntRect(IntPoint(0, 0), m_size), m_data.m_format);
 
-        m_image = BitmapImage::create(image);
+    return BitmapImage::create(image);
+}
+
+void ImageBuffer::clip(GraphicsContext* context, const FloatRect& rect) const
+{
+    notImplemented();
+    UNUSED_PARAM(context);
+    UNUSED_PARAM(rect);
+}
+
+void ImageBuffer::draw(GraphicsContext* context, ColorSpace styleColorSpace, const FloatRect& dstRect, const FloatRect& srcRect,
+                       CompositeOperator op, bool useLowQualityScale)
+{
+    if (m_data.m_tiledImage && context != m_context.get()) {
+        FloatRect src = srcRect;
+        if (src.width() == -1)
+            src.setWidth(m_data.m_tiledImage->size().width());
+        if (src.height() == -1)
+            src.setHeight(m_data.m_tiledImage->size().height());
+
+        ASSERT(context->platformContext()->activePainter());
+        context->platformContext()->activePainter()->drawImage(m_data.m_tiledImage.get(), dstRect, src);
+        return;
     }
-    return m_image.get();
+
+    RefPtr<Image> imageCopy = copyImage();
+    context->drawImage(imageCopy.get(), styleColorSpace, dstRect, srcRect, op, useLowQualityScale);
+}
+
+void ImageBuffer::drawPattern(GraphicsContext* context, const FloatRect& srcRect, const AffineTransform& patternTransform,
+                              const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator op, const FloatRect& dstRect)
+{
+    if (m_data.m_tiledImage && context != m_context.get()) {
+        FloatRect src = srcRect;
+        if (src.width() == -1)
+            src.setWidth(m_data.m_tiledImage->size().width());
+        if (src.height() == -1)
+            src.setHeight(m_data.m_tiledImage->size().height());
+
+        ASSERT(context->platformContext()->activePainter());
+
+        AffineTransform phasedPatternTransform;
+        phasedPatternTransform.translate(phase.x(), phase.y());
+        phasedPatternTransform.multLeft(patternTransform);
+
+        PatternOpenVG pattern(m_data.m_tiledImage, src);
+        pattern.setTransformation(phasedPatternTransform);
+
+        PainterOpenVG* painter = context->platformContext()->activePainter();
+
+        PaintOpenVG currentPaint = painter->fillPaint();
+        CompositeOperator currentOp = painter->compositeOperation();
+
+        painter->setCompositeOperation(op);
+        painter->setFillPattern(pattern);
+        painter->drawRect(dstRect, VG_FILL_PATH);
+
+        painter->setFillPaint(currentPaint);
+        painter->setCompositeOperation(currentOp);
+        return;
+    }
+
+    RefPtr<Image> imageCopy = copyImage();
+    imageCopy->drawPattern(context, srcRect, patternTransform, phase, styleColorSpace, op, dstRect);
 }
 
 void ImageBuffer::platformTransformColorSpace(const Vector<int>& lookUpTable)
@@ -258,7 +370,7 @@ void ImageBuffer::putPremultipliedImageData(ImageData* source, const IntRect& so
     m_data.putImageData(source, sourceRect, destPoint, m_size, IMAGEDATA_VG_PREMULTIPLIED_FORMAT);
 }
 
-String ImageBuffer::toDataURL(const String& mimeType) const
+String ImageBuffer::toDataURL(const String& mimeType, const double* quality) const
 {
     if (m_size.isEmpty())
         return "data:,";

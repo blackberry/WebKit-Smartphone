@@ -37,6 +37,12 @@
 #include <wtf/OwnPtr.h>
 #include <windows.h>
 
+namespace WebCore {
+
+class Page;
+
+}
+
 class WebNodeHighlight;
 class WebView;
 
@@ -52,16 +58,24 @@ public:
     virtual void highlight(WebCore::Node*);
     virtual void hideHighlight();
 
-    virtual void populateSetting(const WebCore::String& key, WebCore::String* value);
-    virtual void storeSetting(const WebCore::String& key, const WebCore::String& value);
+    virtual void populateSetting(const WTF::String& key, WTF::String* value);
+    virtual void storeSetting(const WTF::String& key, const WTF::String& value);
+
+    virtual bool sendMessageToFrontend(const WTF::String&);
 
     void updateHighlight();
-    void frontendClosing() { m_frontendHwnd = 0; }
+    void frontendClosing()
+    {
+        m_frontendHwnd = 0;
+        releaseFrontendPage();
+    }
 
+    void releaseFrontendPage();
 private:
     ~WebInspectorClient();
 
     WebView* m_inspectedWebView;
+    WebCore::Page* m_frontendPage;
     HWND m_inspectedWebViewHwnd;
     HWND m_frontendHwnd;
 
@@ -74,17 +88,18 @@ public:
 
     virtual void frontendLoaded();
     
-    virtual WebCore::String localizedStringsURL();
-    virtual WebCore::String hiddenPanels();
+    virtual WTF::String localizedStringsURL();
+    virtual WTF::String hiddenPanels();
     
     virtual void bringToFront();
     virtual void closeWindow();
+    virtual void disconnectFromBackend();
     
     virtual void attachWindow();
     virtual void detachWindow();
     
     virtual void setAttachedWindowHeight(unsigned height);
-    virtual void inspectedURLChanged(const WebCore::String& newURL);
+    virtual void inspectedURLChanged(const WTF::String& newURL);
 
 private:
     ~WebInspectorFrontendClient();
@@ -92,7 +107,7 @@ private:
     void closeWindowWithoutNotifications();
     void showWindowWithoutNotifications();
 
-    void destroyInspectorView();
+    void destroyInspectorView(bool notifyInspectorController);
 
     void updateWindowTitle();
 
@@ -114,7 +129,7 @@ private:
 
     bool m_attached;
 
-    WebCore::String m_inspectedURL;
+    WTF::String m_inspectedURL;
     bool m_destroyingInspectorView;
 
     static friend LRESULT CALLBACK WebInspectorWndProc(HWND, UINT, WPARAM, LPARAM);

@@ -48,7 +48,13 @@ public:
     virtual bool removeChild(Node* child, ExceptionCode&);
     virtual bool appendChild(PassRefPtr<Node> newChild, ExceptionCode&, bool shouldLazyAttach = false);
 
-    virtual ContainerNode* addChild(PassRefPtr<Node>);
+    // These methods are only used during parsing.
+    // They don't send DOM mutation events or handle reparenting.
+    // However, arbitrary code may be run by beforeload handlers.
+    void parserAddChild(PassRefPtr<Node>);
+    void parserRemoveChild(Node*);
+    void parserInsertBefore(PassRefPtr<Node> newChild, Node* refChild);
+
     bool hasChildNodes() const { return m_firstChild; }
     virtual void attach();
     virtual void detach();
@@ -69,15 +75,18 @@ public:
     virtual bool removeChildren();
 
     void removeAllChildren();
+    void takeAllChildrenFrom(ContainerNode*);
 
     void cloneChildNodes(ContainerNode* clone);
     
     bool dispatchBeforeLoadEvent(const String& sourceURL);
 
+    static void queuePostAttachCallback(NodeCallback, Node*);
+    static bool postAttachCallbacksAreSuspended();
+    
 protected:
     ContainerNode(Document*, ConstructionType = CreateContainer);
 
-    static void queuePostAttachCallback(NodeCallback, Node*);
     void suspendPostAttachCallbacks();
     void resumePostAttachCallbacks();
 
@@ -89,10 +98,19 @@ protected:
 
     void setFirstChild(Node* child) { m_firstChild = child; }
     void setLastChild(Node* child) { m_lastChild = child; }
-    
+
 private:
+    // Never call this function directly.  If you're trying to call this
+    // function, your code is either wrong or you're supposed to call
+    // parserAddChild.  Please do not call parserAddChild unless you are the
+    // parser!
+    virtual void deprecatedParserAddChild(PassRefPtr<Node>);
+
+    void removeBetween(Node* previousChild, Node* nextChild, Node* oldChild);
+    void insertBeforeCommon(Node* nextChild, Node* oldChild);
+
     static void dispatchPostAttachCallbacks();
-    
+
     bool getUpperLeftCorner(FloatPoint&) const;
     bool getLowerRightCorner(FloatPoint&) const;
 
@@ -106,6 +124,22 @@ inline ContainerNode::ContainerNode(Document* document, ConstructionType type)
     , m_lastChild(0)
 {
 }
+
+inline ContainerNode* toContainerNode(Node* node)
+{
+    ASSERT(!node || node->isContainerNode());
+    return static_cast<ContainerNode*>(node);
+}
+	
+inline const ContainerNode* toContainerNode(const Node* node)
+	{
+    ASSERT(!node || node->isContainerNode());
+    return static_cast<const ContainerNode*>(node);
+}
+
+// This will catch anyone doing an unnecessary cast.
+void toContainerNode(const ContainerNode*);
+
 
 inline unsigned Node::containerChildNodeCount() const
 {

@@ -27,9 +27,11 @@
 #define WebUIClient_h
 
 #include "WKPage.h"
+#include <wtf/Forward.h>
+#include <wtf/PassRefPtr.h>
 
 namespace WebCore {
-    class StringImpl;
+class IntSize;
 }
 
 namespace WebKit {
@@ -40,12 +42,16 @@ class WebPageProxy;
 class WebUIClient {
 public:
     WebUIClient();
-    void initialize(WKPageUIClient*);
+    void initialize(const WKPageUIClient*);
 
-    WebPageProxy* createNewPage(WebPageProxy*);
+    PassRefPtr<WebPageProxy> createNewPage(WebPageProxy*);
     void showPage(WebPageProxy*);
     void close(WebPageProxy*);
-    void runJavaScriptAlert(WebPageProxy*, WebCore::StringImpl*, WebFrameProxy*);
+    void runJavaScriptAlert(WebPageProxy*, const WTF::String&, WebFrameProxy*);
+    bool runJavaScriptConfirm(WebPageProxy*, const WTF::String&, WebFrameProxy*);
+    WTF::String runJavaScriptPrompt(WebPageProxy*, const WTF::String&, const WTF::String&, WebFrameProxy*);
+    void setStatusText(WebPageProxy*, const String&);
+    void contentsSizeChanged(WebPageProxy*, const WebCore::IntSize&, WebFrameProxy*);
 
 private:
     WKPageUIClient m_pageUIClient;

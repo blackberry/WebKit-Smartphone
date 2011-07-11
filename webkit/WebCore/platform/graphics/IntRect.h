@@ -48,7 +48,12 @@ QT_BEGIN_NAMESPACE
 class QRect;
 QT_END_NAMESPACE
 #elif PLATFORM(GTK)
+#ifdef GTK_API_VERSION_2
 typedef struct _GdkRectangle GdkRectangle;
+#else
+typedef struct _cairo_rectangle_int cairo_rectangle_int_t;
+typedef cairo_rectangle_int_t GdkRectangle;
+#endif
 #elif PLATFORM(HAIKU)
 class BRect;
 #elif PLATFORM(OLYMPIA)
@@ -57,8 +62,6 @@ namespace Platform {
 class IntRect;
 }
 }
-#elif PLATFORM(EFL)
-#include <Evas.h>
 #endif
 
 #if PLATFORM(WX)
@@ -164,9 +167,6 @@ public:
 #elif PLATFORM(HAIKU)
     explicit IntRect(const BRect&);
     operator BRect() const;
-#elif PLATFORM(EFL)
-    explicit IntRect(const Eina_Rectangle&);
-    operator Eina_Rectangle() const;
 #endif
 
 #if PLATFORM(CG)
@@ -188,9 +188,9 @@ public:
     IntRect(const Olympia::Platform::IntRect&);
     operator Olympia::Platform::IntRect() const;
 
-    String toString() const
+    WTF::String toString() const
     {
-        return String::format("[IntRect %s %s]", m_location.toString().utf8().data(), m_size.toString().utf8().data());
+        return WTF::String::format("[IntRect %s %s]", m_location.toString().utf8().data(), m_size.toString().utf8().data());
     }
 #endif
 

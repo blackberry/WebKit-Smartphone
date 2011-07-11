@@ -1,0 +1,17 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x182
+  RenderBlock {HTML} at (0,0) size 800x182
+    RenderBody {BODY} at (8,16) size 784x150
+      RenderBlock {P} at (0,0) size 784x21
+        RenderText {#text} at (0,1) size 419x19
+          text run at (0,1) width 419: "The three boxes below should have progressively thinner borders."
+      RenderBlock {P} at (0,37) size 784x31 [border: (5px solid #000000)]
+        RenderText {#text} at (5,6) size 12x19
+          text run at (5,6) width 12: "A"
+      RenderBlock {P} at (0,84) size 784x27 [border: (3px solid #000000)]
+        RenderText {#text} at (3,4) size 11x19
+          text run at (3,4) width 11: "B"
+      RenderBlock {P} at (0,127) size 784x23 [border: (1px solid #000000)]
+        RenderText {#text} at (1,2) size 11x19
+          text run at (1,2) width 11: "C"

@@ -31,6 +31,7 @@
 #include "qwebelement.h"
 #include "wtf/RefPtr.h"
 #include "Frame.h"
+#include "ViewportArguments.h"
 
 namespace WebCore {
     class FrameLoaderClientQt;
@@ -44,16 +45,16 @@ class QWebFrameData {
 public:
     QWebFrameData(WebCore::Page*, WebCore::Frame* parentFrame = 0,
                   WebCore::HTMLFrameOwnerElement* = 0,
-                  const WebCore::String& frameName = WebCore::String());
+                  const WTF::String& frameName = WTF::String());
 
     WebCore::KURL url;
-    WebCore::String name;
+    WTF::String name;
     WebCore::HTMLFrameOwnerElement* ownerElement;
     WebCore::Page* page;
     RefPtr<WebCore::Frame> frame;
     WebCore::FrameLoaderClientQt* frameLoaderClient;
 
-    WebCore::String referrer;
+    WTF::String referrer;
     bool allowsScrolling;
     int marginWidth;
     int marginHeight;
@@ -71,6 +72,7 @@ public:
         , allowsScrolling(true)
         , marginWidth(-1)
         , marginHeight(-1)
+        , zoomTextOnly(false)
         {}
     void init(QWebFrame* qframe, QWebFrameData* frameData);
     void setPage(QWebPage*);
@@ -80,8 +82,8 @@ public:
     WebCore::Scrollbar* horizontalScrollBar() const;
     WebCore::Scrollbar* verticalScrollBar() const;
 
-    static WebCore::Frame* core(QWebFrame*);
-    static QWebFrame* kit(WebCore::Frame*);
+    static WebCore::Frame* core(const QWebFrame*);
+    static QWebFrame* kit(const WebCore::Frame*);
 
     void renderRelativeCoords(WebCore::GraphicsContext*, QWebFrame::RenderLayer, const QRegion& clip);
 #if ENABLE(TILED_BACKING_STORE)
@@ -98,6 +100,8 @@ public:
     bool allowsScrolling;
     int marginWidth;
     int marginHeight;
+    bool zoomTextOnly;
+    WebCore::ViewportArguments viewportArguments;
 };
 
 class QWebHitTestResultPrivate {

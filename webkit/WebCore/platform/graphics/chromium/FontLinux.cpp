@@ -49,6 +49,7 @@
 #include <unicode/uchar.h>
 #include <wtf/OwnArrayPtr.h>
 #include <wtf/OwnPtr.h>
+#include <wtf/unicode/Unicode.h>
 
 namespace WebCore {
 
@@ -64,13 +65,13 @@ static bool isCanvasMultiLayered(SkCanvas* canvas)
     return !layerIterator.done();
 }
 
-static void adjustTextRenderMode(SkPaint* paint, bool isCanvasMultiLayered)
+static void adjustTextRenderMode(SkPaint* paint, PlatformContextSkia* skiaContext)
 {
     // Our layers only have a single alpha channel. This means that subpixel
     // rendered text cannot be compositied correctly when the layer is
     // collapsed. Therefore, subpixel text is disabled when we are drawing
-    // onto a layer.
-    if (isCanvasMultiLayered)
+    // onto a layer or when the compositor is being used.
+    if (isCanvasMultiLayered(skiaContext->canvas()) || skiaContext->isDrawingToImageBuffer())
         paint->setLCDRenderText(false);
 }
 
@@ -99,16 +100,17 @@ void Font::drawGlyphs(GraphicsContext* gc, const SimpleFontData* font,
         y += SkFloatToScalar(adv[i].height());
     }
 
+    gc->platformContext()->prepareForSoftwareDraw();
+
     SkCanvas* canvas = gc->platformContext()->canvas();
     int textMode = gc->platformContext()->getTextDrawingMode();
-    bool haveMultipleLayers = isCanvasMultiLayered(canvas);
 
     // We draw text up to two times (once for fill, once for stroke).
     if (textMode & cTextFill) {
         SkPaint paint;
         gc->platformContext()->setupPaintForFilling(&paint);
         font->platformData().setupPaint(&paint);
-        adjustTextRenderMode(&paint, haveMultipleLayers);
+        adjustTextRenderMode(&paint, gc->platformContext());
         paint.setTextEncoding(SkPaint::kGlyphID_TextEncoding);
         paint.setColor(gc->fillColor().rgb());
         canvas->drawPosText(glyphs, numGlyphs << 1, pos, paint);
@@ -121,7 +123,7 @@ void Font::drawGlyphs(GraphicsContext* gc, const SimpleFontData* font,
         SkPaint paint;
         gc->platformContext()->setupPaintForStroking(&paint, 0, 0);
         font->platformData().setupPaint(&paint);
-        adjustTextRenderMode(&paint, haveMultipleLayers);
+        adjustTextRenderMode(&paint, gc->platformContext());
         paint.setTextEncoding(SkPaint::kGlyphID_TextEncoding);
         paint.setColor(gc->strokeColor().rgb());
 
@@ -165,25 +167,37 @@ public:
         , m_offsetX(m_startingX)
         , m_run(getTextRun(run))
         , m_iterateBackwards(m_run.rtl())
+        , m_wordSpacingAdjustment(0)
+        , m_padding(0)
+        , m_padError(0)
     {
         // Do not use |run| inside this constructor. Use |m_run| instead.
 
         memset(&m_item, 0, sizeof(m_item));
         // We cannot know, ahead of time, how many glyphs a given script run
         // will produce. We take a guess that script runs will not produce more
-        // than twice as many glyphs as there are code points and fallback if
-        // we find that we are wrong.
-        m_maxGlyphs = m_run.length() * 2;
-        createGlyphArrays();
+        // than twice as many glyphs as there are code points plus a bit of
+        // padding and fallback if we find that we are wrong.
+        createGlyphArrays((m_run.length() + 2) * 2);
 
         m_item.log_clusters = new unsigned short[m_run.length()];
 
         m_item.face = 0;
         m_item.font = allocHarfbuzzFont();
 
-        m_item.string = m_run.characters();
-        m_item.stringLength = m_run.length();
         m_item.item.bidiLevel = m_run.rtl();
+
+        int length = m_run.length();
+        m_item.stringLength = length;
+
+        if (!m_item.item.bidiLevel)
+            m_item.string = m_run.characters();
+        else {
+            // Assume mirrored character is in the same Unicode multilingual plane as the original one.
+            UChar* string = new UChar[length];
+            mirrorCharacters(string, m_run.characters(), length);
+            m_item.string = string;
+        }
 
         reset();
     }
@@ -193,6 +207,58 @@ public:
         fastFree(m_item.font);
         deleteGlyphArrays();
         delete[] m_item.log_clusters;
+        if (m_item.item.bidiLevel)
+            delete[] m_item.string;
+    }
+
+    // setWordSpacingAdjustment sets a delta (in pixels) which is applied at
+    // each word break in the TextRun.
+    void setWordSpacingAdjustment(int wordSpacingAdjustment)
+    {
+        m_wordSpacingAdjustment = wordSpacingAdjustment;
+    }
+
+    // setLetterSpacingAdjustment sets an additional number of pixels that is
+    // added to the advance after each output cluster. This matches the behaviour
+    // of WidthIterator::advance.
+    //
+    // (NOTE: currently does nothing because I don't know how to get the
+    // cluster information from Harfbuzz.)
+    void setLetterSpacingAdjustment(int letterSpacingAdjustment)
+    {
+        m_letterSpacing = letterSpacingAdjustment;
+    }
+
+    bool isWordBreak(unsigned i, bool isRTL)
+    {
+        if (!isRTL)
+            return i && isCodepointSpace(m_item.string[i]) && !isCodepointSpace(m_item.string[i - 1]);
+        return i != m_item.stringLength - 1 && isCodepointSpace(m_item.string[i]) && !isCodepointSpace(m_item.string[i + 1]);
+    }
+
+    // setPadding sets a number of pixels to be distributed across the TextRun.
+    // WebKit uses this to justify text.
+    void setPadding(int padding)
+    {
+        m_padding = padding;
+        if (!m_padding)
+            return;
+
+        // If we have padding to distribute, then we try to give an equal
+        // amount to each space. The last space gets the smaller amount, if
+        // any.
+        unsigned numWordBreaks = 0;
+        bool isRTL = m_iterateBackwards;
+
+        for (unsigned i = 0; i < m_item.stringLength; i++) {
+            if (isWordBreak(i, isRTL))
+                numWordBreaks++;
+        }
+
+        if (numWordBreaks)
+            m_padPerWordBreak = m_padding / numWordBreaks;
+        else
+            m_padPerWordBreak = 0;
     }
 
     void reset()
@@ -258,10 +324,9 @@ public:
         }
 
         setupFontForScriptRun();
-
-        if (!shapeGlyphs())
-            return false;
+        shapeGlyphs();
         setGlyphXPositions(rtl());
+
         return true;
     }
 
@@ -409,53 +474,52 @@ private:
         delete[] m_xPositions;
     }
 
-    bool createGlyphArrays()
+    void createGlyphArrays(int size)
     {
-        m_item.glyphs = new HB_Glyph[m_maxGlyphs];
-        m_item.attributes = new HB_GlyphAttributes[m_maxGlyphs];
-        m_item.advances = new HB_Fixed[m_maxGlyphs];
-        m_item.offsets = new HB_FixedPoint[m_maxGlyphs];
-        // HB_FixedPoint is a struct, so we must use memset to clear it.
-        memset(m_item.offsets, 0, m_maxGlyphs * sizeof(HB_FixedPoint));
-        m_glyphs16 = new uint16_t[m_maxGlyphs];
-        m_xPositions = new SkScalar[m_maxGlyphs];
+        m_item.glyphs = new HB_Glyph[size];
+        memset(m_item.glyphs, 0, size * sizeof(HB_Glyph));
+        m_item.attributes = new HB_GlyphAttributes[size];
+        memset(m_item.attributes, 0, size * sizeof(HB_GlyphAttributes));
+        m_item.advances = new HB_Fixed[size];
+        memset(m_item.advances, 0, size * sizeof(HB_Fixed));
+        m_item.offsets = new HB_FixedPoint[size];
+        memset(m_item.offsets, 0, size * sizeof(HB_FixedPoint));
 
-        return m_item.glyphs
-            && m_item.attributes
-            && m_item.advances
-            && m_item.offsets
-            && m_glyphs16
-            && m_xPositions;
+        m_glyphs16 = new uint16_t[size];
+        m_xPositions = new SkScalar[size];
+
+        m_item.num_glyphs = size;
     }
 
-    bool expandGlyphArrays()
-    {
-        deleteGlyphArrays();
-        m_maxGlyphs <<= 1;
-        return createGlyphArrays();
-    }
-
-    bool shapeGlyphs()
+    void shapeGlyphs()
     {
         for (;;) {
-            m_item.num_glyphs = m_maxGlyphs;
-            HB_ShapeItem(&m_item);
-            if (m_item.num_glyphs < m_maxGlyphs)
+            if (HB_ShapeItem(&m_item))
                 break;
 
             // We overflowed our arrays. Resize and retry.
-            if (!expandGlyphArrays())
-                return false;
+            // HB_ShapeItem fills in m_item.num_glyphs with the needed size.
+            deleteGlyphArrays();
+            // The |+ 1| here is a workaround for a bug in Harfbuzz: the Khmer
+            // shaper (at least) can fail because of insufficient glyph buffers
+            // and request 0 additional glyphs: throwing us into an infinite
+            // loop.
+            createGlyphArrays(m_item.num_glyphs + 1);
         }
-
-        return true;
     }
 
     void setGlyphXPositions(bool isRTL)
     {
         double position = 0;
+        // logClustersIndex indexes logClusters for the first (or last when
+        // RTL) codepoint of the current glyph.  Each time we advance a glyph,
+        // we skip over all the codepoints that contributed to the current
+        // glyph.
+        unsigned logClustersIndex = isRTL ? m_item.num_glyphs - 1 : 0;
+
         for (int iter = 0; iter < m_item.num_glyphs; ++iter) {
-            // Glyphs are stored in logical order, but for layout purposes we always go left to right.
+            // Glyphs are stored in logical order, but for layout purposes we
+            // always go left to right.
             int i = isRTL ? m_item.num_glyphs - iter - 1 : iter;
 
             m_glyphs16[i] = m_item.glyphs[i];
@@ -463,10 +527,65 @@ private:
             m_xPositions[i] = m_offsetX + position + offsetX;
 
             double advance = truncateFixedPointToInteger(m_item.advances[i]);
+            // The first half of the conjuction works around the case where
+            // output glyphs aren't associated with any codepoints by the
+            // clusters log.
+            if (logClustersIndex < m_item.item.length
+                && isWordBreak(m_item.item.pos + logClustersIndex, isRTL)) {
+                advance += m_wordSpacingAdjustment;
+
+                if (m_padding > 0) {
+                    unsigned toPad = roundf(m_padPerWordBreak + m_padError);
+                    m_padError += m_padPerWordBreak - toPad;
+
+                    if (m_padding < toPad)
+                        toPad = m_padding;
+                    m_padding -= toPad;
+                    advance += toPad;
+                }
+            }
+
+            // We would like to add m_letterSpacing after each cluster, but I
+            // don't know where the cluster information is. This is typically
+            // fine for Roman languages, but breaks more complex languages
+            // terribly.
+            // advance += m_letterSpacing;
+
+            if (isRTL) {
+                while (logClustersIndex > 0 && logClusters()[logClustersIndex] == i)
+                    logClustersIndex--;
+            } else {
+                while (logClustersIndex < m_item.item.length && logClusters()[logClustersIndex] == i)
+                    logClustersIndex++;
+            }
+
             position += advance;
         }
+
         m_pixelWidth = position;
         m_offsetX += m_pixelWidth;
+    }
+
+    static bool isCodepointSpace(HB_UChar16 c)
+    {
+        // This matches the logic in RenderBlock::findNextLineBreak
+        return c == ' ' || c == '\t';
+    }
+
+    void mirrorCharacters(UChar* destination, const UChar* source, int length) const
+    {
+        int position = 0;
+        bool error = false;
+        // Iterate characters in source and mirror character if needed.
+        while (position < length) {
+            UChar32 character;
+            int nextPosition = position;
+            U16_NEXT(source, nextPosition, length, character);
+            character = u_charMirror(character);
+            U16_APPEND(destination, position, length, character, error);
+            ASSERT(!error);
+            position = nextPosition;
+        }
     }
 
     const Font* const m_font;
@@ -478,12 +597,19 @@ private:
     unsigned m_offsetX; // Offset in pixels to the start of the next script run.
     unsigned m_pixelWidth; // Width (in px) of the current script run.
     unsigned m_numCodePoints; // Code points in current script run.
-    unsigned m_maxGlyphs; // Current size of all the Harfbuzz arrays.
 
     OwnPtr<TextRun> m_normalizedRun;
     OwnArrayPtr<UChar> m_normalizedBuffer; // A buffer for normalized run.
     const TextRun& m_run;
     bool m_iterateBackwards;
+    int m_wordSpacingAdjustment; // delta adjustment (pixels) for each word break.
+    float m_padding; // pixels to be distributed over the line at word breaks.
+    float m_padPerWordBreak; // pixels to be added to each word break.
+    float m_padError; // |m_padPerWordBreak| might have a fractional component.
+                      // Since we only add a whole number of padding pixels at
+                      // each word break we accumulate error. This is the
+                      // number of pixels that we are behind so far.
+    unsigned m_letterSpacing; // pixels to be added after each glyph.
 };
 
 static void setupForTextPainting(SkPaint* paint, SkColor color)
@@ -519,18 +645,20 @@ void Font::drawComplexText(GraphicsContext* gc, const TextRun& run,
     }
 
     TextRunWalker walker(run, point.x(), this);
-    bool haveMultipleLayers = isCanvasMultiLayered(canvas);
+    walker.setWordSpacingAdjustment(wordSpacing());
+    walker.setLetterSpacingAdjustment(letterSpacing());
+    walker.setPadding(run.padding());
 
     while (walker.nextScriptRun()) {
         if (fill) {
             walker.fontPlatformDataForScriptRun()->setupPaint(&fillPaint);
-            adjustTextRenderMode(&fillPaint, haveMultipleLayers);
+            adjustTextRenderMode(&fillPaint, gc->platformContext());
             canvas->drawPosTextH(walker.glyphs(), walker.length() << 1, walker.xPositions(), point.y(), fillPaint);
         }
 
         if (stroke) {
             walker.fontPlatformDataForScriptRun()->setupPaint(&strokePaint);
-            adjustTextRenderMode(&strokePaint, haveMultipleLayers);
+            adjustTextRenderMode(&strokePaint, gc->platformContext());
             canvas->drawPosTextH(walker.glyphs(), walker.length() << 1, walker.xPositions(), point.y(), strokePaint);
         }
     }
@@ -539,6 +667,8 @@ void Font::drawComplexText(GraphicsContext* gc, const TextRun& run,
 float Font::floatWidthForComplexText(const TextRun& run, HashSet<const SimpleFontData*>* /* fallbackFonts */, GlyphOverflow* /* glyphOverflow */) const
 {
     TextRunWalker walker(run, 0, this);
+    walker.setWordSpacingAdjustment(wordSpacing());
+    walker.setLetterSpacingAdjustment(letterSpacing());
     return walker.widthOfFullRun();
 }
 
@@ -564,12 +694,18 @@ static int glyphIndexForXPositionInScriptRun(const TextRunWalker& walker, int x)
 }
 
 // Return the code point index for the given |x| offset into the text run.
-int Font::offsetForPositionForComplexText(const TextRun& run, int x,
+int Font::offsetForPositionForComplexText(const TextRun& run, float xFloat,
                                           bool includePartialGlyphs) const
 {
+    // FIXME: This truncation is not a problem for HTML, but only affects SVG, which passes floating-point numbers
+    // to Font::offsetForPosition(). Bug http://webkit.org/b/40673 tracks fixing this problem.
+    int x = static_cast<int>(xFloat);
+
     // (Mac code ignores includePartialGlyphs, and they don't know what it's
     // supposed to do, so we just ignore it as well.)
     TextRunWalker walker(run, 0, this);
+    walker.setWordSpacingAdjustment(wordSpacing());
+    walker.setLetterSpacingAdjustment(letterSpacing());
 
     // If this is RTL text, the first glyph from the left is actually the last
     // code point. So we need to know how many code points there are total in
@@ -641,11 +777,13 @@ int Font::offsetForPositionForComplexText(const TextRun& run, int x,
 
 // Return the rectangle for selecting the given range of code-points in the TextRun.
 FloatRect Font::selectionRectForComplexText(const TextRun& run,
-                                            const IntPoint& point, int height,
+                                            const FloatPoint& point, int height,
                                             int from, int to) const
 {
     int fromX = -1, toX = -1, fromAdvance = -1, toAdvance = -1;
     TextRunWalker walker(run, 0, this);
+    walker.setWordSpacingAdjustment(wordSpacing());
+    walker.setLetterSpacingAdjustment(letterSpacing());
 
     // Base will point to the x offset for the current script run. Note that, in
     // the LTR case, width will be 0.

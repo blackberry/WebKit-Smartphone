@@ -64,6 +64,8 @@ static QPixmap loadResourcePixmap(const char *name)
         pixmap = QWebSettings::webGraphic(QWebSettings::TextAreaSizeGripCornerGraphic);
     else if (qstrcmp(name, "deleteButton") == 0)
         pixmap = QWebSettings::webGraphic(QWebSettings::DeleteButtonGraphic);
+    else if (!qstrcmp(name, "inputSpeech"))
+        pixmap = QWebSettings::webGraphic(QWebSettings::InputSpeechButtonGraphic);
 
     return pixmap;
 }
@@ -164,6 +166,9 @@ void BitmapImage::invalidatePlatformData()
 void BitmapImage::draw(GraphicsContext* ctxt, const FloatRect& dst,
                        const FloatRect& src, ColorSpace styleColorSpace, CompositeOperator op)
 {
+    FloatRect normalizedDst = dst.normalized();
+    FloatRect normalizedSrc = src.normalized();
+
     startAnimation();
 
     QPixmap* image = nativeImageForCurrentFrame();
@@ -171,27 +176,42 @@ void BitmapImage::draw(GraphicsContext* ctxt, const FloatRect& dst,
         return;
 
     if (mayFillWithSolidColor()) {
-        fillWithSolidColor(ctxt, dst, solidColor(), styleColorSpace, op);
+        fillWithSolidColor(ctxt, normalizedDst, solidColor(), styleColorSpace, op);
         return;
     }
 
-    IntSize selfSize = size();
-
-    ctxt->save();
-
-    // Set the compositing operation.
-    ctxt->setCompositeOperation(op);
-
     QPainter* painter(ctxt->platformContext());
 
+    QPainter::CompositionMode compositionMode = GraphicsContext::toQtCompositionMode(op);
+
     if (!image->hasAlpha() && painter->compositionMode() == QPainter::CompositionMode_SourceOver)
-        painter->setCompositionMode(QPainter::CompositionMode_Source);
+        compositionMode = QPainter::CompositionMode_Source;
+
+    QPainter::CompositionMode lastCompositionMode = painter->compositionMode();
+    painter->setCompositionMode(compositionMode);
+
+    FloatSize shadowOffset;
+    float shadowBlur;
+    Color shadowColor;
+    if (ctxt->getShadow(shadowOffset, shadowBlur, shadowColor)) {
+        FloatRect shadowImageRect(normalizedDst);
+        shadowImageRect.move(shadowOffset.width(), shadowOffset.height());
+
+        QImage shadowImage(QSize(static_cast<int>(normalizedSrc.width()), static_cast<int>(normalizedSrc.height())), QImage::Format_ARGB32_Premultiplied);
+        QPainter p(&shadowImage);
+        p.setCompositionMode(QPainter::CompositionMode_Source);
+        p.fillRect(shadowImage.rect(), shadowColor);
+        p.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+        p.drawPixmap(QRect(0, 0, normalizedDst.width(), normalizedDst.height()), *image, normalizedSrc);
+        p.end();
+        painter->drawImage(shadowImageRect, shadowImage, normalizedSrc);
+    }
 
     // Test using example site at
     // http://www.meyerweb.com/eric/css/edge/complexspiral/demo.html
-    painter->drawPixmap(dst, *image, src);
+    painter->drawPixmap(normalizedDst, *image, normalizedSrc);
 
-    ctxt->restore();
+    painter->setCompositionMode(lastCompositionMode);
 
     if (imageObserver())
         imageObserver()->didDraw(this);

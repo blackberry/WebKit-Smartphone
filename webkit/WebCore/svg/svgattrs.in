@@ -141,6 +141,8 @@ onzoom
 opacity
 operator
 order
+orderX
+orderY
 orient
 orientation
 origin
@@ -228,6 +230,7 @@ v-hanging
 v-ideographic
 v-mathematical
 values
+vector-effect
 version
 vert-adv-y
 vert-origin-x

@@ -29,11 +29,13 @@
 #include "config.h"
 #include "RenderLineBoxList.h"
 
+#include "HitTestResult.h"
 #include "InlineTextBox.h"
 #include "RenderArena.h"
 #include "RenderInline.h"
 #include "RenderView.h"
 #include "RootInlineBox.h"
+#include "Settings.h" // FIXME: This include can be removed when paginateDuringLayoutEnabled is taken out.
 
 using namespace std;
 
@@ -144,7 +146,7 @@ void RenderLineBoxList::dirtyLineBoxes()
         curr->dirtyLineBoxes();
 }
 
-void RenderLineBoxList::paint(RenderBoxModelObject* renderer, RenderObject::PaintInfo& paintInfo, int tx, int ty) const
+void RenderLineBoxList::paint(RenderBoxModelObject* renderer, PaintInfo& paintInfo, int tx, int ty) const
 {
     // Only paint during the foreground/selection phases.
     if (paintInfo.phase != PaintPhaseForeground && paintInfo.phase != PaintPhaseSelection && paintInfo.phase != PaintPhaseOutline 
@@ -159,7 +161,7 @@ void RenderLineBoxList::paint(RenderBoxModelObject* renderer, RenderObject::Pain
         return;
 
     RenderView* v = renderer->view();
-    bool usePrintRect = !v->printRect().isEmpty();
+    bool usePrintRect = !v->printRect().isEmpty() && !renderer->document()->settings()->paginateDuringLayoutEnabled();
     
     // We can check the first box and last box and avoid painting if we don't
     // intersect.  This is a quick short-circuit that we can take to avoid walking any lines.
@@ -177,7 +179,7 @@ void RenderLineBoxList::paint(RenderBoxModelObject* renderer, RenderObject::Pain
     if (yPos >= paintInfo.rect.bottom() || yPos + h <= paintInfo.rect.y())
         return;
 
-    RenderObject::PaintInfo info(paintInfo);
+    PaintInfo info(paintInfo);
     ListHashSet<RenderInline*> outlineObjects;
     info.outlineObjects = &outlineObjects;
 
@@ -244,14 +246,16 @@ bool RenderLineBoxList::hitTest(RenderBoxModelObject* renderer, const HitTestReq
     // contain the point.  This is a quick short-circuit that we can take to avoid walking any lines.
     // FIXME: This check is flawed in the following extremely obscure way:
     // if some line in the middle has a huge overflow, it might actually extend below the last line.
-    if ((y >= ty + lastLineBox()->root()->bottomVisibleOverflow()) || (y < ty + firstLineBox()->root()->topVisibleOverflow()))
+    if (y - result.paddingHeight() >= ty + lastLineBox()->root()->bottomVisibleOverflow()
+     || y + result.paddingHeight() < ty + firstLineBox()->root()->topVisibleOverflow())
         return false;
 
     // See if our root lines contain the point.  If so, then we hit test
     // them further.  Note that boxes can easily overlap, so we can't make any assumptions
     // based off positions of our first line box or our last line box.
     for (InlineFlowBox* curr = lastLineBox(); curr; curr = curr->prevLineBox()) {
-        if (y >= ty + curr->root()->topVisibleOverflow() && y < ty + curr->root()->bottomVisibleOverflow()) {
+        if (y + result.paddingHeight() >= ty + curr->root()->topVisibleOverflow()
+         && y - result.paddingHeight() < ty + curr->root()->bottomVisibleOverflow()) {
             bool inside = curr->nodeAtPoint(request, result, x, y, tx, ty);
             if (inside) {
                 renderer->updateHitTestResult(result, IntPoint(x - tx, y - ty));

@@ -57,7 +57,7 @@ namespace WebCore {
 // invoking our constructor or destructor. This allows us to have a vector even for a struct
 // that's not copyable.
 namespace WTF {
-    template<> class VectorTraits<WebCore::FrameData> : public SimpleClassVectorTraits {};
+    template<> struct VectorTraits<WebCore::FrameData> : public SimpleClassVectorTraits {};
 }
 
 namespace WebCore {
@@ -118,6 +118,7 @@ public:
 
     virtual IntSize size() const;
     IntSize currentFrameSize() const;
+    virtual bool getHotSpot(IntPoint&) const;
 
     virtual bool dataChanged(bool allDataReceived);
     virtual String filenameExtension() const; 
@@ -170,7 +171,7 @@ protected:
     virtual void draw(GraphicsContext*, const FloatRect& dstRect, const FloatRect& srcRect, ColorSpace styleColorSpace, CompositeOperator);
 
 #if (OS(WINCE) && !PLATFORM(QT))
-    virtual void drawPattern(GraphicsContext*, const FloatRect& srcRect, const TransformationMatrix& patternTransform,
+    virtual void drawPattern(GraphicsContext*, const FloatRect& srcRect, const AffineTransform& patternTransform,
                              const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator, const FloatRect& destRect);
 #endif
 

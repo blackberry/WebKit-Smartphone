@@ -31,9 +31,6 @@
 #include "config.h"
 #include "EditorClientQt.h"
 
-#include "qwebpage.h"
-#include "qwebpage_p.h"
-
 #include "CSSStyleDeclaration.h"
 #include "Document.h"
 #include "EditCommandQt.h"
@@ -46,15 +43,16 @@
 #include "KeyboardEvent.h"
 #include "NotImplemented.h"
 #include "Page.h"
-#include "Page.h"
 #include "PlatformKeyboardEvent.h"
 #include "QWebPageClient.h"
 #include "Range.h"
 #include "WindowsKeyboardCodes.h"
-
-#include <stdio.h>
+#include "qwebpage.h"
+#include "qwebpage_p.h"
 
 #include <QUndoStack>
+#include <stdio.h>
+
 #define methodDebug() qDebug("EditorClientQt: %s", __FUNCTION__);
 
 static QString dumpPath(WebCore::Node *node)
@@ -247,9 +245,8 @@ void EditorClientQt::registerCommandForUndo(WTF::PassRefPtr<WebCore::EditCommand
 {
 #ifndef QT_NO_UNDOSTACK
     Frame* frame = m_page->d->page->focusController()->focusedOrMainFrame();
-    if (m_inUndoRedo || (frame && !frame->editor()->lastEditCommand() /* HACK!! Don't recreate undos */)) {
+    if (m_inUndoRedo || (frame && !frame->editor()->lastEditCommand() /* HACK!! Don't recreate undos */))
         return;
-    }
     m_page->undoStack()->push(new EditCommandQt(cmd));
 #endif // QT_NO_UNDOSTACK
 }
@@ -378,118 +375,120 @@ void EditorClientQt::handleKeyboardEvent(KeyboardEvent* event)
         } else
 #endif // QT_NO_SHORTCUT
         switch (kevent->windowsVirtualKeyCode()) {
-            case VK_BACK:
-                frame->editor()->deleteWithDirection(SelectionController::BACKWARD,
-                        CharacterGranularity, false, true);
-                break;
-            case VK_DELETE:
-                frame->editor()->deleteWithDirection(SelectionController::FORWARD,
-                        CharacterGranularity, false, true);
-                break;
-            case VK_LEFT:
-                if (kevent->shiftKey())
-                    frame->editor()->command("MoveLeftAndModifySelection").execute();
-                else
-                    frame->editor()->command("MoveLeft").execute();
-                break;
-            case VK_RIGHT:
-                if (kevent->shiftKey())
-                    frame->editor()->command("MoveRightAndModifySelection").execute();
-                else
-                    frame->editor()->command("MoveRight").execute();
-                break;
-            case VK_UP:
-                if (kevent->shiftKey())
-                    frame->editor()->command("MoveUpAndModifySelection").execute();
-                else
-                    frame->editor()->command("MoveUp").execute();
-                break;
-            case VK_DOWN:
-                if (kevent->shiftKey())
-                    frame->editor()->command("MoveDownAndModifySelection").execute();
-                else
-                    frame->editor()->command("MoveDown").execute();
-                break;
-            case VK_PRIOR:  // PageUp
-                if (kevent->shiftKey())
-                    frame->editor()->command("MovePageUpAndModifySelection").execute();
-                else
-                    frame->editor()->command("MovePageUp").execute();
-                break;
-            case VK_NEXT:  // PageDown
-                if (kevent->shiftKey())
-                    frame->editor()->command("MovePageDownAndModifySelection").execute();
-                else
-                    frame->editor()->command("MovePageDown").execute();
-                break;
-            case VK_TAB:
-                return;
-            default:
-                if (kevent->type() != PlatformKeyboardEvent::KeyDown && !kevent->ctrlKey()
+        case VK_BACK:
+            frame->editor()->deleteWithDirection(SelectionController::DirectionBackward,
+                    CharacterGranularity, false, true);
+            break;
+        case VK_DELETE:
+            frame->editor()->deleteWithDirection(SelectionController::DirectionForward,
+                    CharacterGranularity, false, true);
+            break;
+        case VK_LEFT:
+            if (kevent->shiftKey())
+                frame->editor()->command("MoveLeftAndModifySelection").execute();
+            else
+                frame->editor()->command("MoveLeft").execute();
+            break;
+        case VK_RIGHT:
+            if (kevent->shiftKey())
+                frame->editor()->command("MoveRightAndModifySelection").execute();
+            else
+                frame->editor()->command("MoveRight").execute();
+            break;
+        case VK_UP:
+            if (kevent->shiftKey())
+                frame->editor()->command("MoveUpAndModifySelection").execute();
+            else
+                frame->editor()->command("MoveUp").execute();
+            break;
+        case VK_DOWN:
+            if (kevent->shiftKey())
+                frame->editor()->command("MoveDownAndModifySelection").execute();
+            else
+                frame->editor()->command("MoveDown").execute();
+            break;
+        case VK_PRIOR: // PageUp
+            if (kevent->shiftKey())
+                frame->editor()->command("MovePageUpAndModifySelection").execute();
+            else
+                frame->editor()->command("MovePageUp").execute();
+            break;
+        case VK_NEXT: // PageDown
+            if (kevent->shiftKey())
+                frame->editor()->command("MovePageDownAndModifySelection").execute();
+            else
+                frame->editor()->command("MovePageDown").execute();
+            break;
+        case VK_TAB:
+            return;
+        default:
+            if (kevent->type() != PlatformKeyboardEvent::KeyDown && !kevent->ctrlKey()
 #ifndef Q_WS_MAC
-                    // We need to exclude checking for Alt because it is just a different Shift
-                    && !kevent->altKey()
+                // We need to exclude checking for Alt because it is just a different Shift
+                && !kevent->altKey()
 #endif
-                    && !kevent->text().isEmpty()) {
-                    frame->editor()->insertText(kevent->text(), event);
-                } else if (kevent->ctrlKey()) {
-                    switch (kevent->windowsVirtualKeyCode()) {
-                        case VK_A:
-                            frame->editor()->command("SelectAll").execute();
-                            break;
-                        case VK_B:
-                            frame->editor()->command("ToggleBold").execute();
-                            break;
-                        case VK_I:
-                            frame->editor()->command("ToggleItalic").execute();
-                            break;
-                        default:
-                            // catch combination AltGr+key or Ctrl+Alt+key
-                            if (kevent->type() != PlatformKeyboardEvent::KeyDown && kevent->altKey() && !kevent->text().isEmpty()) {
-                                frame->editor()->insertText(kevent->text(), event);
-                                break;
-                            }
-                            return;
+                && !kevent->text().isEmpty()) {
+                frame->editor()->insertText(kevent->text(), event);
+            } else if (kevent->ctrlKey()) {
+                switch (kevent->windowsVirtualKeyCode()) {
+                case VK_A:
+                    frame->editor()->command("SelectAll").execute();
+                    break;
+                case VK_B:
+                    frame->editor()->command("ToggleBold").execute();
+                    break;
+                case VK_I:
+                    frame->editor()->command("ToggleItalic").execute();
+                    break;
+                default:
+                    // catch combination AltGr+key or Ctrl+Alt+key
+                    if (kevent->type() != PlatformKeyboardEvent::KeyDown && kevent->altKey() && !kevent->text().isEmpty()) {
+                        frame->editor()->insertText(kevent->text(), event);
+                        break;
                     }
-                } else return;
+                    return;
+                }
+            } else
+                return;
         }
     } else {
 #ifndef QT_NO_SHORTCUT
-        if (kevent->qtEvent() == QKeySequence::Copy) {
+        if (kevent->qtEvent() == QKeySequence::Copy)
             m_page->triggerAction(QWebPage::Copy);
-        } else
+        else
 #endif // QT_NO_SHORTCUT
         switch (kevent->windowsVirtualKeyCode()) {
-            case VK_UP:
-                frame->editor()->command("MoveUp").execute();
-                break;
-            case VK_DOWN:
-                frame->editor()->command("MoveDown").execute();
-                break;
-            case VK_PRIOR:  // PageUp
-                frame->editor()->command("MovePageUp").execute();
-                break;
-            case VK_NEXT:  // PageDown
-                frame->editor()->command("MovePageDown").execute();
-                break;
-            case VK_HOME:
-                if (kevent->ctrlKey())
-                    frame->editor()->command("MoveToBeginningOfDocument").execute();
-                break;
-            case VK_END:
-                if (kevent->ctrlKey())
-                    frame->editor()->command("MoveToEndOfDocument").execute();
-                break;
-            default:
-                if (kevent->ctrlKey()) {
-                    switch (kevent->windowsVirtualKeyCode()) {
-                        case VK_A:
-                            frame->editor()->command("SelectAll").execute();
-                            break;
-                        default:
-                            return;
-                    }
-                } else return;
+        case VK_UP:
+            frame->editor()->command("MoveUp").execute();
+            break;
+        case VK_DOWN:
+            frame->editor()->command("MoveDown").execute();
+            break;
+        case VK_PRIOR: // PageUp
+            frame->editor()->command("MovePageUp").execute();
+            break;
+        case VK_NEXT: // PageDown
+            frame->editor()->command("MovePageDown").execute();
+            break;
+        case VK_HOME:
+            if (kevent->ctrlKey())
+                frame->editor()->command("MoveToBeginningOfDocument").execute();
+            break;
+        case VK_END:
+            if (kevent->ctrlKey())
+                frame->editor()->command("MoveToEndOfDocument").execute();
+            break;
+        default:
+            if (kevent->ctrlKey()) {
+                switch (kevent->windowsVirtualKeyCode()) {
+                case VK_A:
+                    frame->editor()->command("SelectAll").execute();
+                    break;
+                default:
+                    return;
+                }
+            } else
+                return;
         }
     }
     event->setDefaultHandled();
@@ -529,13 +528,6 @@ void EditorClientQt::textWillBeDeletedInTextField(Element*)
 
 void EditorClientQt::textDidChangeInTextArea(Element*)
 {
-}
-
-// Note: This code is under review for upstreaming.
-bool EditorClientQt::focusedElementsAreRichlyEditable()
-{
-    notImplemented();
-    return false;
 }
 
 void EditorClientQt::ignoreWordInSpellDocument(const String&)
@@ -595,30 +587,48 @@ bool EditorClientQt::isEditing() const
     return m_editing;
 }
 
+void EditorClientQt::willSetInputMethodState()
+{
+}
+
 void EditorClientQt::setInputMethodState(bool active)
 {
     QWebPageClient* webPageClient = m_page->d->client;
     if (webPageClient) {
-#if QT_VERSION >= 0x040600
-        bool isPasswordField = false;
-        if (!active) {
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
+        Qt::InputMethodHints hints;
+
+        HTMLInputElement* inputElement = 0;
+        Frame* frame = m_page->d->page->focusController()->focusedOrMainFrame();
+        if (frame && frame->document() && frame->document()->focusedNode())
+            if (frame->document()->focusedNode()->hasTagName(HTMLNames::inputTag))
+                inputElement = static_cast<HTMLInputElement*>(frame->document()->focusedNode());
+
+        if (inputElement) {
+            // Set input method hints for "number", "tel", "email", "url" and "password" input elements.
+            if (inputElement->isTelephoneField())
+                hints |= Qt::ImhDialableCharactersOnly;
+            if (inputElement->isNumberField())
+                hints |= Qt::ImhDigitsOnly;
+            if (inputElement->isEmailField())
+                hints |= Qt::ImhEmailCharactersOnly;
+            if (inputElement->isUrlField())
+                hints |= Qt::ImhUrlCharactersOnly;
             // Setting the Qt::WA_InputMethodEnabled attribute true and Qt::ImhHiddenText flag
-            // for password fields. The Qt platform is responsible for determining which widget 
+            // for password fields. The Qt platform is responsible for determining which widget
             // will receive input method events for password fields.
-            Frame* frame = m_page->d->page->focusController()->focusedOrMainFrame();
-            if (frame && frame->document() && frame->document()->focusedNode()) {
-                if (frame->document()->focusedNode()->hasTagName(HTMLNames::inputTag)) {
-                    HTMLInputElement* inputElement = static_cast<HTMLInputElement*>(frame->document()->focusedNode());
-                    active = isPasswordField = inputElement->isPasswordField();
-              }
+            if (inputElement->isPasswordField()) {
+                active = true;
+                hints |= Qt::ImhHiddenText;
             }
         }
-        webPageClient->setInputMethodHint(Qt::ImhHiddenText, isPasswordField);
-#if defined(Q_WS_MAEMO_5) || defined(Q_OS_SYMBIAN)
+
+#if defined(Q_WS_MAEMO_5) || defined(Q_WS_MAEMO_6) || defined(Q_OS_SYMBIAN)
         // disables auto-uppercase and predictive text for mobile devices
-        webPageClient->setInputMethodHint(Qt::ImhNoAutoUppercase, true);
-        webPageClient->setInputMethodHint(Qt::ImhNoPredictiveText, true);
-#endif // Q_WS_MAEMO_5 || Q_OS_SYMBIAN
+        hints |= Qt::ImhNoAutoUppercase;
+        hints |= Qt::ImhNoPredictiveText;
+#endif // Q_WS_MAEMO_5 || Q_WS_MAEMO_6 || Q_OS_SYMBIAN
+       webPageClient->setInputMethodHints(hints);
 #endif // QT_VERSION check
         webPageClient->setInputMethodEnabled(active);
     }

@@ -73,9 +73,75 @@ END
 undef],
     expectedNextLine => undef,
 },
+{
+    # New test
+    diffName => "simple: add svn:mergeinfo",
+    inputText => <<'END',
+Added: svn:mergeinfo
+   Merged /trunk/Makefile:r33020
+END
+    expectedReturn => [
+{
+    name => "svn:mergeinfo",
+    propertyChangeDelta => 1,
+    value => "/trunk/Makefile:r33020",
+},
+undef],
+    expectedNextLine => undef,
+},
+{
+    # New test
+    diffName => "simple: delete svn:mergeinfo",
+    inputText => <<'END',
+Deleted: svn:mergeinfo
+   Reverse-merged /trunk/Makefile:r33020
+END
+    expectedReturn => [
+{
+    name => "svn:mergeinfo",
+    propertyChangeDelta => -1,
+    value => "/trunk/Makefile:r33020",
+},
+undef],
+    expectedNextLine => undef,
+},
+{
+    # New test
+    diffName => "simple: modified svn:mergeinfo",
+    inputText => <<'END',
+Modified: svn:mergeinfo
+   Reverse-merged /trunk/Makefile:r33020
+   Merged /trunk/Makefile:r41697
+END
+    expectedReturn => [
+{
+    name => "svn:mergeinfo",
+    propertyChangeDelta => 1,
+    value => "/trunk/Makefile:r41697",
+},
+undef],
+    expectedNextLine => undef,
+},
 ####
 # Using SVN 1.4 syntax
 ##
+{
+    # New test
+    diffName => "simple: modified svn:mergeinfo using SVN 1.4 syntax",
+    inputText => <<'END',
+Name: svn:mergeinfo
+   Reverse-merged /trunk/Makefile:r33020
+   Merged /trunk/Makefile:r41697
+END
+    expectedReturn => [
+{
+    name => "svn:mergeinfo",
+    propertyChangeDelta => 1,
+    value => "/trunk/Makefile:r41697",
+},
+undef],
+    expectedNextLine => undef,
+},
 {
     # New test
     diffName => "simple: delete svn:executable using SVN 1.4 syntax",
@@ -131,6 +197,25 @@ END
 },
 {
     # New test
+    diffName => "add svn:executable, followed by empty line and start of next diff using Windows line endings",
+    inputText => toWindowsLineEndings(<<'END',
+Added: svn:executable
+   + *
+
+Index: Makefile.shared
+END
+),
+    expectedReturn => [
+{
+    name => "svn:executable",
+    propertyChangeDelta => 1,
+    value => "*",
+},
+"\r\n"],
+    expectedNextLine => "Index: Makefile.shared\r\n",
+},
+{
+    # New test
     diffName => "add svn:executable, followed by empty line and start of next property diff",
     inputText => <<'END',
 Added: svn:executable
@@ -146,6 +231,25 @@ END
 },
 "\n"],
     expectedNextLine => "Property changes on: Makefile.shared\n",
+},
+{
+    # New test
+    diffName => "add svn:executable, followed by empty line and start of next property diff using Windows line endings",
+    inputText => toWindowsLineEndings(<<'END',
+Added: svn:executable
+   + *
+
+Property changes on: Makefile.shared
+END
+),
+    expectedReturn => [
+{
+    name => "svn:executable",
+    propertyChangeDelta => 1,
+    value => "*",
+},
+"\r\n"],
+    expectedNextLine => "Property changes on: Makefile.shared\r\n",
 },
 {
     # New test
@@ -169,6 +273,27 @@ END
 },
 {
     # New test
+    diffName => "multi-line '+' change, followed by empty line and start of next diff using Windows line endings",
+    inputText => toWindowsLineEndings(<<'END',
+Name: documentation
+   + A
+long sentence that spans
+multiple lines.
+
+Index: Makefile.shared
+END
+),
+    expectedReturn => [
+{
+    name => "documentation",
+    propertyChangeDelta => 1,
+    value => "A\r\nlong sentence that spans\r\nmultiple lines.",
+},
+"\r\n"],
+    expectedNextLine => "Index: Makefile.shared\r\n",
+},
+{
+    # New test
     diffName => "multi-line '+' change, followed by empty line and start of next property diff",
     inputText => <<'END',
 Name: documentation
@@ -186,6 +311,27 @@ END
 },
 "\n"],
     expectedNextLine => "Property changes on: Makefile.shared\n",
+},
+{
+    # New test
+    diffName => "multi-line '+' change, followed by empty line and start of next property diff using Windows line endings",
+    inputText => toWindowsLineEndings(<<'END',
+Name: documentation
+   + A
+long sentence that spans
+multiple lines.
+
+Property changes on: Makefile.shared
+END
+),
+    expectedReturn => [
+{
+    name => "documentation",
+    propertyChangeDelta => 1,
+    value => "A\r\nlong sentence that spans\r\nmultiple lines.",
+},
+"\r\n"],
+    expectedNextLine => "Property changes on: Makefile.shared\r\n",
 },
 ####
 # Property value followed by empty line and start of binary patch
@@ -210,6 +356,25 @@ END
 },
 {
     # New test
+    diffName => "add svn:executable, followed by empty line and start of binary patch using Windows line endings",
+    inputText => toWindowsLineEndings(<<'END',
+Added: svn:executable
+   + *
+
+Q1dTBx0AAAB42itg4GlgYJjGwMDDyODMxMDw34GBgQEAJPQDJA==
+END
+),
+    expectedReturn => [
+{
+    name => "svn:executable",
+    propertyChangeDelta => 1,
+    value => "*",
+},
+"\r\n"],
+    expectedNextLine => "Q1dTBx0AAAB42itg4GlgYJjGwMDDyODMxMDw34GBgQEAJPQDJA==\r\n",
+},
+{
+    # New test
     diffName => "multi-line '+' change, followed by empty line and start of binary patch",
     inputText => <<'END',
 Name: documentation
@@ -227,6 +392,27 @@ END
 },
 "\n"],
     expectedNextLine => "Q1dTBx0AAAB42itg4GlgYJjGwMDDyODMxMDw34GBgQEAJPQDJA==\n",
+},
+{
+    # New test
+    diffName => "multi-line '+' change, followed by empty line and start of binary patch using Windows line endings",
+    inputText => toWindowsLineEndings(<<'END',
+Name: documentation
+   + A
+long sentence that spans
+multiple lines.
+
+Q1dTBx0AAAB42itg4GlgYJjGwMDDyODMxMDw34GBgQEAJPQDJA==
+END
+),
+    expectedReturn => [
+{
+    name => "documentation",
+    propertyChangeDelta => 1,
+    value => "A\r\nlong sentence that spans\r\nmultiple lines.",
+},
+"\r\n"],
+    expectedNextLine => "Q1dTBx0AAAB42itg4GlgYJjGwMDDyODMxMDw34GBgQEAJPQDJA==\r\n",
 },
 {
     # New test
@@ -250,6 +436,30 @@ END
 },
 "\n"],
     expectedNextLine => "Q1dTBx0AAAB42itg4GlgYJjGwMDDyODMxMDw34GBgQEAJPQDJA==\n",
+},
+{
+    # New test
+    diffName => "multi-line '-' change, followed by multi-line '+' change, empty line, and start of binary patch using Windows line endings",
+    inputText => toWindowsLineEndings(<<'END',
+Modified: documentation
+   - A
+long sentence that spans
+multiple lines.
+   + Another
+long sentence that spans
+multiple lines.
+
+Q1dTBx0AAAB42itg4GlgYJjGwMDDyODMxMDw34GBgQEAJPQDJA==
+END
+),
+    expectedReturn => [
+{
+    name => "documentation",
+    propertyChangeDelta => 1,
+    value => "Another\r\nlong sentence that spans\r\nmultiple lines.",
+},
+"\r\n"],
+    expectedNextLine => "Q1dTBx0AAAB42itg4GlgYJjGwMDDyODMxMDw34GBgQEAJPQDJA==\r\n",
 },
 ####
 # Successive properties
@@ -315,6 +525,40 @@ END
 "Added: svn:executable\n"],
     expectedNextLine => "   + *\n",
 },
+{
+    # New test
+    diffName => "'Merged' change followed by 'Merged' change",
+    inputText => <<'END',
+Added: svn:mergeinfo
+   Merged /trunk/Makefile:r33020
+   Merged /trunk/Makefile.shared:r58350
+END
+    expectedReturn => [
+{
+    name => "svn:mergeinfo",
+    propertyChangeDelta => 1,
+    value => "/trunk/Makefile.shared:r58350",
+},
+undef],
+    expectedNextLine => undef,
+},
+{
+    # New test
+    diffName => "'Reverse-merged' change followed by 'Reverse-merged' change",
+    inputText => <<'END',
+Deleted: svn:mergeinfo
+   Reverse-merged /trunk/Makefile:r33020
+   Reverse-merged /trunk/Makefile.shared:r58350
+END
+    expectedReturn => [
+{
+    name => "svn:mergeinfo",
+    propertyChangeDelta => -1,
+    value => "/trunk/Makefile.shared:r58350",
+},
+undef],
+    expectedNextLine => undef,
+},
 ####
 # Property values with trailing new lines.
 ##
@@ -340,6 +584,24 @@ END
 },
 {
     # New test
+    diffName => "single-line '+' with trailing new line using Windows line endings",
+    inputText => toWindowsLineEndings(<<'END',
+Added: documentation
+   + A sentence.
+
+END
+),
+    expectedReturn => [
+{
+    name => "documentation",
+    propertyChangeDelta => 1,
+    value => "A sentence.",
+},
+"\r\n"],
+    expectedNextLine => undef,
+},
+{
+    # New test
     diffName => "single-line '+' with trailing new line, followed by empty line and start of binary patch",
     inputText => <<'END',
 Added: documentation
@@ -359,6 +621,26 @@ END
 },
 {
     # New test
+    diffName => "single-line '+' with trailing new line, followed by empty line and start of binary patch using Windows line endings",
+    inputText => toWindowsLineEndings(<<'END',
+Added: documentation
+   + A sentence.
+
+
+Q1dTBx0AAAB42itg4GlgYJjGwMDDyODMxMDw34GBgQEAJPQDJA==
+END
+),
+    expectedReturn => [
+{
+    name => "documentation",
+    propertyChangeDelta => 1,
+    value => "A sentence.",
+},
+"\r\n"],
+    expectedNextLine => "\r\n",
+},
+{
+    # New test
     diffName => "single-line '-' change with trailing new line, and single-line '+' change",
     inputText => <<'END',
 Modified: documentation
@@ -374,6 +656,25 @@ END
 },
 "\n"],
     expectedNextLine => "   + A sentence.\n",
+},
+{
+    # New test
+    diffName => "single-line '-' change with trailing new line, and single-line '+' change using Windows line endings",
+    inputText => toWindowsLineEndings(<<'END',
+Modified: documentation
+   - A long sentence.
+
+   + A sentence.
+END
+),
+    expectedReturn => [
+{
+    name => "documentation",
+    propertyChangeDelta => -1, # Since we only interpret the '-' property.
+    value => "A long sentence.",
+},
+"\r\n"],
+    expectedNextLine => "   + A sentence.\r\n",
 },
 {
     # New test
@@ -396,6 +697,29 @@ END
 },
 "\n"],
     expectedNextLine => "   + Another\n",
+},
+{
+    # New test
+    diffName => "multi-line '-' change with trailing new line, and multi-line '+' change using Windows line endings",
+    inputText => toWindowsLineEndings(<<'END',
+Modified: documentation
+   - A
+long sentence that spans
+multiple lines.
+
+   + Another
+long sentence that spans
+multiple lines.
+END
+),
+    expectedReturn => [
+{
+    name => "documentation",
+    propertyChangeDelta => -1, # Since we only interpret the '-' property.
+    value => "A\r\nlong sentence that spans\r\nmultiple lines.",
+},
+"\r\n"],
+    expectedNextLine => "   + Another\r\n",
 },
 );
 

@@ -93,12 +93,12 @@ namespace JSC {
         \
         macro(op_resolve, 3) \
         macro(op_resolve_skip, 4) \
-        macro(op_resolve_global, 6) \
-        macro(op_resolve_global_dynamic, 7) \
+        macro(op_resolve_global, 5) \
+        macro(op_resolve_global_dynamic, 6) \
         macro(op_get_scoped_var, 4) \
         macro(op_put_scoped_var, 4) \
-        macro(op_get_global_var, 4) \
-        macro(op_put_global_var, 4) \
+        macro(op_get_global_var, 3) \
+        macro(op_put_global_var, 3) \
         macro(op_resolve_base, 3) \
         macro(op_resolve_with_base, 4) \
         macro(op_get_by_id, 8) \
@@ -120,10 +120,10 @@ namespace JSC {
         macro(op_get_by_id_generic, 8) \
         macro(op_get_array_length, 8) \
         macro(op_get_string_length, 8) \
-        macro(op_put_by_id, 8) \
-        macro(op_put_by_id_transition, 8) \
-        macro(op_put_by_id_replace, 8) \
-        macro(op_put_by_id_generic, 8) \
+        macro(op_put_by_id, 9) \
+        macro(op_put_by_id_transition, 9) \
+        macro(op_put_by_id_replace, 9) \
+        macro(op_put_by_id_generic, 9) \
         macro(op_del_by_id, 4) \
         macro(op_get_by_val, 4) \
         macro(op_get_by_pname, 7) \
@@ -210,8 +210,8 @@ namespace JSC {
         FOR_EACH_OPCODE_ID(VERIFY_OPCODE_ID);
     #undef VERIFY_OPCODE_ID
 
-#if HAVE(COMPUTED_GOTO)
-#if COMPILER(RVCT)
+#if ENABLE(COMPUTED_GOTO_INTERPRETER)
+#if COMPILER(RVCT) || COMPILER(INTEL)
     typedef void* Opcode;
 #else
     typedef const void* Opcode;
@@ -253,6 +253,17 @@ namespace JSC {
     };
 
 #endif
+
+    inline size_t opcodeLength(OpcodeID opcode)
+    {
+        switch (opcode) {
+#define OPCODE_ID_LENGTHS(id, length) case id: return OPCODE_LENGTH(id);
+             FOR_EACH_OPCODE_ID(OPCODE_ID_LENGTHS)
+#undef OPCODE_ID_LENGTHS
+        }
+        ASSERT_NOT_REACHED();
+        return 0;
+    }
 
 } // namespace JSC
 

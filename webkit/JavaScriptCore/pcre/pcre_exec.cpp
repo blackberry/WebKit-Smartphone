@@ -88,7 +88,7 @@ public:
     void add(const JSRegExp*, double);
 
 private:
-    typedef HashMap<RefPtr<UString::Rep>, double> Map;
+    typedef HashMap<RefPtr<StringImpl>, double> Map;
     Map times;
 };
 
@@ -427,7 +427,7 @@ static inline void startNewGroup(MatchFrame* currentFrame)
 }
 
 // FIXME: "minimize" means "not greedy", we should invert the callers to ask for "greedy" to be less confusing
-static inline void repeatInformationFromInstructionOffset(short instructionOffset, bool& minimize, int& minimumRepeats, int& maximumRepeats)
+static inline void repeatInformationFromInstructionOffset(int instructionOffset, bool& minimize, int& minimumRepeats, int& maximumRepeats)
 {
     // Instruction offsets are based off of OP_CRSTAR, OP_STAR, OP_TYPESTAR, OP_NOTSTAR
     static const char minimumRepeatsFromInstructionOffset[] = { 0, 0, 1, 1, 0, 0 };
@@ -2143,7 +2143,7 @@ Histogram::~Histogram()
     size_t size = values.size();
     printf("Regular Expressions, sorted by time spent evaluating them:\n");
     for (size_t i = 0; i < size; ++i)
-        printf("    %f - %s\n", values[size - i - 1].second, values[size - i - 1].first.UTF8String().c_str());
+        printf("    %f - %s\n", values[size - i - 1].second, values[size - i - 1].first.utf8().c_str());
 }
 
 void Histogram::add(const JSRegExp* re, double elapsedTime)
@@ -2157,7 +2157,7 @@ void Histogram::add(const JSRegExp* re, double elapsedTime)
         if (re->options & MatchAcrossMultipleLinesOption)
             string += " (multi-line)";
     }
-    pair<Map::iterator, bool> result = times.add(string.rep(), elapsedTime);
+    pair<Map::iterator, bool> result = times.add(string.impl(), elapsedTime);
     if (!result.second)
         result.first->second += elapsedTime;
 }

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="resources/pass-escape-key-utilities.js"></script>
+<script>
+function runTest()
+{
+    document.getElementById("immutable-element").focus();
+    testEscapeKeyCaptured(document.getElementById("immutable-element"));
+}
+window.onload = runTest;
+</script>
+</head>
+<body>
+<p>This tests that the escape keyboard key, triggered by the BlackBerry Escape (back) button, is passed to a non-text input/content-editable node. This test PASSED if you see PASS below. Otherwise, it FAILED.</p>
+<div id="immutable-element" tabindex="-1"></div> <!-- tabindex := -1 to make this element focusable, but not reachable using sequential focus navigation. -->
+<pre id="console"></pre>
+</body>
+</html>

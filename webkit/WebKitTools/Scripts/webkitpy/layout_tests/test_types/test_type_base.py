@@ -58,9 +58,6 @@ class TestArguments(object):
     # Whether to use wdiff to generate by-word diffs.
     wdiff = False
 
-    # Whether to report the locations of the expected result files used.
-    show_sources = False
-
 # Python bug workaround.  See the wdiff code in WriteOutputFiles for an
 # explanation.
 _wdiff_available = True
@@ -159,7 +156,7 @@ class TestTypeBase(object):
         Return:
           a list of TestFailure objects, empty if the test passes
         """
-        raise NotImplemented
+        raise NotImplementedError
 
     def _write_into_file_at_path(self, file_path, contents, encoding):
         """This method assumes that byte_array is already encoded

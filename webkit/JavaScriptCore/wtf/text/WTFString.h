@@ -1,6 +1,7 @@
 /*
  * (C) 1999 Lars Knoll (knoll@kde.org)
- * Copyright (C) 2004, 2005, 2006, 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -53,21 +54,14 @@ class BString;
 #if PLATFORM(OLYMPIA)
 namespace Olympia {
 namespace WebKit {
-    class String;
+    class WebString;
 }
 }
 #endif
 
 namespace WTF {
+
 class CString;
-}
-using WTF::CString;
-
-// FIXME: This is a temporary layering violation while we move string code to WTF.
-// Landing the file moves in one patch, will follow on with patches to change the namespaces.
-namespace WebCore {
-
-class SharedBuffer;
 struct StringHash;
 
 // Declarations of string operations
@@ -88,45 +82,45 @@ intptr_t charactersToIntPtr(const UChar*, size_t, bool* ok = 0); // ignores trai
 double charactersToDouble(const UChar*, size_t, bool* ok = 0);
 float charactersToFloat(const UChar*, size_t, bool* ok = 0);
 
-int find(const UChar*, size_t, UChar, int startPosition = 0);
-int reverseFind(const UChar*, size_t, UChar, int startPosition = -1);
+template<bool isSpecialCharacter(UChar)> bool isAllSpecialCharacters(const UChar*, size_t);
 
 class String {
 public:
-    String() { } // gives null string, distinguishable from an empty string
-    String(const UChar* str, unsigned len)
-    {
-        if (!str)
-            return;
-        m_impl = StringImpl::create(str, len);
-    }
-    String(const char* str)
-    {
-        if (!str)
-            return;
-        m_impl = StringImpl::create(str);
-    }
-    String(const char* str, unsigned length)
-    {
-        if (!str)
-            return;
-        m_impl = StringImpl::create(str, length);
-    }
-    String(const UChar*); // Specifically for null terminated UTF-16
-    String(StringImpl* i) : m_impl(i) { }
-    String(PassRefPtr<StringImpl> i) : m_impl(i) { }
-    String(RefPtr<StringImpl> i) : m_impl(i) { }
+    // Construct a null string, distinguishable from an empty string.
+    String() { }
+
+    // Construct a string with UTF-16 data.
+    String(const UChar* characters, unsigned length);
+
+    // Construct a string with UTF-16 data, from a null-terminated source.
+    String(const UChar*);
+
+    // Construct a string with latin1 data.
+    String(const char* characters, unsigned length);
+
+    // Construct a string with latin1 data, from a null-terminated source.
+    String(const char* characters);
+
+    // Construct a string referencing an existing StringImpl.
+    String(StringImpl* impl) : m_impl(impl) { }
+    String(PassRefPtr<StringImpl> impl) : m_impl(impl) { }
+    String(RefPtr<StringImpl> impl) : m_impl(impl) { }
+
+    // Inline the destructor.
+    ALWAYS_INLINE ~String() { }
 
     void swap(String& o) { m_impl.swap(o.m_impl); }
 
-    // Hash table deleted values, which are only constructed and never copied or destroyed.
-    String(WTF::HashTableDeletedValueType) : m_impl(WTF::HashTableDeletedValue) { }
-    bool isHashTableDeletedValue() const { return m_impl.isHashTableDeletedValue(); }
-
     static String adopt(StringBuffer& buffer) { return StringImpl::adopt(buffer); }
-    static String adopt(Vector<UChar>& vector) { return StringImpl::adopt(vector); }
+    template<size_t inlineCapacity>
+    static String adopt(Vector<UChar, inlineCapacity>& vector) { return StringImpl::adopt(vector); }
 
-    ALWAYS_INLINE unsigned length() const
+    bool isNull() const { return !m_impl; }
+    bool isEmpty() const { return !m_impl || !m_impl->length(); }
+
+    StringImpl* impl() const { return m_impl.get(); }
+
+    unsigned length() const
     {
         if (!m_impl)
             return 0;
@@ -140,34 +134,67 @@ public:
         return m_impl->characters();
     }
 
+    CString ascii() const;
+    CString latin1() const;
+    CString utf8(bool strict = false) const;
+
+    UChar operator[](unsigned index) const
+    {
+        if (!m_impl || index >= m_impl->length())
+            return 0;
+        return m_impl->characters()[index];
+    }
+
+    static String number(short);
+    static String number(unsigned short);
+    static String number(int);
+    static String number(unsigned);
+    static String number(long);
+    static String number(unsigned long);
+    static String number(long long);
+    static String number(unsigned long long);
+    static String number(double);
+
+    // Find a single character or string, also with match function & latin1 forms.
+    size_t find(UChar c, unsigned start = 0) const
+        { return m_impl ? m_impl->find(c, start) : notFound; }
+    size_t find(const String& str, unsigned start = 0) const
+        { return m_impl ? m_impl->find(str.impl(), start) : notFound; }
+    size_t find(CharacterMatchFunctionPtr matchFunction, unsigned start = 0) const
+        { return m_impl ? m_impl->find(matchFunction, start) : notFound; }
+    size_t find(const char* str, unsigned start = 0) const
+        { return m_impl ? m_impl->find(str, start) : notFound; }
+
+    // Find the last instance of a single character or string.
+    size_t reverseFind(UChar c, unsigned start = UINT_MAX) const
+        { return m_impl ? m_impl->reverseFind(c, start) : notFound; }
+    size_t reverseFind(const String& str, unsigned start = UINT_MAX) const
+        { return m_impl ? m_impl->reverseFind(str.impl(), start) : notFound; }
+
+    // Case insensitive string matching.
+    size_t findIgnoringCase(const char* str, unsigned start = 0) const
+        { return m_impl ? m_impl->findIgnoringCase(str, start) : notFound; }
+    size_t findIgnoringCase(const String& str, unsigned start = 0) const
+        { return m_impl ? m_impl->findIgnoringCase(str.impl(), start) : notFound; }
+    size_t reverseFindIgnoringCase(const String& str, unsigned start = UINT_MAX) const
+        { return m_impl ? m_impl->reverseFindIgnoringCase(str.impl(), start) : notFound; }
+
+    // Wrappers for find & reverseFind adding dynamic sensitivity check.
+    size_t find(const char* str, unsigned start, bool caseSensitive) const
+        { return caseSensitive ? find(str, start) : findIgnoringCase(str, start); }
+    size_t find(const String& str, unsigned start, bool caseSensitive) const
+        { return caseSensitive ? find(str, start) : findIgnoringCase(str, start); }
+    size_t reverseFind(const String& str, unsigned start, bool caseSensitive) const
+        { return caseSensitive ? reverseFind(str, start) : reverseFindIgnoringCase(str, start); }
+
     const UChar* charactersWithNullTermination();
     
-    UChar operator[](unsigned i) const // if i >= length(), returns 0
-    {
-        if (!m_impl || i >= m_impl->length())
-            return 0;
-        return m_impl->characters()[i];
-    }
     UChar32 characterStartingAt(unsigned) const; // Ditto.
     
-    bool contains(UChar c) const { return find(c) != -1; }
-    bool contains(const char* str, bool caseSensitive = true) const { return find(str, 0, caseSensitive) != -1; }
-    bool contains(const String& str, bool caseSensitive = true) const { return find(str, 0, caseSensitive) != -1; }
+    bool contains(UChar c) const { return find(c) != notFound; }
+    bool contains(const char* str, bool caseSensitive = true) const { return find(str, 0, caseSensitive) != notFound; }
+    bool contains(const String& str, bool caseSensitive = true) const { return find(str, 0, caseSensitive) != notFound; }
 
-    int find(UChar c, int start = 0) const
-        { return m_impl ? m_impl->find(c, start) : -1; }
-    int find(CharacterMatchFunctionPtr matchFunction, int start = 0) const
-        { return m_impl ? m_impl->find(matchFunction, start) : -1; }
-    int find(const char* str, int start = 0, bool caseSensitive = true) const
-        { return m_impl ? m_impl->find(str, start, caseSensitive) : -1; }
-    int find(const String& str, int start = 0, bool caseSensitive = true) const
-        { return m_impl ? m_impl->find(str.impl(), start, caseSensitive) : -1; }
-
-    int reverseFind(UChar c, int start = -1) const
-        { return m_impl ? m_impl->reverseFind(c, start) : -1; }
-    int reverseFind(const String& str, int start = -1, bool caseSensitive = true) const
-        { return m_impl ? m_impl->reverseFind(str.impl(), start, caseSensitive) : -1; }
-    
     bool startsWith(const String& s, bool caseSensitive = true) const
         { return m_impl ? m_impl->startsWith(s.impl(), caseSensitive) : s.isEmpty(); }
     bool endsWith(const String& s, bool caseSensitive = true) const
@@ -193,6 +220,7 @@ public:
     void remove(unsigned pos, int len = 1);
 
     String substring(unsigned pos, unsigned len = UINT_MAX) const;
+    String substringSharingImpl(unsigned pos, unsigned len = UINT_MAX) const;
     String left(unsigned len) const { return substring(0, len); }
     String right(unsigned len) const { return substring(length() - len, len); }
 
@@ -204,21 +232,16 @@ public:
     String simplifyWhiteSpace() const;
 
     String removeCharacters(CharacterMatchFunctionPtr) const;
+    template<bool isSpecialCharacter(UChar)> bool isAllSpecialCharacters() const;
 
     // Return the string with case folded for case insensitive comparison.
     String foldCase() const;
 
-    static String number(short);
-    static String number(unsigned short);
-    static String number(int);
-    static String number(unsigned);
-    static String number(long);
-    static String number(unsigned long);
-    static String number(long long);
-    static String number(unsigned long long);
-    static String number(double);
-    
+#if !PLATFORM(QT)
     static String format(const char *, ...) WTF_ATTRIBUTE_PRINTF(1, 2);
+#else
+    static String format(const char *, ...);
+#endif
 
     // Returns an uninitialized string. The characters needs to be written
     // into the buffer returned in data before the returned string is used.
@@ -254,11 +277,6 @@ public:
     // to ever prefer copy() over plain old assignment.
     String threadsafeCopy() const;
 
-    bool isNull() const { return !m_impl; }
-    ALWAYS_INLINE bool isEmpty() const { return !m_impl || !m_impl->length(); }
-
-    StringImpl* impl() const { return m_impl.get(); }
-
 #if PLATFORM(CF)
     String(CFStringRef);
     CFStringRef createCFString() const;
@@ -289,14 +307,9 @@ public:
 #endif
 
 #if PLATFORM(OLYMPIA)
-    String(const Olympia::WebKit::String&);
-    operator Olympia::WebKit::String() const;
+    String(const Olympia::WebKit::WebString&);
+    operator Olympia::WebKit::WebString() const;
 #endif
-
-    Vector<char> ascii() const;
-
-    CString latin1() const;
-    CString utf8() const;
 
     static String fromUTF8(const char*, size_t);
     static String fromUTF8(const char*);
@@ -308,6 +321,10 @@ public:
     WTF::Unicode::Direction defaultWritingDirection() const { return m_impl ? m_impl->defaultWritingDirection() : WTF::Unicode::LeftToRight; }
 
     bool containsOnlyASCII() const { return charactersAreAllASCII(characters(), length()); }
+
+    // Hash table deleted values, which are only constructed and never copied or destroyed.
+    String(WTF::HashTableDeletedValueType) : m_impl(WTF::HashTableDeletedValue) { }
+    bool isHashTableDeletedValue() const { return m_impl.isHashTableDeletedValue(); }
 
 private:
     RefPtr<StringImpl> m_impl;
@@ -364,43 +381,39 @@ inline bool charactersAreAllASCII(const UChar* characters, size_t length)
     return !(ored & 0xFF80);
 }
 
-inline int find(const UChar* characters, size_t length, UChar character, int startPosition)
+int codePointCompare(const String&, const String&);
+
+inline size_t find(const UChar* characters, unsigned length, UChar matchCharacter, unsigned index = 0)
 {
-    if (startPosition >= static_cast<int>(length))
-        return -1;
-    for (size_t i = startPosition; i < length; ++i) {
-        if (characters[i] == character)
-            return static_cast<int>(i);
+    while (index < length) {
+        if (characters[index] == matchCharacter)
+            return index;
+        ++index;
     }
-    return -1;
+    return notFound;
 }
 
-inline int find(const UChar* characters, size_t length, CharacterMatchFunctionPtr matchFunction, int startPosition)
+inline size_t find(const UChar* characters, unsigned length, CharacterMatchFunctionPtr matchFunction, unsigned index = 0)
 {
-    if (startPosition >= static_cast<int>(length))
-        return -1;
-    for (size_t i = startPosition; i < length; ++i) {
-        if (matchFunction(characters[i]))
-            return static_cast<int>(i);
+    while (index < length) {
+        if (matchFunction(characters[index]))
+            return index;
+        ++index;
     }
-    return -1;
+    return notFound;
 }
 
-inline int reverseFind(const UChar* characters, size_t length, UChar character, int startPosition)
+inline size_t reverseFind(const UChar* characters, unsigned length, UChar matchCharacter, unsigned index = UINT_MAX)
 {
-    if (startPosition >= static_cast<int>(length) || !length)
-        return -1;
-    if (startPosition < 0)
-        startPosition += static_cast<int>(length);
-    while (true) {
-        if (characters[startPosition] == character)
-            return startPosition;
-        if (!startPosition)
-            return -1;
-        startPosition--;
+    if (!length)
+        return notFound;
+    if (index >= length)
+        index = length - 1;
+    while (characters[index] != matchCharacter) {
+        if (!index--)
+            return notFound;
     }
-    ASSERT_NOT_REACHED();
-    return -1;
+    return index;
 }
 
 inline void append(Vector<UChar>& vector, const String& string)
@@ -428,16 +441,46 @@ inline void appendNumber(Vector<UChar>& vector, unsigned char number)
     }
 }
 
-} // namespace WebCore
+template<bool isSpecialCharacter(UChar)> inline bool isAllSpecialCharacters(const UChar* characters, size_t length)
+{
+    for (size_t i = 0; i < length; ++i) {
+        if (!isSpecialCharacter(characters[i]))
+            return false;
+    }
+    return true;
+}
 
-namespace WTF {
+template<bool isSpecialCharacter(UChar)> inline bool String::isAllSpecialCharacters() const
+{
+    return WTF::isAllSpecialCharacters<isSpecialCharacter>(characters(), length());
+}
 
-    // StringHash is the default hash for String
-    template<typename T> struct DefaultHash;
-    template<> struct DefaultHash<WebCore::String> {
-        typedef WebCore::StringHash Hash;
-    };
+// StringHash is the default hash for String
+template<typename T> struct DefaultHash;
+template<> struct DefaultHash<String> {
+    typedef StringHash Hash;
+};
+
+template <> struct VectorTraits<String> : SimpleClassVectorTraits
+{
+    static const bool canInitializeWithMemset = true;
+};
 
 }
+
+using WTF::CString;
+using WTF::String;
+using WTF::append;
+using WTF::appendNumber;
+using WTF::charactersAreAllASCII;
+using WTF::charactersToDouble;
+using WTF::charactersToFloat;
+using WTF::charactersToInt;
+using WTF::equal;
+using WTF::equalIgnoringCase;
+using WTF::find;
+using WTF::isAllSpecialCharacters;
+using WTF::isSpaceOrNewline;
+using WTF::reverseFind;
 
 #endif

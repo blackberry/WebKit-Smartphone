@@ -32,16 +32,15 @@
 #ifndef EventTarget_h
 #define EventTarget_h
 
-#include "AtomicStringHash.h"
 #include "EventNames.h"
 #include "RegisteredEventListener.h"
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
+#include <wtf/text/AtomicStringHash.h>
 
 namespace WebCore {
 
     class AbstractWorker;
-    class AtomicString;
     class DedicatedWorkerContext;
     class DOMApplicationCache;
     class DOMWindow;
@@ -49,7 +48,9 @@ namespace WebCore {
     class EventListener;
     class EventSource;
     class FileReader;
+    class FileWriter;
     class IDBRequest;
+    class IDBTransaction;
     class MessagePort;
     class Node;
     class Notification;
@@ -120,12 +121,16 @@ namespace WebCore {
 #if ENABLE(NOTIFICATIONS)
         virtual Notification* toNotification();
 #endif
-#if ENABLE(FILE_READER)
+#if ENABLE(BLOB)
         virtual FileReader* toFileReader();
+#endif
+#if ENABLE(FILE_WRITER)
+        virtual FileWriter* toFileWriter();
 #endif
 
 #if ENABLE(INDEXED_DATABASE)
         virtual IDBRequest* toIDBRequest();
+        virtual IDBTransaction* toIDBTransaction();
 #endif
 
         virtual ScriptExecutionContext* scriptExecutionContext() const = 0;
@@ -166,6 +171,8 @@ namespace WebCore {
         void fireEventListeners(Event*, EventTargetData*, EventListenerVector&);
     };
 
+    // FIXME: These macros should be split into separate DEFINE and DECLARE
+    // macros to avoid causing so many header includes.
     #define DEFINE_ATTRIBUTE_EVENT_LISTENER(attribute) \
         EventListener* on##attribute() { return getAttributeEventListener(eventNames().attribute##Event); } \
         void setOn##attribute(PassRefPtr<EventListener> listener) { setAttributeEventListener(eventNames().attribute##Event, listener); } \

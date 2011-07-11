@@ -26,24 +26,12 @@
 #ifndef ArgumentDecoder_h
 #define ArgumentDecoder_h
 
+#include "ArgumentCoder.h"
 #include "Attachment.h"
 #include <wtf/Deque.h>
-#include <wtf/TypeTraits.h>
 #include <wtf/Vector.h>
 
 namespace CoreIPC {
-
-class ArgumentDecoder;
-class Attachment;
-
-namespace ArgumentCoders {
-
-template<typename T> bool decode(ArgumentDecoder& decoder, T& t)
-{
-    return WTF::RemovePointer<T>::Type::decode(decoder, t);
-}
-
-}
 
 class ArgumentDecoder {
 public:
@@ -52,6 +40,9 @@ public:
     ~ArgumentDecoder();
 
     uint64_t destinationID() const { return m_destinationID; }
+
+    bool isInvalid() const { return m_bufferPos > m_bufferEnd; }
+    void markInvalid() { m_bufferPos = m_bufferEnd + 1; }
 
     bool decodeBytes(Vector<uint8_t>&);
     bool decodeBytes(uint8_t*, size_t);
@@ -64,10 +55,19 @@ public:
     bool decodeFloat(float&);
     bool decodeDouble(double&);
 
+    template<typename T>
+    bool bufferIsLargeEnoughToContain(size_t numElements) const
+    {
+        if (numElements > std::numeric_limits<size_t>::max() / sizeof(T))
+            return false;
+
+        return bufferIsLargeEnoughToContain(__alignof(T), numElements * sizeof(T));
+    }
+
     // Generic type decode function.
     template<typename T> bool decode(T& t)
     {
-        return ArgumentCoders::decode<T>(*this, t);
+        return ArgumentCoder<T>::decode(this, t);
     }
 
     // This overload exists so we can pass temporaries to decode. In the Star Trek future, it 
@@ -82,12 +82,13 @@ public:
     void debug();
 
 private:
-    ArgumentDecoder(const ArgumentDecoder&);
-    ArgumentDecoder& operator=(const ArgumentDecoder&);
+    ArgumentDecoder(const ArgumentDecoder*);
+    ArgumentDecoder* operator=(const ArgumentDecoder*);
 
     void initialize(const uint8_t* buffer, size_t bufferSize);
 
     bool alignBufferPosition(unsigned alignment, size_t size);
+    bool bufferIsLargeEnoughToContain(unsigned alignment, size_t size) const;
 
     uint64_t m_destinationID;
 

@@ -33,7 +33,7 @@ class ValidityState : public Noncopyable {
 public:
     static PassOwnPtr<ValidityState> create(HTMLFormControlElement* control)
     {
-        return new ValidityState(control);
+        return adoptPtr(new ValidityState(control));
     }
 
     void ref() { m_control->ref(); }
@@ -41,12 +41,12 @@ public:
 
     String validationMessage() const;
 
-    void setCustomErrorMessage(const String& message) { m_customErrorMessage = message; }
+    void setCustomErrorMessage(const String&);
 
-    bool valueMissing() const { return m_control->valueMissing(); }
+    bool valueMissing() const;
     bool typeMismatch() const;
-    bool patternMismatch() const { return m_control->patternMismatch(); }
-    bool tooLong() const { return m_control->tooLong(); }
+    bool patternMismatch() const;
+    bool tooLong() const;
     bool rangeUnderflow() const;
     bool rangeOverflow() const;
     bool stepMismatch() const;

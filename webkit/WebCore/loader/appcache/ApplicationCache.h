@@ -29,11 +29,11 @@
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
 
 #include "PlatformString.h"
-#include "StringHash.h"
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
+#include <wtf/text/StringHash.h>
 
 namespace WebCore {
 
@@ -41,7 +41,6 @@ class ApplicationCacheGroup;
 class ApplicationCacheResource;
 class DocumentLoader;
 class KURL;
-
 class ResourceRequest;
 
 typedef Vector<std::pair<KURL, KURL> > FallbackURLVector;

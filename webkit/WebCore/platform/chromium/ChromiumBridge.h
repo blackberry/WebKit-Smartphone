@@ -1,10 +1,10 @@
 /*
  * Copyright (c) 2010, Google Inc. All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
- * 
+ *
  *     * Redistributions of source code must retain the above copyright
  * notice, this list of conditions and the following disclaimer.
  *     * Redistributions in binary form must reproduce the above
@@ -14,7 +14,7 @@
  *     * Neither the name of Google Inc. nor the names of its
  * contributors may be used to endorse or promote products derived from
  * this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -36,12 +36,25 @@
 #include "LinkHash.h"
 #include "PassRefPtr.h"
 #include "PasteboardPrivate.h"
+#include "PluginData.h"
 
+#include <wtf/Forward.h>
+#include <wtf/HashSet.h>
 #include <wtf/Vector.h>
 
 typedef struct NPObject NPObject;
 typedef struct _NPP NPP_t;
 typedef NPP_t* NPP;
+
+#if OS(DARWIN)
+typedef struct CGFont* CGFontRef;
+typedef uintptr_t ATSFontContainerRef;
+#ifdef __OBJC__
+@class NSFont;
+#else
+class NSFont;
+#endif
+#endif // OS(DARWIN)
 
 #if OS(WINDOWS)
 typedef struct HFONT__* HFONT;
@@ -49,6 +62,7 @@ typedef struct HFONT__* HFONT;
 
 namespace WebCore {
 
+    class ClipboardData;
     class Color;
     class Cursor;
     class Document;
@@ -57,14 +71,14 @@ namespace WebCore {
     class GeolocationServiceChromium;
     class GraphicsContext;
     class Image;
-    class IndexedDatabase;
+    class IDBFactoryBackendInterface;
+    class IDBKey;
     class IntRect;
     class KURL;
-    class String;
+    class SerializedScriptValue;
     class Widget;
 
     struct Cookie;
-    struct PluginInfo;
     struct FontRenderStyle;
 
     // An interface to the embedding layer, which has the ability to answer
@@ -81,13 +95,19 @@ namespace WebCore {
         static String clipboardReadPlainText(PasteboardPrivate::ClipboardBuffer);
         static void clipboardReadHTML(PasteboardPrivate::ClipboardBuffer, String*, KURL*);
 
-        // Only the clipboardRead functions take a buffer argument because 
+        // Only the clipboardRead functions take a buffer argument because
         // Chromium currently uses a different technique to write to alternate
         // clipboard buffers.
         static void clipboardWriteSelection(const String&, const KURL&, const String&, bool);
         static void clipboardWritePlainText(const String&);
         static void clipboardWriteURL(const KURL&, const String&);
         static void clipboardWriteImage(NativeImagePtr, const KURL&, const String&);
+        static void clipboardWriteData(const String& type, const String& data, const String& metadata);
+
+        // Interface for handling copy and paste, drag and drop, and selection copy.
+        static HashSet<String> clipboardReadAvailableTypes(PasteboardPrivate::ClipboardBuffer, bool* containsFilenames);
+        static bool clipboardReadData(PasteboardPrivate::ClipboardBuffer, const String& type, String& data, String& metadata);
+        static Vector<String> clipboardReadFilenames(PasteboardPrivate::ClipboardBuffer);
 
         // Cookies ------------------------------------------------------------
         static void setCookies(const Document*, const KURL&, const String& value);
@@ -127,6 +147,9 @@ namespace WebCore {
         static void getRenderStyleForStrike(const char* family, int sizeAndStyle, FontRenderStyle* result);
         static String getFontFamilyForCharacters(const UChar*, size_t numCharacters);
 #endif
+#if OS(DARWIN)
+        static bool loadFont(NSFont* srcFont, ATSFontContainerRef* out);
+#endif
 
         // Forms --------------------------------------------------------------
         static void notifyFormStateChanged(const Document*);
@@ -134,8 +157,7 @@ namespace WebCore {
         // Geolocation --------------------------------------------------------
         static GeolocationServiceBridge* createGeolocationServiceBridge(GeolocationServiceChromium*);
 
-        // HTML5 DB -----------------------------------------------------------
-#if ENABLE(DATABASE)
+        // Databases ----------------------------------------------------------
         // Returns a handle to the DB file and ooptionally a handle to its containing directory
         static PlatformFileHandle databaseOpenFile(const String& vfsFleName, int desiredFlags);
         // Returns a SQLite code (SQLITE_OK = 0, on success)
@@ -144,10 +166,11 @@ namespace WebCore {
         static long databaseGetFileAttributes(const String& vfsFileName);
         // Returns the size of the DB file
         static long long databaseGetFileSize(const String& vfsFileName);
-#endif
 
         // IndexedDB ----------------------------------------------------------
-        static PassRefPtr<IndexedDatabase> indexedDatabase();
+        static PassRefPtr<IDBFactoryBackendInterface> idbFactory();
+        // Extracts keyPath from values and returns the corresponding keys.
+        static void createIDBKeysFromSerializedValuesAndKeyPath(const Vector<RefPtr<SerializedScriptValue> >& values, const String& keyPath, Vector<RefPtr<IDBKey> >& keys);
 
         // JavaScript ---------------------------------------------------------
         static void notifyJSOutOfMemory(Frame*);
@@ -167,6 +190,9 @@ namespace WebCore {
         // That is committed size for Windows and virtual memory size for POSIX
         static int memoryUsageMB();
 
+        // Same as above, but always returns actual value, without any caches.
+        static int actualMemoryUsageMB();
+
         // MimeType -----------------------------------------------------------
         static bool isSupportedImageMIMEType(const String& mimeType);
         static bool isSupportedJavaScriptMIMEType(const String& mimeType);
@@ -176,7 +202,7 @@ namespace WebCore {
         static String preferredExtensionForMIMEType(const String& mimeType);
 
         // Plugin -------------------------------------------------------------
-        static bool plugins(bool refresh, Vector<PluginInfo*>*);
+        static bool plugins(bool refresh, Vector<PluginInfo>*);
         static NPObject* pluginScriptableObject(Widget*);
         static bool popupsAllowed(NPP);
 
@@ -220,6 +246,8 @@ namespace WebCore {
             GraphicsContext*, int part, int state, int classicState, const IntRect&);
         static void paintScrollbarTrack(
             GraphicsContext*, int part, int state, int classicState, const IntRect&, const IntRect& alignRect);
+        static void paintSpinButton(
+            GraphicsContext*, int part, int state, int classicState, const IntRect&);
         static void paintTextField(
             GraphicsContext*, int part, int state, int classicState, const IntRect&, const Color&, bool fillContentArea, bool drawEdges);
         static void paintTrackbar(
@@ -239,7 +267,6 @@ namespace WebCore {
 
         // Widget -------------------------------------------------------------
         static void widgetSetCursor(Widget*, const Cursor&);
-        static void widgetSetFocus(Widget*);
     };
 
 } // namespace WebCore

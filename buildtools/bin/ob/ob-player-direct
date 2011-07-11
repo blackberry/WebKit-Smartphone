@@ -2,6 +2,7 @@
 
 export BUILD_WEBKIT_DYNAMIC_FLEDGE=Yes
 
+OLDCONFIGUREFLAGS="$CONFIGUREFLAGS"
 CONFIGUREFLAGS=""
 
 if [ "$FEATURE_OLYMPIA_DEBUG_MEMORY" = "Yes" ] ; then
@@ -18,6 +19,11 @@ if [ "$OLYMPIABUILDCHOICE" = "fledge" ] ; then
         echo "Passing --disable-webkit-monolithic to configure"
         CONFIGUREFLAGS="$CONFIGUREFLAGS --disable-webkit-monolithic"
     fi
+fi
+
+if [ "$LIBWEBVIEWDIR" ] ; then
+    echo "Passing --libwebview-dir=$LIBWEBVIEWDIR to configure"
+    CONFIGUREFLAGS="$CONFIGUREFLAGS --libwebview-dir=$LIBWEBVIEWDIR"
 fi
 
 pushd $BBNSLDIR/players
@@ -37,6 +43,10 @@ $BBNSLDIR/players/configure \
     --prefix=$PLAYERINSTALLPREFIX \
     $CONFIGUREFLAGS
 let RETURNCODE+=$?
+
+# Don't corrupt future bbnsl builds by leaving garbage in
+# the CONFIGUREFLAGS environment variable
+CONFIGUREFLAGS=$OLDCONFIGUREFLAGS
 
 $BBNSLDIR/tools/win32/bin/make install
 let RETURNCODE+=$?

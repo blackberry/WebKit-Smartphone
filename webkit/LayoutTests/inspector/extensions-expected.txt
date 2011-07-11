@@ -1,0 +1,27 @@
+Tests WebInspector extension API
+
+Page reloaded.
+Started extension.
+Running tests...
+RUNNING TEST: extension_testCreatePanel
+done createPanel
+Panel created
+{
+    createSidebarPane : <function>
+    onSelectionChanged : {
+        addListener : <function>
+        removeListener : <function>
+    }
+    onSearch : {
+        addListener : <function>
+        removeListener : <function>
+    }
+}
+RUNNING TEST: extension_testCreateSidebar
+Sidebar created
+{
+    setHeight : <function>
+    setExpanded : <function>
+}
+All tests done.
+

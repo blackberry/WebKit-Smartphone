@@ -25,12 +25,22 @@
 
 #include "WebPreferencesStore.h"
 
+#include "FontSmoothingLevel.h"
+
 namespace WebKit {
+
+static bool hasXSSAuditorEnabledTestRunnerOverride;
+static bool xssAuditorEnabledTestRunnerOverride;
 
 WebPreferencesStore::WebPreferencesStore()
     : javaScriptEnabled(true)
     , loadsImagesAutomatically(true)
-    , minimumFontSize(9)
+    , pluginsEnabled(true)
+    , offlineWebApplicationCacheEnabled(false)
+    , localStorageEnabled(true)
+    , xssAuditorEnabled(true)
+    , fontSmoothingLevel(FontSmoothingLevelMedium)
+    , minimumFontSize(1)
     , minimumLogicalFontSize(9)
     , defaultFontSize(16)
     , defaultFixedFontSize(13)
@@ -43,45 +53,79 @@ WebPreferencesStore::WebPreferencesStore()
 {
 }
 
-WebPreferencesStore::WebPreferencesStore(const WebPreferencesStore& other)
+void WebPreferencesStore::encode(CoreIPC::ArgumentEncoder* encoder) const
 {
-    javaScriptEnabled = other.javaScriptEnabled;
-    loadsImagesAutomatically = other.loadsImagesAutomatically;
-
-    minimumFontSize = other.minimumFontSize;
-    minimumLogicalFontSize = other.minimumLogicalFontSize;
-    defaultFontSize = other.defaultFontSize;
-    defaultFixedFontSize = other.defaultFixedFontSize;
-    standardFontFamily = other.standardFontFamily;
-    cursiveFontFamily = other.cursiveFontFamily;
-    fantasyFontFamily = other.fantasyFontFamily;
-    fixedFontFamily = other.fixedFontFamily;
-    sansSerifFontFamily = other.sansSerifFontFamily;
-    serifFontFamily = other.serifFontFamily;
-
+    encoder->encode(javaScriptEnabled);
+    encoder->encode(loadsImagesAutomatically);
+    encoder->encode(pluginsEnabled);
+    encoder->encode(offlineWebApplicationCacheEnabled);
+    encoder->encode(localStorageEnabled);
+    encoder->encode(xssAuditorEnabled);
+    encoder->encode(fontSmoothingLevel);
+    encoder->encode(minimumFontSize);
+    encoder->encode(minimumLogicalFontSize);
+    encoder->encode(defaultFontSize);
+    encoder->encode(defaultFixedFontSize);
+    encoder->encode(standardFontFamily);
+    encoder->encode(cursiveFontFamily);
+    encoder->encode(fantasyFontFamily);
+    encoder->encode(fixedFontFamily);
+    encoder->encode(sansSerifFontFamily);
+    encoder->encode(serifFontFamily);
 }
 
-WebPreferencesStore& WebPreferencesStore::operator=(const WebPreferencesStore& other)
+bool WebPreferencesStore::decode(CoreIPC::ArgumentDecoder* decoder, WebPreferencesStore& s)
 {
-    WebPreferencesStore copy = other;
-    swap(copy);
-    return *this;
+    if (!decoder->decode(s.javaScriptEnabled))
+        return false;
+    if (!decoder->decode(s.loadsImagesAutomatically))
+        return false;
+    if (!decoder->decode(s.pluginsEnabled))
+        return false;
+    if (!decoder->decode(s.offlineWebApplicationCacheEnabled))
+        return false;
+    if (!decoder->decode(s.localStorageEnabled))
+        return false;
+    if (!decoder->decode(s.xssAuditorEnabled))
+        return false;
+    if (!decoder->decode(s.fontSmoothingLevel))
+        return false;
+    if (!decoder->decode(s.minimumFontSize))
+        return false;
+    if (!decoder->decode(s.minimumLogicalFontSize))
+        return false;
+    if (!decoder->decode(s.defaultFontSize))
+        return false;
+    if (!decoder->decode(s.defaultFixedFontSize))
+        return false;
+    if (!decoder->decode(s.standardFontFamily))
+        return false;
+    if (!decoder->decode(s.cursiveFontFamily))
+        return false;
+    if (!decoder->decode(s.fantasyFontFamily))
+        return false;
+    if (!decoder->decode(s.fixedFontFamily))
+        return false;
+    if (!decoder->decode(s.sansSerifFontFamily))
+        return false;
+    if (!decoder->decode(s.serifFontFamily))
+        return false;
+
+    if (hasXSSAuditorEnabledTestRunnerOverride)
+        s.xssAuditorEnabled = xssAuditorEnabledTestRunnerOverride;
+
+    return true;
 }
 
-void WebPreferencesStore::swap(WebPreferencesStore& other)
+void WebPreferencesStore::overrideXSSAuditorEnabledForTestRunner(bool enabled)
 {
-    std::swap(javaScriptEnabled, other.javaScriptEnabled);
-    std::swap(loadsImagesAutomatically, other.loadsImagesAutomatically);
-    std::swap(minimumFontSize, other.minimumFontSize);
-    std::swap(minimumLogicalFontSize, other.minimumLogicalFontSize);
-    std::swap(defaultFontSize, other.defaultFontSize);
-    std::swap(defaultFixedFontSize, other.defaultFixedFontSize);
-    WebCore::swap(standardFontFamily, other.standardFontFamily);
-    WebCore::swap(cursiveFontFamily, other.cursiveFontFamily);
-    WebCore::swap(fantasyFontFamily, other.fantasyFontFamily);
-    WebCore::swap(fixedFontFamily, other.fixedFontFamily);
-    WebCore::swap(sansSerifFontFamily, other.sansSerifFontFamily);
-    WebCore::swap(serifFontFamily, other.serifFontFamily);
+    hasXSSAuditorEnabledTestRunnerOverride = true;
+    xssAuditorEnabledTestRunnerOverride = enabled;
+}
+
+void WebPreferencesStore::removeTestRunnerOverrides()
+{
+    hasXSSAuditorEnabledTestRunnerOverride = false;
 }
 
 } // namespace WebKit

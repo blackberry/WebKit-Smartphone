@@ -28,28 +28,49 @@
 
 #include "Connection.h"
 #include "PlatformProcessIdentifier.h"
+#include "PluginInfoStore.h"
+#include "ProcessLauncher.h"
 #include "ProcessModel.h"
 #include "ResponsivenessTimer.h"
+#include "ThreadLauncher.h"
 #include "WebPageProxy.h"
+#include <WebCore/LinkHash.h>
+#include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
 
+namespace WebCore {
+    class KURL;
+};
+
 namespace WebKit {
 
+class WebBackForwardListItem;
+class WebContext;
 class WebPageNamespace;
-
-class WebProcessProxy : public RefCounted<WebProcessProxy>, CoreIPC::Connection::Client, ResponsivenessTimer::Client {
+    
+class WebProcessProxy : public RefCounted<WebProcessProxy>, CoreIPC::Connection::Client, ResponsivenessTimer::Client, ProcessLauncher::Client, ThreadLauncher::Client {
 public:
     typedef HashMap<uint64_t, RefPtr<WebPageProxy> > WebPageProxyMap;
     typedef WebPageProxyMap::const_iterator::Values pages_const_iterator;
+    typedef HashMap<uint64_t, RefPtr<WebBackForwardListItem> > WebBackForwardListItemMap;
 
-    static PassRefPtr<WebProcessProxy> create(ProcessModel);
+    static PassRefPtr<WebProcessProxy> create(WebContext*);
     ~WebProcessProxy();
 
     void terminate();
 
-    CoreIPC::Connection* connection() const { return m_connection.get(); }
+    template<typename E, typename T> bool send(E messageID, uint64_t destinationID, const T& arguments);
+    
+    CoreIPC::Connection* connection() const
+    { 
+        ASSERT(m_connection);
+        
+        return m_connection.get(); 
+    }
+
+    PlatformProcessIdentifier processIdentifier() const { return m_processLauncher->processIdentifier(); }
 
     WebPageProxy* webPage(uint64_t pageID) const;
     WebPageProxy* createWebPage(WebPageNamespace*);
@@ -60,37 +81,79 @@ public:
     pages_const_iterator pages_end();
     size_t numberOfPages();
 
+    WebBackForwardListItem* webBackForwardItem(uint64_t itemID) const;
+
     ResponsivenessTimer* responsivenessTimer() { return &m_responsivenessTimer; }
 
     bool isValid() const { return m_connection; }
+    bool isLaunching() const;
 
-    ProcessModel processModel() const { return m_processModel; }
-
-    PlatformProcessIdentifier processIdentifier() const { return m_platformProcessIdentifier; }
+    WebFrameProxy* webFrame(uint64_t) const;
+    void frameCreated(uint64_t, WebFrameProxy*);
+    void frameDestroyed(uint64_t);
+    void disconnectFramesFromPage(WebPageProxy*); // Including main frame.
+    size_t frameCountInPage(WebPageProxy*) const; // Including main frame.
 
 private:
-    explicit WebProcessProxy(ProcessModel);
-    
+    explicit WebProcessProxy(WebContext*);
+
     void connect();
+#if USE(ACCELERATED_COMPOSITING)
+    void setUpAcceleratedCompositing();
+#endif
+
+    bool sendMessage(CoreIPC::MessageID, PassOwnPtr<CoreIPC::ArgumentEncoder>);
+
+    void getPlugins(bool refresh, Vector<WebCore::PluginInfo>&);
+    void getPluginHostConnection(const WTF::String& mimeType, const WebCore::KURL& url, WTF::String& pluginPath);
+
+    void addOrUpdateBackForwardListItem(uint64_t itemID, const WTF::String& originalURLString, const WTF::String& urlString, const WTF::String& title);
+    void addVisitedLink(WebCore::LinkHash);
 
     // CoreIPC::Connection::Client
     void didReceiveMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
     void didReceiveSyncMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*, CoreIPC::ArgumentEncoder*);
     void didClose(CoreIPC::Connection*);
+    void didReceiveInvalidMessage(CoreIPC::Connection*, CoreIPC::MessageID);
         
     // ResponsivenessTimer::Client
     void didBecomeUnresponsive(ResponsivenessTimer*);
     void didBecomeResponsive(ResponsivenessTimer*);
 
+    // ProcessLauncher::Client
+    virtual void didFinishLaunching(ProcessLauncher*, CoreIPC::Connection::Identifier);
+
+    // ThreadLauncher::Client
+    virtual void didFinishLaunching(ThreadLauncher*, CoreIPC::Connection::Identifier);
+
+    void didFinishLaunching(CoreIPC::Connection::Identifier);
+
     ResponsivenessTimer m_responsivenessTimer;
     RefPtr<CoreIPC::Connection> m_connection;
-    PlatformProcessIdentifier m_platformProcessIdentifier;
 
-    ProcessModel m_processModel;
+    Vector<CoreIPC::Connection::OutgoingMessage> m_pendingMessages;
+    RefPtr<ProcessLauncher> m_processLauncher;
+    RefPtr<ThreadLauncher> m_threadLauncher;
 
-    // NOTE: This map is for pages in all WebPageNamespaces that use this process.
+    WebContext* m_context;
+
+    // NOTE: This map is for WebPageProxies in all WebPageNamespaces that use this process.
     WebPageProxyMap m_pageMap;
+
+    // NOTE: This map is for WebBackForwardListItems in all WebPageNamespaces and WebPageProxies that use this process.
+    WebBackForwardListItemMap m_backForwardListItemMap;
+
+    HashMap<uint64_t, RefPtr<WebFrameProxy> > m_frameMap;
 };
+
+template<typename E, typename T>
+bool WebProcessProxy::send(E messageID, uint64_t destinationID, const T& arguments)
+{
+    OwnPtr<CoreIPC::ArgumentEncoder> argumentEncoder(new CoreIPC::ArgumentEncoder(destinationID));
+    argumentEncoder->encode(arguments);
+
+    return sendMessage(CoreIPC::MessageID(messageID), argumentEncoder.release());
+}
 
 } // namespace WebKit
 

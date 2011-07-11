@@ -10,9 +10,6 @@
  * 2.  Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer in the
  *     documentation and/or other materials provided with the distribution.
- * 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of
- *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -30,7 +27,12 @@
 #include "WebIDBDatabaseImpl.h"
 
 #include "DOMStringList.h"
-#include "IDBDatabase.h"
+#include "IDBCallbacksProxy.h"
+#include "IDBDatabaseBackendInterface.h"
+#include "IDBTransactionBackendInterface.h"
+#include "WebIDBCallbacks.h"
+#include "WebIDBObjectStoreImpl.h"
+#include "WebIDBTransactionImpl.h"
 
 #if ENABLE(INDEXED_DATABASE)
 
@@ -38,8 +40,8 @@ using namespace WebCore;
 
 namespace WebKit {
 
-WebIDBDatabaseImpl::WebIDBDatabaseImpl(PassRefPtr<IDBDatabase> idbDatabase)
-    : m_idbDatabase(idbDatabase)
+WebIDBDatabaseImpl::WebIDBDatabaseImpl(PassRefPtr<IDBDatabaseBackendInterface> databaseBackend)
+    : m_databaseBackend(databaseBackend)
 {
 }
 
@@ -47,24 +49,56 @@ WebIDBDatabaseImpl::~WebIDBDatabaseImpl()
 {
 }
 
-WebString WebIDBDatabaseImpl::name()
+WebString WebIDBDatabaseImpl::name() const
 {
-    return m_idbDatabase->name();
+    return m_databaseBackend->name();
 }
 
-WebString WebIDBDatabaseImpl::description()
+WebString WebIDBDatabaseImpl::description() const
 {
-    return m_idbDatabase->description();
+    return m_databaseBackend->description();
 }
 
-WebString WebIDBDatabaseImpl::version()
+WebString WebIDBDatabaseImpl::version() const
 {
-    return m_idbDatabase->version();
+    return m_databaseBackend->version();
 }
 
-WebDOMStringList WebIDBDatabaseImpl::objectStores()
+WebDOMStringList WebIDBDatabaseImpl::objectStores() const
 {
-    return m_idbDatabase->objectStores();
+    return m_databaseBackend->objectStores();
+}
+
+void WebIDBDatabaseImpl::createObjectStore(const WebString& name, const WebString& keyPath, bool autoIncrement, WebIDBCallbacks* callbacks)
+{
+    m_databaseBackend->createObjectStore(name, keyPath, autoIncrement, IDBCallbacksProxy::create(callbacks));
+}
+
+WebIDBObjectStore* WebIDBDatabaseImpl::objectStore(const WebString& name, unsigned short mode)
+{
+    RefPtr<IDBObjectStoreBackendInterface> objectStore = m_databaseBackend->objectStore(name, mode);
+    if (!objectStore)
+        return 0;
+    return new WebIDBObjectStoreImpl(objectStore);
+}
+
+void WebIDBDatabaseImpl::removeObjectStore(const WebString& name, WebIDBCallbacks* callbacks)
+{
+    m_databaseBackend->removeObjectStore(name, IDBCallbacksProxy::create(callbacks));
+}
+
+void WebIDBDatabaseImpl::setVersion(const WebString& version, WebIDBCallbacks* callbacks)
+{
+    m_databaseBackend->setVersion(version, IDBCallbacksProxy::create(callbacks));
+}
+
+WebIDBTransaction* WebIDBDatabaseImpl::transaction(const WebDOMStringList& names, unsigned short mode, unsigned long timeout)
+{
+    RefPtr<DOMStringList> nameList = PassRefPtr<DOMStringList>(names);
+    RefPtr<IDBTransactionBackendInterface> transaction = m_databaseBackend->transaction(nameList.get(), mode, timeout);
+    if (!transaction)
+        return 0;
+    return new WebIDBTransactionImpl(transaction);
 }
 
 } // namespace WebCore

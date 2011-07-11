@@ -33,19 +33,18 @@
 
 #if ENABLE(DATABASE)
 
-#include <wtf/Threading.h>
+#include <wtf/ThreadSafeShared.h>
 
 namespace WebCore {
 
 class Database;
 class DatabaseSync;
-class ScriptExecutionContext;
 
 class DatabaseCallback : public ThreadSafeShared<DatabaseCallback> {
 public:
     virtual ~DatabaseCallback() { }
-    virtual bool handleEvent(ScriptExecutionContext*, Database*) = 0;
-    virtual bool handleEvent(ScriptExecutionContext*, DatabaseSync*) = 0;
+    virtual bool handleEvent(Database*) = 0;
+    virtual bool handleEvent(DatabaseSync*) = 0;
 };
 
 }

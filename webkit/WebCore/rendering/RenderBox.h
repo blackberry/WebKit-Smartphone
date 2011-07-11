@@ -227,7 +227,7 @@ public:
 
     bool stretchesToViewHeight() const
     {
-        return style()->htmlHacks() && style()->height().isAuto() && !isFloatingOrPositioned() && (isRoot() || isBody());
+        return document()->inQuirksMode() && style()->height().isAuto() && !isFloatingOrPositioned() && (isRoot() || isBody());
     }
 
     virtual IntSize intrinsicSize() const { return IntSize(); }
@@ -256,7 +256,7 @@ public:
 
     virtual int verticalScrollbarWidth() const;
     int horizontalScrollbarHeight() const;
-    virtual bool scroll(ScrollDirection, ScrollGranularity, float multiplier = 1.0f, Node** stopNode = 0);
+    virtual bool scroll(ScrollDirection, ScrollGranularity, float multiplier = 1, Node** stopNode = 0);
     bool canBeScrolledAndHasScrollableArea() const;
     virtual bool canBeProgramaticallyScrolled(bool) const;
     virtual void autoscroll();
@@ -306,10 +306,6 @@ public:
 
     bool shrinkToAvoidFloats() const;
     virtual bool avoidsFloats() const;
-
-#if ENABLE(SVG)
-    virtual AffineTransform localTransform() const;
-#endif
 
 protected:
     virtual void styleWillChange(StyleDifference, const RenderStyle* newStyle);

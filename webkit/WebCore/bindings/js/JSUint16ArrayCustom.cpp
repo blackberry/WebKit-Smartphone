@@ -46,9 +46,19 @@ JSC::JSValue toJS(JSC::ExecState* exec, JSDOMGlobalObject* globalObject, Uint16A
     return getDOMObjectWrapper<JSUint16Array>(exec, globalObject, object);
 }
 
-JSC::JSValue JSUint16Array::set(JSC::ExecState* exec, JSC::ArgList const& args)
+JSC::JSValue JSUint16Array::set(JSC::ExecState* exec)
 {
-    return setWebGLArrayHelper(exec, impl(), args, toUint16Array);
+    return setWebGLArrayHelper(exec, impl(), toUint16Array);
+}
+
+EncodedJSValue JSC_HOST_CALL JSUint16ArrayConstructor::constructJSUint16Array(ExecState* exec)
+{
+    JSUint16ArrayConstructor* jsConstructor = static_cast<JSUint16ArrayConstructor*>(exec->callee());
+    RefPtr<Uint16Array> array = static_cast<Uint16Array*>(constructArrayBufferView<Uint16Array, unsigned short>(exec).get());
+    if (!array.get())
+        // Exception has already been thrown.
+        return JSValue::encode(JSValue());
+    return JSValue::encode(asObject(toJS(exec, jsConstructor->globalObject(), array.get())));
 }
 
 } // namespace WebCore

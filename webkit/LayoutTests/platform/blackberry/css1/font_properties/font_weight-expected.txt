@@ -1,0 +1,124 @@
+layer at (0,0) size 800x1116
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x1116
+  RenderBlock {HTML} at (0,0) size 800x1116
+    RenderBody {BODY} at (8,8) size 784x1100 [bgcolor=#CCCCCC]
+      RenderBlock {P} at (0,0) size 784x21
+        RenderText {#text} at (0,1) size 356x19
+          text run at (0,1) width 356: "The style declarations which apply to the text below are:"
+      RenderBlock {PRE} at (0,37) size 784x165
+        RenderText {#text} at (0,0) size 240x165
+          text run at (0,0) width 200: ".one {font-weight: bold;}"
+          text run at (200,0) width 0: " "
+          text run at (0,15) width 216: ".two {font-weight: bolder;}"
+          text run at (216,15) width 0: " "
+          text run at (0,30) width 240: ".three {font-weight: lighter;}"
+          text run at (240,30) width 0: " "
+          text run at (0,45) width 200: ".four {font-weight: 100;}"
+          text run at (200,45) width 0: " "
+          text run at (0,60) width 200: ".five {font-weight: 300;}"
+          text run at (200,60) width 0: " "
+          text run at (0,75) width 192: ".six {font-weight: 500;}"
+          text run at (192,75) width 0: " "
+          text run at (0,90) width 208: ".seven {font-weight: 700;}"
+          text run at (208,90) width 0: " "
+          text run at (0,105) width 208: ".eight {font-weight: 900;}"
+          text run at (208,105) width 0: " "
+          text run at (0,120) width 224: ".nine {font-weight: normal;}"
+          text run at (224,120) width 0: " "
+          text run at (0,135) width 200: "B {font-weight: lighter;}"
+          text run at (200,135) width 0: " "
+          text run at (0,150) width 0: " "
+      RenderBlock {HR} at (0,215) size 784x2 [border: (1px inset #000000)]
+      RenderBlock {P} at (0,233) size 784x21
+        RenderText {#text} at (0,1) size 198x19
+          text run at (0,1) width 198: "This sentence should be bold."
+      RenderBlock {P} at (0,270) size 784x21
+        RenderText {#text} at (0,1) size 300x19
+          text run at (0,1) width 300: "This sentence should be bolder than normal."
+      RenderBlock {H4} at (0,312) size 784x21
+        RenderText {#text} at (0,1) size 131x19
+          text run at (0,1) width 131: "This is a heading-4."
+      RenderBlock {H4} at (0,354) size 784x21
+        RenderText {#text} at (0,1) size 206x19
+          text run at (0,1) width 206: "This is a bolder heading-4."
+      RenderBlock {P} at (0,396) size 784x21
+        RenderInline {B} at (0,0) size 354x19
+          RenderText {#text} at (0,1) size 354x19
+            text run at (0,1) width 354: "This sentence should be normal (boldface made lighter)."
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,433) size 784x21
+        RenderText {#text} at (0,1) size 230x19
+          text run at (0,1) width 230: "This sentence should be weight 100."
+      RenderBlock {P} at (0,470) size 784x21
+        RenderText {#text} at (0,1) size 230x19
+          text run at (0,1) width 230: "This sentence should be weight 300."
+      RenderBlock {P} at (0,507) size 784x21
+        RenderText {#text} at (0,1) size 230x19
+          text run at (0,1) width 230: "This sentence should be weight 500."
+      RenderBlock {P} at (0,544) size 784x21
+        RenderText {#text} at (0,1) size 241x19
+          text run at (0,1) width 241: "This sentence should be weight 700."
+      RenderBlock {P} at (0,581) size 784x21
+        RenderText {#text} at (0,1) size 276x19
+          text run at (0,1) width 276: "This sentence should be weight 900."
+      RenderBlock {P} at (0,618) size 784x21
+        RenderText {#text} at (0,1) size 493x19
+          text run at (0,1) width 493: "This sentence should be bold, but the last word in the sentence should be "
+        RenderInline {SPAN} at (0,0) size 44x19
+          RenderText {#text} at (493,1) size 44x19
+            text run at (493,1) width 44: "normal"
+        RenderText {#text} at (537,1) size 4x19
+          text run at (537,1) width 4: "."
+      RenderTable {TABLE} at (0,655) size 563x445 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 561x443
+          RenderTableRow {TR} at (0,0) size 561x29
+            RenderTableCell {TD} at (0,0) size 561x29 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderInline {STRONG} at (0,0) size 161x19
+                RenderText {#text} at (4,5) size 161x19
+                  text run at (4,5) width 161: "TABLE Testing Section"
+          RenderTableRow {TR} at (0,29) size 561x414
+            RenderTableCell {TD} at (0,221) size 12x29 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,5) size 4x19
+                text run at (4,5) width 4: " "
+            RenderTableCell {TD} at (12,29) size 549x414 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderBlock {P} at (4,4) size 541x21
+                RenderText {#text} at (0,1) size 198x19
+                  text run at (0,1) width 198: "This sentence should be bold."
+              RenderBlock {P} at (4,41) size 541x21
+                RenderText {#text} at (0,1) size 300x19
+                  text run at (0,1) width 300: "This sentence should be bolder than normal."
+              RenderBlock {H4} at (4,83) size 541x21
+                RenderText {#text} at (0,1) size 131x19
+                  text run at (0,1) width 131: "This is a heading-4."
+              RenderBlock {H4} at (4,125) size 541x21
+                RenderText {#text} at (0,1) size 206x19
+                  text run at (0,1) width 206: "This is a bolder heading-4."
+              RenderBlock {P} at (4,167) size 541x21
+                RenderInline {B} at (0,0) size 354x19
+                  RenderText {#text} at (0,1) size 354x19
+                    text run at (0,1) width 354: "This sentence should be normal (boldface made lighter)."
+                RenderText {#text} at (0,0) size 0x0
+              RenderBlock {P} at (4,204) size 541x21
+                RenderText {#text} at (0,1) size 230x19
+                  text run at (0,1) width 230: "This sentence should be weight 100."
+              RenderBlock {P} at (4,241) size 541x21
+                RenderText {#text} at (0,1) size 230x19
+                  text run at (0,1) width 230: "This sentence should be weight 300."
+              RenderBlock {P} at (4,278) size 541x21
+                RenderText {#text} at (0,1) size 230x19
+                  text run at (0,1) width 230: "This sentence should be weight 500."
+              RenderBlock {P} at (4,315) size 541x21
+                RenderText {#text} at (0,1) size 241x19
+                  text run at (0,1) width 241: "This sentence should be weight 700."
+              RenderBlock {P} at (4,352) size 541x21
+                RenderText {#text} at (0,1) size 276x19
+                  text run at (0,1) width 276: "This sentence should be weight 900."
+              RenderBlock {P} at (4,389) size 541x21
+                RenderText {#text} at (0,1) size 493x19
+                  text run at (0,1) width 493: "This sentence should be bold, but the last word in the sentence should be "
+                RenderInline {SPAN} at (0,0) size 44x19
+                  RenderText {#text} at (493,1) size 44x19
+                    text run at (493,1) width 44: "normal"
+                RenderText {#text} at (537,1) size 4x19
+                  text run at (537,1) width 4: "."

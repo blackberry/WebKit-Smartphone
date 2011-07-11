@@ -34,8 +34,6 @@
 #if ENABLE(DOM_STORAGE)
 
 #include "EventListener.h"
-#include "ScriptObject.h"
-#include "ScriptState.h"
 
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>

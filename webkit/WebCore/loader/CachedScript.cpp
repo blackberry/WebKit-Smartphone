@@ -50,12 +50,6 @@ CachedScript::~CachedScript()
 {
 }
 
-void CachedScript::didAddClient(CachedResourceClient* c)
-{
-    if (!isLoading())
-        c->notifyFinished(this);
-}
-
 void CachedScript::allClientsRemoved()
 {
     m_decodedDataDeletionTimer.startOneShot(0);
@@ -80,7 +74,6 @@ const String& CachedScript::script()
         m_script += m_decoder->flush();
         setDecodedSize(m_script.length() * sizeof(UChar));
     }
-
     m_decodedDataDeletionTimer.startOneShot(0);
     return m_script;
 }

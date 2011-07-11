@@ -33,7 +33,10 @@
 typedef const struct OpaqueJSContext* JSContextRef;
 typedef struct OpaqueJSValue* JSObjectRef;
 
-JSObjectRef makeEventSender(JSContextRef context);
+JSObjectRef makeEventSender(JSContextRef context, bool isTopFrame);
 void replaySavedEvents();
+void dragBeginCallback(GtkWidget*, GdkDragContext*, gpointer);
+void dragEndCallback(GtkWidget*, GdkDragContext*, gpointer);
+gboolean dragFailedCallback(GtkWidget*, GdkDragContext*, gpointer);
 
 #endif

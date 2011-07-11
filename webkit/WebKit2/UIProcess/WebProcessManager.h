@@ -26,28 +26,27 @@
 #ifndef WebProcessManager_h
 #define WebProcessManager_h
 
-#include "ProcessModel.h"
 #include "WebProcessProxy.h"
 #include <wtf/HashMap.h>
 #include <wtf/RefPtr.h>
 
 namespace WebKit {
 
-class WebProcessProxy;
-class WebPageNamespace;
-
 class WebProcessManager {
 public:
     static WebProcessManager& shared();
 
-    WebProcessProxy* getWebProcess(ProcessModel);
-
-    void processDidClose(WebProcessProxy*);
+    WebProcessProxy* getWebProcess(WebContext*);
+    void processDidClose(WebProcessProxy*, WebContext*);
 
 private:
     WebProcessManager();
+
     RefPtr<WebProcessProxy> m_sharedThread;
     RefPtr<WebProcessProxy> m_sharedProcess;
+
+    typedef HashMap<WebContext*, RefPtr<WebProcessProxy> > ProcessMap; 
+    ProcessMap m_processMap;
 };
 
 } // namespace WebKit

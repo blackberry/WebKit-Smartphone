@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2008, 2010 Apple Inc. All Rights Reserved.
  * Copyright (C) 2009 Google Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,7 @@
 #include "Worker.h"
 
 #include "DOMWindow.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "Document.h"
 #include "EventException.h"
 #include "EventListener.h"
@@ -48,23 +48,48 @@
 #include "WorkerThread.h"
 #include <wtf/MainThread.h>
 
+#if OS(OLYMPIA)
+#include "OlympiaPlatformMisc.h"
+#endif
+
 namespace WebCore {
 
-Worker::Worker(const String& url, ScriptExecutionContext* context, ExceptionCode& ec)
+inline Worker::Worker(ScriptExecutionContext* context)
     : AbstractWorker(context)
     , m_contextProxy(WorkerContextProxy::create(this))
 {
-    KURL scriptURL = resolveURL(url, ec);
-    if (ec)
-        return;
-
-    m_scriptLoader = new WorkerScriptLoader(ResourceRequestBase::TargetIsWorker);
-    m_scriptLoader->loadAsynchronously(scriptExecutionContext(), scriptURL, DenyCrossOriginRequests, this);
-    setPendingActivity(this);  // The worker context does not exist while loading, so we must ensure that the worker object is not collected, as well as its event listeners.
-#if ENABLE(INSPECTOR)
-    if (InspectorController* inspector = scriptExecutionContext()->inspectorController())
-        inspector->didCreateWorker(asID(), scriptURL.string(), false);
+#if OS(OLYMPIA)
+    Olympia::Platform::increaseWorkerCount();
 #endif
+}
+
+PassRefPtr<Worker> Worker::create(const String& url, ScriptExecutionContext* context, ExceptionCode& ec)
+{
+#if OS(OLYMPIA)
+    if (!Olympia::Platform::willStartWorker()) {
+        ec = INVALID_STATE_ERR;
+        return 0;
+    }
+#endif
+
+    RefPtr<Worker> worker = adoptRef(new Worker(context));
+
+    KURL scriptURL = worker->resolveURL(url, ec);
+    if (scriptURL.isEmpty())
+        return 0;
+
+    worker->m_scriptLoader = adoptPtr(new WorkerScriptLoader(ResourceRequestBase::TargetIsWorker));
+    worker->m_scriptLoader->loadAsynchronously(context, scriptURL, DenyCrossOriginRequests, worker.get());
+
+    // The worker context does not exist while loading, so we must ensure that the worker object is not collected, nor are its event listeners.
+    worker->setPendingActivity(worker.get());
+
+#if ENABLE(INSPECTOR)
+    if (InspectorController* inspector = context->inspectorController())
+        inspector->didCreateWorker(worker->asID(), scriptURL.string(), false);
+#endif
+
+    return worker.release();
 }
 
 Worker::~Worker()
@@ -72,6 +97,10 @@ Worker::~Worker()
     ASSERT(isMainThread());
     ASSERT(scriptExecutionContext()); // The context is protected by worker context proxy, so it cannot be destroyed while a Worker exists.
     m_contextProxy->workerObjectDestroyed();
+
+#if OS(OLYMPIA)
+    Olympia::Platform::decreaseWorkerCount();
+#endif
 }
 
 // FIXME: remove this when we update the ObjC bindings (bug #28774).
@@ -120,9 +149,12 @@ bool Worker::hasPendingActivity() const
 
 void Worker::notifyFinished()
 {
-    if (m_scriptLoader->failed())
+    if (m_scriptLoader->failed()) {
+#if OS(OLYMPIA)
+        Olympia::Platform::didCancelStartingWorker();
+#endif
         dispatchEvent(Event::create(eventNames().errorEvent, false, true));
-    else {
+    } else {
 #if OS(OLYMPIA)
         m_contextProxy->startWorkerContext(m_scriptLoader->url(), scriptExecutionContext()->groupName(), scriptExecutionContext()->userAgent(m_scriptLoader->url()), m_scriptLoader->script());
 #else

@@ -31,6 +31,8 @@
 #include "config.h"
 
 #include "GLES2Context.h"
+#include "GLES2ContextInternal.h"
+#include "IntSize.h"
 #include "WebGLES2Context.h"
 #include "WebKit.h"
 #include "WebKitClient.h"
@@ -47,45 +49,25 @@
 //      WebGLES2Context. This is done so we have a place to inject an
 //      implementation which creates the GL ES context.
 
+using namespace WebKit;
+
 namespace WebCore {
 
-class GLES2ContextInternal {
-public:
-    GLES2ContextInternal() {}
-    ~GLES2ContextInternal() {}
-
-    bool initialize(Page*);
-
-    WebKit::WebGLES2Context* getWebGLES2Context() { return m_impl.get(); }
-
-private:
-    OwnPtr<WebKit::WebGLES2Context> m_impl;
-};
-
-bool GLES2ContextInternal::initialize(Page* page)
+PassOwnPtr<GLES2ContextInternal> GLES2ContextInternal::create(WebGLES2Context* impl, bool owns)
 {
-    m_impl = WebKit::webKitClient()->createGLES2Context();
-    if (!m_impl)
-        return false;
-
-    WebKit::WebViewImpl* webView = WebKit::WebViewImpl::fromPage(page);
-    if (!m_impl->initialize(webView)) {
-        m_impl.clear();
-        return false;
-    }
-    return true;
+    PassOwnPtr<GLES2ContextInternal> result = new GLES2ContextInternal(impl, owns);
+    return result;
 }
 
-PassOwnPtr<GLES2Context> GLES2Context::create(Page* page)
+PassOwnPtr<GLES2Context> GLES2Context::create(PassOwnPtr<GLES2ContextInternal> internal)
 {
-    GLES2ContextInternal* internal = new GLES2ContextInternal();
-    if (!internal->initialize(page)) {
-        delete internal;
-        return 0;
-    }
     PassOwnPtr<GLES2Context> result = new GLES2Context();
-    result->m_internal.set(internal);
+    result->m_internal = internal;
     return result;
+}
+
+GLES2Context::GLES2Context()
+{
 }
 
 GLES2Context::~GLES2Context()
@@ -94,7 +76,7 @@ GLES2Context::~GLES2Context()
 
 bool GLES2Context::makeCurrent()
 {
-    WebKit::WebGLES2Context* webContext = m_internal->getWebGLES2Context();
+    WebGLES2Context* webContext = m_internal->getWebGLES2Context();
     if (!webContext)
         return false;
     return webContext->makeCurrent();
@@ -102,7 +84,7 @@ bool GLES2Context::makeCurrent()
 
 bool GLES2Context::destroy()
 {
-    WebKit::WebGLES2Context* webContext = m_internal->getWebGLES2Context();
+    WebGLES2Context* webContext = m_internal->getWebGLES2Context();
     if (!webContext)
         return false;
     return webContext->destroy();
@@ -110,10 +92,24 @@ bool GLES2Context::destroy()
 
 bool GLES2Context::swapBuffers()
 {
-    WebKit::WebGLES2Context* webContext = m_internal->getWebGLES2Context();
+    WebGLES2Context* webContext = m_internal->getWebGLES2Context();
     if (!webContext)
         return false;
     return webContext->swapBuffers();
+}
+
+void GLES2Context::resizeOffscreenContent(const IntSize& size)
+{
+    WebGLES2Context* webContext = m_internal->getWebGLES2Context();
+    ASSERT(webContext);
+    webContext->resizeOffscreenContent(size);
+}
+
+unsigned GLES2Context::getOffscreenContentParentTextureId()
+{
+    WebGLES2Context* webContext = m_internal->getWebGLES2Context();
+    ASSERT(webContext);
+    return webContext->getOffscreenContentParentTextureId();
 }
 
 }  // namespace WebCore

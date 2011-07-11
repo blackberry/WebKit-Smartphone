@@ -41,9 +41,10 @@
 #include <WebCore/HTMLInputElement.h>
 #include <WebCore/HTMLNames.h>
 #include <WebCore/KeyboardEvent.h>
-#include <WebCore/PlatformKeyboardEvent.h>
 #include <WebCore/NotImplemented.h>
+#include <WebCore/PlatformKeyboardEvent.h>
 #include <WebCore/Range.h>
+#include <WebCore/UserTypingGestureIndicator.h>
 #pragma warning(pop)
 
 using namespace WebCore;
@@ -347,6 +348,9 @@ void WebEditorClient::textFieldDidEndEditing(Element* e)
 
 void WebEditorClient::textDidChangeInTextField(Element* e)
 {
+    if (!UserTypingGestureIndicator::processingUserTypingGesture() || UserTypingGestureIndicator::focusedElementAtGestureStart() != e)
+        return;
+
     IWebFormDelegate* formDelegate;
     if (SUCCEEDED(m_webView->formDelegate(&formDelegate)) && formDelegate) {
         IDOMElement* domElement = DOMElement::createInstance(e);
@@ -418,13 +422,6 @@ void WebEditorClient::textDidChangeInTextArea(Element* e)
         }
         formDelegate->Release();
     }
-}
-
-// Note: This code is under review for upstreaming.
-bool WebEditorClient::focusedElementsAreRichlyEditable()
-{
-    notImplemented();
-    return false;
 }
 
 class WebEditorUndoCommand : public IWebUndoCommand
@@ -781,6 +778,10 @@ void WebEditorClient::getGuessesForWord(const String& word, Vector<String>& gues
         guesses.append(String(guess, SysStringLen(guess)));
         SysFreeString(guess);
     }
+}
+
+void WebEditorClient::willSetInputMethodState()
+{
 }
 
 void WebEditorClient::setInputMethodState(bool enabled)

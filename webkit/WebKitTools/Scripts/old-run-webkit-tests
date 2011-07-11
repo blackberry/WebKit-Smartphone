@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright (C) 2005, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
+# Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
 # Copyright (C) 2006 Alexey Proskuryakov (ap@nypop.com)
 # Copyright (C) 2007 Matt Lilek (pewtermoose@gmail.com)
 # Copyright (C) 2007 Eric Seidel <eric@webkit.org>
@@ -76,6 +76,7 @@ use POSIX;
 
 sub buildPlatformResultHierarchy();
 sub buildPlatformTestHierarchy(@);
+sub checkPythonVersion();
 sub closeCygpaths();
 sub closeDumpTool();
 sub closeWebSocketServer();
@@ -93,6 +94,7 @@ sub launchWithEnv(\@\%);
 sub resolveAndMakeTestResultsDirectory();
 sub numericcmp($$);
 sub openDiffTool();
+sub buildDumpTool($);
 sub openDumpTool();
 sub parseLeaksandPrintUniqueLeaks();
 sub openWebSocketServerIfNeeded();
@@ -104,12 +106,14 @@ sub readSkippedFiles($);
 sub recordActualResultsAndDiff($$);
 sub sampleDumpTool();
 sub setFileHandleNonBlocking(*$);
+sub setUpWindowsCrashLogSaving();
 sub slowestcmp($$);
 sub splitpath($);
 sub stopRunningTestsEarlyIfNeeded();
 sub stripExtension($);
 sub stripMetrics($$);
 sub testCrashedOrTimedOut($$$$$);
+sub toCygwinPath($);
 sub toURL($);
 sub toWindowsPath($);
 sub validateSkippedArg($$;$);
@@ -119,6 +123,7 @@ sub writeToFile($$);
 my $addPlatformExceptions = 0;
 my $complexText = 0;
 my $exitAfterNFailures = 0;
+my $exitAfterNCrashesOrTimeouts = 0;
 my $generateNewResults = isAppleMacWebKit() ? 1 : 0;
 my $guardMalloc = '';
 # FIXME: Dynamic HTTP-port configuration in this file is wrong.  The various
@@ -147,8 +152,9 @@ my $root;
 my $runSample = 1;
 my $shouldCheckLeaks = 0;
 my $showHelp = 0;
-my $stripEditingCallbacks = isCygwin();
+my $stripEditingCallbacks;
 my $testHTTP = 1;
+my $testWebSocket = 1;
 my $testMedia = 1;
 my $tmpDir = "/tmp";
 my $testResultsDirectory = File::Spec->catfile($tmpDir, "layout-test-results");
@@ -162,6 +168,7 @@ my $useRemoteLinksToTests = 0;
 my $useValgrind = 0;
 my $verbose = 0;
 my $shouldWaitForHTTPD = 0;
+my $useWebKitTestRunner = 0;
 
 my @leaksFilenames;
 
@@ -179,7 +186,16 @@ my $prettyDiffTag = "pretty-diff";
 my $diffsTag = "diffs";
 my $errorTag = "stderr";
 
+# These are defined here instead of closer to where they are used so that they
+# will always be accessible from the END block that uses them, even if the user
+# presses Ctrl-C before Perl has finished evaluating this whole file.
+my $windowsPostMortemDebuggerKey = "/HKLM/SOFTWARE/Microsoft/Windows NT/CurrentVersion/AeDebug";
+my %previousWindowsPostMortemDebuggerValues;
+
+my $realPlatform;
+
 my @macPlatforms = ("mac-tiger", "mac-leopard", "mac-snowleopard", "mac");
+my @winPlatforms = ("win-xp", "win-vista", "win-7", "win");
 
 if (isAppleMacWebKit()) {
     if (isTiger()) {
@@ -208,21 +224,38 @@ if (isAppleMacWebKit()) {
     }
 } elsif (isGtk()) {
     $platform = "gtk";
-    if (!$ENV{"WEBKIT_TESTFONTS"}) {
-        print "The WEBKIT_TESTFONTS environment variable is not defined.\n";
+} elsif (isWx()) {
+    $platform = "wx";
+} elsif (isCygwin()) {
+    if (isWindowsXP()) {
+        $platform = "win-xp";
+    } elsif (isWindowsVista()) {
+        $platform = "win-vista";
+    } elsif (isWindows7()) {
+        $platform = "win-7";
+    } else {
+        $platform = "win";
+    }
+}
+
+if (isQt() || isGtk() || isCygwin()) {
+    my $testfontPath = $ENV{"WEBKIT_TESTFONTS"};
+    if (!$testfontPath || !-d "$testfontPath") {
+        print "The WEBKIT_TESTFONTS environment variable is not defined or not set properly\n";
         print "You must set it before running the tests.\n";
         print "Use git to grab the actual fonts from http://gitorious.org/qtwebkit/testfonts\n";
         exit 1;
     }
-} elsif (isWx()) {
-    $platform = "wx";
-} elsif (isCygwin()) {
-    $platform = "win";
 }
 
 if (!defined($platform)) {
     print "WARNING: Your platform is not recognized. Any platform-specific results will be generated in platform/undefined.\n";
     $platform = "undefined";
+}
+
+if (!checkPythonVersion()) {
+    print "WARNING: Your platform does not have Python 2.5+, which is required to run websocket server, so disabling websocket/tests.\n";
+    $testWebSocket = 0;
 }
 
 my $programName = basename($0);
@@ -236,7 +269,9 @@ Usage: $programName [options] [testdir|testpath ...]
   --complex-text                  Use the complex text code path for all text (Mac OS X and Windows only)
   -c|--configuration config       Set DumpRenderTree build configuration
   -g|--guard-malloc               Enable malloc guard
-  --exit-after-n-failures N       Exit after the first N failures instead of running all tests
+  --exit-after-n-failures N       Exit after the first N failures (includes crashes) instead of running all tests
+  --exit-after-n-crashes-or-timeouts N
+                                  Exit after the first N crashes instead of running all tests
   -h|--help                       Show this help message
   --[no-]http                     Run (or do not run) http tests (default: $httpDefault)
   --[no-]wait-for-httpd           Wait for httpd if some other test session is using it already (same as WEBKIT_WAIT_FOR_HTTPD=1). (default: $shouldWaitForHTTPD) 
@@ -272,6 +307,7 @@ Usage: $programName [options] [testdir|testpath ...]
   -v|--verbose                    More verbose output (overrides --quiet)
   -m|--merge-leak-depth arg       Merges leak callStacks and prints the number of unique leaks beneath a callstack depth of arg.  Defaults to 5.
   --use-remote-links-to-tests     Link to test files within the SVN repository in the results.
+  -2|--webkit-test-runner         Use WebKitTestRunner rather than DumpRenderTree.
 EOF
 
 setConfiguration();
@@ -280,6 +316,7 @@ my $getOptionsResult = GetOptions(
     'add-platform-exceptions' => \$addPlatformExceptions,
     'complex-text' => \$complexText,
     'exit-after-n-failures=i' => \$exitAfterNFailures,
+    'exit-after-n-crashes-or-timeouts=i' => \$exitAfterNCrashesOrTimeouts,
     'guard-malloc|g' => \$guardMalloc,
     'help|h' => \$showHelp,
     'http!' => \$testHTTP,
@@ -313,12 +350,26 @@ my $getOptionsResult = GetOptions(
     'use-remote-links-to-tests' => \$useRemoteLinksToTests,
     'valgrind' => \$useValgrind,
     'verbose|v' => \$verbose,
+    'webkit-test-runner|2' => \$useWebKitTestRunner,
 );
 
 if (!$getOptionsResult || $showHelp) {
     print STDERR $usage;
     exit 1;
 }
+
+if ($useWebKitTestRunner) {
+    if (isAppleMacWebKit()) {
+        $realPlatform = $platform;
+        $platform = "mac-wk2";
+    } elsif (isAppleWinWebKit()) {
+        $stripEditingCallbacks = 0 unless defined $stripEditingCallbacks;
+        $realPlatform = $platform;
+        $platform = "win-wk2";
+    }
+}
+
+$stripEditingCallbacks = isCygwin() unless defined $stripEditingCallbacks;
 
 my $ignoreSkipped = $treatSkipped eq "ignore";
 my $skippedOnly = $treatSkipped eq "only";
@@ -339,6 +390,8 @@ $testMedia = 0 if $shouldCheckLeaks && isTiger();
 # Generating remote links causes a lot of unnecessary spew on GTK build bot
 $useRemoteLinksToTests = 0 if isGtk();
 
+setUpWindowsCrashLogSaving() if isCygwin();
+
 setConfigurationProductDir(Cwd::abs_path($root)) if (defined($root));
 my $productDir = productDir();
 $productDir .= "/bin" if isQt();
@@ -347,37 +400,17 @@ $productDir .= "/Programs" if isGtk();
 chdirWebKit();
 
 if (!defined($root)) {
-    print STDERR "Running build-dumprendertree\n";
-
-    local *DEVNULL;
-    my ($childIn, $childOut, $childErr);
-    if ($quiet) {
-        open(DEVNULL, ">", File::Spec->devnull()) or die "Failed to open /dev/null";
-        $childOut = ">&DEVNULL";
-        $childErr = ">&DEVNULL";
-    } else {
-        # When not quiet, let the child use our stdout/stderr.
-        $childOut = ">&STDOUT";
-        $childErr = ">&STDERR";
-    }
-
-    my @args = argumentsForConfiguration();
-    my $buildProcess = open3($childIn, $childOut, $childErr, "WebKitTools/Scripts/build-dumprendertree", @args) or die "Failed to run build-dumprendertree";
-    close($childIn);
-    waitpid $buildProcess, 0;
-    my $buildResult = $?;
-    close($childOut);
-    close($childErr);
-
-    close DEVNULL if ($quiet);
-
-    if ($buildResult) {
-        print STDERR "Compiling DumpRenderTree failed!\n";
-        exit exitStatus($buildResult);
-    }
+    # FIXME: We build both DumpRenderTree and WebKitTestRunner for
+    # WebKitTestRunner runs becuase DumpRenderTree still includes
+    # the DumpRenderTreeSupport module and the TestNetscapePlugin.
+    # These two projects should be factored out into their own
+    # projects.
+    buildDumpTool("DumpRenderTree");
+    buildDumpTool("WebKitTestRunner") if $useWebKitTestRunner;
 }
 
-my $dumpToolName = "DumpRenderTree";
+my $dumpToolName = $useWebKitTestRunner ? "WebKitTestRunner" : "DumpRenderTree";
+
 $dumpToolName .= "_debug" if isCygwin() && configurationForVisualStudio() !~ /^Release|Debug_Internal$/;
 my $dumpTool = "$productDir/$dumpToolName";
 die "can't find executable $dumpToolName (looked in $productDir)\n" unless -x $dumpTool;
@@ -456,6 +489,9 @@ if (!$testHTTP) {
     $ignoredDirectories{'http'} = 1;
     $ignoredDirectories{'websocket'} = 1;
 }
+if (!$testWebSocket) {
+    $ignoredDirectories{'websocket'} = 1;
+}
 
 if (!$testMedia) {
     $ignoredDirectories{'media'} = 1;
@@ -493,6 +529,7 @@ if (!$has3DRendering) {
 
 if (!checkWebCoreFeatureSupport("3D Canvas", 0)) {
     $ignoredDirectories{'fast/canvas/webgl'} = 1;
+    $ignoredDirectories{'compositing/webgl'} = 1;
 }
 
 if (checkWebCoreFeatureSupport("WML", 0)) {
@@ -1312,6 +1349,41 @@ sub openDiffTool()
     $isDiffToolOpen = 1;
 }
 
+sub buildDumpTool($)
+{
+    my ($dumpToolName) = @_;
+
+    my $dumpToolBuildScript =  "build-" . lc($dumpToolName);
+    print STDERR "Running $dumpToolBuildScript\n";
+
+    local *DEVNULL;
+    my ($childIn, $childOut, $childErr);
+    if ($quiet) {
+        open(DEVNULL, ">", File::Spec->devnull()) or die "Failed to open /dev/null";
+        $childOut = ">&DEVNULL";
+        $childErr = ">&DEVNULL";
+    } else {
+        # When not quiet, let the child use our stdout/stderr.
+        $childOut = ">&STDOUT";
+        $childErr = ">&STDERR";
+    }
+
+    my @args = argumentsForConfiguration();
+    my $buildProcess = open3($childIn, $childOut, $childErr, "WebKitTools/Scripts/$dumpToolBuildScript", @args) or die "Failed to run build-dumprendertree";
+    close($childIn);
+    waitpid $buildProcess, 0;
+    my $buildResult = $?;
+    close($childOut);
+    close($childErr);
+
+    close DEVNULL if ($quiet);
+
+    if ($buildResult) {
+        print STDERR "Compiling $dumpToolName failed!\n";
+        exit exitStatus($buildResult);
+    }
+}
+
 sub openDumpTool()
 {
     return if $isDumpToolOpen;
@@ -1356,20 +1428,26 @@ sub openDumpTool()
     } elsif (isCygwin()) {
         $CLEAN_ENV{HOMEDRIVE} = $ENV{'HOMEDRIVE'};
         $CLEAN_ENV{HOMEPATH} = $ENV{'HOMEPATH'};
+        $CLEAN_ENV{_NT_SYMBOL_PATH} = $ENV{_NT_SYMBOL_PATH};
 
         setPathForRunningWebKitApp(\%CLEAN_ENV);
     }
 
-    # Port spesifics
+    # Port specifics
+    if (isGtk()) {
+        $CLEAN_ENV{GTK_MODULES} = "gail";
+        $CLEAN_ENV{WEBKIT_INSPECTOR_PATH} = "$productDir/resources/inspector";
+    }
+
+    if (isQt()) {
+        $CLEAN_ENV{QTWEBKIT_PLUGIN_PATH} = productDir() . "/lib/plugins";
+        $CLEAN_ENV{QT_DRT_WEBVIEW_MODE} = $ENV{"QT_DRT_WEBVIEW_MODE"};
+    }
 
     if (isOlympia()) {
         $CLEAN_ENV{SDCARD_PATH} = $ENV{'SDCARD_PATH'};
         $CLEAN_ENV{FLEDGE_PATH} = $ENV{'FLEDGE_PATH'};
         $CLEAN_ENV{FLEDGE_WD} = $ENV{'FLEDGE_WD'};
-    }
-
-    if (isQt()) {
-        $CLEAN_ENV{QTWEBKIT_PLUGIN_PATH} = productDir() . "/lib/plugins";
     }
 
     my @args = ($dumpTool, @toolArgs);
@@ -1435,6 +1513,13 @@ sub configureAndOpenHTTPDIfNeeded()
 
     waitForHTTPDLock() if $shouldWaitForHTTPD;
     $isHttpdOpen = openHTTPD(@args);
+}
+
+sub checkPythonVersion()
+{
+    # we have not chdir to sourceDir yet.
+    system sourceDir() . "/WebKitTools/Scripts/ensure-valid-python", "--check-only";
+    return exitStatus($?) == 0;
 }
 
 sub openWebSocketServerIfNeeded()
@@ -1597,6 +1682,12 @@ sub testCrashedOrTimedOut($$$$$)
     kill 9, $dumpToolPID unless $didCrash;
 
     closeDumpTool();
+    
+    return unless isCygwin() && !$didCrash && $base =~ /^http/;
+    # On Cygwin, http tests timing out can be a symptom of a non-responsive httpd.
+    # If we timed out running an http test, try restarting httpd.
+    $isHttpdOpen = !closeHTTPD();
+    configureAndOpenHTTPDIfNeeded();
 }
 
 sub printFailureMessageForTest($$)
@@ -1665,6 +1756,14 @@ sub convertPathUsingCygpath($$)
 
     $convertedPath =~ s/\Q$spaceSubstitute\E/ /g;
     return $convertedPath;
+}
+
+sub toCygwinPath($)
+{
+    my ($path) = @_;
+    return unless isCygwin();
+
+    return convertPathUsingCygpath($path, "-u");
 }
 
 sub toWindowsPath($)
@@ -1841,13 +1940,23 @@ sub buildPlatformResultHierarchy()
     mkpath($platformTestDirectory) if ($platform eq "undefined" && !-d "$platformTestDirectory");
 
     my @platforms;
-    if ($platform =~ /^mac-/) {
-        my $i;
-        for ($i = 0; $i < @macPlatforms; $i++) {
-            last if $macPlatforms[$i] eq $platform;
+    
+    my $isMac = $platform =~ /^mac/;
+    my $isWin = $platform =~ /^win/;
+    if ($isMac || $isWin) {
+        my $effectivePlatform = $platform;
+        if ($platform eq "mac-wk2" || $platform eq "win-wk2") {
+            push @platforms, $platform;
+            $effectivePlatform = $realPlatform;
         }
-        for (; $i < @macPlatforms; $i++) {
-            push @platforms, $macPlatforms[$i];
+
+        my @platformList = $isMac ? @macPlatforms : @winPlatforms;
+        my $i;
+        for ($i = 0; $i < @platformList; $i++) {
+            last if $platformList[$i] eq $effectivePlatform;
+        }
+        for (; $i < @platformList; $i++) {
+            push @platforms, $platformList[$i];
         }
     } elsif ($platform =~ /^qt-/) {
         push @platforms, $platform;
@@ -1861,7 +1970,7 @@ sub buildPlatformResultHierarchy()
         my $scoped = catdir($platformBaseDirectory, $platforms[$i]);
         push(@hierarchy, $scoped) if (-d $scoped);
     }
-
+    
     return @hierarchy;
 }
 
@@ -1869,7 +1978,9 @@ sub buildPlatformTestHierarchy(@)
 {
     my (@platformHierarchy) = @_;
     return @platformHierarchy if (@platformHierarchy < 2);
-
+    if ($platformHierarchy[0] =~ /mac-wk2/) {
+        return ($platformHierarchy[0], $platformHierarchy[1], $platformHierarchy[$#platformHierarchy]);
+    }
     return ($platformHierarchy[0], $platformHierarchy[$#platformHierarchy]);
 }
 
@@ -2011,6 +2122,10 @@ sub readFromDumpToolWithTimer(**)
             }
         }
         if (defined($lineError)) {
+            if ($lineError =~ /#CRASHED/) {
+                $status = "crashed";
+                last;
+            }
             if ($lineError =~ /#EOF/) {
                 $haveSeenEofError = 1;
             } else {
@@ -2101,7 +2216,14 @@ sub readSkippedFiles($)
 {
     my ($constraintPath) = @_;
 
-    foreach my $level (@platformTestHierarchy) {
+    my @skippedFileDirectories = @platformTestHierarchy;
+
+    # Because nearly all of the skipped tests for WebKit 2 on Mac are due to
+    # cross-platform issues, Windows will use both the Mac and Windows skipped
+    # lists to avoid maintaining separate lists.
+    push(@skippedFileDirectories, catdir($platformBaseDirectory, "mac-wk2")) if $platform eq "win-wk2";
+
+    foreach my $level (@skippedFileDirectories) {
         if (open SKIPPED, "<", "$level/Skipped") {
             if ($verbose) {
                 my ($dir, $name) = splitpath($level);
@@ -2259,14 +2381,68 @@ sub printResults
 sub stopRunningTestsEarlyIfNeeded()
 {
     # --reset-results does not check pass vs. fail, so exitAfterNFailures makes no sense with --reset-results.
-    return 0 if !$exitAfterNFailures || $resetResults;
+    return 0 if $resetResults;
 
     my $passCount = $counts{match} || 0; # $counts{match} will be undefined if we've not yet passed a test (e.g. the first test fails).
     my $newCount = $counts{new} || 0;
     my $failureCount = $count - $passCount - $newCount; # "Failure" here includes timeouts, crashes, etc.
-    return 0 if $failureCount < $exitAfterNFailures;
+    if ($exitAfterNFailures && $failureCount >= $exitAfterNFailures) {
+        print "\nExiting early after $failureCount failures. $count tests run.";
+        closeDumpTool();
+        return 1;
+    }
 
-    print "\nExiting early after $failureCount failures. $count tests run.";
-    closeDumpTool();
-    return 1;
+    my $crashCount = $counts{crash} || 0;
+    my $timeoutCount = $counts{timedout} || 0;
+    if ($exitAfterNCrashesOrTimeouts && $crashCount + $timeoutCount >= $exitAfterNCrashesOrTimeouts) {
+        print "\nExiting early after $crashCount crashes and $timeoutCount timeouts. $count tests run.";
+        closeDumpTool();
+        return 1;
+    }
+
+    return 0;
+}
+
+sub setUpWindowsCrashLogSaving()
+{
+    return unless isCygwin();
+
+    unless (defined $ENV{_NT_SYMBOL_PATH}) {
+        print "The _NT_SYMBOL_PATH environment variable is not set. Crash logs will not be saved.\nSee <http://trac.webkit.org/wiki/BuildingOnWindows#GettingCrashLogs>.\n";
+        return;
+    }
+
+    my $ntsdPath = File::Spec->catfile(toCygwinPath($ENV{PROGRAMFILES}), "Debugging Tools for Windows (x86)", "ntsd.exe");
+    unless (-f $ntsdPath) {
+        $ntsdPath = File::Spec->catfile(toCygwinPath($ENV{SYSTEMROOT}), "system32", "ntsd.exe");
+        unless (-f $ntsdPath) {
+            print STDERR "Can't find ntsd.exe. Crash logs will not be saved.\nSee <http://trac.webkit.org/wiki/BuildingOnWindows#GettingCrashLogs>.\n";
+            return;
+        }
+    }
+
+    my %values = (
+        Debugger => '"' . toWindowsPath($ntsdPath) . '" -p %ld -e %ld -g -lines -c ".logopen /t \"' . toWindowsPath($testResultsDirectory) . '\CrashLog.txt\";!analyze -vv;~*kpn;q"',
+        Auto => 1
+    );
+
+    foreach my $value (keys %values) {
+        chomp($previousWindowsPostMortemDebuggerValues{$value} = `regtool get "$windowsPostMortemDebuggerKey/$value"`);
+        my $result = system "regtool", "set", "-s", "$windowsPostMortemDebuggerKey/$value", $values{$value};
+        next unless $result;
+
+        print "Failed to set \"$windowsPostMortemDebuggerKey/$value\". Crash logs will not be saved.\nSee <http://trac.webkit.org/wiki/BuildingOnWindows#GettingCrashLogs>.\n";
+        return;
+    }
+
+    print "Crash logs will be saved to $testResultsDirectory.\n";
+}
+
+END {
+    return unless isCygwin();
+
+    foreach my $value (keys %previousWindowsPostMortemDebuggerValues) {
+        my $result = system "regtool", "set", "-s", "$windowsPostMortemDebuggerKey/$value", $previousWindowsPostMortemDebuggerValues{$value};
+        !$result or print "Failed to restore \"$windowsPostMortemDebuggerKey/$value\" to its previous value \"$previousWindowsPostMortemDebuggerValues{$value}\"\n.";
+    }
 }

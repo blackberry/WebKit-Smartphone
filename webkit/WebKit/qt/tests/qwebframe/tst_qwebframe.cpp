@@ -33,6 +33,7 @@
 #include <QRegExp>
 #include <QNetworkRequest>
 #include <QNetworkReply>
+#include <QTextCodec>
 #ifndef QT_NO_OPENSSL
 #include <qsslerror.h>
 #endif
@@ -598,6 +599,7 @@ private slots:
     void setHtml();
     void setHtmlWithResource();
     void setHtmlWithBaseURL();
+    void setHtmlWithJSAlert();
     void ipv6HostEncoding();
     void metaData();
 #if !defined(Q_WS_MAEMO_5)
@@ -621,6 +623,8 @@ private slots:
     void qObjectWrapperWithSameIdentity();
     void introspectQtMethods_data();
     void introspectQtMethods();
+    void setContent_data();
+    void setContent();
 
 private:
     QString  evalJS(const QString&s) {
@@ -2485,6 +2489,33 @@ void tst_QWebFrame::setHtmlWithBaseURL()
     QCOMPARE(m_view->page()->history()->count(), 0);
 }
 
+class MyPage : public QWebPage
+{
+public:
+    MyPage() :  QWebPage(), alerts(0) {}
+    int alerts;
+
+protected:
+    virtual void javaScriptAlert(QWebFrame*, const QString& msg)
+    {
+        alerts++;
+        QCOMPARE(msg, QString("foo"));
+        // Should not be enough to trigger deferred loading, since we've upped the HTML
+        // tokenizer delay in the Qt frameloader. See HTMLTokenizer::continueProcessing()
+        QTest::qWait(1000);
+    }
+};
+
+void tst_QWebFrame::setHtmlWithJSAlert()
+{
+    QString html("<html><head></head><body><script>alert('foo');</script><p>hello world</p></body></html>");
+    MyPage page;
+    m_view->setPage(&page);
+    page.mainFrame()->setHtml(html);
+    QCOMPARE(page.alerts, 1);
+    QCOMPARE(m_view->page()->mainFrame()->toHtml(), html);
+}
+
 class TestNetworkManager : public QNetworkAccessManager
 {
 public:
@@ -2577,7 +2608,8 @@ void tst_QWebFrame::popupFocus()
     QTRY_VERIFY(view.hasFocus());
 
     // open the popup by clicking. check if focus is on the popup
-    QTest::mouseClick(&view, Qt::LeftButton, 0, QPoint(25, 25));
+    const QWebElement webCombo = view.page()->mainFrame()->documentElement().findFirst(QLatin1String("select[name=select]"));
+    QTest::mouseClick(&view, Qt::LeftButton, 0, webCombo.geometry().center());
     QObject* webpopup = firstChildByClassName(&view, "QComboBox");
     QComboBox* combo = qobject_cast<QComboBox*>(webpopup);
     QVERIFY(combo != 0);
@@ -2595,6 +2627,7 @@ void tst_QWebFrame::inputFieldFocus()
     view.setHtml("<html><body><input type=\"text\"></input></body></html>");
     view.resize(400, 100);
     view.show();
+    QTest::qWaitForWindowShown(&view);
     view.setFocus();
     QTRY_VERIFY(view.hasFocus());
 
@@ -2602,7 +2635,8 @@ void tst_QWebFrame::inputFieldFocus()
     int delay = qApp->cursorFlashTime() * 2;
 
     // focus the lineedit and check if it blinks
-    QTest::mouseClick(&view, Qt::LeftButton, 0, QPoint(25, 25));
+    const QWebElement inputElement = view.page()->mainFrame()->documentElement().findFirst(QLatin1String("input[type=text]"));
+    QTest::mouseClick(&view, Qt::LeftButton, 0, inputElement.geometry().center());
     m_inputFieldsTestView = &view;
     view.installEventFilter( this );
     QTest::qWait(delay);
@@ -2612,13 +2646,14 @@ void tst_QWebFrame::inputFieldFocus()
 
 void tst_QWebFrame::hitTestContent()
 {
-    QString html("<html><body><p>A paragraph</p><br/><br/><br/><a href=\"about:blank\" target=\"_foo\">link text</a></body></html>");
+    QString html("<html><body><p>A paragraph</p><br/><br/><br/><a href=\"about:blank\" target=\"_foo\" id=\"link\">link text</a></body></html>");
 
     QWebPage page;
     QWebFrame* frame = page.mainFrame();
     frame->setHtml(html);
     page.setViewportSize(QSize(200, 0)); //no height so link is not visible
-    QWebHitTestResult result = frame->hitTestContent(QPoint(10, 100));
+    const QWebElement linkElement = frame->documentElement().findFirst(QLatin1String("a#link"));
+    QWebHitTestResult result = frame->hitTestContent(linkElement.geometry().center());
     QCOMPARE(result.linkText(), QString("link text"));
     QWebElement link = result.linkElement();
     QCOMPARE(link.attribute("target"), QString("_foo"));
@@ -3001,6 +3036,35 @@ void tst_QWebFrame::introspectQtMethods()
     }
 
     QVERIFY(evalJSV("var props=[]; for (var p in myObject.deleteLater) {props.push(p);}; props.sort()").toStringList().isEmpty());
+}
+
+void tst_QWebFrame::setContent_data()
+{
+    QTest::addColumn<QString>("mimeType");
+    QTest::addColumn<QByteArray>("testContents");
+    QTest::addColumn<QString>("expected");
+
+    QString str = QString::fromUtf8("ὕαλον ϕαγεῖν δύναμαι· τοῦτο οὔ με βλάπτει");
+    QTest::newRow("UTF-8 plain text") << "text/plain; charset=utf-8" << str.toUtf8() << str;
+
+    QTextCodec *utf16 = QTextCodec::codecForName("UTF-16");
+    if (utf16)
+        QTest::newRow("UTF-16 plain text") << "text/plain; charset=utf-16" << utf16->fromUnicode(str) << str;
+
+    str = QString::fromUtf8("Une chaîne de caractères à sa façon.");
+    QTest::newRow("latin-1 plain text") << "text/plain; charset=iso-8859-1" << str.toLatin1() << str;
+
+
+}
+
+void tst_QWebFrame::setContent()
+{
+    QFETCH(QString, mimeType);
+    QFETCH(QByteArray, testContents);
+    QFETCH(QString, expected);
+    m_view->setContent(testContents, mimeType);
+    QWebFrame* mainFrame = m_view->page()->mainFrame();
+    QCOMPARE(expected , mainFrame->toPlainText());
 }
 
 QTEST_MAIN(tst_QWebFrame)

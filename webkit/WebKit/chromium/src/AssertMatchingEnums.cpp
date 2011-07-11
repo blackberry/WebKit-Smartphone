@@ -35,20 +35,29 @@
 
 #include "AccessibilityObject.h"
 #include "ApplicationCacheHost.h"
+#include "AsyncFileSystem.h"
 #include "EditorInsertAction.h"
+#include "FontDescription.h"
+#include "FontSmoothingMode.h"
 #include "HTMLInputElement.h"
+#include "IDBKey.h"
 #include "MediaPlayer.h"
 #include "NotificationPresenter.h"
 #include "PasteboardPrivate.h"
 #include "PlatformCursor.h"
 #include "Settings.h"
-#include "StringImpl.h"
 #include "TextAffinity.h"
+#include "UserContentTypes.h"
+#include "UserScriptTypes.h"
+#include "VideoFrameChromium.h"
 #include "WebAccessibilityObject.h"
 #include "WebApplicationCacheHost.h"
 #include "WebClipboard.h"
 #include "WebCursorInfo.h"
 #include "WebEditingAction.h"
+#include "WebFileSystem.h"
+#include "WebFontDescription.h"
+#include "WebIDBKey.h"
 #include "WebInputElement.h"
 #include "WebMediaPlayer.h"
 #include "WebNotificationPresenter.h"
@@ -56,10 +65,19 @@
 #include "WebSettings.h"
 #include "WebTextAffinity.h"
 #include "WebTextCaseSensitivity.h"
+#include "WebVideoFrame.h"
+#include "WebView.h"
 #include <wtf/Assertions.h>
+#include <wtf/text/StringImpl.h>
 
 #define COMPILE_ASSERT_MATCHING_ENUM(webkit_name, webcore_name) \
     COMPILE_ASSERT(int(WebKit::webkit_name) == int(WebCore::webcore_name), mismatching_enums)
+
+// These constants are in WTF, bring them into WebCore so the ASSERT still works for them!
+namespace WebCore {
+    using WTF::TextCaseSensitive;
+    using WTF::TextCaseInsensitive;
+};
 
 COMPILE_ASSERT_MATCHING_ENUM(WebAccessibilityRoleUnknown, UnknownRole);
 COMPILE_ASSERT_MATCHING_ENUM(WebAccessibilityRoleButton, ButtonRole);
@@ -127,6 +145,7 @@ COMPILE_ASSERT_MATCHING_ENUM(WebAccessibilityRoleDefinitionListDefinition, Defin
 COMPILE_ASSERT_MATCHING_ENUM(WebAccessibilityRoleAnnotation, AnnotationRole);
 COMPILE_ASSERT_MATCHING_ENUM(WebAccessibilityRoleSliderThumb, SliderThumbRole);
 COMPILE_ASSERT_MATCHING_ENUM(WebAccessibilityRoleIgnored, IgnoredRole);
+COMPILE_ASSERT_MATCHING_ENUM(WebAccessibilityRolePresentational, PresentationalRole);
 COMPILE_ASSERT_MATCHING_ENUM(WebAccessibilityRoleTab, TabRole);
 COMPILE_ASSERT_MATCHING_ENUM(WebAccessibilityRoleTabList, TabListRole);
 COMPILE_ASSERT_MATCHING_ENUM(WebAccessibilityRoleTabPanel, TabPanelRole);
@@ -180,6 +199,7 @@ COMPILE_ASSERT_MATCHING_ENUM(WebClipboard::FormatSmartPaste, PasteboardPrivate::
 
 COMPILE_ASSERT_MATCHING_ENUM(WebClipboard::BufferStandard, PasteboardPrivate::StandardBuffer);
 COMPILE_ASSERT_MATCHING_ENUM(WebClipboard::BufferSelection, PasteboardPrivate::SelectionBuffer);
+COMPILE_ASSERT_MATCHING_ENUM(WebClipboard::BufferDrag, PasteboardPrivate::DragBuffer);
 
 COMPILE_ASSERT_MATCHING_ENUM(WebCursorInfo::TypePointer, PlatformCursor::TypePointer);
 COMPILE_ASSERT_MATCHING_ENUM(WebCursorInfo::TypeCross, PlatformCursor::TypeCross);
@@ -227,6 +247,31 @@ COMPILE_ASSERT_MATCHING_ENUM(WebCursorInfo::TypeCustom, PlatformCursor::TypeCust
 COMPILE_ASSERT_MATCHING_ENUM(WebEditingActionTyped, EditorInsertActionTyped);
 COMPILE_ASSERT_MATCHING_ENUM(WebEditingActionPasted, EditorInsertActionPasted);
 COMPILE_ASSERT_MATCHING_ENUM(WebEditingActionDropped, EditorInsertActionDropped);
+
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::GenericFamilyNone, FontDescription::NoFamily);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::GenericFamilyStandard, FontDescription::StandardFamily);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::GenericFamilySerif, FontDescription::SerifFamily);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::GenericFamilySansSerif, FontDescription::SansSerifFamily);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::GenericFamilyMonospace, FontDescription::MonospaceFamily);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::GenericFamilyCursive, FontDescription::CursiveFamily);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::GenericFamilyFantasy, FontDescription::FantasyFamily);
+
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::SmoothingAuto, AutoSmoothing);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::SmoothingNone, NoSmoothing);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::SmoothingGrayscale, Antialiased);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::SmoothingSubpixel, SubpixelAntialiased);
+
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::Weight100, FontWeight100);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::Weight200, FontWeight200);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::Weight300, FontWeight300);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::Weight400, FontWeight400);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::Weight500, FontWeight500);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::Weight600, FontWeight600);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::Weight700, FontWeight700);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::Weight800, FontWeight800);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::Weight900, FontWeight900);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::WeightNormal, FontWeightNormal);
+COMPILE_ASSERT_MATCHING_ENUM(WebFontDescription::WeightBold, FontWeightBold);
 
 COMPILE_ASSERT_MATCHING_ENUM(WebInputElement::Text, HTMLInputElement::TEXT);
 COMPILE_ASSERT_MATCHING_ENUM(WebInputElement::Password, HTMLInputElement::PASSWORD);
@@ -286,6 +331,24 @@ COMPILE_ASSERT_MATCHING_ENUM(WebMediaPlayer::Unknown, MediaPlayer::Unknown);
 COMPILE_ASSERT_MATCHING_ENUM(WebMediaPlayer::Download, MediaPlayer::Download);
 COMPILE_ASSERT_MATCHING_ENUM(WebMediaPlayer::StoredStream, MediaPlayer::StoredStream);
 COMPILE_ASSERT_MATCHING_ENUM(WebMediaPlayer::LiveStream, MediaPlayer::LiveStream);
+
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::FormatInvalid, VideoFrameChromium::Invalid);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::FormatRGB555, VideoFrameChromium::RGB555);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::FormatRGB565, VideoFrameChromium::RGB565);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::FormatRGB24, VideoFrameChromium::RGB24);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::FormatRGB32, VideoFrameChromium::RGB32);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::FormatRGBA, VideoFrameChromium::RGBA);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::FormatYV12, VideoFrameChromium::YV12);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::FormatYV16, VideoFrameChromium::YV16);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::FormatNV12, VideoFrameChromium::NV12);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::FormatEmpty, VideoFrameChromium::Empty);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::FormatASCII, VideoFrameChromium::ASCII);
+
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::SurfaceTypeSystemMemory, VideoFrameChromium::TypeSystemMemory);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::SurfaceTypeOMXBufferHead, VideoFrameChromium::TypeOMXBufferHead);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::SurfaceTypeEGLImage, VideoFrameChromium::TypeEGLImage);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::SurfaceTypeMFBuffer, VideoFrameChromium::TypeMFBuffer);
+COMPILE_ASSERT_MATCHING_ENUM(WebVideoFrame::SurfaceTypeDirect3DSurface, VideoFrameChromium::TypeDirect3DSurface);
 #endif
 
 #if ENABLE(NOTIFICATIONS)
@@ -310,3 +373,17 @@ COMPILE_ASSERT_MATCHING_ENUM(WebTextAffinityDownstream, DOWNSTREAM);
 
 COMPILE_ASSERT_MATCHING_ENUM(WebTextCaseSensitive, TextCaseSensitive);
 COMPILE_ASSERT_MATCHING_ENUM(WebTextCaseInsensitive, TextCaseInsensitive);
+
+COMPILE_ASSERT_MATCHING_ENUM(WebView::UserScriptInjectAtDocumentStart, InjectAtDocumentStart);
+COMPILE_ASSERT_MATCHING_ENUM(WebView::UserScriptInjectAtDocumentEnd, InjectAtDocumentEnd);
+COMPILE_ASSERT_MATCHING_ENUM(WebView::UserContentInjectInAllFrames, InjectInAllFrames);
+COMPILE_ASSERT_MATCHING_ENUM(WebView::UserContentInjectInTopFrameOnly, InjectInTopFrameOnly);
+
+COMPILE_ASSERT_MATCHING_ENUM(WebIDBKey::NullType, IDBKey::NullType);
+COMPILE_ASSERT_MATCHING_ENUM(WebIDBKey::StringType, IDBKey::StringType);
+COMPILE_ASSERT_MATCHING_ENUM(WebIDBKey::NumberType, IDBKey::NumberType);
+
+#if ENABLE(FILE_SYSTEM)
+COMPILE_ASSERT_MATCHING_ENUM(WebFileSystem::TypeTemporary, AsyncFileSystem::Temporary);
+COMPILE_ASSERT_MATCHING_ENUM(WebFileSystem::TypePersistent, AsyncFileSystem::Persistent);
+#endif

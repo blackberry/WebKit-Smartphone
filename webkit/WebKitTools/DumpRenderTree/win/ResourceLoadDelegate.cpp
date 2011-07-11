@@ -250,6 +250,13 @@ HRESULT STDMETHODCALLTYPE ResourceLoadDelegate::willSendRequest(
             descriptionSuitableForTestResult(redirectResponse).c_str());
     }
 
+    if (!done && !gLayoutTestController->deferMainResourceDataLoad()) {
+        COMPtr<IWebDataSourcePrivate> dataSourcePrivate(Query, dataSource);
+        if (!dataSourcePrivate)
+            return E_FAIL;
+        dataSourcePrivate->setDeferMainResourceDataLoad(FALSE);
+    }
+
     if (!done && gLayoutTestController->willSendRequestReturnsNull()) {
         *newRequest = 0;
         return S_OK;
@@ -280,18 +287,21 @@ HRESULT STDMETHODCALLTYPE ResourceLoadDelegate::didReceiveAuthenticationChalleng
     /* [in] */ IWebURLAuthenticationChallenge *challenge,
     /* [in] */ IWebDataSource *dataSource)
 {
-    if (!gLayoutTestController->handlesAuthenticationChallenges())
+    COMPtr<IWebURLAuthenticationChallengeSender> sender;
+    if (!challenge || FAILED(challenge->sender(&sender)))
         return E_FAIL;
+
+    if (!gLayoutTestController->handlesAuthenticationChallenges()) {
+        printf("%S - didReceiveAuthenticationChallenge - Simulating cancelled authentication sheet\n", descriptionSuitableForTestResult(identifier).c_str());
+        sender->continueWithoutCredentialForAuthenticationChallenge(challenge);
+        return S_OK;
+    }
     
     const char* user = gLayoutTestController->authenticationUsername().c_str();
     const char* password = gLayoutTestController->authenticationPassword().c_str();
 
     printf("%S - didReceiveAuthenticationChallenge - Responding with %s:%s\n", descriptionSuitableForTestResult(identifier).c_str(), user, password);
-    
-    COMPtr<IWebURLAuthenticationChallengeSender> sender;
-    if (!challenge || FAILED(challenge->sender(&sender)))
-        return E_FAIL;
-        
+
     COMPtr<IWebURLCredential> credential;
     if (FAILED(WebKitCreateInstance(CLSID_WebURLCredential, 0, IID_IWebURLCredential, (void**)&credential)))
         return E_FAIL;
@@ -324,10 +334,10 @@ HRESULT STDMETHODCALLTYPE ResourceLoadDelegate::didReceiveResponse(
         if (FAILED(response->URL(&urlBSTR)))
             E_FAIL;
     
-        wstring url = urlSuitableForTestResult(wstringFromBSTR(urlBSTR));
+        wstring url = wstringFromBSTR(urlBSTR);
         ::SysFreeString(urlBSTR);
 
-        printf("%S has MIME type %S\n", url.c_str(), mimeType.c_str());
+        printf("%S has MIME type %S\n", lastPathComponent(url).c_str(), mimeType.c_str());
     }
 
     return S_OK;

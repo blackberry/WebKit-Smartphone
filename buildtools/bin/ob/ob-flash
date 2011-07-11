@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# set the CFP_PASSWORD_ARG variable
+CFP_PASSWORD_ARG=
+if [ ! -z "$CFP_PASSWORD" ] ; then
+    CFP_PASSWORD_ARG=-w"$CFP_PASSWORD"
+fi
+if [ ! -z "$2" ] ; then
+    CFP_PASSWORD_ARG=-w"$2"
+fi
+
+FILES_MISSING=1
+SFI="$OLYMPIAJAVA/Lynx/build/$OLYMPIABUILDCHOICE/Release/jvm/$SFINAME"
+if [ ! -f $SFI ] ; then
+    SFI="$OLYMPIAJAVA/lynx/jvm/arm/ReleaseARM/$SFINAME"
+fi
+case $1 in
+    device )
+        if [ -f $PLAYERINSTALLPREFIX/bin/OlympiaWebKit.sfi ] && [ -f $SFI ] && [ -f $OLYMPIAJAVA/JavaApplications/FSLinked.dmp ] ; then
+            FILES_MISSING=0
+            cfp $CFP_PASSWORD_ARG -u wipe
+            pushd $OLYMPIAJAVA
+            cfp $CFP_PASSWORD_ARG -u load $SFI
+            pushd $PLAYERINSTALLPREFIX
+            cfp $CFP_PASSWORD_ARG -u load -p bin/OlympiaWebKit.sfi
+            popd
+            cfp $CFP_PASSWORD_ARG -u load JavaApplications/FSLinked.dmp
+            popd
+        fi
+        if [ ! -f $PLAYERINSTALLPREFIX/bin/OlympiaWebKit.sfi ] ; then
+            echo "Missing OlympiaWebKit.sfi"
+        fi
+        if [ ! -f $SFI ] ; then
+            echo "Missing $SFI";
+        fi
+        if [ ! -f $OLYMPIAJAVA/JavaApplications/FSLinked.dmp ] ; then
+            echo "Missing FSLinked.dmp"
+        fi
+    ;;
+    device-fast )
+        if [ -f $PLAYERINSTALLPREFIX/bin/OlympiaWebKit.sfi ] && [ -f $SFI ] && [ -f $OLYMPIAJAVA/JavaApplications/FSLinked.dmp ] ; then
+            FILES_MISSING=0
+            cfp $CFP_PASSWORD_ARG -u load -p $SFI $PLAYERINSTALLPREFIX/bin/OlympiaWebKit.sfi $OLYMPIAJAVA/JavaApplications/FSLinked.dmp
+        fi
+        if [ ! -f $PLAYERINSTALLPREFIX/bin/OlympiaWebKit.sfi ] ; then
+            echo "Missing OlympiaWebKit.sfi"
+        fi
+        if [ ! -f $SFI ] ; then
+            echo "Missing $SFI";
+        fi
+        if [ ! -f $OLYMPIAJAVA/JavaApplications/FSLinked.dmp ] ; then
+            echo "Missing FSLinked.dmp"
+        fi
+    ;;
+    vm )
+        if [ -f $SFI ] ; then
+            FILES_MISSING=0
+            pushd $OLYMPIAJAVA
+            cfp $CFP_PASSWORD_ARG -u load $SFI
+            popd
+        fi
+    ;;
+    webkit )
+        if [ -f $PLAYERINSTALLPREFIX/bin/OlympiaWebKit.sfi ] ; then
+            FILES_MISSING=0
+            pushd $PLAYERINSTALLPREFIX
+            cfp $CFP_PASSWORD_ARG -u load -p bin/OlympiaWebKit.sfi
+            popd
+        fi
+    ;;
+    webkit-and-player )
+        if [ -f $PLAYERINSTALLPREFIX/bin/OlympiaWebKitLDLL.sfi ] && [ -f $PLAYERINSTALLPREFIX/bin/OlympiaWebKitLEXE-injected.sfi ] ; then
+            FILES_MISSING=0
+            pushd "$PLAYERINSTALLPREFIX/bin"
+            cfp $CFP_PASSWORD_ARG -u load -p OlympiaWebKitLDLL.sfi OlympiaWebKitLEXE-injected.sfi
+            popd
+        fi
+    ;;
+    apps )
+        if [ -f $OLYMPIAJAVA/JavaApplications/FSLinked.dmp ] ; then
+            FILES_MISSING=0
+            pushd $OLYMPIAJAVA
+            cfp $CFP_PASSWORD_ARG -u load JavaApplications/FSLinked.dmp
+            popd
+        fi
+    ;;
+    olympia )
+        if [ -f $OLYMPIAJAVA/Lynx/Debug/net_rim_bb_browser_olympia.cod ] ; then
+            FILES_MISSING=0
+            pushd $OLYMPIAJAVA/
+            Lynx/bin/javaloader $CFP_PASSWORD_ARG -u load Lynx/Debug/net_rim_bb_browser_olympia.cod
+            popd
+        fi
+    ;;
+    * )
+        echo "Please specify a flash subcommand to run."
+        FILES_MISSING=0
+    ;;
+esac
+
+if [ "$FILES_MISSING" == "1" ] ; then
+    echo "Can't flash device, build files are missing"
+fi
+
+# wipe out the password arg for safety
+CFP_PASSWORD_ARG=
+
+$(exit $FILES_MISSING)

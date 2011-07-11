@@ -46,9 +46,7 @@
 
 #include <gdk/gdkprivate.h>
 #include "gtkdrawing.h"
-
-#include "Assertions.h"
-
+#include "GtkVersioning.h"
 #include <math.h>
 #include <string.h>
 
@@ -150,7 +148,7 @@ ensure_toggle_button_widget()
         gParts->toggleButtonWidget = gtk_toggle_button_new();
         setup_widget_prototype(gParts->toggleButtonWidget);
         /* toggle button must be set active to get the right style on hover. */
-        GTK_TOGGLE_BUTTON(gParts->toggleButtonWidget)->active = TRUE;
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gParts->toggleButtonWidget), TRUE);
   }
   return MOZ_GTK_SUCCESS;
 }
@@ -297,7 +295,7 @@ ensure_combo_box_widgets()
 
     if (gParts->comboBoxButtonWidget) {
         /* Get the widgets inside the Button */
-        buttonChild = GTK_BIN(gParts->comboBoxButtonWidget)->child;
+        buttonChild = gtk_bin_get_child(GTK_BIN(gParts->comboBoxButtonWidget));
         if (GTK_IS_HBOX(buttonChild)) {
             /* appears-as-list = FALSE, cell-view = TRUE; the button
              * contains an hbox. This hbox is there because the ComboBox
@@ -407,7 +405,7 @@ ensure_combo_box_entry_widgets()
 
     if (gParts->comboBoxEntryButtonWidget) {
         /* Get the Arrow inside the Button */
-        buttonChild = GTK_BIN(gParts->comboBoxEntryButtonWidget)->child;
+        buttonChild = gtk_bin_get_child(GTK_BIN(gParts->comboBoxEntryButtonWidget));
         if (GTK_IS_HBOX(buttonChild)) {
             /* appears-as-list = FALSE, cell-view = TRUE; the button
              * contains an hbox. This hbox is there because ComboBoxEntry
@@ -682,9 +680,14 @@ ensure_tree_header_cell_widget()
         gtk_tree_view_column_set_title(lastTreeViewColumn, "M");
         gtk_tree_view_append_column(GTK_TREE_VIEW(gParts->treeViewWidget), lastTreeViewColumn);
 
+#ifdef GTK_API_VERSION_2
         /* Use the middle column's header for our button */
         gParts->treeHeaderCellWidget = gParts->middleTreeViewColumn->button;
         gParts->treeHeaderSortArrowWidget = gParts->middleTreeViewColumn->arrow;
+#else
+        gParts->treeHeaderCellWidget = gtk_button_new();
+        gParts->treeHeaderSortArrowWidget = gtk_arrow_new(GTK_ARROW_DOWN, GTK_SHADOW_NONE);
+#endif
         g_object_set_data(G_OBJECT(gParts->treeHeaderCellWidget),
                           "transparent-bg-hint", GINT_TO_POINTER(TRUE));
         g_object_set_data(G_OBJECT(gParts->treeHeaderSortArrowWidget),
@@ -726,6 +729,7 @@ ConvertGtkState(GtkWidgetState* state)
         return GTK_STATE_NORMAL;
 }
 
+#ifdef GTK_API_VERSION_2
 static gint
 TSOffsetStyleGCArray(GdkGC** gcs, gint xorigin, gint yorigin)
 {
@@ -735,10 +739,12 @@ TSOffsetStyleGCArray(GdkGC** gcs, gint xorigin, gint yorigin)
         gdk_gc_set_ts_origin(gcs[i], xorigin, yorigin);
     return MOZ_GTK_SUCCESS;
 }
+#endif
 
 static gint
 TSOffsetStyleGCs(GtkStyle* style, gint xorigin, gint yorigin)
 {
+#ifdef GTK_API_VERSION_2
     TSOffsetStyleGCArray(style->fg_gc, xorigin, yorigin);
     TSOffsetStyleGCArray(style->bg_gc, xorigin, yorigin);
     TSOffsetStyleGCArray(style->light_gc, xorigin, yorigin);
@@ -748,6 +754,7 @@ TSOffsetStyleGCs(GtkStyle* style, gint xorigin, gint yorigin)
     TSOffsetStyleGCArray(style->base_gc, xorigin, yorigin);
     gdk_gc_set_ts_origin(style->black_gc, xorigin, yorigin);
     gdk_gc_set_ts_origin(style->white_gc, xorigin, yorigin);
+#endif
     return MOZ_GTK_SUCCESS;
 }
 
@@ -758,7 +765,7 @@ moz_gtk_button_paint(GdkDrawable* drawable, GdkRectangle* rect,
                      GtkTextDirection direction)
 {
     GtkShadowType shadow_type;
-    GtkStyle* style = widget->style;
+    GtkStyle* style = gtk_widget_get_style(widget);
     GtkStateType button_state = ConvertGtkState(state);
     gint x = rect->x, y=rect->y, width=rect->width, height=rect->height;
 
@@ -776,15 +783,19 @@ moz_gtk_button_paint(GdkDrawable* drawable, GdkRectangle* rect,
     gtk_widget_set_state(widget, button_state);
     gtk_widget_set_direction(widget, direction);
 
+#ifdef GTK_API_VERSION_2
     if (state->isDefault)
         GTK_WIDGET_SET_FLAGS(widget, GTK_HAS_DEFAULT);
+#endif
 
-    GTK_BUTTON(widget)->relief = relief;
+    gtk_button_set_relief(GTK_BUTTON(widget), relief);
 
     /* Some theme engines love to cause us pain in that gtk_paint_focus is a
        no-op on buttons and button-like widgets. They only listen to this flag. */
+#ifdef GTK_API_VERSION_2
     if (state->focused && !state->disabled)
         GTK_WIDGET_SET_FLAGS(widget, GTK_HAS_FOCUS);
+#endif
 
     if (!interior_focus && state->focused) {
         x += focus_width + focus_pad;
@@ -814,10 +825,11 @@ moz_gtk_button_paint(GdkDrawable* drawable, GdkRectangle* rect,
 
     if (state->focused) {
         if (interior_focus) {
-            x += widget->style->xthickness + focus_pad;
-            y += widget->style->ythickness + focus_pad;
-            width -= 2 * (widget->style->xthickness + focus_pad);
-            height -= 2 * (widget->style->ythickness + focus_pad);
+            GtkStyle* style = gtk_widget_get_style(widget);
+            x += style->xthickness + focus_pad;
+            y += style->ythickness + focus_pad;
+            width -= 2 * (style->xthickness + focus_pad);
+            height -= 2 * (style->ythickness + focus_pad);
         } else {
             x -= focus_width + focus_pad;
             y -= focus_width + focus_pad;
@@ -830,8 +842,10 @@ moz_gtk_button_paint(GdkDrawable* drawable, GdkRectangle* rect,
                         widget, "button", x, y, width, height);
     }
 
+#ifdef GTK_API_VERSION_2
     GTK_WIDGET_UNSET_FLAGS(widget, GTK_HAS_DEFAULT);
     GTK_WIDGET_UNSET_FLAGS(widget, GTK_HAS_FOCUS);
+#endif
     return MOZ_GTK_SUCCESS;
 }
 
@@ -970,12 +984,12 @@ moz_gtk_toggle_paint(GdkDrawable* drawable, GdkRectangle* rect,
     focus_width = width + 2 * indicator_spacing;
     focus_height = height + 2 * indicator_spacing;
   
-    style = w->style;
+    style = gtk_widget_get_style(w);
     TSOffsetStyleGCs(style, x, y);
 
     gtk_widget_set_sensitive(w, !state->disabled);
     gtk_widget_set_direction(w, direction);
-    GTK_TOGGLE_BUTTON(w)->active = selected;
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(w), selected);
       
     if (isradio) {
         gtk_paint_option(style, drawable, state_type, shadow_type, cliprect,
@@ -1022,7 +1036,7 @@ calculate_button_inner_rect(GtkWidget* button, GdkRectangle* rect,
     gint focus_width, focus_pad;
     GtkStyle* style;
 
-    style = button->style;
+    style = gtk_widget_get_style(button);
 
     /* This mirrors gtkbutton's child positioning */
     moz_gtk_button_get_inner_border(button, &inner_border);
@@ -1055,23 +1069,56 @@ calculate_arrow_rect(GtkWidget* arrow, GdkRectangle* rect,
     gfloat xalign, xpad;
     gint extent;
     GtkMisc* misc = GTK_MISC(arrow);
+    gfloat misc_xalign, misc_yalign;
+    gint misc_xpad, misc_ypad;
 
     if (have_arrow_scaling)
         gtk_widget_style_get(arrow, "arrow_scaling", &arrow_scaling, NULL);
 
-    extent = MIN((rect->width - misc->xpad * 2),
-                 (rect->height - misc->ypad * 2)) * arrow_scaling;
+    gtk_misc_get_padding(misc, &misc_xpad, &misc_ypad);
+    gtk_misc_get_alignment(misc, &misc_xalign, &misc_yalign);
 
-    xalign = direction == GTK_TEXT_DIR_LTR ? misc->xalign : 1.0 - misc->xalign;
-    xpad = misc->xpad + (rect->width - extent) * xalign;
+    extent = MIN((rect->width - misc_xpad * 2),
+                 (rect->height - misc_ypad * 2)) * arrow_scaling;
+
+    xalign = direction == GTK_TEXT_DIR_LTR ? misc_xalign : 1.0 - misc_xalign;
+    xpad = misc_xpad + (rect->width - extent) * xalign;
 
     arrow_rect->x = direction == GTK_TEXT_DIR_LTR ?
                         floor(rect->x + xpad) : ceil(rect->x + xpad);
-    arrow_rect->y = floor(rect->y + misc->ypad +
-                          ((rect->height - extent) * misc->yalign));
+    arrow_rect->y = floor(rect->y + misc_ypad +
+                          ((rect->height - extent) * misc_yalign));
 
     arrow_rect->width = arrow_rect->height = extent;
 
+    return MOZ_GTK_SUCCESS;
+}
+
+static gint
+moz_gtk_scrolled_window_paint(GdkDrawable* drawable, GdkRectangle* rect,
+                              GdkRectangle* cliprect, GtkWidgetState* state)
+{
+    GtkStateType state_type = ConvertGtkState(state);
+    GtkShadowType shadow_type = (state->active) ?  GTK_SHADOW_IN : GTK_SHADOW_OUT;
+    GtkStyle* style;
+    GtkAllocation allocation;
+    GtkWidget* widget;
+
+    ensure_scrolled_window_widget();
+    widget = gParts->scrolledWindowWidget;
+
+    gtk_widget_get_allocation(widget, &allocation);
+    allocation.x = rect->x;
+    allocation.y = rect->y;
+    allocation.width = rect->width;
+    allocation.height = rect->height;
+    gtk_widget_set_allocation(widget, &allocation);
+
+    style = gtk_widget_get_style(widget);
+    TSOffsetStyleGCs(style, rect->x - 1, rect->y - 1);
+    gtk_paint_box(style, drawable, state_type, shadow_type, cliprect,
+                  widget, "scrolled_window", rect->x - 1, rect->y - 1,
+                  rect->width + 2, rect->height + 2);
     return MOZ_GTK_SUCCESS;
 }
 
@@ -1087,6 +1134,7 @@ moz_gtk_scrollbar_button_paint(GdkDrawable* drawable, GdkRectangle* rect,
     GdkRectangle arrow_rect;
     GtkStyle* style;
     GtkWidget *scrollbar;
+    GtkAllocation allocation;
     GtkArrowType arrow_type;
     gint arrow_displacement_x, arrow_displacement_y;
     const char* detail = (flags & MOZ_GTK_STEPPER_VERTICAL) ?
@@ -1105,41 +1153,43 @@ moz_gtk_scrollbar_button_paint(GdkDrawable* drawable, GdkRectangle* rect,
        to determine where it should paint rounded corners on the buttons.
        We need to trick them into drawing the buttons the way we want them. */
 
-    scrollbar->allocation.x = rect->x;
-    scrollbar->allocation.y = rect->y;
-    scrollbar->allocation.width = rect->width;
-    scrollbar->allocation.height = rect->height;
+    gtk_widget_get_allocation(scrollbar, &allocation);
+    allocation.x = rect->x;
+    allocation.y = rect->y;
+    allocation.width = rect->width;
+    allocation.height = rect->height;
 
     if (flags & MOZ_GTK_STEPPER_VERTICAL) {
-        scrollbar->allocation.height *= 5;
+        allocation.height *= 5;
         if (flags & MOZ_GTK_STEPPER_DOWN) {
             arrow_type = GTK_ARROW_DOWN;
             if (flags & MOZ_GTK_STEPPER_BOTTOM)
-                scrollbar->allocation.y -= 4 * rect->height;
+                allocation.y -= 4 * rect->height;
             else
-                scrollbar->allocation.y -= rect->height;
+                allocation.y -= rect->height;
 
         } else {
             arrow_type = GTK_ARROW_UP;
             if (flags & MOZ_GTK_STEPPER_BOTTOM)
-                scrollbar->allocation.y -= 3 * rect->height;
+                allocation.y -= 3 * rect->height;
         }
     } else {
-        scrollbar->allocation.width *= 5;
+        allocation.width *= 5;
         if (flags & MOZ_GTK_STEPPER_DOWN) {
             arrow_type = GTK_ARROW_RIGHT;
             if (flags & MOZ_GTK_STEPPER_BOTTOM)
-                scrollbar->allocation.x -= 4 * rect->width;
+                allocation.x -= 4 * rect->width;
             else
-                scrollbar->allocation.x -= rect->width;
+                allocation.x -= rect->width;
         } else {
             arrow_type = GTK_ARROW_LEFT;
             if (flags & MOZ_GTK_STEPPER_BOTTOM)
-                scrollbar->allocation.x -= 3 * rect->width;
+                allocation.x -= 3 * rect->width;
         }
     }
 
-    style = scrollbar->style;
+    gtk_widget_set_allocation(scrollbar, &allocation);
+    style = gtk_widget_get_style(scrollbar);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
 
@@ -1187,13 +1237,9 @@ moz_gtk_scrollbar_trough_paint(GtkThemeWidgetType widget,
 
     gtk_widget_set_direction(GTK_WIDGET(scrollbar), direction);
 
-    style = GTK_WIDGET(scrollbar)->style;
+    style = gtk_widget_get_style(GTK_WIDGET(scrollbar));
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
-    gtk_style_apply_default_background(style, drawable, TRUE, GTK_STATE_ACTIVE,
-                                       cliprect, rect->x, rect->y,
-                                       rect->width, rect->height);
-
     gtk_paint_box(style, drawable, GTK_STATE_ACTIVE, GTK_SHADOW_IN, cliprect,
                   GTK_WIDGET(scrollbar), "trough", rect->x, rect->y,
                   rect->width, rect->height);
@@ -1246,20 +1292,30 @@ moz_gtk_scrollbar_thumb_paint(GtkThemeWidgetType widget,
     if (widget == MOZ_GTK_SCROLLBAR_THUMB_HORIZONTAL) {
         cliprect->x -= 1;
         cliprect->width += 2;
-        adj->page_size = rect->width;
+        gtk_adjustment_set_page_size(adj, rect->width);
     }
     else {
         cliprect->y -= 1;
         cliprect->height += 2;
-        adj->page_size = rect->height;
+        gtk_adjustment_set_page_size(adj, rect->height);
     }
 
+#if GTK_CHECK_VERSION(2, 14, 0)
+    gtk_adjustment_configure(adj,
+                             state->curpos,
+                             0,
+                             state->maxpos,
+                             gtk_adjustment_get_step_increment(adj),
+                             gtk_adjustment_get_page_increment(adj),
+                             gtk_adjustment_get_page_size(adj));
+#else
     adj->lower = 0;
     adj->value = state->curpos;
     adj->upper = state->maxpos;
     gtk_adjustment_changed(adj);
+#endif
 
-    style = GTK_WIDGET(scrollbar)->style;
+    style = gtk_widget_get_style(GTK_WIDGET(scrollbar));
     
     gtk_widget_style_get(GTK_WIDGET(scrollbar), "activate-slider",
                          &activate_slider, NULL);
@@ -1288,7 +1344,7 @@ moz_gtk_spin_paint(GdkDrawable* drawable, GdkRectangle* rect,
 
     ensure_spin_widget();
     gtk_widget_set_direction(gParts->spinWidget, direction);
-    style = gParts->spinWidget->style;
+    style = gtk_widget_get_style(gParts->spinWidget);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
     gtk_paint_box(style, drawable, GTK_STATE_NORMAL, GTK_SHADOW_IN, NULL,
@@ -1309,7 +1365,7 @@ moz_gtk_spin_updown_paint(GdkDrawable* drawable, GdkRectangle* rect,
     GtkStyle* style;
 
     ensure_spin_widget();
-    style = gParts->spinWidget->style;
+    style = gtk_widget_get_style(gParts->spinWidget);
     gtk_widget_set_direction(gParts->spinWidget, direction);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
@@ -1347,7 +1403,7 @@ moz_gtk_scale_paint(GdkDrawable* drawable, GdkRectangle* rect,
   widget = ((flags == GTK_ORIENTATION_HORIZONTAL) ? gParts->hScaleWidget : gParts->vScaleWidget);
   gtk_widget_set_direction(widget, direction);
 
-  style = widget->style;
+  style = gtk_widget_get_style(widget);
 
   if (flags == GTK_ORIENTATION_HORIZONTAL) {
     x = XTHICKNESS(style);
@@ -1388,7 +1444,7 @@ moz_gtk_scale_thumb_paint(GdkDrawable* drawable, GdkRectangle* rect,
   widget = ((flags == GTK_ORIENTATION_HORIZONTAL) ? gParts->hScaleWidget : gParts->vScaleWidget);
   gtk_widget_set_direction(widget, direction);
 
-  style = widget->style;
+  style = gtk_widget_get_style(widget);
 
   /* determine the thumb size, and position the thumb in the center in the opposite axis */
   if (flags == GTK_ORIENTATION_HORIZONTAL) {
@@ -1422,8 +1478,8 @@ moz_gtk_gripper_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_handlebox_widget();
     gtk_widget_set_direction(gParts->handleBoxWidget, direction);
 
-    style = gParts->handleBoxWidget->style;
-    shadow_type = GTK_HANDLE_BOX(gParts->handleBoxWidget)->shadow_type;
+    style = gtk_widget_get_style(gParts->handleBoxWidget);
+    shadow_type = gtk_handle_box_get_shadow_type(GTK_HANDLE_BOX(gParts->handleBoxWidget));
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
     gtk_paint_box(style, drawable, state_type, shadow_type, cliprect,
@@ -1440,7 +1496,7 @@ moz_gtk_hpaned_paint(GdkDrawable* drawable, GdkRectangle* rect,
     GtkStateType hpaned_state = ConvertGtkState(state);
 
     ensure_hpaned_widget();
-    gtk_paint_handle(gParts->hpanedWidget->style, drawable, hpaned_state,
+    gtk_paint_handle(gtk_widget_get_style(gParts->hpanedWidget), drawable, hpaned_state,
                      GTK_SHADOW_NONE, cliprect, gParts->hpanedWidget, "paned",
                      rect->x, rect->y, rect->width, rect->height,
                      GTK_ORIENTATION_VERTICAL);
@@ -1455,7 +1511,7 @@ moz_gtk_vpaned_paint(GdkDrawable* drawable, GdkRectangle* rect,
     GtkStateType vpaned_state = ConvertGtkState(state);
 
     ensure_vpaned_widget();
-    gtk_paint_handle(gParts->vpanedWidget->style, drawable, vpaned_state,
+    gtk_paint_handle(gtk_widget_get_style(gParts->vpanedWidget), drawable, vpaned_state,
                      GTK_SHADOW_NONE, cliprect, gParts->vpanedWidget, "paned",
                      rect->x, rect->y, rect->width, rect->height,
                      GTK_ORIENTATION_HORIZONTAL);
@@ -1495,7 +1551,7 @@ moz_gtk_entry_paint(GdkDrawable* drawable, GdkRectangle* rect,
 
     gtk_widget_set_direction(widget, direction);
 
-    style = widget->style;
+    style = gtk_widget_get_style(widget);
 
     gtk_widget_style_get(widget,
                          "interior-focus", &interior_focus,
@@ -1523,8 +1579,17 @@ moz_gtk_entry_paint(GdkDrawable* drawable, GdkRectangle* rect,
     if (theme_honors_transparency) {
         g_object_set_data(G_OBJECT(widget), "transparent-bg-hint", GINT_TO_POINTER(TRUE));
     } else {
+#ifndef GTK_API_VERSION_2
+        cairo_t* cr = gdk_cairo_create(drawable);
+        gdk_cairo_set_source_color(cr, (const GdkColor*)&style->base[bg_state]);
+        cairo_pattern_set_extend (cairo_get_source(cr), CAIRO_EXTEND_REPEAT);
+        gdk_cairo_rectangle(cr, cliprect);
+        cairo_fill(cr);
+        cairo_destroy(cr);
+#else
         gdk_draw_rectangle(drawable, style->base_gc[bg_state], TRUE,
                            cliprect->x, cliprect->y, cliprect->width, cliprect->height);
+#endif
         g_object_set_data(G_OBJECT(widget), "transparent-bg-hint", GINT_TO_POINTER(FALSE));
     }
 
@@ -1551,7 +1616,9 @@ moz_gtk_entry_paint(GdkDrawable* drawable, GdkRectangle* rect,
     if (state->focused && !state->disabled) {
         /* This will get us the lit borders that focused textboxes enjoy on
          * some themes. */
+#ifdef GTK_API_VERSION_2
         GTK_WIDGET_SET_FLAGS(widget, GTK_HAS_FOCUS);
+#endif
 
         if (!interior_focus) {
             /* Indent the border a little bit if we have exterior focus 
@@ -1575,7 +1642,9 @@ moz_gtk_entry_paint(GdkDrawable* drawable, GdkRectangle* rect,
 
         /* Now unset the focus flag. We don't want other entries to look
          * like they're focused too! */
+#ifdef GTK_API_VERSION_2
         GTK_WIDGET_UNSET_FLAGS(widget, GTK_HAS_FOCUS);
+#endif
     }
 
     return MOZ_GTK_SUCCESS;
@@ -1588,7 +1657,7 @@ moz_gtk_treeview_paint(GdkDrawable* drawable, GdkRectangle* rect,
 {
     gint xthickness, ythickness;
 
-    GtkStyle *style;
+    GtkStyle *style, *treeview_style;
     GtkStateType state_type;
 
     ensure_tree_view_widget();
@@ -1605,16 +1674,17 @@ moz_gtk_treeview_paint(GdkDrawable* drawable, GdkRectangle* rect,
      * which contains the cells to the treeview base color.
      * If we don't set it here the background color will not be correct.*/
     gtk_widget_modify_bg(gParts->treeViewWidget, state_type,
-                         &gParts->treeViewWidget->style->base[state_type]);
+                         &gtk_widget_get_style(gParts->treeViewWidget)->base[state_type]);
 
-    style = gParts->scrolledWindowWidget->style;
+    style = gtk_widget_get_style(gParts->scrolledWindowWidget);
     xthickness = XTHICKNESS(style);
     ythickness = YTHICKNESS(style);
 
-    TSOffsetStyleGCs(gParts->treeViewWidget->style, rect->x, rect->y);
+    treeview_style = gtk_widget_get_style(gParts->treeViewWidget);
+    TSOffsetStyleGCs(treeview_style, rect->x, rect->y);
     TSOffsetStyleGCs(style, rect->x, rect->y);
 
-    gtk_paint_flat_box(gParts->treeViewWidget->style, drawable, state_type,
+    gtk_paint_flat_box(treeview_style, drawable, state_type,
                        GTK_SHADOW_NONE, cliprect, gParts->treeViewWidget, "treeview",
                        rect->x + xthickness, rect->y + ythickness,
                        rect->width - 2 * xthickness,
@@ -1661,7 +1731,7 @@ moz_gtk_tree_header_sort_arrow_paint(GdkDrawable* drawable, GdkRectangle* rect,
     arrow_rect.x = rect->x + (rect->width - arrow_rect.width) / 2;
     arrow_rect.y = rect->y + (rect->height - arrow_rect.height) / 2;
 
-    style = gParts->treeHeaderSortArrowWidget->style;
+    style = gtk_widget_get_style(gParts->treeHeaderSortArrowWidget);
     TSOffsetStyleGCs(style, arrow_rect.x, arrow_rect.y);
 
     gtk_paint_arrow(style, drawable, state_type, shadow_type, cliprect,
@@ -1684,7 +1754,7 @@ moz_gtk_treeview_expander_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_tree_view_widget();
     gtk_widget_set_direction(gParts->treeViewWidget, direction);
 
-    style = gParts->treeViewWidget->style;
+    style = gtk_widget_get_style(gParts->treeViewWidget);
 
     /* Because the frame we get is of the entire treeview, we can't get the precise
      * event state of one expander, thus rendering hover and active feedback useless. */
@@ -1709,7 +1779,7 @@ moz_gtk_expander_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_expander_widget();
     gtk_widget_set_direction(gParts->expanderWidget, direction);
 
-    style = gParts->expanderWidget->style;
+    style = gtk_widget_get_style(gParts->expanderWidget);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
     gtk_paint_expander(style, drawable, state_type, cliprect, gParts->expanderWidget, "expander",
@@ -1750,7 +1820,7 @@ moz_gtk_combo_box_paint(GdkDrawable* drawable, GdkRectangle* rect,
     calculate_arrow_rect(gParts->comboBoxArrowWidget,
                          &arrow_rect, &real_arrow_rect, direction);
 
-    style = gParts->comboBoxArrowWidget->style;
+    style = gtk_widget_get_style(gParts->comboBoxArrowWidget);
     TSOffsetStyleGCs(style, rect->x, rect->y);
 
     gtk_widget_size_allocate(gParts->comboBoxWidget, rect);
@@ -1765,7 +1835,7 @@ moz_gtk_combo_box_paint(GdkDrawable* drawable, GdkRectangle* rect,
     if (!gParts->comboBoxSeparatorWidget)
         return MOZ_GTK_SUCCESS;
 
-    style = gParts->comboBoxSeparatorWidget->style;
+    style = gtk_widget_get_style(gParts->comboBoxSeparatorWidget);
     TSOffsetStyleGCs(style, rect->x, rect->y);
 
     gtk_widget_style_get(gParts->comboBoxSeparatorWidget,
@@ -1809,7 +1879,7 @@ moz_gtk_downarrow_paint(GdkDrawable* drawable, GdkRectangle* rect,
     GdkRectangle arrow_rect;
 
     ensure_button_arrow_widget();
-    style = gParts->buttonArrowWidget->style;
+    style = gtk_widget_get_style(gParts->buttonArrowWidget);
 
     calculate_arrow_rect(gParts->buttonArrowWidget, rect, &arrow_rect,
                          GTK_TEXT_DIR_LTR);
@@ -1840,14 +1910,18 @@ moz_gtk_combo_box_entry_button_paint(GdkDrawable* drawable, GdkRectangle* rect,
     if (input_focus) {
         /* Some themes draw a complementary focus ring for the dropdown button
          * when the dropdown entry has focus */
+#ifdef GTK_API_VERSION_2
         GTK_WIDGET_SET_FLAGS(gParts->comboBoxEntryTextareaWidget, GTK_HAS_FOCUS);
+#endif
     }
 
     moz_gtk_button_paint(drawable, rect, cliprect, state, GTK_RELIEF_NORMAL,
                          gParts->comboBoxEntryButtonWidget, direction);
 
+#ifdef GTK_API_VERSION_2
     if (input_focus)
         GTK_WIDGET_UNSET_FLAGS(gParts->comboBoxEntryTextareaWidget, GTK_HAS_FOCUS);
+#endif
 
     calculate_button_inner_rect(gParts->comboBoxEntryButtonWidget,
                                 rect, &arrow_rect, direction, FALSE);
@@ -1863,7 +1937,7 @@ moz_gtk_combo_box_entry_button_paint(GdkDrawable* drawable, GdkRectangle* rect,
     calculate_arrow_rect(gParts->comboBoxEntryArrowWidget,
                          &arrow_rect, &real_arrow_rect, direction);
 
-    style = gParts->comboBoxEntryArrowWidget->style;
+    style = gtk_widget_get_style(gParts->comboBoxEntryArrowWidget);
     TSOffsetStyleGCs(style, real_arrow_rect.x, real_arrow_rect.y);
 
     gtk_paint_arrow(style, drawable, state_type, shadow_type, cliprect,
@@ -1894,7 +1968,7 @@ moz_gtk_container_paint(GdkDrawable* drawable, GdkRectangle* rect,
     }
     gtk_widget_set_direction(widget, direction);
 
-    style = widget->style;
+    style = gtk_widget_get_style(widget);
     moz_gtk_widget_get_focus(widget, &interior_focus, &focus_width,
                              &focus_pad);
 
@@ -1951,7 +2025,7 @@ moz_gtk_toggle_label_paint(GdkDrawable* drawable, GdkRectangle* rect,
 
     state_type = ConvertGtkState(state);
 
-    style = widget->style;
+    style = gtk_widget_get_style(widget);
     TSOffsetStyleGCs(style, rect->x, rect->y);
 
     /* Always "checkbutton" to match gtkcheckbutton.c */
@@ -1972,7 +2046,7 @@ moz_gtk_toolbar_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_toolbar_widget();
     gtk_widget_set_direction(gParts->toolbarWidget, direction);
 
-    style = gParts->toolbarWidget->style;
+    style = gtk_widget_get_style(gParts->toolbarWidget);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
 
@@ -2007,7 +2081,7 @@ moz_gtk_toolbar_separator_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_toolbar_separator_widget();
     gtk_widget_set_direction(gParts->toolbarSeparatorWidget, direction);
 
-    style = gParts->toolbarSeparatorWidget->style;
+    style = gtk_widget_get_style(gParts->toolbarSeparatorWidget);
 
     gtk_widget_style_get(gParts->toolbarWidget,
                          "wide-separators", &wide_separators,
@@ -2058,7 +2132,7 @@ moz_gtk_tooltip_paint(GdkDrawable* drawable, GdkRectangle* rect,
                                       "gtk-tooltips", "GtkWindow",
                                       GTK_TYPE_WINDOW);
 
-    style = gtk_style_attach(style, gParts->tooltipWidget->window);
+    style = gtk_style_attach(style, gtk_widget_get_window(gParts->tooltipWidget));
     TSOffsetStyleGCs(style, rect->x, rect->y);
     gtk_paint_flat_box(style, drawable, GTK_STATE_NORMAL, GTK_SHADOW_OUT,
                        cliprect, gParts->tooltipWidget, "tooltip",
@@ -2078,7 +2152,7 @@ moz_gtk_resizer_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_window_widget();
     gtk_widget_set_direction(gParts->protoWindow, direction);
 
-    style = gParts->protoWindow->style;
+    style = gtk_widget_get_style(gParts->protoWindow);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
 
@@ -2100,7 +2174,7 @@ moz_gtk_frame_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_frame_widget();
     gtk_widget_set_direction(gParts->frameWidget, direction);
 
-    style = gParts->frameWidget->style;
+    style = gtk_widget_get_style(gParts->frameWidget);
 
     gtk_widget_style_get(gParts->statusbarWidget, "shadow-type", &shadow_type, NULL);
 
@@ -2121,7 +2195,7 @@ moz_gtk_progressbar_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_progress_widget();
     gtk_widget_set_direction(gParts->progresWidget, direction);
 
-    style = gParts->progresWidget->style;
+    style = gtk_widget_get_style(gParts->progresWidget);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
     gtk_paint_box(style, drawable, GTK_STATE_NORMAL, GTK_SHADOW_IN,
@@ -2140,7 +2214,7 @@ moz_gtk_progress_chunk_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_progress_widget();
     gtk_widget_set_direction(gParts->progresWidget, direction);
 
-    style = gParts->progresWidget->style;
+    style = gtk_widget_get_style(gParts->progresWidget);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
     gtk_paint_box(style, drawable, GTK_STATE_PRELIGHT, GTK_SHADOW_OUT,
@@ -2153,11 +2227,14 @@ moz_gtk_progress_chunk_paint(GdkDrawable* drawable, GdkRectangle* rect,
 gint
 moz_gtk_get_tab_thickness(void)
 {
+    GtkStyle* style;
+
     ensure_tab_widget();
-    if (YTHICKNESS(gParts->tabWidget->style) < 2)
+    style = gtk_widget_get_style(gParts->tabWidget);
+    if (YTHICKNESS(style) < 2)
         return 2; /* some themes don't set ythickness correctly */
 
-    return YTHICKNESS(gParts->tabWidget->style);
+    return YTHICKNESS(style);
 }
 
 static gint
@@ -2175,7 +2252,7 @@ moz_gtk_tab_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_tab_widget();
     gtk_widget_set_direction(gParts->tabWidget, direction);
 
-    style = gParts->tabWidget->style;
+    style = gtk_widget_get_style(gParts->tabWidget);
     TSOffsetStyleGCs(style, rect->x, rect->y);
 
     if ((flags & MOZ_GTK_TAB_SELECTED) == 0) {
@@ -2312,7 +2389,7 @@ moz_gtk_tabpanels_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_tab_widget();
     gtk_widget_set_direction(gParts->tabWidget, direction);
 
-    style = gParts->tabWidget->style;
+    style = gtk_widget_get_style(gParts->tabWidget);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
     gtk_paint_box_gap(style, drawable, GTK_STATE_NORMAL, GTK_SHADOW_OUT,
@@ -2338,7 +2415,7 @@ moz_gtk_tab_scroll_arrow_paint(GdkDrawable* drawable, GdkRectangle* rect,
 
     ensure_tab_widget();
 
-    style = gParts->tabWidget->style;
+    style = gtk_widget_get_style(gParts->tabWidget);
     TSOffsetStyleGCs(style, rect->x, rect->y);
 
     if (direction == GTK_TEXT_DIR_RTL) {
@@ -2364,7 +2441,7 @@ moz_gtk_menu_bar_paint(GdkDrawable* drawable, GdkRectangle* rect,
 
     gtk_widget_style_get(gParts->menuBarWidget, "shadow-type", &shadow_type, NULL);
 
-    style = gParts->menuBarWidget->style;
+    style = gtk_widget_get_style(gParts->menuBarWidget);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
     gtk_style_apply_default_background(style, drawable, TRUE, GTK_STATE_NORMAL,
@@ -2385,7 +2462,7 @@ moz_gtk_menu_popup_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_menu_popup_widget();
     gtk_widget_set_direction(gParts->menuPopupWidget, direction);
 
-    style = gParts->menuPopupWidget->style;
+    style = gtk_widget_get_style(gParts->menuPopupWidget);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
     gtk_style_apply_default_background(style, drawable, TRUE, GTK_STATE_NORMAL,
@@ -2411,7 +2488,7 @@ moz_gtk_menu_separator_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_menu_separator_widget();
     gtk_widget_set_direction(gParts->menuSeparatorWidget, direction);
 
-    style = gParts->menuSeparatorWidget->style;
+    style = gtk_widget_get_style(gParts->menuSeparatorWidget);
 
     gtk_widget_style_get(gParts->menuSeparatorWidget,
                          "wide-separators",    &wide_separators,
@@ -2467,7 +2544,7 @@ moz_gtk_menu_item_paint(GdkDrawable* drawable, GdkRectangle* rect,
         }
         gtk_widget_set_direction(item_widget, direction);
         
-        style = item_widget->style;
+        style = gtk_widget_get_style(item_widget);
         TSOffsetStyleGCs(style, rect->x, rect->y);
 
         gtk_widget_style_get(item_widget, "selected-shadow-type",
@@ -2492,7 +2569,7 @@ moz_gtk_menu_arrow_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_menu_item_widget();
     gtk_widget_set_direction(gParts->menuItemWidget, direction);
 
-    style = gParts->menuItemWidget->style;
+    style = gtk_widget_get_style(gParts->menuItemWidget);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
     gtk_paint_arrow(style, drawable, state_type,
@@ -2526,11 +2603,14 @@ moz_gtk_check_menu_item_paint(GdkDrawable* drawable, GdkRectangle* rect,
                           "indicator-size", &indicator_size,
                           NULL);
 
+#ifdef GTK_API_VERSION_2
     if (checked || GTK_CHECK_MENU_ITEM(gParts->checkMenuItemWidget)->always_show_toggle) {
-      style = gParts->checkMenuItemWidget->style;
+#else
+    if (checked || FALSE) {
+#endif
+      style = gtk_widget_get_style(gParts->checkMenuItemWidget);
 
-      offset = GTK_CONTAINER(gParts->checkMenuItemWidget)->border_width +
-             gParts->checkMenuItemWidget->style->xthickness + 2;
+      offset = gtk_container_get_border_width(GTK_CONTAINER(gParts->checkMenuItemWidget)) + style->xthickness + 2;
 
       /* while normally this "3" would be the horizontal-padding style value, passing it to Gecko
          as the value of menuitem padding causes problems with dropdowns (bug 406129), so in the menu.css
@@ -2566,7 +2646,7 @@ moz_gtk_window_paint(GdkDrawable* drawable, GdkRectangle* rect,
     ensure_window_widget();
     gtk_widget_set_direction(gParts->protoWindow, direction);
 
-    style = gParts->protoWindow->style;
+    style = gtk_widget_get_style(gParts->protoWindow);
 
     TSOffsetStyleGCs(style, rect->x, rect->y);
     gtk_style_apply_default_background(style, drawable, TRUE,
@@ -2582,6 +2662,7 @@ moz_gtk_get_widget_border(GtkThemeWidgetType widget, gint* left, gint* top,
                           gboolean inhtml)
 {
     GtkWidget* w;
+    GtkStyle *style;
 
     switch (widget) {
     case MOZ_GTK_BUTTON:
@@ -2589,9 +2670,10 @@ moz_gtk_get_widget_border(GtkThemeWidgetType widget, gint* left, gint* top,
             GtkBorder inner_border;
             gboolean interior_focus;
             gint focus_width, focus_pad;
+            GtkStyle *style;
 
             ensure_button_widget();
-            *left = *top = *right = *bottom = GTK_CONTAINER(gParts->buttonWidget)->border_width;
+            *left = *top = *right = *bottom = gtk_container_get_border_width(GTK_CONTAINER(gParts->buttonWidget));
 
             /* Don't add this padding in HTML, otherwise the buttons will
                become too big and stuff the layout. */
@@ -2604,10 +2686,11 @@ moz_gtk_get_widget_border(GtkThemeWidgetType widget, gint* left, gint* top,
                 *bottom += focus_width + focus_pad + inner_border.bottom;
             }
 
-            *left += gParts->buttonWidget->style->xthickness;
-            *right += gParts->buttonWidget->style->xthickness;
-            *top += gParts->buttonWidget->style->ythickness;
-            *bottom += gParts->buttonWidget->style->ythickness;
+            style = gtk_widget_get_style(gParts->buttonWidget);
+            *left += style->xthickness;
+            *right += style->xthickness;
+            *top += style->ythickness;
+            *bottom += style->ythickness;
             return MOZ_GTK_SUCCESS;
         }
     case MOZ_GTK_ENTRY:
@@ -2629,9 +2712,10 @@ moz_gtk_get_widget_border(GtkThemeWidgetType widget, gint* left, gint* top,
             GtkBorder inner_border;
             gboolean interior_focus;
             gint focus_width, focus_pad;
+            GtkStyle* style;
 
             ensure_tree_header_cell_widget();
-            *left = *top = *right = *bottom = GTK_CONTAINER(gParts->treeHeaderCellWidget)->border_width;
+            *left = *top = *right = *bottom = gtk_container_get_border_width(GTK_CONTAINER(gParts->treeHeaderCellWidget));
 
             moz_gtk_widget_get_focus(gParts->treeHeaderCellWidget, &interior_focus, &focus_width, &focus_pad);
             moz_gtk_button_get_inner_border(gParts->treeHeaderCellWidget, &inner_border);
@@ -2640,10 +2724,11 @@ moz_gtk_get_widget_border(GtkThemeWidgetType widget, gint* left, gint* top,
             *top += focus_width + focus_pad + inner_border.top;
             *bottom += focus_width + focus_pad + inner_border.bottom;
             
-            *left += gParts->treeHeaderCellWidget->style->xthickness;
-            *right += gParts->treeHeaderCellWidget->style->xthickness;
-            *top += gParts->treeHeaderCellWidget->style->ythickness;
-            *bottom += gParts->treeHeaderCellWidget->style->ythickness;
+            style = gtk_widget_get_style(gParts->treeHeaderCellWidget);
+            *left += style->xthickness;
+            *right += style->xthickness;
+            *top += style->ythickness;
+            *bottom += style->ythickness;
             return MOZ_GTK_SUCCESS;
         }
     case MOZ_GTK_TREE_HEADER_SORTARROW:
@@ -2666,10 +2751,11 @@ moz_gtk_get_widget_border(GtkThemeWidgetType widget, gint* left, gint* top,
             gboolean ignored_interior_focus, wide_separators;
             gint focus_width, focus_pad, separator_width;
             GtkRequisition arrow_req;
+            GtkStyle* style;
 
             ensure_combo_box_widgets();
 
-            *left = GTK_CONTAINER(gParts->comboBoxButtonWidget)->border_width;
+            *left = gtk_container_get_border_width(GTK_CONTAINER(gParts->comboBoxButtonWidget));
 
             if (!inhtml) {
                 moz_gtk_widget_get_focus(gParts->comboBoxButtonWidget,
@@ -2678,8 +2764,9 @@ moz_gtk_get_widget_border(GtkThemeWidgetType widget, gint* left, gint* top,
                 *left += focus_width + focus_pad;
             }
 
-            *top = *left + gParts->comboBoxButtonWidget->style->ythickness;
-            *left += gParts->comboBoxButtonWidget->style->xthickness;
+            style = gtk_widget_get_style(gParts->comboBoxButtonWidget);
+            *top = *left + style->ythickness;
+            *left += style->xthickness;
 
             *right = *left; *bottom = *top;
 
@@ -2693,7 +2780,7 @@ moz_gtk_get_widget_border(GtkThemeWidgetType widget, gint* left, gint* top,
 
                 if (!wide_separators)
                     separator_width =
-                        XTHICKNESS(gParts->comboBoxSeparatorWidget->style);
+                        XTHICKNESS(style);
             }
 
             gtk_widget_size_request(gParts->comboBoxArrowWidget, &arrow_req);
@@ -2778,7 +2865,7 @@ moz_gtk_get_widget_border(GtkThemeWidgetType widget, gint* left, gint* top,
                 w = gParts->radiobuttonWidget;
             }
 
-            *left = *top = *right = *bottom = GTK_CONTAINER(w)->border_width;
+            *left = *top = *right = *bottom = gtk_container_get_border_width(GTK_CONTAINER(w));
 
             if (!interior_focus) {
                 *left += (focus_width + focus_pad);
@@ -2843,8 +2930,9 @@ moz_gtk_get_widget_border(GtkThemeWidgetType widget, gint* left, gint* top,
         return MOZ_GTK_UNKNOWN_WIDGET;
     }
 
-    *right = *left = XTHICKNESS(w->style);
-    *bottom = *top = YTHICKNESS(w->style);
+    style = gtk_widget_get_style(w);
+    *right = *left = XTHICKNESS(style);
+    *bottom = *top = YTHICKNESS(style);
 
     return MOZ_GTK_SUCCESS;
 }
@@ -2904,7 +2992,7 @@ moz_gtk_get_toolbar_separator_width(gint* size)
 
     ensure_toolbar_widget();
 
-    style = gParts->toolbarWidget->style;
+    style = gtk_widget_get_style(gParts->toolbarWidget);
 
     gtk_widget_style_get(gParts->toolbarWidget,
                          "space-size", size,
@@ -2945,6 +3033,7 @@ moz_gtk_get_menu_separator_height(gint *size)
 {
     gboolean wide_separators;
     gint     separator_height;
+    GtkStyle *style;
 
     ensure_menu_separator_widget();
 
@@ -2953,10 +3042,12 @@ moz_gtk_get_menu_separator_height(gint *size)
                           "separator-height", &separator_height,
                           NULL);
 
+    style = gtk_widget_get_style(gParts->menuSeparatorWidget);
+
     if (wide_separators)
-        *size = separator_height + gParts->menuSeparatorWidget->style->ythickness;
+        *size = separator_height + style->ythickness;
     else
-        *size = gParts->menuSeparatorWidget->style->ythickness * 2;
+        *size = style->ythickness * 2;
 
     return MOZ_GTK_SUCCESS;
 }
@@ -2987,10 +3078,12 @@ moz_gtk_get_scrollbar_metrics(MozGtkScrollbarMetrics *metrics)
                           "trough_border", &metrics->trough_border,
                           "stepper_size", &metrics->stepper_size,
                           "stepper_spacing", &metrics->stepper_spacing,
+                          "trough_under_steppers", &metrics->trough_under_steppers,
+                          "has_secondary_forward_stepper", &metrics->has_secondary_forward_stepper,
+                          "has_secondary_backward_stepper", &metrics->has_secondary_backward_stepper,
                           NULL);
 
-    metrics->min_slider_size =
-        GTK_RANGE(gParts->horizScrollbarWidget)->min_slider_size;
+    metrics->min_slider_size = gtk_range_get_min_slider_size(GTK_RANGE(gParts->horizScrollbarWidget));
 
     return MOZ_GTK_SUCCESS;
 }
@@ -3049,6 +3142,9 @@ moz_gtk_widget_paint(GtkThemeWidgetType widget, GdkDrawable* drawable,
     case MOZ_GTK_SCROLLBAR_THUMB_VERTICAL:
         return moz_gtk_scrollbar_thumb_paint(widget, drawable, rect,
                                              cliprect, state, direction);
+        break;
+    case MOZ_GTK_SCROLLED_WINDOW:
+        return moz_gtk_scrolled_window_paint(drawable, rect, cliprect, state);
         break;
     case MOZ_GTK_SCALE_HORIZONTAL:
     case MOZ_GTK_SCALE_VERTICAL:
@@ -3246,4 +3342,12 @@ void moz_gtk_destroy_theme_parts_widgets(GtkThemeParts* parts)
         gtk_widget_destroy(parts->protoWindow);
         parts->protoWindow = NULL;
     }
+}
+
+GtkWidget* moz_gtk_get_progress_widget()
+{
+    if (!is_initialized)
+        return NULL;
+    ensure_progress_widget();
+    return gParts->progresWidget;
 }

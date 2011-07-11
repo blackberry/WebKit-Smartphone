@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 1999-2003 Lars Knoll (knoll@kde.org)
  *               1999 Waldo Bastian (bastian@kde.org)
- * Copyright (C) 2004, 2006, 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -22,12 +22,15 @@
 #ifndef CSSSelector_h
 #define CSSSelector_h
 
-#include "RenderStyleConstants.h"
 #include "QualifiedName.h"
+#include "RenderStyleConstants.h"
 #include <wtf/Noncopyable.h>
 #include <wtf/OwnPtr.h>
+#include <wtf/PassOwnPtr.h>
 
 namespace WebCore {
+
+    class CSSSelectorBag;
 
     // this class represents a selector for a StyleRule
     class CSSSelector : public Noncopyable {
@@ -39,6 +42,7 @@ namespace WebCore {
             , m_parsedNth(false)
             , m_isLastInSelectorList(false)
             , m_hasRareData(false)
+            , m_isForPage(false)
             , m_tag(anyQName())
         {
         }
@@ -50,16 +54,25 @@ namespace WebCore {
             , m_parsedNth(false)
             , m_isLastInSelectorList(false)
             , m_hasRareData(false)
+            , m_isForPage(false)
             , m_tag(qName)
         {
         }
 
         ~CSSSelector()
         {
-            if (m_hasRareData)
-                delete m_data.m_rareData;
-            else
-                delete m_data.m_tagHistory;
+            // Exit if this selector does not own any objects to be deleted.
+            if (m_hasRareData) {
+                if (!m_data.m_rareData)
+                    return;
+            } else if (!m_data.m_tagHistory)
+                return;
+
+            // We can not delete the owned object(s) by simply calling delete
+            // directly on them. That would lead to recursive destructor calls
+            // which might cause stack overflow. We have to delete them
+            // iteratively.
+            deleteReachableSelectors();
         }
 
         /**
@@ -72,7 +85,7 @@ namespace WebCore {
 
         // tag == -1 means apply to all elements (Selector = *)
 
-        unsigned specificity();
+        unsigned specificity() const;
 
         /* how the attribute value has to match.... Default is Exact */
         enum Match {
@@ -174,6 +187,7 @@ namespace WebCore {
             PseudoMediaControlsPlayButton,
             PseudoMediaControlsTimelineContainer,
             PseudoMediaControlsVolumeSliderContainer,
+            PseudoMediaControlsVolumeSliderMuteButton,
             PseudoMediaControlsCurrentTimeDisplay,
             PseudoMediaControlsTimeRemainingDisplay,
             PseudoMediaControlsToggleClosedCaptions,
@@ -185,13 +199,28 @@ namespace WebCore {
             PseudoMediaControlsReturnToRealtimeButton,
             PseudoMediaControlsStatusDisplay,
             PseudoMediaControlsFullscreenButton,
+            PseudoMeterHorizontalBar,
+            PseudoMeterVerticalBar,
+            PseudoMeterHorizontalOptimum,
+            PseudoMeterHorizontalSuboptimal,
+            PseudoMeterHorizontalEvenLessGood,
+            PseudoMeterVerticalOptimum,
+            PseudoMeterVerticalSuboptimal,
+            PseudoMeterVerticalEvenLessGood,
             PseudoInputListButton,
+#if ENABLE(INPUT_SPEECH)
+            PseudoInputSpeechButton,
+#endif
             PseudoInnerSpinButton,
             PseudoOuterSpinButton,
             PseudoProgressBarValue,
             PseudoLeftPage,
             PseudoRightPage,
             PseudoFirstPage,
+#if ENABLE(FULLSCREEN_API)
+            PseudoFullScreen,
+            PseudoFullScreenDocument,
+#endif
         };
 
         enum MarginBoxType {
@@ -253,6 +282,9 @@ namespace WebCore {
         void setLastInSelectorList() { m_isLastInSelectorList = true; }
         bool isSimple() const;
 
+        bool isForPage() const { return m_isForPage; }
+        void setForPage() { m_isForPage = true; }
+
         unsigned m_relation           : 3; // enum Relation
         mutable unsigned m_match      : 4; // enum Match
         mutable unsigned m_pseudoType : 8; // PseudoType
@@ -261,15 +293,20 @@ namespace WebCore {
         bool m_parsedNth              : 1; // Used for :nth-* 
         bool m_isLastInSelectorList   : 1;
         bool m_hasRareData            : 1;
+        bool m_isForPage              : 1;
 
+        void releaseOwnedSelectorsToBag(CSSSelectorBag&);
+        void deleteReachableSelectors();
+
+        unsigned specificityForOneSelector() const;
+        unsigned specificityForPage() const;
         void extractPseudoType() const;
 
         struct RareData : Noncopyable {
-            RareData(CSSSelector* tagHistory)
+            RareData(PassOwnPtr<CSSSelector> tagHistory)
                 : m_a(0)
                 , m_b(0)
                 , m_tagHistory(tagHistory)
-                , m_simpleSelector(0)
                 , m_attribute(anyQName())
                 , m_argument(nullAtom)
             {
@@ -290,7 +327,7 @@ namespace WebCore {
         {
             if (m_hasRareData) 
                 return;
-            m_data.m_rareData = new RareData(m_data.m_tagHistory); 
+            m_data.m_rareData = new RareData(adoptPtr(m_data.m_tagHistory));
             m_hasRareData = true;
         }
         

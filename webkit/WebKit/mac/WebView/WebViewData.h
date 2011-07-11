@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2005, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Igalia S.L
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -43,6 +44,7 @@ namespace WebCore {
 @class WebPreferences;
 @class WebTextCompletionController;
 @protocol WebFormDelegate;
+@protocol WebDeviceOrientationProvider;
 @protocol WebGeolocationProvider;
 #if ENABLE(VIDEO)
 @class WebVideoFullscreenController;
@@ -76,9 +78,10 @@ extern int pluginDatabaseClientCount;
     BOOL allowsUndo;
         
     float zoomMultiplier;
+    BOOL zoomsTextOnly;
 
     NSString *applicationNameForUserAgent;
-    WebCore::String userAgent;
+    WTF::String userAgent;
     BOOL userAgentOverridden;
     
     WebPreferences *preferences;
@@ -169,6 +172,10 @@ extern int pluginDatabaseClientCount;
     WebVideoFullscreenController *fullscreenController;
 #endif
 
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+    CFRunLoopObserverRef glibRunLoopObserver;
+#endif
     id<WebGeolocationProvider> _geolocationProvider;
+    id<WebDeviceOrientationProvider> m_deviceOrientationProvider;
 }
 @end

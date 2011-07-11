@@ -181,6 +181,29 @@ bool Font::canReturnFallbackFontsForComplexText()
     return false;
 }
 
+#ifndef GTK_API_VERSION_2
+static void cairo_region_shrink(cairo_region_t* region, int dx, int dy)
+{
+    int nRects = cairo_region_num_rectangles(region);
+    // Clear region.
+    cairo_region_subtract(region, region);
+
+    for (int i = 0; i < nRects; i++) {
+        cairo_rectangle_int_t rect;
+        cairo_region_get_rectangle(region, i, &rect);
+
+        if (rect.width <= 2 * dx || rect.height <= 2 * dy)
+            continue;
+
+        rect.x += dx;
+        rect.y += dy;
+        rect.width -= 2 * dx;
+        rect.height -= 2 * dy;
+        cairo_region_union_rectangle(region, &rect);
+    }
+}
+#endif
+
 void Font::drawComplexText(GraphicsContext* context, const TextRun& run, const FloatPoint& point, int from, int to) const
 {
     cairo_t* cr = context->platformContext();
@@ -196,25 +219,33 @@ void Font::drawComplexText(GraphicsContext* context, const TextRun& run, const F
     // Our layouts are single line
     PangoLayoutLine* layoutLine = pango_layout_get_line_readonly(layout, 0);
 
-    GdkRegion* partialRegion = NULL;
+#ifdef GTK_API_VERSION_2
+    GdkRegion* partialRegion = 0;
+#else
+    cairo_region_t* partialRegion = 0;
+#endif
     if (to - from != run.length()) {
         // Clip the region of the run to be rendered
         char* start = g_utf8_offset_to_pointer(utf8, from);
         char* end = g_utf8_offset_to_pointer(start, to - from);
         int ranges[] = {start - utf8, end - utf8};
         partialRegion = gdk_pango_layout_line_get_clip_region(layoutLine, 0, 0, ranges, 1);
+#ifdef GTK_API_VERSION_2
         gdk_region_shrink(partialRegion, 0, -pixelSize());
+#else
+        cairo_region_shrink(partialRegion, 0, -pixelSize());
+#endif
     }
 
     Color fillColor = context->fillColor();
     float red, green, blue, alpha;
 
     // Text shadow, inspired by FontMac
-    IntSize shadowSize;
-    int shadowBlur = 0;
+    FloatSize shadowOffset;
+    float shadowBlur = 0;
     Color shadowColor;
     bool hasShadow = context->textDrawingMode() == cTextFill &&
-        context->getShadow(shadowSize, shadowBlur, shadowColor);
+        context->getShadow(shadowOffset, shadowBlur, shadowColor);
 
     // TODO: Blur support
     if (hasShadow) {
@@ -226,7 +257,7 @@ void Font::drawComplexText(GraphicsContext* context, const TextRun& run, const F
         shadowFillColor.getRGBA(red, green, blue, alpha);
         cairo_set_source_rgba(cr, red, green, blue, alpha);
 
-        cairo_translate(cr, shadowSize.width(), shadowSize.height());
+        cairo_translate(cr, shadowOffset.width(), shadowOffset.height());
 
         if (partialRegion) {
             gdk_cairo_region(cr, partialRegion);
@@ -259,13 +290,17 @@ void Font::drawComplexText(GraphicsContext* context, const TextRun& run, const F
 
     // Re-enable the platform shadow we disabled earlier
     if (hasShadow)
-        context->setShadow(shadowSize, shadowBlur, shadowColor, DeviceColorSpace);
+        context->setShadow(shadowOffset, shadowBlur, shadowColor, DeviceColorSpace);
 
     // Pango sometimes leaves behind paths we don't want
     cairo_new_path(cr);
 
     if (partialRegion)
+#ifdef GTK_API_VERSION_2
         gdk_region_destroy(partialRegion);
+#else
+        cairo_region_destroy(partialRegion);
+#endif
 
     g_free(utf8);
     g_object_unref(layout);
@@ -308,8 +343,12 @@ float Font::floatWidthForComplexText(const TextRun& run, HashSet<const SimpleFon
     return width;
 }
 
-int Font::offsetForPositionForComplexText(const TextRun& run, int x, bool includePartialGlyphs) const
+int Font::offsetForPositionForComplexText(const TextRun& run, float xFloat, bool includePartialGlyphs) const
 {
+    // FIXME: This truncation is not a problem for HTML, but only affects SVG, which passes floating-point numbers
+    // to Font::offsetForPosition(). Bug http://webkit.org/b/40673 tracks fixing this problem.
+    int x = static_cast<int>(xFloat);
+
     PangoLayout* layout = getDefaultPangoLayout(run);
     setPangoAttributes(this, run, layout);
 
@@ -328,7 +367,7 @@ int Font::offsetForPositionForComplexText(const TextRun& run, int x, bool includ
     return offset;
 }
 
-FloatRect Font::selectionRectForComplexText(const TextRun& run, const IntPoint& point, int h, int from, int to) const
+FloatRect Font::selectionRectForComplexText(const TextRun& run, const FloatPoint& point, int h, int from, int to) const
 {
     PangoLayout* layout = getDefaultPangoLayout(run);
     setPangoAttributes(this, run, layout);

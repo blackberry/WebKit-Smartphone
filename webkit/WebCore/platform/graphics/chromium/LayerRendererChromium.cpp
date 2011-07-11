@@ -34,95 +34,21 @@
 #if USE(ACCELERATED_COMPOSITING)
 #include "LayerRendererChromium.h"
 
+#include "Canvas2DLayerChromium.h"
 #include "GLES2Context.h"
 #include "LayerChromium.h"
 #include "NotImplemented.h"
-#include "Page.h"
+#include "WebGLLayerChromium.h"
 #if PLATFORM(SKIA)
 #include "NativeImageSkia.h"
 #include "PlatformContextSkia.h"
+#elif PLATFORM(CG)
+#include <CoreGraphics/CGBitmapContext.h>
 #endif
 
 #include <GLES2/gl2.h>
 
 namespace WebCore {
-
-static WTFLogChannel LogLayerRenderer = { 0x00000000, "LayerRenderer", WTFLogChannelOn };
-
-static void checkGLError()
-{
-#ifndef NDEBUG
-    GLenum error = glGetError();
-    if (error)
-        LOG_ERROR("GL Error: %d " , error);
-#endif
-}
-
-static GLuint loadShader(GLenum type, const char* shaderSource)
-{
-    GLuint shader = glCreateShader(type);
-    if (!shader)
-        return 0;
-    glShaderSource(shader, 1, &shaderSource, 0);
-    glCompileShader(shader);
-    GLint compiled;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-    if (!compiled) {
-        glDeleteShader(shader);
-        return 0;
-    }
-    return shader;
-}
-
-static GLuint loadShaderProgram(const char* vertexShaderSource, const char* fragmentShaderSource)
-{
-    GLuint vertexShader;
-    GLuint fragmentShader;
-    GLuint programObject;
-    GLint linked;
-    vertexShader = loadShader(GL_VERTEX_SHADER, vertexShaderSource);
-    if (!vertexShader)
-        return 0;
-    fragmentShader = loadShader(GL_FRAGMENT_SHADER, fragmentShaderSource);
-    if (!fragmentShader) {
-        glDeleteShader(vertexShader);
-        return 0;
-    }
-    programObject = glCreateProgram();
-    if (!programObject)
-        return 0;
-    glAttachShader(programObject, vertexShader);
-    glAttachShader(programObject, fragmentShader);
-    glLinkProgram(programObject);
-    glGetProgramiv(programObject, GL_LINK_STATUS, &linked);
-    if (!linked) {
-        glDeleteProgram(programObject);
-        return 0;
-    }
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-    return programObject;
-}
-
-static void toGLMatrix(float* flattened, const TransformationMatrix& m)
-{
-    flattened[0] = m.m11();
-    flattened[1] = m.m12();
-    flattened[2] = m.m13();
-    flattened[3] = m.m14();
-    flattened[4] = m.m21();
-    flattened[5] = m.m22();
-    flattened[6] = m.m23();
-    flattened[7] = m.m24();
-    flattened[8] = m.m31();
-    flattened[9] = m.m32();
-    flattened[10] = m.m33();
-    flattened[11] = m.m34();
-    flattened[12] = m.m41();
-    flattened[13] = m.m42();
-    flattened[14] = m.m43();
-    flattened[15] = m.m44();
-}
 
 static TransformationMatrix orthoMatrix(float left, float right, float bottom, float top, float nearZ, float farZ)
 {
@@ -141,58 +67,50 @@ static TransformationMatrix orthoMatrix(float left, float right, float bottom, f
     return ortho;
 }
 
-// Creates a GL texture object to be used for transfering the layer's bitmap into.
-static GLuint createLayerTexture()
+static inline bool compareLayerZ(const LayerChromium* a, const LayerChromium* b)
 {
-    GLuint textureId = 0;
-    glGenTextures(1, &textureId);
-    glBindTexture(GL_TEXTURE_2D, textureId);
-    // Do basic linear filtering on resize.
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // NPOT textures in GL ES only work when the wrap mode is set to GL_CLAMP_TO_EDGE.
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    return textureId;
+    const TransformationMatrix& transformA = a->drawTransform();
+    const TransformationMatrix& transformB = b->drawTransform();
+
+    return transformA.m43() < transformB.m43();
 }
 
-
-PassOwnPtr<LayerRendererChromium> LayerRendererChromium::create(Page* page)
+PassOwnPtr<LayerRendererChromium> LayerRendererChromium::create(PassOwnPtr<GLES2Context> gles2Context)
 {
-    return new LayerRendererChromium(page);
+    if (!gles2Context)
+        return 0;
+
+    OwnPtr<LayerRendererChromium> layerRenderer(new LayerRendererChromium(gles2Context));
+    if (!layerRenderer->hardwareCompositing())
+        return 0;
+
+    return layerRenderer.release();
 }
 
-LayerRendererChromium::LayerRendererChromium(Page* page)
-    : m_rootLayer(0)
-    , m_needsDisplay(false)
-    , m_layerProgramObject(0)
-    , m_borderProgramObject(0)
-    , m_scrollProgramObject(0)
-    , m_positionLocation(0)
-    , m_texCoordLocation(1)
-    , m_page(page)
+LayerRendererChromium::LayerRendererChromium(PassOwnPtr<GLES2Context> gles2Context)
+    : m_rootLayerTextureId(0)
     , m_rootLayerTextureWidth(0)
     , m_rootLayerTextureHeight(0)
+    , m_scrollShaderProgram(0)
+    , m_rootLayer(0)
+    , m_needsDisplay(false)
+    , m_scrollPosition(IntPoint(-1, -1))
+    , m_currentShader(0)
+    , m_gles2Context(gles2Context)
 {
-    m_quadVboIds[Vertices] = m_quadVboIds[LayerElements] = 0;
-    m_hardwareCompositing = (initGL() && initializeSharedGLObjects());
+    m_hardwareCompositing = initializeSharedObjects();
 }
 
 LayerRendererChromium::~LayerRendererChromium()
 {
-    if (m_hardwareCompositing) {
-        makeContextCurrent();
-        glDeleteBuffers(3, m_quadVboIds);
-        glDeleteProgram(m_layerProgramObject);
-        glDeleteProgram(m_scrollProgramObject);
-        glDeleteProgram(m_borderProgramObject);
-    }
+    cleanupSharedObjects();
+}
 
-    // Free up all GL textures.
-    for (TextureIdMap::iterator iter = m_textureIdMap.begin(); iter != m_textureIdMap.end(); ++iter) {
-        glDeleteTextures(1, &(iter->second));
-        iter->first->setLayerRenderer(0);
-    }
+void LayerRendererChromium::debugGLCall(const char* command, const char* file, int line)
+{
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR)
+        LOG_ERROR("GL command failed: File: %s\n\tLine %d\n\tcommand: %s, error %x\n", file, line, command, error);
 }
 
 // Creates a canvas and an associated graphics context that the root layer will
@@ -209,6 +127,18 @@ void LayerRendererChromium::setRootLayerCanvasSize(const IntSize& size)
     m_rootLayerSkiaContext = new PlatformContextSkia(m_rootLayerCanvas.get());
     m_rootLayerSkiaContext->setDrawingToImageBuffer(true);
     m_rootLayerGraphicsContext = new GraphicsContext(reinterpret_cast<PlatformGraphicsContext*>(m_rootLayerSkiaContext.get()));
+#elif PLATFORM(CG)
+    // Release the previous CGBitmapContext before reallocating the backing store as a precaution.
+    m_rootLayerCGContext.adoptCF(0);
+    int rowBytes = 4 * size.width();
+    m_rootLayerBackingStore.resize(rowBytes * size.height());
+    memset(m_rootLayerBackingStore.data(), 0, m_rootLayerBackingStore.size());
+    RetainPtr<CGColorSpaceRef> colorSpace(AdoptCF, CGColorSpaceCreateDeviceRGB());
+    m_rootLayerCGContext.adoptCF(CGBitmapContextCreate(m_rootLayerBackingStore.data(),
+                                                       size.width(), size.height(), 8, rowBytes,
+                                                       colorSpace.get(),
+                                                       kCGImageAlphaPremultipliedLast));
+    m_rootLayerGraphicsContext = new GraphicsContext(m_rootLayerCGContext.get());
 #else
 #error "Need to implement for your platform."
 #endif
@@ -216,232 +146,243 @@ void LayerRendererChromium::setRootLayerCanvasSize(const IntSize& size)
     m_rootLayerCanvasSize = size;
 }
 
-void LayerRendererChromium::drawTexturedQuad(const TransformationMatrix& matrix, float width, float height, float opacity, bool scrolling)
+void LayerRendererChromium::useShader(unsigned programId)
 {
-    static GLfloat glMatrix[16];
-
-    TransformationMatrix renderMatrix = matrix;
-
-    // Apply a scaling factor to size the quad from 1x1 to its intended size.
-    renderMatrix.scale3d(width, height, 1);
-
-    // Apply the projection matrix before sending the transform over to the shader.
-    renderMatrix.multiply(m_projectionMatrix);
-
-    toGLMatrix(&glMatrix[0], renderMatrix);
-
-    int matrixLocation = (scrolling ? m_scrollMatrixLocation : m_matrixLocation);
-    glUniformMatrix4fv(matrixLocation, 1, false, &glMatrix[0]);
-
-    if (!scrolling)
-        glUniform1f(m_alphaLocation, opacity);
-
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
+    if (programId != m_currentShader) {
+        GLC(glUseProgram(programId));
+        m_currentShader = programId;
+    }
 }
-
 
 // Updates the contents of the root layer texture that fall inside the updateRect
 // and re-composits all sublayers.
-void LayerRendererChromium::drawLayers(const IntRect& updateRect, const IntRect& visibleRect,
-                                       const IntRect& contentRect, const IntPoint& scrollPosition)
+void LayerRendererChromium::prepareToDrawLayers(const IntRect& visibleRect, const IntRect& contentRect, 
+                                                const IntPoint& scrollPosition)
 {
     ASSERT(m_hardwareCompositing);
 
     if (!m_rootLayer)
         return;
 
+    makeContextCurrent();
+
+    GLC(glBindTexture(GL_TEXTURE_2D, m_rootLayerTextureId));
+
     // If the size of the visible area has changed then allocate a new texture
     // to store the contents of the root layer and adjust the projection matrix
     // and viewport.
-    makeContextCurrent();
-
-    glBindTexture(GL_TEXTURE_2D, m_rootLayerTextureId);
-
-    unsigned int visibleRectWidth = visibleRect.width();
-    unsigned int visibleRectHeight = visibleRect.height();
+    int visibleRectWidth = visibleRect.width();
+    int visibleRectHeight = visibleRect.height();
     if (visibleRectWidth != m_rootLayerTextureWidth || visibleRectHeight != m_rootLayerTextureHeight) {
         m_rootLayerTextureWidth = visibleRect.width();
         m_rootLayerTextureHeight = visibleRect.height();
 
-        m_projectionMatrix = orthoMatrix(0, visibleRectWidth + 0.5, visibleRectHeight + 0.5, 0, -1000, 1000);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_rootLayerTextureWidth, m_rootLayerTextureHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        m_projectionMatrix = orthoMatrix(0, visibleRectWidth, visibleRectHeight, 0, -1000, 1000);
+        GLC(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_rootLayerTextureWidth, m_rootLayerTextureHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0));
     }
 
     // The GL viewport covers the entire visible area, including the scrollbars.
-    glViewport(0, 0, visibleRectWidth, visibleRectHeight);
+    GLC(glViewport(0, 0, visibleRectWidth, visibleRectHeight));
 
-    // The layer, scroll and debug border shaders all use the same vertex attributes
-    // so we can bind them only once.
-    glBindBuffer(GL_ARRAY_BUFFER, m_quadVboIds[Vertices]);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_quadVboIds[LayerElements]);
-    GLuint offset = 0;
-    glVertexAttribPointer(m_positionLocation, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*)(offset));
-    offset += 3 * sizeof(GLfloat);
-    glVertexAttribPointer(m_texCoordLocation, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*)(offset));
-    glEnableVertexAttribArray(m_positionLocation);
-    glEnableVertexAttribArray(m_texCoordLocation);
-    glActiveTexture(GL_TEXTURE0);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_CULL_FACE);
+    // Bind the common vertex attributes used for drawing all the layers.
+    LayerChromium::prepareForDraw(layerSharedValues());
+
+    // FIXME: These calls can be made once, when the compositor context is initialized.
+    GLC(glDisable(GL_DEPTH_TEST));
+    GLC(glDisable(GL_CULL_FACE));
+    GLC(glDepthFunc(GL_LEQUAL));
+    GLC(glClearStencil(0));
+
+    if (m_scrollPosition == IntPoint(-1, -1))
+        m_scrollPosition = scrollPosition;
 
     IntPoint scrollDelta = toPoint(scrollPosition - m_scrollPosition);
-    // Scroll only when the updateRect contains pixels for the newly uncovered region to avoid flashing.
-    if ((scrollDelta.x() && updateRect.width() >= abs(scrollDelta.x()) && updateRect.height() >= contentRect.height())
-        || (scrollDelta.y() && updateRect.height() >= abs(scrollDelta.y()) && updateRect.width() >= contentRect.width())) {
+    // Scroll the backbuffer
+    if (scrollDelta.x() || scrollDelta.y()) {
         // Scrolling works as follows: We render a quad with the current root layer contents
         // translated by the amount the page has scrolled since the last update and then read the
         // pixels of the content area (visible area excluding the scroll bars) back into the
-        // root layer texture. The newly exposed area is subesquently filled as usual with
-        // the contents of the updateRect.
+        // root layer texture. The newly exposed area will be filled by a subsequent drawLayersIntoRect call
         TransformationMatrix scrolledLayerMatrix;
-        scrolledLayerMatrix.translate3d((int)floorf(0.5 * visibleRect.width() + 0.5) - scrollDelta.x(),
-            (int)floorf(0.5 * visibleRect.height() + 0.5) + scrollDelta.y(), 0);
+#if PLATFORM(SKIA)
+        float scaleFactor = 1.0f;
+#elif PLATFORM(CG)
+        // Because the contents of the OpenGL texture are inverted
+        // vertically compared to the Skia backend, we need to move
+        // the backing store in the opposite direction.
+        float scaleFactor = -1.0f;
+#else
+#error "Need to implement for your platform."
+#endif
+
+        scrolledLayerMatrix.translate3d(0.5 * visibleRect.width() - scrollDelta.x(),
+            0.5 * visibleRect.height() + scaleFactor * scrollDelta.y(), 0);
         scrolledLayerMatrix.scale3d(1, -1, 1);
 
-        // Switch shaders to avoid RGB swizzling.
-        glUseProgram(m_scrollProgramObject);
-        glUniform1i(m_scrollSamplerLocation, 0);
+        useShader(m_scrollShaderProgram);
+        GLC(glUniform1i(m_scrollShaderSamplerLocation, 0));
+        LayerChromium::drawTexturedQuad(m_projectionMatrix, scrolledLayerMatrix,
+                                        visibleRect.width(), visibleRect.height(), 1,
+                                        m_scrollShaderMatrixLocation, -1);
 
-        drawTexturedQuad(scrolledLayerMatrix, visibleRect.width(), visibleRect.height(), 1, true);
-
-        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, contentRect.width(), contentRect.height());
-
-        checkGLError();
+        GLC(glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, contentRect.width(), contentRect.height()));
+        m_scrollPosition = scrollPosition;
+    } else if (abs(scrollDelta.y()) > contentRect.height() || abs(scrollDelta.x()) > contentRect.width()) {
+        // Scrolling larger than the contentRect size does not preserve any of the pixels, so there is
+        // no need to copy framebuffer pixels back into the texture.
         m_scrollPosition = scrollPosition;
     }
-
-    // FIXME: The following check should go away when the compositor renders independently from its own thread.
-    // Ignore a 1x1 update rect at (0, 0) as that's used a way to kick off a redraw for the compositor.
-    if (!(!updateRect.x() && !updateRect.y() && updateRect.width() == 1 && updateRect.height() == 1)) {
-        // Update the root layer texture.
-        ASSERT((updateRect.x() + updateRect.width() <= m_rootLayerTextureWidth)
-               && (updateRect.y() + updateRect.height() <= m_rootLayerTextureHeight));
-
-#if PLATFORM(SKIA)
-        // Get the contents of the updated rect.
-        const SkBitmap bitmap = m_rootLayerCanvas->getDevice()->accessBitmap(false);
-        int rootLayerWidth = bitmap.width();
-        int rootLayerHeight = bitmap.height();
-        ASSERT(rootLayerWidth == updateRect.width() && rootLayerHeight == updateRect.height());
-        void* pixels = bitmap.getPixels();
-
-        checkGLError();
-        // Copy the contents of the updated rect to the root layer texture.
-        glTexSubImage2D(GL_TEXTURE_2D, 0, updateRect.x(), updateRect.y(), updateRect.width(), updateRect.height(), GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-        checkGLError();
-#else
-#error Must port to your platform
-#endif
-    }
-
-    glClearColor(0, 0, 1, 1);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    // Render the root layer using a quad that takes up the entire visible area of the window.
-    glUseProgram(m_layerProgramObject);
-    glUniform1i(m_samplerLocation, 0);
-    TransformationMatrix layerMatrix;
-    layerMatrix.translate3d(visibleRect.width() / 2, visibleRect.height() / 2, 0);
-    drawTexturedQuad(layerMatrix, visibleRect.width(), visibleRect.height(), 1, false);
-
-    // If culling is enabled then we will cull the backface.
-    glCullFace(GL_BACK);
-    // The orthographic projection is setup such that Y starts at zero and
-    // increases going down the page so we need to adjust the winding order of
-    // front facing triangles.
-    glFrontFace(GL_CW);
-
-    // The shader used to render layers returns pre-multiplied alpha colors
-    // so we need to send the blending mode appropriately.
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-
-    checkGLError();
-
-    // FIXME: Need to prevent composited layers from drawing over the scroll
-    // bars.
-
-    // FIXME: Sublayers need to be sorted in Z to get the correct transparency effect.
 
     // Translate all the composited layers by the scroll position.
     TransformationMatrix matrix;
     matrix.translate3d(-m_scrollPosition.x(), -m_scrollPosition.y(), 0);
+
+    // Traverse the layer tree and update the layer transforms.
     float opacity = 1;
     const Vector<RefPtr<LayerChromium> >& sublayers = m_rootLayer->getSublayers();
+    size_t i;
+    for (i = 0; i < sublayers.size(); i++)
+        updateLayersRecursive(sublayers[i].get(), matrix, opacity);
+}
+
+void LayerRendererChromium::updateRootLayerTextureRect(const IntRect& updateRect)
+{
+    ASSERT(m_hardwareCompositing);
+
+    if (!m_rootLayer)
+        return;
+
+    GLC(glBindTexture(GL_TEXTURE_2D, m_rootLayerTextureId));
+
+    // Update the root layer texture.
+    ASSERT((updateRect.right()  <= m_rootLayerTextureWidth)
+           && (updateRect.bottom() <= m_rootLayerTextureHeight));
+
+#if PLATFORM(SKIA)
+    // Get the contents of the updated rect.
+    const SkBitmap bitmap = m_rootLayerCanvas->getDevice()->accessBitmap(false);
+    int bitmapWidth = bitmap.width();
+    int bitmapHeight = bitmap.height();
+    ASSERT(bitmapWidth == updateRect.width() && bitmapHeight == updateRect.height());
+    void* pixels = bitmap.getPixels();
+    // Copy the contents of the updated rect to the root layer texture.
+    GLC(glTexSubImage2D(GL_TEXTURE_2D, 0, updateRect.x(), updateRect.y(), updateRect.width(), updateRect.height(), GL_RGBA, GL_UNSIGNED_BYTE, pixels));
+#elif PLATFORM(CG)
+    // Get the contents of the updated rect.
+    ASSERT(static_cast<int>(CGBitmapContextGetWidth(m_rootLayerCGContext.get())) == updateRect.width() && static_cast<int>(CGBitmapContextGetHeight(m_rootLayerCGContext.get())) == updateRect.height());
+    void* pixels = m_rootLayerBackingStore.data();
+
+    // Copy the contents of the updated rect to the root layer texture.
+    // The origin is at the lower left in Core Graphics' coordinate system. We need to correct for this here.
+    GLC(glTexSubImage2D(GL_TEXTURE_2D, 0,
+                        updateRect.x(), m_rootLayerTextureHeight - updateRect.y() - updateRect.height(),
+                        updateRect.width(), updateRect.height(),
+                        GL_RGBA, GL_UNSIGNED_BYTE, pixels));
+#else
+#error "Need to implement for your platform."
+#endif
+}
+
+void LayerRendererChromium::drawLayers(const IntRect& visibleRect, const IntRect& contentRect)
+{
+    ASSERT(m_hardwareCompositing);
+
+    glClearColor(0, 0, 1, 1);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    GLC(glBindTexture(GL_TEXTURE_2D, m_rootLayerTextureId));
+
+    // Render the root layer using a quad that takes up the entire visible area of the window.
+    // We reuse the shader program used by ContentLayerChromium.
+    const ContentLayerChromium::SharedValues* contentLayerValues = contentLayerSharedValues();
+    useShader(contentLayerValues->contentShaderProgram());
+    GLC(glUniform1i(contentLayerValues->shaderSamplerLocation(), 0));
+    TransformationMatrix layerMatrix;
+    layerMatrix.translate3d(visibleRect.width() * 0.5f, visibleRect.height() * 0.5f, 0);
+    LayerChromium::drawTexturedQuad(m_projectionMatrix, layerMatrix,
+                                    visibleRect.width(), visibleRect.height(), 1,
+                                    contentLayerValues->shaderMatrixLocation(), contentLayerValues->shaderAlphaLocation());
+
+    // If culling is enabled then we will cull the backface.
+    GLC(glCullFace(GL_BACK));
+    // The orthographic projection is setup such that Y starts at zero and
+    // increases going down the page so we need to adjust the winding order of
+    // front facing triangles.
+    GLC(glFrontFace(GL_CW));
+
+    // The shader used to render layers returns pre-multiplied alpha colors
+    // so we need to send the blending mode appropriately.
+    GLC(glEnable(GL_BLEND));
+    GLC(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
+
+    // Set the rootVisibleRect --- used by subsequent drawLayers calls
+    m_rootVisibleRect = visibleRect;
+
+    // Translate all the composited layers by the scroll position.
+    TransformationMatrix matrix;
+    matrix.translate3d(-m_scrollPosition.x(), -m_scrollPosition.y(), 0);
+
+    // Traverse the layer tree and update the layer transforms.
+    float opacity = 1;
+    const Vector<RefPtr<LayerChromium> >& sublayers = m_rootLayer->getSublayers();
+    size_t i;
+    for (i = 0; i < sublayers.size(); i++)
+        updateLayersRecursive(sublayers[i].get(), matrix, opacity);
+
+    // Enable scissoring to avoid rendering composited layers over the scrollbars.
+    GLC(glEnable(GL_SCISSOR_TEST));
+    FloatRect scissorRect(contentRect);
+
+    // The scissorRect should not include the scroll offset.
+    scissorRect.move(-m_scrollPosition.x(), -m_scrollPosition.y());
+    scissorToRect(scissorRect);
+
+    // Clear the stencil buffer to 0.
+    GLC(glClear(GL_STENCIL_BUFFER_BIT));
+    // Disable writes to the stencil buffer.
+    GLC(glStencilMask(0));
+
+    // Traverse the layer tree one more time to draw the layers.
     for (size_t i = 0; i < sublayers.size(); i++)
-        compositeLayersRecursive(sublayers[i].get(), matrix, opacity, visibleRect);
+        drawLayersRecursive(sublayers[i].get(), scissorRect);
 
-    glFlush();
+    GLC(glDisable(GL_SCISSOR_TEST));
+}
+
+void LayerRendererChromium::present()
+{
+    // We're done! Time to swapbuffers!
     m_gles2Context->swapBuffers();
-
     m_needsDisplay = false;
 }
 
-// Returns the id of the texture currently associated with the layer or
-// -1 if the id hasn't been registered yet.
-int LayerRendererChromium::getTextureId(LayerChromium* layer)
+void LayerRendererChromium::getFramebufferPixels(void *pixels, const IntRect& rect)
 {
-    TextureIdMap::iterator textureId = m_textureIdMap.find(layer);
-    if (textureId != m_textureIdMap.end())
-        return textureId->second;
+    ASSERT(rect.right() <= rootLayerTextureSize().width()
+           && rect.bottom() <= rootLayerTextureSize().height());
 
-    return -1;
-}
-
-// Allocates a new texture for the layer and registers it in the textureId map.
-// FIXME: We will need to come up with a more sophisticated allocation strategy here.
-int LayerRendererChromium::assignTextureForLayer(LayerChromium* layer)
-{
-    GLuint textureId = createLayerTexture();
-
-    // FIXME: Check that textureId is valid
-    m_textureIdMap.set(layer, textureId);
-
-    layer->setLayerRenderer(this);
-
-    return textureId;
-}
-
-bool LayerRendererChromium::freeLayerTexture(LayerChromium* layer)
-{
-    TextureIdMap::iterator textureId = m_textureIdMap.find(layer);
-    if (textureId == m_textureIdMap.end())
-        return false;
-    // Free up the texture.
-    glDeleteTextures(1, &(textureId->second));
-    m_textureIdMap.remove(textureId);
-    return true;
-}
-
-// Draws a debug border around the layer's bounds.
-void LayerRendererChromium::drawDebugBorder(LayerChromium* layer, const TransformationMatrix& matrix)
-{
-    static GLfloat glMatrix[16];
-    Color borderColor = layer->borderColor();
-    if (!borderColor.alpha())
+    if (!pixels)
         return;
 
-    glUseProgram(m_borderProgramObject);
-    TransformationMatrix renderMatrix = matrix;
-    IntSize bounds = layer->bounds();
-    renderMatrix.scale3d(bounds.width(), bounds.height(), 1);
-    renderMatrix.multiply(m_projectionMatrix);
-    toGLMatrix(&glMatrix[0], renderMatrix);
-    glUniformMatrix4fv(m_borderMatrixLocation, 1, false, &glMatrix[0]);
+    makeContextCurrent();
 
-    glUniform4f(m_borderColorLocation, borderColor.red() / 255.0,
-                                       borderColor.green() / 255.0,
-                                       borderColor.blue() / 255.0,
-                                       1);
+    GLC(glReadPixels(rect.x(), rect.y(), rect.width(), rect.height(),
+                     GL_RGBA, GL_UNSIGNED_BYTE, pixels));
+}
 
-    glLineWidth(layer->borderWidth());
-
-    // The indices for the line are stored in the same array as the triangle indices.
-    glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_SHORT, (void*)(6 * sizeof(unsigned short)));
-    checkGLError();
-
-    // Switch back to the shader program used for layer contents.
-    glUseProgram(m_layerProgramObject);
+// FIXME: This method should eventually be replaced by a proper texture manager.
+unsigned LayerRendererChromium::createLayerTexture()
+{
+    GLuint textureId = 0;
+    GLC(glGenTextures(1, &textureId));
+    GLC(glBindTexture(GL_TEXTURE_2D, textureId));
+    // Do basic linear filtering on resize.
+    GLC(glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+    GLC(glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+    // NPOT textures in GL ES only work when the wrap mode is set to GL_CLAMP_TO_EDGE.
+    GLC(glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
+    GLC(glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
+    return textureId;
 }
 
 // Returns true if any part of the layer falls within the visibleRect
@@ -461,66 +402,218 @@ bool LayerRendererChromium::isLayerVisible(LayerChromium* layer, const Transform
     return mappedRect.intersects(FloatRect(-1, -1, 2, 2));
 }
 
-void LayerRendererChromium::compositeLayersRecursive(LayerChromium* layer, const TransformationMatrix& matrix, float opacity, const IntRect& visibleRect)
+// Recursively walks the layer tree starting at the given node and updates the 
+// transform and opacity values.
+void LayerRendererChromium::updateLayersRecursive(LayerChromium* layer, const TransformationMatrix& parentMatrix, float opacity)
 {
-    static GLfloat glMatrix[16];
-
     // Compute the new matrix transformation that will be applied to this layer and
-    // all its sublayers.
-    // The basic transformation chain for the layer is (using the Matrix x Vector order):
-    // M = M[p] * T[l] * T[a] * M[l] * T[-a]
+    // all its sublayers. It's important to remember that the layer's position
+    // is the position of the layer's anchor point. Also, the coordinate system used
+    // assumes that the origin is at the lower left even though the coordinates the browser
+    // gives us for the layers are for the upper left corner. The Y flip happens via
+    // the orthographic projection applied at render time.
+    // The transformation chain for the layer is (using the Matrix x Vector order):
+    // M = M[p] * Tr[l] * M[l] * Tr[c]
     // Where M[p] is the parent matrix passed down to the function
-    //       T[l] is the translation of the layer's center
-    //       T[a] and T[-a] is a translation/inverse translation by the anchor point
-    //       M[l] is the layer's matrix
+    //       Tr[l] is the translation matrix locating the layer's anchor point
+    //       Tr[c] is the translation offset between the anchor point and the center of the layer
+    //       M[l] is the layer's matrix (applied at the anchor point)
+    // This transform creates a coordinate system whose origin is the center of the layer.
     // Note that the final matrix used by the shader for the layer is P * M * S . This final product
-    // is effectively computed in drawTexturedQuad().
+    // is computed in drawTexturedQuad().
     // Where: P is the projection matrix
     //        M is the layer's matrix computed above
     //        S is the scale adjustment (to scale up to the layer size)
     IntSize bounds = layer->bounds();
     FloatPoint anchorPoint = layer->anchorPoint();
     FloatPoint position = layer->position();
-    float anchorX = (anchorPoint.x() - 0.5) * bounds.width();
-    float anchorY = (0.5 - anchorPoint.y()) * bounds.height();
+
+    // Offset between anchor point and the center of the quad.
+    float centerOffsetX = (0.5 - anchorPoint.x()) * bounds.width();
+    float centerOffsetY = (0.5 - anchorPoint.y()) * bounds.height();
 
     // M = M[p]
-    TransformationMatrix localMatrix = matrix;
-    // M = M[p] * T[l]
-    localMatrix.translate3d(position.x(), position.y(), 0);
-    // M = M[p] * T[l] * T[a]
-    localMatrix.translate3d(anchorX, anchorY, 0);
-    // M = M[p] * T[l] * T[a] * M[l]
+    TransformationMatrix localMatrix = parentMatrix;
+    // M = M[p] * Tr[l]
+    localMatrix.translate3d(position.x(), position.y(), layer->anchorPointZ());
+    // M = M[p] * Tr[l] * M[l]
     localMatrix.multLeft(layer->transform());
-    // M = M[p] * T[l] * T[a] * M[l] * T[-a]
-    localMatrix.translate3d(-anchorX, -anchorY, 0);
-
-    bool skipLayer = false;
-    if (bounds.width() > 2048 || bounds.height() > 2048) {
-        LOG(LayerRenderer, "Skipping layer with size %d %d", bounds.width(), bounds.height());
-        skipLayer = true;
-    }
+    // M = M[p] * Tr[l] * M[l] * Tr[c]
+    localMatrix.translate3d(centerOffsetX, centerOffsetY, -layer->anchorPointZ());
 
     // Calculate the layer's opacity.
     opacity *= layer->opacity();
 
-    bool layerVisible = isLayerVisible(layer, localMatrix, visibleRect);
+    layer->setDrawTransform(localMatrix);
+    layer->setDrawOpacity(opacity);
 
-    // Note that there are two types of layers:
-    // 1. Layers that have their own GraphicsContext and can draw their contents on demand (layer->drawsContent() == true).
-    // 2. Layers that are just containers of images/video/etc that don't own a GraphicsContext (layer->contents() == true).
-    if ((layer->drawsContent() || layer->contents()) && !skipLayer && layerVisible) {
-        int textureId = getTextureId(layer);
-        // If no texture has been created for the layer yet then create one now.
-        if (textureId == -1)
-            textureId = assignTextureForLayer(layer);
+    // Flatten to 2D if the layer doesn't preserve 3D.
+    if (!layer->preserves3D()) {
+        localMatrix.setM13(0);
+        localMatrix.setM23(0);
+        localMatrix.setM31(0);
+        localMatrix.setM32(0);
+        localMatrix.setM33(1);
+        localMatrix.setM34(0);
+        localMatrix.setM43(0);
+    }
 
-        // Redraw the contents of the layer if necessary.
-        if ((layer->drawsContent() || layer->contents()) && layer->contentsDirty()) {
-            // Update the contents of the layer before taking a snapshot. For layers that
-            // are simply containers, the following call just clears the dirty flag but doesn't
-            // actually do any draws/copies.
-            layer->updateTextureContents(textureId);
+    // Apply the sublayer transform at the center of the layer.
+    localMatrix.multLeft(layer->sublayerTransform());
+
+    // The origin of the sublayers is actually the bottom left corner of the layer
+    // (or top left when looking it it from the browser's pespective) instead of the center.
+    // The matrix passed down to the sublayers is therefore:
+    // M[s] = M * Tr[-center]
+    localMatrix.translate3d(-bounds.width() * 0.5, -bounds.height() * 0.5, 0);
+
+    const Vector<RefPtr<LayerChromium> >& sublayers = layer->getSublayers();
+    for (size_t i = 0; i < sublayers.size(); i++)
+        updateLayersRecursive(sublayers[i].get(), localMatrix, opacity);
+
+    layer->setLayerRenderer(this);
+}
+
+// Does a quick draw of the given layer into the stencil buffer. If decrement
+// is true then it decrements the current stencil values otherwise it increments them.
+void LayerRendererChromium::drawLayerIntoStencilBuffer(LayerChromium* layer, bool decrement)
+{
+    // Enable writes to the stencil buffer and increment the stencil values
+    // by one for every pixel under the current layer.
+    GLC(glStencilMask(0xff));
+    GLC(glStencilFunc(GL_ALWAYS, 1, 0xff));
+    GLenum stencilOp = (decrement ? GL_DECR : GL_INCR);
+    GLC(glStencilOp(stencilOp, stencilOp, stencilOp));
+
+    GLC(glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE));
+
+    layer->drawAsMask();
+
+    // Disable writes to the stencil buffer.
+    GLC(glStencilMask(0));
+    GLC(glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE));
+}
+
+// Recursively walk the layer tree and draw the layers.
+void LayerRendererChromium::drawLayersRecursive(LayerChromium* layer, const FloatRect& scissorRect)
+{
+    static bool depthTestEnabledForSubtree = false;
+    static int currentStencilValue = 0;
+
+    // Check if the layer falls within the visible bounds of the page.
+    FloatRect layerRect = layer->getDrawRect();
+    bool isLayerVisible = scissorRect.intersects(layerRect);
+
+    // Enable depth testing for this layer and all its descendants if preserves3D is set.
+    bool mustClearDepth = false;
+    if (layer->preserves3D()) {
+        if (!depthTestEnabledForSubtree) {
+            GLC(glEnable(GL_DEPTH_TEST));
+            depthTestEnabledForSubtree = true;
+
+            // Need to clear the depth buffer when we're done rendering this subtree.
+            mustClearDepth = true;
+        }
+    }
+
+    if (isLayerVisible)
+        drawLayer(layer);
+
+    // FIXME: We should check here if the layer has descendants that draw content
+    // before we setup for clipping.
+    FloatRect currentScissorRect = scissorRect;
+    bool mustResetScissorRect = false;
+    bool didStencilDraw = false;
+    if (layer->masksToBounds()) {
+        // If the layer isn't rotated then we can use scissoring otherwise we need
+        // to clip using the stencil buffer.
+        if (layer->drawTransform().isIdentityOrTranslation()) {
+            currentScissorRect.intersect(layerRect);
+            if (currentScissorRect != scissorRect) {
+                scissorToRect(currentScissorRect);
+                mustResetScissorRect = true;
+            }
+        } else if (currentStencilValue < ((1 << m_numStencilBits) - 1)) {
+            // Clipping using the stencil buffer works as follows: When we encounter
+            // a clipping layer we increment the stencil buffer values for all the pixels
+            // the layer touches. As a result 1's will be stored in the stencil buffer for pixels under
+            // the first clipping layer found in a traversal, 2's for pixels in the intersection
+            // of two nested clipping layers, etc. When the sublayers of a clipping layer are drawn
+            // we turn on stencil testing to render only pixels that have the correct stencil
+            // value (one that matches the value of currentStencilValue). As the recursion unravels,
+            // we decrement the stencil buffer values for each clipping layer. When the entire layer tree
+            // is rendered, the stencil values should be all back to zero. An 8 bit stencil buffer
+            // will allow us up to 255 nested clipping layers which is hopefully enough.
+            if (!currentStencilValue)
+                GLC(glEnable(GL_STENCIL_TEST));
+
+            drawLayerIntoStencilBuffer(layer, false);
+
+            currentStencilValue++;
+            didStencilDraw = true;
+        }
+    }
+    // Sublayers will render only if the value in the stencil buffer is equal to
+    // currentStencilValue.
+    if (didStencilDraw) {
+        // The sublayers will render only if the stencil test passes.
+        GLC(glStencilFunc(GL_EQUAL, currentStencilValue, 0xff));
+    }
+
+    // If we're using depth testing then we need to sort the children in Z to
+    // get the transparency to work properly.
+    if (depthTestEnabledForSubtree) {
+        const Vector<RefPtr<LayerChromium> >& sublayers = layer->getSublayers();
+        Vector<LayerChromium*> sublayerList;
+        size_t i;
+        for (i = 0; i < sublayers.size(); i++)
+            sublayerList.append(sublayers[i].get());
+
+        // Sort by the z coordinate of the layer center so that layers further away
+        // are drawn first.
+        std::stable_sort(sublayerList.begin(), sublayerList.end(), compareLayerZ);
+
+        for (i = 0; i < sublayerList.size(); i++)
+            drawLayersRecursive(sublayerList[i], currentScissorRect);
+    } else {
+        const Vector<RefPtr<LayerChromium> >& sublayers = layer->getSublayers();
+        for (size_t i = 0; i < sublayers.size(); i++)
+            drawLayersRecursive(sublayers[i].get(), currentScissorRect);
+    }
+
+    if (didStencilDraw) {
+        // Draw into the stencil buffer subtracting 1 for every pixel hit
+        // effectively removing this mask
+        drawLayerIntoStencilBuffer(layer, true);
+        currentStencilValue--;
+        if (!currentStencilValue) {
+            // Disable stencil testing.
+            GLC(glDisable(GL_STENCIL_TEST));
+            GLC(glStencilFunc(GL_ALWAYS, 0, 0xff));
+        }
+    }
+
+    if (mustResetScissorRect) {
+        scissorToRect(scissorRect);
+    }
+
+    if (mustClearDepth) {
+        GLC(glDisable(GL_DEPTH_TEST));
+        GLC(glClear(GL_DEPTH_BUFFER_BIT));
+        depthTestEnabledForSubtree = false;
+    }
+}
+
+void LayerRendererChromium::drawLayer(LayerChromium* layer)
+{
+    IntSize bounds = layer->bounds();
+
+    if (layer->drawsContent()) {
+        // Update the contents of the layer if necessary.
+        if (layer->contentsDirty()) {
+            // Update the backing texture contents for any dirty portion of the layer.
+            layer->updateContents();
+            m_gles2Context->makeCurrent();
         }
 
         if (layer->doubleSided())
@@ -528,24 +621,20 @@ void LayerRendererChromium::compositeLayersRecursive(LayerChromium* layer, const
         else
             glEnable(GL_CULL_FACE);
 
-        glBindTexture(GL_TEXTURE_2D, textureId);
-
-        drawTexturedQuad(localMatrix, bounds.width(), bounds.height(), opacity, false);
+        layer->draw();
     }
 
     // Draw the debug border if there is one.
-    drawDebugBorder(layer, localMatrix);
+    layer->drawDebugBorder();
+}
 
-    // Apply the sublayer transform.
-    localMatrix.multLeft(layer->sublayerTransform());
-
-    // The origin of the sublayers is actually the left top corner of the layer
-    // instead of the center. The matrix passed down to the sublayers is therefore:
-    // M[s] = M * T[-center]
-    localMatrix.translate3d(-bounds.width() * 0.5, -bounds.height() * 0.5, 0);
-    const Vector<RefPtr<LayerChromium> >& sublayers = layer->getSublayers();
-    for (size_t i = 0; i < sublayers.size(); i++)
-        compositeLayersRecursive(sublayers[i].get(), localMatrix, opacity, visibleRect);
+// Sets the scissor region to the given rectangle. The coordinate system for the
+// scissorRect has its origin at the top left corner of the current visible rect.
+void LayerRendererChromium::scissorToRect(const FloatRect& scissorRect)
+{
+    // Compute the lower left corner of the scissor rect.
+    float bottom = std::max((float)m_rootVisibleRect.height() - scissorRect.bottom(), 0.f);
+    GLC(glScissor(scissorRect.x(), bottom, scissorRect.width(), scissorRect.height()));
 }
 
 bool LayerRendererChromium::makeContextCurrent()
@@ -553,30 +642,22 @@ bool LayerRendererChromium::makeContextCurrent()
     return m_gles2Context->makeCurrent();
 }
 
-bool LayerRendererChromium::initGL()
+// Checks whether a given size is within the maximum allowed texture size range.
+bool LayerRendererChromium::checkTextureSize(const IntSize& textureSize)
 {
-    m_gles2Context = GLES2Context::create(m_page);
-
-    if (!m_gles2Context)
+    if (textureSize.width() > m_maxTextureSize || textureSize.height() > m_maxTextureSize)
         return false;
-
     return true;
 }
 
-// Binds the given attribute name to a common location across all three programs
-// used by the compositor. This allows the code to bind the attributes only once
-// even when switching between programs.
-void LayerRendererChromium::bindCommonAttribLocation(int location, char* attribName)
+bool LayerRendererChromium::initializeSharedObjects()
 {
-    glBindAttribLocation(m_layerProgramObject, location, attribName);
-    glBindAttribLocation(m_borderProgramObject, location, attribName);
-    glBindAttribLocation(m_scrollProgramObject, location, attribName);
-}
+    makeContextCurrent();
 
-bool LayerRendererChromium::initializeSharedGLObjects()
-{
-    // Shaders for drawing the layer contents.
-    char vertexShaderString[] =
+    // Vertex and fragment shaders for rendering the scrolled root layer quad.
+    // They differ from a regular content layer shader in that they don't swizzle
+    // the colors or take an alpha value.
+    char scrollVertexShaderString[] =
         "attribute vec4 a_position;   \n"
         "attribute vec2 a_texCoord;   \n"
         "uniform mat4 matrix;         \n"
@@ -586,24 +667,8 @@ bool LayerRendererChromium::initializeSharedGLObjects()
         "  gl_Position = matrix * a_position; \n"
         "  v_texCoord = a_texCoord;   \n"
         "}                            \n";
-    char fragmentShaderString[] =
-        // FIXME: Re-introduce precision qualifier when we need GL ES shaders.
-        "//precision mediump float;                            \n"
-        "varying vec2 v_texCoord;                            \n"
-        "uniform sampler2D s_texture;                        \n"
-        "uniform float alpha;                                \n"
-        "void main()                                         \n"
-        "{                                                   \n"
-        "  vec4 texColor = texture2D(s_texture, v_texCoord); \n"
-        "  gl_FragColor = vec4(texColor.z, texColor.y, texColor.x, texColor.w) * alpha; \n"
-        "}                                                   \n";
-
-    // Fragment shader used for rendering the scrolled root layer quad. It differs
-    // from fragmentShaderString in that it doesn't swizzle the colors and doesn't
-    // take an alpha value.
     char scrollFragmentShaderString[] =
-        // FIXME: Re-introduce precision qualifier when we need GL ES shaders.
-        "//precision mediump float;                            \n"
+        "precision mediump float;                            \n"
         "varying vec2 v_texCoord;                            \n"
         "uniform sampler2D s_texture;                        \n"
         "void main()                                         \n"
@@ -612,100 +677,70 @@ bool LayerRendererChromium::initializeSharedGLObjects()
         "  gl_FragColor = vec4(texColor.x, texColor.y, texColor.z, texColor.w); \n"
         "}                                                   \n";
 
-    // Shaders for drawing the debug borders around the layers.
-    char borderVertexShaderString[] =
-        "attribute vec4 a_position;   \n"
-        "uniform mat4 matrix;         \n"
-        "void main()                  \n"
-        "{                            \n"
-        "   gl_Position = matrix * a_position; \n"
-        "}                            \n";
-    char borderFragmentShaderString[] =
-        // FIXME: Re-introduce precision qualifier when we need GL ES shaders.
-        "//precision mediump float;                            \n"
-        "uniform vec4 color;                                 \n"
-        "void main()                                         \n"
-        "{                                                   \n"
-        "  gl_FragColor = color;                             \n"
-        "}                                                   \n";
-
-    GLfloat vertices[] = { -0.5f,  0.5f, 0.0f, // Position 0
-                            0.0f,  1.0f, // TexCoord 0 
-                           -0.5f, -0.5f, 0.0f, // Position 1
-                            0.0f,  0.0f, // TexCoord 1
-                            0.5f, -0.5f, 0.0f, // Position 2
-                            1.0f,  0.0f, // TexCoord 2
-                            0.5f,  0.5f, 0.0f, // Position 3
-                            1.0f,  1.0f // TexCoord 3
-                         };
-    GLushort indices[] = { 0, 1, 2, 0, 2, 3, // The two triangles that make up the layer quad.
-                           0, 1, 2, 3}; // A line path for drawing the layer border.
-
-    makeContextCurrent();
-    m_layerProgramObject = loadShaderProgram(vertexShaderString, fragmentShaderString);
-    if (!m_layerProgramObject) {
-        LOG_ERROR("Failed to create shader program for layers");
+    m_scrollShaderProgram = LayerChromium::createShaderProgram(scrollVertexShaderString, scrollFragmentShaderString);
+    if (!m_scrollShaderProgram) {
+        LOG_ERROR("LayerRendererChromium: Failed to create scroll shader program");
+        cleanupSharedObjects();
         return false;
     }
 
-    m_scrollProgramObject = loadShaderProgram(vertexShaderString, scrollFragmentShaderString);
-    if (!m_scrollProgramObject) {
-        LOG_ERROR("Failed to create shader program for scrolling layer");
+    GLC(m_scrollShaderSamplerLocation = glGetUniformLocation(m_scrollShaderProgram, "s_texture"));
+    GLC(m_scrollShaderMatrixLocation = glGetUniformLocation(m_scrollShaderProgram, "matrix"));
+    if (m_scrollShaderSamplerLocation == -1 || m_scrollShaderMatrixLocation == -1) {
+        LOG_ERROR("Failed to initialize scroll shader.");
+        cleanupSharedObjects();
         return false;
     }
-
-    m_borderProgramObject = loadShaderProgram(borderVertexShaderString, borderFragmentShaderString);
-    if (!m_borderProgramObject) {
-        LOG_ERROR("Failed to create shader program for debug borders");
-        return false;
-    }
-
-    // Specify the attrib location for the position and make it the same for all three programs to
-    // avoid binding re-binding the vertex attributes.
-    bindCommonAttribLocation(m_positionLocation, "a_position");
-    bindCommonAttribLocation(m_texCoordLocation, "a_texCoord");
-
-    checkGLError();
-
-    // Re-link the shaders to get the new attrib location to take effect.
-    glLinkProgram(m_layerProgramObject);
-    glLinkProgram(m_borderProgramObject);
-    glLinkProgram(m_scrollProgramObject);
-
-    checkGLError();
-
-    // Get locations of uniforms for the layer content shader program.
-    m_samplerLocation = glGetUniformLocation(m_layerProgramObject, "s_texture");
-    m_matrixLocation = glGetUniformLocation(m_layerProgramObject, "matrix");
-    m_alphaLocation = glGetUniformLocation(m_layerProgramObject, "alpha");
-
-    m_scrollMatrixLocation = glGetUniformLocation(m_scrollProgramObject, "matrix");
-    m_scrollSamplerLocation = glGetUniformLocation(m_scrollProgramObject, "s_texture");
-
-    // Get locations of uniforms for the debug border shader program.
-    m_borderMatrixLocation = glGetUniformLocation(m_borderProgramObject, "matrix");
-    m_borderColorLocation = glGetUniformLocation(m_borderProgramObject, "color");
-
-    glGenBuffers(3, m_quadVboIds);
-    glBindBuffer(GL_ARRAY_BUFFER, m_quadVboIds[Vertices]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_quadVboIds[LayerElements]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
     // Create a texture object to hold the contents of the root layer.
     m_rootLayerTextureId = createLayerTexture();
-    if (m_rootLayerTextureId == -1) {
+    if (!m_rootLayerTextureId) {
         LOG_ERROR("Failed to create texture for root layer");
+        cleanupSharedObjects();
         return false;
     }
     // Turn off filtering for the root layer to avoid blurring from the repeated
     // writes and reads to the framebuffer that happen while scrolling.
-    glBindTexture(GL_TEXTURE_2D, m_rootLayerTextureId);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    GLC(glBindTexture(GL_TEXTURE_2D, m_rootLayerTextureId));
+    GLC(glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
+    GLC(glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+
+    // Get the max texture size supported by the system.
+    GLC(glGetIntegerv(GL_MAX_TEXTURE_SIZE, &m_maxTextureSize));
+
+    // Get the number of bits available in the stencil buffer.
+    GLC(glGetIntegerv(GL_STENCIL_BITS, &m_numStencilBits));
+
+    m_layerSharedValues = adoptPtr(new LayerChromium::SharedValues());
+    m_contentLayerSharedValues = adoptPtr(new ContentLayerChromium::SharedValues());
+    m_canvasLayerSharedValues = adoptPtr(new CanvasLayerChromium::SharedValues());
+    if (!m_layerSharedValues->initialized() || !m_contentLayerSharedValues->initialized() || !m_canvasLayerSharedValues->initialized()) {
+        cleanupSharedObjects();
+        return false;
+    }
 
     return true;
 }
+
+void LayerRendererChromium::cleanupSharedObjects()
+{
+    makeContextCurrent();
+
+    m_layerSharedValues.clear();
+    m_contentLayerSharedValues.clear();
+    m_canvasLayerSharedValues.clear();
+
+    if (m_scrollShaderProgram) {
+        GLC(glDeleteProgram(m_scrollShaderProgram));
+        m_scrollShaderProgram = 0;
+    }
+
+    if (m_rootLayerTextureId) {
+        GLC(glDeleteTextures(1, &m_rootLayerTextureId));
+        m_rootLayerTextureId = 0;
+    }
+}
+
 } // namespace WebCore
 
 #endif // USE(ACCELERATED_COMPOSITING)

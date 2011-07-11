@@ -6,7 +6,6 @@
  * modify it under the terms of the GNU Library General Public
  * License as published by the Free Software Foundation; either
  * version 2 of the License, or (at your option) any later version.
- *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
@@ -21,6 +20,8 @@
 #include "config.h"
 #include "Page.h"
 
+#include "DeviceMotionController.h"
+#include "BackForwardController.h"
 #include "BackForwardList.h"
 #include "Base64.h"
 #include "CSSStyleSelector.h"
@@ -29,7 +30,7 @@
 #include "ContextMenuClient.h"
 #include "ContextMenuController.h"
 #include "DOMWindow.h"
-#include "DeviceOrientation.h"
+#include "DeviceOrientationController.h"
 #include "DragController.h"
 #include "EditorClient.h"
 #include "Event.h"
@@ -57,16 +58,19 @@
 #include "ProgressTracker.h"
 #include "RenderTheme.h"
 #include "RenderWidget.h"
+#include "RuntimeEnabledFeatures.h"
 #include "ScriptController.h"
 #include "SelectionController.h"
 #include "Settings.h"
 #include "SharedBuffer.h"
-#include "StringHash.h"
+#include "SpeechInput.h"
+#include "SpeechInputClient.h"
 #include "TextResourceDecoder.h"
 #include "Widget.h"
 #include <wtf/HashMap.h>
 #include <wtf/RefCountedLeakCounter.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/text/StringHash.h>
 
 #if ENABLE(DOM_STORAGE)
 #include "StorageArea.h"
@@ -85,6 +89,10 @@
 #include "GeolocationController.h"
 #endif
 
+#if ENABLE(INSPECTOR) && ENABLE(OFFLINE_WEB_APPLICATIONS)
+#include "InspectorApplicationCacheAgent.h"
+#endif
+
 namespace WebCore {
 
 static HashSet<Page*>* allPages;
@@ -97,11 +105,19 @@ static void networkStateChanged()
 {
     Vector<RefPtr<Frame> > frames;
     
+#if ENABLE(INSPECTOR) && ENABLE(OFFLINE_WEB_APPLICATIONS)
+    bool isNowOnline = networkStateNotifier().onLine();
+#endif
+
     // Get all the frames of all the pages in all the page groups
     HashSet<Page*>::iterator end = allPages->end();
     for (HashSet<Page*>::iterator it = allPages->begin(); it != end; ++it) {
         for (Frame* frame = (*it)->mainFrame(); frame; frame = frame->tree()->traverseNext())
             frames.append(frame);
+#if ENABLE(INSPECTOR) && ENABLE(OFFLINE_WEB_APPLICATIONS)
+        if (InspectorApplicationCacheAgent* applicationCacheAgent = (*it)->inspectorController()->applicationCacheAgent())
+            applicationCacheAgent->updateNetworkState(isNowOnline);
+#endif
     }
 
     AtomicString eventName = networkStateNotifier().onLine() ? eventNames().onlineEvent : eventNames().offlineEvent;
@@ -109,30 +125,34 @@ static void networkStateChanged()
         frames[i]->document()->dispatchWindowEvent(Event::create(eventName, false, false));
 }
 
-Page::Page(ChromeClient* chromeClient, ContextMenuClient* contextMenuClient, EditorClient* editorClient, DragClient* dragClient, InspectorClient* inspectorClient, PluginHalterClient* pluginHalterClient, GeolocationControllerClient* geolocationControllerClient, DeviceOrientationClient* deviceOrientationClient)
-    : m_chrome(new Chrome(this, chromeClient))
+Page::Page(const PageClients& pageClients)
+    : m_chrome(new Chrome(this, pageClients.chromeClient))
     , m_dragCaretController(new SelectionController(0, true))
 #if ENABLE(DRAG_SUPPORT)
-    , m_dragController(new DragController(this, dragClient))
+    , m_dragController(new DragController(this, pageClients.dragClient))
 #endif
     , m_focusController(new FocusController(this))
 #if ENABLE(CONTEXT_MENUS)
-    , m_contextMenuController(new ContextMenuController(this, contextMenuClient))
+    , m_contextMenuController(new ContextMenuController(this, pageClients.contextMenuClient))
 #endif
 #if ENABLE(INSPECTOR)
-    , m_inspectorController(new InspectorController(this, inspectorClient))
+    , m_inspectorController(new InspectorController(this, pageClients.inspectorClient))
 #endif
 #if ENABLE(CLIENT_BASED_GEOLOCATION)
-    , m_geolocationController(new GeolocationController(this, geolocationControllerClient))
+    , m_geolocationController(new GeolocationController(this, pageClients.geolocationControllerClient))
 #endif
 #if ENABLE(DEVICE_ORIENTATION)
-    , m_deviceOrientation(new DeviceOrientation(this, deviceOrientationClient))
+    , m_deviceMotionController(RuntimeEnabledFeatures::deviceMotionEnabled() ? new DeviceMotionController(pageClients.deviceMotionClient) : 0)
+    , m_deviceOrientationController(RuntimeEnabledFeatures::deviceOrientationEnabled() ? new DeviceOrientationController(this, pageClients.deviceOrientationClient) : 0)
+#endif
+#if ENABLE(INPUT_SPEECH)
+    , m_speechInputClient(pageClients.speechInputClient)
 #endif
     , m_settings(new Settings(this))
     , m_progress(new ProgressTracker)
-    , m_backForwardList(BackForwardList::create(this))
+    , m_backForwardController(new BackForwardController(this, pageClients.backForwardControllerClient))
     , m_theme(RenderTheme::themeForPage(this))
-    , m_editorClient(editorClient)
+    , m_editorClient(pageClients.editorClient)
     , m_frameCount(0)
     , m_openedByDOM(false)
     , m_tabKeyCyclesThroughElements(true)
@@ -149,23 +169,8 @@ Page::Page(ChromeClient* chromeClient, ContextMenuClient* contextMenuClient, Edi
     , m_customHTMLTokenizerTimeDelay(-1)
     , m_customHTMLTokenizerChunkSize(-1)
     , m_canStartMedia(true)
+    , m_viewMode(ViewModeWindowed)
 {
-#if !ENABLE(CONTEXT_MENUS)
-    UNUSED_PARAM(contextMenuClient);
-#endif
-#if !ENABLE(DRAG_SUPPORT)
-    UNUSED_PARAM(dragClient);
-#endif
-#if !ENABLE(INSPECTOR)
-    UNUSED_PARAM(inspectorClient);
-#endif
-#if !ENABLE(CLIENT_BASED_GEOLOCATION)
-    UNUSED_PARAM(geolocationControllerClient);
-#endif
-#if !ENABLE(CLIENT_DEVICE_ORIENTATION)
-    UNUSED_PARAM(deviceOrientationClient);
-#endif
-
     if (!allPages) {
         allPages = new HashSet<Page*>;
         
@@ -175,8 +180,8 @@ Page::Page(ChromeClient* chromeClient, ContextMenuClient* contextMenuClient, Edi
     ASSERT(!allPages->contains(this));
     allPages->add(this);
 
-    if (pluginHalterClient) {
-        m_pluginHalter.set(new PluginHalter(pluginHalterClient));
+    if (pageClients.pluginHalterClient) {
+        m_pluginHalter.set(new PluginHalter(pageClients.pluginHalterClient));
         m_pluginHalter->setPluginAllowedRunTime(m_settings->pluginAllowedRunTime());
     }
 
@@ -206,7 +211,7 @@ Page::~Page()
     m_inspectorController->inspectedPageDestroyed();
 #endif
 
-    m_backForwardList->close();
+    backForwardList()->close();
 
 #ifndef NDEBUG
     pageCounter.decrement();
@@ -216,6 +221,45 @@ Page::~Page()
     // is executing.
     Frame::cancelAllKeepAlive();
 #endif
+}
+
+struct ViewModeInfo {
+    const char* name;
+    Page::ViewMode type;
+};
+static const int viewModeMapSize = 5;
+static ViewModeInfo viewModeMap[viewModeMapSize] = {
+    {"windowed", Page::ViewModeWindowed},
+    {"floating", Page::ViewModeFloating},
+    {"fullscreen", Page::ViewModeFullscreen},
+    {"maximized", Page::ViewModeMaximized},
+    {"minimized", Page::ViewModeMinimized}
+};
+
+Page::ViewMode Page::stringToViewMode(const String& text)
+{
+    for (int i = 0; i < viewModeMapSize; ++i) {
+        if (text == viewModeMap[i].name)
+            return viewModeMap[i].type;
+    }
+    return Page::ViewModeInvalid;
+}
+
+void Page::setViewMode(ViewMode viewMode)
+{
+    if (viewMode == m_viewMode || viewMode == ViewModeInvalid)
+        return;
+
+    m_viewMode = viewMode;
+
+    if (!m_mainFrame)
+        return;
+
+    if (m_mainFrame->view())
+        m_mainFrame->view()->forceLayout();
+
+    if (m_mainFrame->document())
+        m_mainFrame->document()->styleSelectorChanged(RecalcStyleImmediately);
 }
 
 void Page::setMainFrame(PassRefPtr<Frame> mainFrame)
@@ -234,14 +278,14 @@ void Page::setOpenedByDOM()
     m_openedByDOM = true;
 }
 
-BackForwardList* Page::backForwardList()
+BackForwardList* Page::backForwardList() const
 {
-    return m_backForwardList.get();
+    return m_backForwardController->list();
 }
 
 bool Page::goBack()
 {
-    HistoryItem* item = m_backForwardList->backItem();
+    HistoryItem* item = backForwardList()->backItem();
     
     if (item) {
         goToItem(item, FrameLoadTypeBack);
@@ -252,7 +296,7 @@ bool Page::goBack()
 
 bool Page::goForward()
 {
-    HistoryItem* item = m_backForwardList->forwardItem();
+    HistoryItem* item = backForwardList()->forwardItem();
     
     if (item) {
         goToItem(item, FrameLoadTypeForward);
@@ -265,9 +309,9 @@ bool Page::canGoBackOrForward(int distance) const
 {
     if (distance == 0)
         return true;
-    if (distance > 0 && distance <= m_backForwardList->forwardListCount())
+    if (distance > 0 && distance <= backForwardList()->forwardListCount())
         return true;
-    if (distance < 0 && -distance <= m_backForwardList->backListCount())
+    if (distance < 0 && -distance <= backForwardList()->backListCount())
         return true;
     return false;
 }
@@ -277,16 +321,16 @@ void Page::goBackOrForward(int distance)
     if (distance == 0)
         return;
 
-    HistoryItem* item = m_backForwardList->itemAtIndex(distance);
+    HistoryItem* item = backForwardList()->itemAtIndex(distance);
     if (!item) {
         if (distance > 0) {
-            int forwardListCount = m_backForwardList->forwardListCount();
+            int forwardListCount = backForwardList()->forwardListCount();
             if (forwardListCount > 0) 
-                item = m_backForwardList->itemAtIndex(forwardListCount);
+                item = backForwardList()->itemAtIndex(forwardListCount);
         } else {
-            int backListCount = m_backForwardList->backListCount();
+            int backListCount = backForwardList()->backListCount();
             if (backListCount > 0)
-                item = m_backForwardList->itemAtIndex(-backListCount);
+                item = backForwardList()->itemAtIndex(-backListCount);
         }
     }
 
@@ -297,6 +341,13 @@ void Page::goBackOrForward(int distance)
 
 void Page::goToItem(HistoryItem* item, FrameLoadType type)
 {
+    if (defersLoading())
+        return;
+
+    // stopAllLoaders may end up running onload handlers, which could cause further history traversals that may lead to the passed in HistoryItem
+    // being deref()-ed. Make sure we can still use it with HistoryController::goToItem later.
+    RefPtr<HistoryItem> protector(item);
+    
     // Abort any current load unless we're navigating the current document to a new state object
     HistoryItem* currentItem = m_mainFrame->loader()->history()->currentItem();
     if (!item->stateObject() || !currentItem || item->documentSequenceNumber() != currentItem->documentSequenceNumber() || item == currentItem) {
@@ -320,7 +371,7 @@ void Page::goToItem(HistoryItem* item, FrameLoadType type)
 
 int Page::getHistoryLength()
 {
-    return m_backForwardList->backListCount() + 1 + m_backForwardList->forwardListCount();
+    return backForwardList()->backListCount() + 1 + backForwardList()->forwardListCount();
 }
 
 void Page::setGlobalHistoryItem(HistoryItem* item)
@@ -359,14 +410,14 @@ void Page::initGroup()
     m_group = m_singlePageGroup.get();
 }
 
-void Page::setNeedsReapplyStyles()
+void Page::scheduleForcedStyleRecalcForAllPages()
 {
     if (!allPages)
         return;
     HashSet<Page*>::iterator end = allPages->end();
     for (HashSet<Page*>::iterator it = allPages->begin(); it != end; ++it)
         for (Frame* frame = (*it)->mainFrame(); frame; frame = frame->tree()->traverseNext())
-            frame->setNeedsReapplyStyles();
+            frame->document()->scheduleForcedStyleRecalc();
 }
 
 void Page::refreshPlugins(bool reload)
@@ -381,18 +432,19 @@ void Page::refreshPlugins(bool reload)
     HashSet<Page*>::iterator end = allPages->end();
     for (HashSet<Page*>::iterator it = allPages->begin(); it != end; ++it) {
         Page* page = *it;
-
+        
         // Clear out the page's plug-in data.
         if (page->m_pluginData) {
             page->m_pluginData->disconnectPage();
             page->m_pluginData = 0;
         }
 
-        if (reload) {
-            for (Frame* frame = (*it)->mainFrame(); frame; frame = frame->tree()->traverseNext()) {
-                if (frame->loader()->containsPlugins())
-                    framesNeedingReload.append(frame);
-            }
+        if (!reload)
+            continue;
+        
+        for (Frame* frame = (*it)->mainFrame(); frame; frame = frame->tree()->traverseNext()) {
+            if (frame->loader()->subframeLoader()->containsPlugins())
+                framesNeedingReload.append(frame);
         }
     }
 
@@ -402,7 +454,7 @@ void Page::refreshPlugins(bool reload)
 
 PluginData* Page::pluginData() const
 {
-    if (!mainFrame()->loader()->allowPlugins(NotAboutToInstantiatePlugin))
+    if (!mainFrame()->loader()->subframeLoader()->allowPlugins(NotAboutToInstantiatePlugin))
         return 0;
     if (!m_pluginData)
         m_pluginData = PluginData::create(this);
@@ -448,7 +500,7 @@ bool Page::findString(const String& target, TextCaseSensitivity caseSensitivity,
     Frame* frame = focusController()->focusedOrMainFrame();
     Frame* startFrame = frame;
     do {
-        if (frame->findString(target, direction == FindDirectionForward, caseSensitivity == TextCaseSensitive, false, true)) {
+        if (frame->editor()->findString(target, direction == FindDirectionForward, caseSensitivity == TextCaseSensitive, false, true)) {
             if (frame != startFrame)
                 startFrame->selection()->clear();
             focusController()->setFocusedFrame(frame);
@@ -460,7 +512,7 @@ bool Page::findString(const String& target, TextCaseSensitivity caseSensitivity,
     // Search contents of startFrame, on the other side of the selection that we did earlier.
     // We cheat a bit and just research with wrap on
     if (shouldWrap && !startFrame->selection()->isNone()) {
-        bool found = startFrame->findString(target, direction == FindDirectionForward, caseSensitivity == TextCaseSensitive, true, true);
+        bool found = startFrame->editor()->findString(target, direction == FindDirectionForward, caseSensitivity == TextCaseSensitive, true, true);
         focusController()->setFocusedFrame(frame);
         return found;
     }
@@ -477,8 +529,8 @@ unsigned int Page::markAllMatchesForText(const String& target, TextCaseSensitivi
 
     Frame* frame = mainFrame();
     do {
-        frame->setMarkedTextMatchesAreHighlighted(shouldHighlight);
-        matches += frame->markAllMatchesForText(target, caseSensitivity == TextCaseSensitive, (limit == 0) ? 0 : (limit - matches));
+        frame->editor()->setMarkedTextMatchesAreHighlighted(shouldHighlight);
+        matches += frame->editor()->countMatchesForText(target, caseSensitivity == TextCaseSensitive, limit ? (limit - matches) : 0, true);
         frame = incrementFrame(frame, true, false);
     } while (frame);
 
@@ -492,7 +544,7 @@ void Page::unmarkAllTextMatches()
 
     Frame* frame = mainFrame();
     do {
-        frame->document()->removeMarkers(DocumentMarker::TextMatch);
+        frame->document()->markers()->removeMarkers(DocumentMarker::TextMatch);
         frame = incrementFrame(frame, true, false);
     } while (frame);
 }
@@ -591,7 +643,7 @@ void Page::userStyleSheetLocationChanged()
     
     for (Frame* frame = mainFrame(); frame; frame = frame->tree()->traverseNext()) {
         if (frame->document())
-            frame->document()->clearPageUserSheet();
+            frame->document()->updatePageUserSheet();
     }
 }
 
@@ -783,6 +835,16 @@ bool Page::javaScriptURLsAreAllowed() const
 InspectorTimelineAgent* Page::inspectorTimelineAgent() const
 {
     return m_inspectorController->timelineAgent();
+}
+#endif
+
+#if ENABLE(INPUT_SPEECH)
+SpeechInput* Page::speechInput()
+{
+    ASSERT(m_speechInputClient);
+    if (!m_speechInput.get())
+        m_speechInput.set(new SpeechInput(m_speechInputClient));
+    return m_speechInput.get();
 }
 #endif
 

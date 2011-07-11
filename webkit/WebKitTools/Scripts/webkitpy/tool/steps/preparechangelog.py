@@ -28,6 +28,7 @@
 
 import os
 
+from webkitpy.common.checkout.changelog import ChangeLog
 from webkitpy.common.system.executive import ScriptError
 from webkitpy.tool.steps.abstractstep import AbstractStep
 from webkitpy.tool.steps.options import Options
@@ -42,23 +43,33 @@ class PrepareChangeLog(AbstractStep):
             Options.quiet,
             Options.email,
             Options.git_commit,
-            Options.no_squash,
-            Options.squash,
         ]
+
+    def _ensure_bug_url(self, state):
+        if not state.get("bug_id"):
+            return
+        bug_id = state.get("bug_id")
+        changelogs = self.cached_lookup(state, "changelogs")
+        for changelog_path in changelogs:
+            changelog = ChangeLog(changelog_path)
+            if not changelog.latest_entry().bug_id():
+                changelog.set_short_description_and_bug_url(
+                    self.cached_lookup(state, "bug_title"),
+                    self._tool.bugs.bug_url_for_bug_id(bug_id))
 
     def run(self, state):
         if self.cached_lookup(state, "changelogs"):
+            self._ensure_bug_url(state)
             return
         os.chdir(self._tool.scm().checkout_root)
         args = [self.port().script_path("prepare-ChangeLog")]
-        if state["bug_id"]:
+        if state.get("bug_id"):
             args.append("--bug=%s" % state["bug_id"])
         if self._options.email:
             args.append("--email=%s" % self._options.email)
-        if self._tool.scm().should_squash(self._options.squash):
-            args.append("--merge-base=%s" % self._tool.scm().svn_merge_base())
-        if self._options.git_commit:
-            args.append("--git-commit=%s" % self._options.git_commit)
+
+        if self._tool.scm().supports_local_commits():
+            args.append("--merge-base=%s" % self._tool.scm().merge_base(self._options.git_commit))
 
         try:
             self._tool.executive.run_and_throw_if_fail(args, self._options.quiet)

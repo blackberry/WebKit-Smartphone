@@ -96,6 +96,7 @@ LOCAL_SRC_FILES := \
 	runtime/Executable.cpp \
 	runtime/FunctionConstructor.cpp \
 	runtime/FunctionPrototype.cpp \
+	runtime/GCHandle.cpp \
 	runtime/GetterSetter.cpp \
 	runtime/GlobalEvalFunction.cpp \
 	runtime/Identifier.cpp \
@@ -160,6 +161,7 @@ LOCAL_SRC_FILES := \
 	wtf/FastMalloc.cpp \
 	wtf/HashTable.cpp \
 	wtf/MainThread.cpp \
+	jit/PageAllocation.cpp\
 	wtf/RandomNumber.cpp \
 	wtf/RefCountedLeakCounter.cpp \
 	wtf/TCSystemAlloc.cpp \
@@ -186,14 +188,6 @@ LOCAL_SRC_FILES := \
 	yarr/RegexCompiler.cpp \
 	yarr/RegexInterpreter.cpp \
 	yarr/RegexJIT.cpp
-
-# Rule to build grammar.y with our custom bison.
-GEN := $(intermediates)/parser/Grammar.cpp
-$(GEN) : PRIVATE_YACCFLAGS := -p jscyy
-$(GEN) : $(LOCAL_PATH)/parser/Grammar.y
-	$(call local-transform-y-to-cpp,.cpp)
-$(GEN) : $(LOCAL_BISON)
-LOCAL_GENERATED_SOURCES += $(GEN)
 
 # generated headers
 JSC_OBJECTS := $(addprefix $(intermediates)/runtime/, \

@@ -11,20 +11,24 @@ plugins/mouse-events.html
 plugins/private-browsing-mode.html
 plugins/private-browsing-mode-2.html
 plugins/netscape-plugin-property-access-exception.html
-plugins/netscape-throw-exception.html
+plugins/npruntime/throw-exception.html
 plugins/netscape-dom-access.html
-plugins/netscape-browser-object-identity.html
+plugins/npruntime/browser-object-identity.html
 plugins/destroy-plugin-from-callback.html
+
 # Intermittent failures, requiring a newer version of Safari:
 # https://bugs.webkit.org/show_bug.cgi?id=36462
 plugins/keyboard-events.html
 plugins/mouse-events-fixedpos.html
-plugins/netscape-construct.html
+plugins/npruntime/construct.html
 
 # https://bugs.webkit.org/show_bug.cgi?id=30528 - test started failing
 # immediately on Snow Leopard due to the expected exception not being
 # thrown
-plugins/netscape-invoke-failure.html
+plugins/npruntime/invoke-failure.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=43438 - New test added during WebKit2 work; unknown why it fails.
+plugins/npruntime/remove-property.html
 
 # Radar bugs needed for these
 fast/canvas/set-colors.html
@@ -54,10 +58,8 @@ media/video-controls-rendering.html
 media/video-controls-transformed.html
 media/video-controls-visible-audio-only.html
 media/video-controls-zoomed.html
+media/video-zoom-controls.html
 media/video-display-toggle.html
-
-#<rdar://problem/7135864> - Intermittent failure
-fast/dom/frame-loading-via-document-write.html
 
 #<rdar://problem/7144385> - media/controls-drag-timebar.html fails
 media/controls-drag-timebar.html
@@ -118,14 +120,12 @@ platform/mac/fonts/color-bitmap.html
 # Snow Leopard bot does not support EXT_packed_depth_stencil, which is required by WebGL.
 # https://bugs.webkit.org/show_bug.cgi?id=36925
 fast/canvas/webgl/framebuffer-object-attachment.html
+# The video upload test is failing on the bots for some currently unknown reason.
+# https://bugs.webkit.org/show_bug.cgi?id=44459
+fast/canvas/webgl/tex-image-and-sub-image-2d-with-video.html
 
 # This test asserts: https://bugs.webkit.org/show_bug.cgi?id=37932
 transitions/transition-end-event-destroy-iframe.html
-
-# These tests fail in 64 bit
-# https://bugs.webkit.org/show_bug.cgi?id=38356
-fast/js/sputnik/Conformance/11_Expressions/11.5_Multiplicative_Operators/11.5.3_Applying_the_percent_Operator/S11.5.3_A4_T2.html
-fast/js/sputnik/Conformance/15_Native_Objects/15.4_Array/15.4.4/15.4.4.12_Array_prototype_splice/S15.4.4.12_A2.1_T3.html
 
 # Test fails on Snow Leopard in DRT but passes when run manually and passes on Leopard. The test itself might need
 # tweaking to deal with scrolling differences between Leopard and SL. https://bugs.webkit.org/show_bug.cgi?id=38416

@@ -24,13 +24,13 @@
 #define WMLPageState_h
 
 #if ENABLE(WML)
-#include "StringHash.h"
+#include <wtf/Forward.h>
 #include <wtf/HashMap.h>
+#include <wtf/text/StringHash.h>
 
 namespace WebCore {
 
 class Page;
-class String;
 class WMLCardElement;
 
 typedef HashMap<String, String> WMLVariableMap;

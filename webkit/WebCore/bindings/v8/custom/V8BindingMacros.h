@@ -28,11 +28,21 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define EXCEPTION_BLOCK(type, var, value)         \
-    type var;                                     \
-    {                                             \
-        v8::TryCatch block;                       \
-        var = value;                              \
-        if (block.HasCaught())                    \
-            return throwError(block.Exception()); \
+#define EXCEPTION_BLOCK(type, var, value) \
+    type var;                             \
+    {                                     \
+        v8::TryCatch block;               \
+        var = (value);                    \
+        if (block.HasCaught())            \
+            return block.ReThrow();       \
     }
+
+#define STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(type, var, value) \
+    type var(value);                                            \
+    if (!var.prepare())                                         \
+        return v8::Undefined();
+
+#define STRING_TO_V8PARAMETER_EXCEPTION_BLOCK_VOID(type, var, value) \
+    type var(value);                                                 \
+    if (!var.prepare())                                              \
+        return;

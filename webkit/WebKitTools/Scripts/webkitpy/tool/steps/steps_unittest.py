@@ -30,8 +30,7 @@ import unittest
 
 from webkitpy.common.system.outputcapture import OutputCapture
 from webkitpy.common.config.ports import WebKitPort
-from webkitpy.thirdparty.mock import Mock
-from webkitpy.tool.mocktool import MockTool
+from webkitpy.tool.mocktool import MockOptions, MockTool
 from webkitpy.tool.steps.update import Update
 from webkitpy.tool.steps.runtests import RunTests
 from webkitpy.tool.steps.promptforbugortitle import PromptForBugOrTitle
@@ -42,13 +41,13 @@ class StepsTest(unittest.TestCase):
         if not tool:
             tool = MockTool()
         if not options:
-            options = Mock()
+            options = MockOptions()
         if not state:
             state = {}
         step(tool, options).run(state)
 
     def test_update_step(self):
-        options = Mock()
+        options = MockOptions()
         options.update = True
         expected_stderr = "Updating working directory\n"
         OutputCapture().assert_outputs(self, self._run_step, [Update, options], expected_stderr=expected_stderr)
@@ -63,7 +62,7 @@ class StepsTest(unittest.TestCase):
         OutputCapture().assert_outputs(self, self._run_step, [RunTests], expected_stderr=expected_stderr)
 
     def test_runtests_leopard_commit_queue_hack(self):
-        mock_options = Mock()
+        mock_options = MockOptions()
         mock_options.non_interactive = True
         step = RunTests(MockTool(log_executive=True), mock_options)
         # FIXME: We shouldn't use a real port-object here, but there is too much to mock at the moment.
@@ -78,6 +77,6 @@ MOCK run_and_throw_if_fail: ['WebKitTools/Scripts/test-webkitperl']
 Running JavaScriptCore tests
 MOCK run_and_throw_if_fail: ['WebKitTools/Scripts/run-javascriptcore-tests']
 Running run-webkit-tests
-MOCK run_and_throw_if_fail: ['WebKitTools/Scripts/run-webkit-tests', '--no-launch-safari', '--exit-after-n-failures=1', '--ignore-tests', 'compositing', '--quiet']
+MOCK run_and_throw_if_fail: ['WebKitTools/Scripts/run-webkit-tests', '--no-launch-safari', '--exit-after-n-failures=1', '--wait-for-httpd', '--ignore-tests', 'compositing,media', '--quiet']
 """
         OutputCapture().assert_outputs(self, step.run, [{}], expected_stderr=expected_stderr)

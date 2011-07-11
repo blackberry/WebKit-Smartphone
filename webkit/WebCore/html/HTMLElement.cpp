@@ -39,13 +39,11 @@
 #include "HTMLElementFactory.h"
 #include "HTMLFormElement.h"
 #include "HTMLNames.h"
-#include "HTMLTokenizer.h"
 #include "RenderWordBreak.h"
 #include "ScriptEventListener.h"
 #include "Settings.h"
 #include "Text.h"
 #include "TextIterator.h"
-#include "XMLTokenizer.h"
 #include "markup.h"
 #include <wtf/StdLibExtras.h>
 
@@ -58,73 +56,60 @@ using std::max;
 
 PassRefPtr<HTMLElement> HTMLElement::create(const QualifiedName& tagName, Document* document)
 {
-    return adoptRef(new HTMLElement(tagName, document, CreateHTMLElement));
+    return adoptRef(new HTMLElement(tagName, document));
 }
 
 String HTMLElement::nodeName() const
 {
-    // FIXME: Would be nice to have an atomicstring lookup based off uppercase chars that does not have to copy
-    // the string on a hit in the hash.
+    // FIXME: Would be nice to have an atomicstring lookup based off uppercase
+    // chars that does not have to copy the string on a hit in the hash.
     // FIXME: We should have a way to detect XHTML elements and replace the hasPrefix() check with it.
     if (document()->isHTMLDocument() && !tagQName().hasPrefix())
         return tagQName().localNameUpper();
     return Element::nodeName();
 }
-    
-HTMLTagStatus HTMLElement::endTagRequirement() const
+
+bool HTMLElement::ieForbidsInsertHTML() const
 {
-    if (hasLocalName(wbrTag))
-        return TagStatusForbidden;
-    if (hasLocalName(dtTag) || hasLocalName(ddTag) || hasLocalName(rpTag) || hasLocalName(rtTag))
-        return TagStatusOptional;
-
-    // Same values as <span>.  This way custom tag name elements will behave like inline spans.
-    return TagStatusRequired;
-}
-
-struct Empty1IntHashTraits : HashTraits<int> {
-    static const bool emptyValueIsZero = false;
-    static int emptyValue() { return 1; }
-};
-typedef HashMap<AtomicStringImpl*, int, DefaultHash<AtomicStringImpl*>::Hash, HashTraits<AtomicStringImpl*>, Empty1IntHashTraits> TagPriorityMap;
-
-static const TagPriorityMap* createTagPriorityMap()
-{
-    TagPriorityMap* map = new TagPriorityMap;
-
-    map->add(wbrTag.localName().impl(), 0);
-
-    map->add(addressTag.localName().impl(), 3);
-    map->add(ddTag.localName().impl(), 3);
-    map->add(dtTag.localName().impl(), 3);
-    map->add(noscriptTag.localName().impl(), 3);
-    map->add(rpTag.localName().impl(), 3);
-    map->add(rtTag.localName().impl(), 3);
-
-    // 5 is same as <div>'s priority.
-    map->add(articleTag.localName().impl(), 5);
-    map->add(asideTag.localName().impl(), 5);
-    map->add(centerTag.localName().impl(), 5);
-    map->add(footerTag.localName().impl(), 5);
-    map->add(headerTag.localName().impl(), 5);
-    map->add(hgroupTag.localName().impl(), 5);
-    map->add(nobrTag.localName().impl(), 5);
-    map->add(rubyTag.localName().impl(), 5);
-    map->add(navTag.localName().impl(), 5);
-    map->add(sectionTag.localName().impl(), 5);
-
-    map->add(noembedTag.localName().impl(), 10);
-    map->add(noframesTag.localName().impl(), 10);
-
-    // TagPriorityMap returns 1 for unregistered tags. It's same as <span>.
-    // This way custom tag name elements will behave like inline spans.
-    return map;
-}
-
-int HTMLElement::tagPriority() const
-{
-    static const TagPriorityMap* tagPriorityMap = createTagPriorityMap();
-    return tagPriorityMap->get(localName().impl());
+    // FIXME: Supposedly IE disallows settting innerHTML, outerHTML
+    // and createContextualFragment on these tags.  We have no tests to
+    // verify this however, so this list could be totally wrong.
+    // This list was moved from the previous endTagRequirement() implementation.
+    // This is also called from editing and assumed to be the list of tags
+    // for which no end tag should be serialized. It's unclear if the list for
+    // IE compat and the list for serialization sanity are the same.
+    if (hasLocalName(areaTag)
+        || hasLocalName(baseTag)
+        || hasLocalName(basefontTag)
+        || hasLocalName(brTag)
+        || hasLocalName(colTag)
+#if ENABLE(DATAGRID)
+        || hasLocalName(dcellTag)
+        || hasLocalName(dcolTag)
+#endif
+        || hasLocalName(embedTag)
+        || hasLocalName(frameTag)
+        || hasLocalName(hrTag)
+        || hasLocalName(imageTag)
+        || hasLocalName(imgTag)
+        || hasLocalName(inputTag)
+        || hasLocalName(isindexTag)
+        || hasLocalName(linkTag)
+        || hasLocalName(metaTag)
+        || hasLocalName(paramTag)
+        || hasLocalName(sourceTag)
+        || hasLocalName(wbrTag))
+        return true;
+    // FIXME: I'm not sure why dashboard mode would want to change the
+    // serialization of <canvas>, that seems like a bad idea.
+#if ENABLE(DASHBOARD_SUPPORT)
+    if (hasLocalName(canvasTag)) {
+        Settings* settings = document()->settings();
+        if (settings && settings->usesDashboardBackwardCompatibilityMode())
+            return true;
+    }
+#endif
+    return false;
 }
 
 bool HTMLElement::mapToEntry(const QualifiedName& attrName, MappedAttributeEntry& result) const
@@ -144,7 +129,7 @@ bool HTMLElement::mapToEntry(const QualifiedName& attrName, MappedAttributeEntry
     
 void HTMLElement::parseMappedAttribute(Attribute* attr)
 {
-    if (attr->name() == idAttributeName() || attr->name() == classAttr || attr->name() == styleAttr)
+    if (isIdAttributeName(attr->name()) || attr->name() == classAttr || attr->name() == styleAttr)
         return StyledElement::parseMappedAttribute(attr);
 
     String indexstring;
@@ -264,6 +249,10 @@ void HTMLElement::parseMappedAttribute(Attribute* attr)
         setAttributeEventListener(eventNames().touchendEvent, createAttributeEventListener(this, attr));
     } else if (attr->name() == ontouchcancelAttr) {
         setAttributeEventListener(eventNames().touchcancelEvent, createAttributeEventListener(this, attr));
+#if ENABLE(FULLSCREEN_API)
+    } else if (attr->name() == onwebkitfullscreenchangeAttr) {
+        setAttributeEventListener(eventNames().webkitfullscreenchangeEvent, createAttributeEventListener(this, attr));
+#endif
     }
 }
 
@@ -277,17 +266,18 @@ String HTMLElement::outerHTML() const
     return createMarkup(this);
 }
 
-PassRefPtr<DocumentFragment> HTMLElement::createContextualFragment(const String& markup, FragmentScriptingPermission scriptingPermission)
+// FIXME: This logic should move into Range::createContextualFragment
+PassRefPtr<DocumentFragment> HTMLElement::deprecatedCreateContextualFragment(const String& markup, FragmentScriptingPermission scriptingPermission)
 {
     // The following is in accordance with the definition as used by IE.
-    if (endTagRequirement() == TagStatusForbidden)
+    if (ieForbidsInsertHTML())
         return 0;
 
-    if (hasLocalName(colTag) || hasLocalName(colgroupTag) || hasLocalName(framesetTag) ||
-        hasLocalName(headTag) || hasLocalName(styleTag) || hasLocalName(titleTag))
+    if (hasLocalName(colTag) || hasLocalName(colgroupTag) || hasLocalName(framesetTag)
+        || hasLocalName(headTag) || hasLocalName(styleTag) || hasLocalName(titleTag))
         return 0;
 
-    return Element::createContextualFragment(markup, scriptingPermission);
+    return Element::deprecatedCreateContextualFragment(markup, scriptingPermission);
 }
 
 static inline bool hasOneChild(ContainerNode* node)
@@ -340,22 +330,31 @@ static void replaceChildrenWithText(HTMLElement* element, const String& text, Ex
     element->appendChild(textNode.release(), ec);
 }
 
+// We may want to move a version of this function into DocumentFragment.h/cpp
+static PassRefPtr<DocumentFragment> createFragmentFromSource(const String& markup, Element* contextElement, ExceptionCode& ec)
+{
+    Document* document = contextElement->document();
+    RefPtr<DocumentFragment> fragment;
+
+    fragment = DocumentFragment::create(document);
+    if (document->isHTMLDocument()) {
+        fragment->parseHTML(markup, contextElement);
+        return fragment;
+    }
+
+    bool wasValid = fragment->parseXML(markup, contextElement);
+    if (!wasValid) {
+        ec = INVALID_STATE_ERR;
+        return 0;
+    }
+    return fragment;
+}
+
 void HTMLElement::setInnerHTML(const String& html, ExceptionCode& ec)
 {
-    if (hasLocalName(scriptTag) || hasLocalName(styleTag)) {
-        // Script and CSS source shouldn't be parsed as HTML.
-        removeChildren();
-        appendChild(document()->createTextNode(html), ec);
-        return;
-    }
-
-    RefPtr<DocumentFragment> fragment = createContextualFragment(html);
-    if (!fragment) {
-        ec = NO_MODIFICATION_ALLOWED_ERR;
-        return;
-    }
-
-    replaceChildrenWithFragment(this, fragment.release(), ec);
+    RefPtr<DocumentFragment> fragment = createFragmentFromSource(html, this, ec);
+    if (fragment)
+        replaceChildrenWithFragment(this, fragment.release(), ec);
 }
 
 void HTMLElement::setOuterHTML(const String& html, ExceptionCode& ec)
@@ -365,23 +364,18 @@ void HTMLElement::setOuterHTML(const String& html, ExceptionCode& ec)
         ec = NO_MODIFICATION_ALLOWED_ERR;
         return;
     }
-
     HTMLElement* parent = static_cast<HTMLElement*>(p);
-    RefPtr<DocumentFragment> fragment = parent->createContextualFragment(html);
-    if (!fragment) {
-        ec = NO_MODIFICATION_ALLOWED_ERR;
-        return;
+
+    RefPtr<DocumentFragment> fragment = createFragmentFromSource(html, parent, ec);
+    if (fragment) {
+        // FIXME: Why doesn't this have code to merge neighboring text nodes the way setOuterText does?
+        parent->replaceChild(fragment.release(), this, ec);
     }
-
-    // FIXME: Why doesn't this have code to merge neighboring text nodes the way setOuterText does?
-
-    parent->replaceChild(fragment.release(), this, ec);
 }
 
 void HTMLElement::setInnerText(const String& text, ExceptionCode& ec)
 {
-    // Follow the IE specs about when this is allowed.
-    if (endTagRequirement() == TagStatusForbidden) {
+    if (ieForbidsInsertHTML()) {
         ec = NO_MODIFICATION_ALLOWED_ERR;
         return;
     }
@@ -435,7 +429,7 @@ void HTMLElement::setInnerText(const String& text, ExceptionCode& ec)
                     return;
             }
             if (!(c == '\n' && i != 0 && prev == '\r')) {
-                fragment->appendChild(new HTMLBRElement(brTag, document()), ec);
+                fragment->appendChild(HTMLBRElement::create(document()), ec);
                 if (ec)
                     return;
             }
@@ -450,8 +444,7 @@ void HTMLElement::setInnerText(const String& text, ExceptionCode& ec)
 
 void HTMLElement::setOuterText(const String &text, ExceptionCode& ec)
 {
-    // Follow the IE specs about when this is allowed.
-    if (endTagRequirement() == TagStatusForbidden) {
+    if (ieForbidsInsertHTML()) {
         ec = NO_MODIFICATION_ALLOWED_ERR;
         return;
     }
@@ -549,13 +542,35 @@ Element* HTMLElement::insertAdjacentElement(const String& where, Element* newChi
     return static_cast<Element*>(returnValue); 
 }
 
-void HTMLElement::insertAdjacentHTML(const String& where, const String& html, ExceptionCode& ec)
+// Step 3 of http://www.whatwg.org/specs/web-apps/current-work/multipage/apis-in-html-documents.html#insertadjacenthtml()
+static Element* contextElementForInsertion(const String& where, Element* element, ExceptionCode& ec)
+{
+    if (equalIgnoringCase(where, "beforeBegin") || equalIgnoringCase(where, "afterEnd")) {
+        Node* parent = element->parentNode();
+        if (parent && parent->isDocumentNode()) {
+            ec = NO_MODIFICATION_ALLOWED_ERR;
+            return 0;
+        }
+        ASSERT(!parent || parent->isElementNode());
+        return static_cast<Element*>(parent);
+    }
+    if (equalIgnoringCase(where, "afterBegin") || equalIgnoringCase(where, "beforeEnd"))
+        return element;
+    ec =  SYNTAX_ERR;
+    return 0;
+}
+
+void HTMLElement::insertAdjacentHTML(const String& where, const String& markup, ExceptionCode& ec)
 {
     RefPtr<DocumentFragment> fragment = document()->createDocumentFragment();
+    Element* contextElement = contextElementForInsertion(where, this, ec);
+    if (!contextElement)
+        return;
+
     if (document()->isHTMLDocument())
-         parseHTMLDocumentFragment(html, fragment.get());
+         fragment->parseHTML(markup, contextElement);
     else {
-        if (!parseXMLDocumentFragment(html, fragment.get(), this))
+        if (!fragment->parseXML(markup, contextElement))
             // FIXME: We should propagate a syntax error exception out here.
             return;
     }
@@ -620,9 +635,9 @@ bool HTMLElement::isContentEditable() const
     if (document()->frame() && document()->frame()->isContentEditable())
         return true;
 
-    // FIXME: this is a terrible thing to do here:
-    // https://bugs.webkit.org/show_bug.cgi?id=21834
-    document()->updateStyleIfNeeded();
+    // Ideally we'd call ASSERT!needsStyleRecalc()) here, but
+    // ContainerNode::setFocus() calls setNeedsStyleRecalc(), so the assertion
+    // would fire in the middle of Document::setFocusedNode().
 
     if (!renderer()) {
         if (parentNode())
@@ -639,8 +654,6 @@ bool HTMLElement::isContentRichlyEditable() const
     if (document()->frame() && document()->frame()->isContentEditable())
         return true;
 
-    document()->updateStyleIfNeeded();
-
     if (!renderer()) {
         if (parentNode())
             return parentNode()->isContentEditable();
@@ -648,15 +661,11 @@ bool HTMLElement::isContentRichlyEditable() const
             return false;
     }
     
-    // Note: This code is under review for upstreaming.
-    // Note:  This object is a subelement of the focused item and is only called when the parent has focus.
-    return renderer()->style()->userModify() == READ_WRITE || document()->frame()->editor()->focusedElementsAreRichlyEditable();
+    return renderer()->style()->userModify() == READ_WRITE;
 }
 
 String HTMLElement::contentEditable() const 
 {
-    document()->updateStyleIfNeeded();
-
     if (!renderer())
         return "false";
     
@@ -758,225 +767,6 @@ PassRefPtr<HTMLCollection> HTMLElement::children()
     return HTMLCollection::create(this, NodeChildren);
 }
 
-// DOM Section 1.1.1
-bool HTMLElement::childAllowed(Node *newChild)
-{
-    if (!Element::childAllowed(newChild))
-        return false;
-
-    // For XML documents, we are non-validating and do not check against a DTD, even for HTML elements.
-    if (!document()->isHTMLDocument())
-        return true;
-
-    // Future-proof for XML content inside HTML documents (we may allow this some day).
-    if (newChild->isElementNode() && !newChild->isHTMLElement())
-        return true;
-
-    // Elements with forbidden tag status can never have children
-    if (endTagRequirement() == TagStatusForbidden)
-        return false;
-
-    // Comment nodes are always allowed.
-    if (newChild->isCommentNode())
-        return true;
-
-    // Now call checkDTD.
-    return checkDTD(newChild);
-}
-
-// DTD Stuff
-// This unfortunate function is only needed when checking against the DTD.  Other languages (like SVG) won't need this.
-bool HTMLElement::isRecognizedTagName(const QualifiedName& tagName)
-{
-    DEFINE_STATIC_LOCAL(HashSet<AtomicStringImpl*>, tagList, ());
-    if (tagList.isEmpty()) {
-        size_t tagCount = 0;
-        WebCore::QualifiedName** tags = HTMLNames::getHTMLTags(&tagCount);
-        for (size_t i = 0; i < tagCount; i++)
-            tagList.add(tags[i]->localName().impl());
-    }
-    return tagList.contains(tagName.localName().impl());
-}
-
-// The terms inline and block are used here loosely.  Don't make the mistake of assuming all inlines or all blocks
-// need to be in these two lists.
-static HashSet<AtomicStringImpl*>* inlineTagList()
-{
-    DEFINE_STATIC_LOCAL(HashSet<AtomicStringImpl*>, tagList, ());
-    if (tagList.isEmpty()) {
-        tagList.add(ttTag.localName().impl());
-        tagList.add(iTag.localName().impl());
-        tagList.add(bTag.localName().impl());
-        tagList.add(uTag.localName().impl());
-        tagList.add(sTag.localName().impl());
-        tagList.add(strikeTag.localName().impl());
-        tagList.add(bigTag.localName().impl());
-        tagList.add(smallTag.localName().impl());
-        tagList.add(emTag.localName().impl());
-        tagList.add(strongTag.localName().impl());
-        tagList.add(dfnTag.localName().impl());
-        tagList.add(codeTag.localName().impl());
-        tagList.add(sampTag.localName().impl());
-        tagList.add(kbdTag.localName().impl());
-        tagList.add(varTag.localName().impl());
-        tagList.add(citeTag.localName().impl());
-        tagList.add(abbrTag.localName().impl());
-        tagList.add(acronymTag.localName().impl());
-        tagList.add(aTag.localName().impl());
-        tagList.add(canvasTag.localName().impl());
-        tagList.add(imgTag.localName().impl());
-        tagList.add(appletTag.localName().impl());
-        tagList.add(objectTag.localName().impl());
-        tagList.add(embedTag.localName().impl());
-        tagList.add(fontTag.localName().impl());
-        tagList.add(basefontTag.localName().impl());
-        tagList.add(brTag.localName().impl());
-        tagList.add(scriptTag.localName().impl());
-        tagList.add(styleTag.localName().impl());
-        tagList.add(linkTag.localName().impl());
-        tagList.add(mapTag.localName().impl());
-        tagList.add(qTag.localName().impl());
-        tagList.add(subTag.localName().impl());
-        tagList.add(supTag.localName().impl());
-        tagList.add(spanTag.localName().impl());
-        tagList.add(bdoTag.localName().impl());
-        tagList.add(iframeTag.localName().impl());
-        tagList.add(inputTag.localName().impl());
-        tagList.add(keygenTag.localName().impl());
-        tagList.add(selectTag.localName().impl());
-        tagList.add(datagridTag.localName().impl());
-        tagList.add(textareaTag.localName().impl());
-        tagList.add(labelTag.localName().impl());
-        tagList.add(buttonTag.localName().impl());
-        tagList.add(datalistTag.localName().impl());
-        tagList.add(insTag.localName().impl());
-        tagList.add(delTag.localName().impl());
-        tagList.add(nobrTag.localName().impl());
-        tagList.add(wbrTag.localName().impl());
-#if ENABLE(VIDEO)
-        tagList.add(audioTag.localName().impl());
-        tagList.add(videoTag.localName().impl());
-#endif
-        tagList.add(rpTag.localName().impl());
-        tagList.add(rtTag.localName().impl());
-        tagList.add(rubyTag.localName().impl());
-        tagList.add(progressTag.localName().impl());
-        tagList.add(meterTag.localName().impl());
-    }
-    return &tagList;
-}
-
-static HashSet<AtomicStringImpl*>* blockTagList()
-{
-    DEFINE_STATIC_LOCAL(HashSet<AtomicStringImpl*>, tagList, ());
-    if (tagList.isEmpty()) {
-        tagList.add(addressTag.localName().impl());
-        tagList.add(articleTag.localName().impl());
-        tagList.add(asideTag.localName().impl());
-        tagList.add(blockquoteTag.localName().impl());
-        tagList.add(centerTag.localName().impl());
-        tagList.add(ddTag.localName().impl());
-        tagList.add(dirTag.localName().impl());
-        tagList.add(divTag.localName().impl());
-        tagList.add(dlTag.localName().impl());
-        tagList.add(dtTag.localName().impl());
-        tagList.add(fieldsetTag.localName().impl());
-        tagList.add(footerTag.localName().impl());
-        tagList.add(formTag.localName().impl());
-        tagList.add(h1Tag.localName().impl());
-        tagList.add(h2Tag.localName().impl());
-        tagList.add(h3Tag.localName().impl());
-        tagList.add(h4Tag.localName().impl());
-        tagList.add(h5Tag.localName().impl());
-        tagList.add(h6Tag.localName().impl());
-        tagList.add(headerTag.localName().impl());
-        tagList.add(hgroupTag.localName().impl());
-        tagList.add(hrTag.localName().impl());
-        tagList.add(isindexTag.localName().impl());
-        tagList.add(layerTag.localName().impl());
-        tagList.add(liTag.localName().impl());
-        tagList.add(listingTag.localName().impl());
-        tagList.add(marqueeTag.localName().impl());
-        tagList.add(menuTag.localName().impl());
-        tagList.add(navTag.localName().impl());
-        tagList.add(noembedTag.localName().impl());
-        tagList.add(noframesTag.localName().impl());
-        tagList.add(nolayerTag.localName().impl());
-        tagList.add(noscriptTag.localName().impl());
-        tagList.add(olTag.localName().impl());
-        tagList.add(pTag.localName().impl());
-        tagList.add(plaintextTag.localName().impl());
-        tagList.add(preTag.localName().impl());
-        tagList.add(sectionTag.localName().impl());
-        tagList.add(tableTag.localName().impl());
-        tagList.add(ulTag.localName().impl());
-        tagList.add(xmpTag.localName().impl());
-    }
-    return &tagList;
-}
-
-bool HTMLElement::inEitherTagList(const Node* newChild)
-{
-    if (newChild->isTextNode())
-        return true;
-        
-    if (newChild->isHTMLElement()) {
-        const HTMLElement* child = static_cast<const HTMLElement*>(newChild);
-        if (inlineTagList()->contains(child->tagQName().localName().impl())) {
-#if PLATFORM(MAC)
-            if (child->tagQName().localName() == styleTag) {
-                // Leopard Mail doesn't expect <style> to be in the body of the document, so don't allow it in that case.
-                // See <rdar://problem/6621310>
-                Settings* settings = newChild->document() ? newChild->document()->settings() : 0;
-                if (settings && settings->needsLeopardMailQuirks())
-                    return false;
-            }
-#endif
-            return true;
-        }
-        if (blockTagList()->contains(child->tagQName().localName().impl()))
-            return true;
-        return !isRecognizedTagName(child->tagQName()); // Accept custom html tags
-    }
-
-    return false;
-}
-
-bool HTMLElement::inInlineTagList(const Node* newChild)
-{
-    if (newChild->isTextNode())
-        return true;
-
-    if (newChild->isHTMLElement()) {
-        const HTMLElement* child = static_cast<const HTMLElement*>(newChild);
-        if (inlineTagList()->contains(child->tagQName().localName().impl()))
-            return true;
-        return !isRecognizedTagName(child->tagQName()); // Accept custom html tags
-    }
-
-    return false;
-}
-
-bool HTMLElement::inBlockTagList(const Node* newChild)
-{
-    if (newChild->isTextNode())
-        return true;
-            
-    if (newChild->isHTMLElement()) {
-        const HTMLElement* child = static_cast<const HTMLElement*>(newChild);
-        return (blockTagList()->contains(child->tagQName().localName().impl()));
-    }
-
-    return false;
-}
-
-bool HTMLElement::checkDTD(const Node* newChild)
-{
-    if (hasLocalName(addressTag) && newChild->hasTagName(pTag))
-        return true;
-    return inEitherTagList(newChild);
-}
-    
 bool HTMLElement::rendererIsNeeded(RenderStyle *style)
 {
 #if !ENABLE(XHTMLMP)
@@ -984,11 +774,16 @@ bool HTMLElement::rendererIsNeeded(RenderStyle *style)
         Frame* frame = document()->frame();
         if (frame && frame->script()->canExecuteScripts(NotAboutToExecuteScript))
             return false;
-    }
+    } else
 #endif
+    if (hasLocalName(noembedTag)) {
+        Frame* frame = document()->frame();
+        if (frame && frame->loader()->subframeLoader()->allowPlugins(NotAboutToInstantiatePlugin))
+            return false;
+    }
     return StyledElement::rendererIsNeeded(style);
 }
-    
+
 RenderObject* HTMLElement::createRenderer(RenderArena* arena, RenderStyle* style)
 {
     if (hasLocalName(wbrTag))

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004, 2006, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2006, 2009, 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2007 Alp Toker <alp@atoker.com>
  * Copyright (C) 2010 Torch Mobile (Beijing) Co. Ltd. All rights reserved.
  *
@@ -28,12 +28,8 @@
 #ifndef HTMLCanvasElement_h
 #define HTMLCanvasElement_h
 
-#include "CanvasSurface.h"
 #include "FloatRect.h"
 #include "HTMLElement.h"
-#if ENABLE(3D_CANVAS)    
-#include "GraphicsContext3D.h"
-#endif
 #include "IntSize.h"
 
 namespace WebCore {
@@ -42,6 +38,8 @@ class CanvasContextAttributes;
 class CanvasRenderingContext;
 class GraphicsContext;
 class HTMLCanvasElement;
+class Image;
+class ImageBuffer;
 class IntSize;
 
 class CanvasObserver {
@@ -53,15 +51,23 @@ public:
     virtual void canvasDestroyed(HTMLCanvasElement*) = 0;
 };
 
-class HTMLCanvasElement : public HTMLElement, public CanvasSurface {
+class HTMLCanvasElement : public HTMLElement {
 public:
-    HTMLCanvasElement(const QualifiedName&, Document*);
+    static PassRefPtr<HTMLCanvasElement> create(Document*);
+    static PassRefPtr<HTMLCanvasElement> create(const QualifiedName&, Document*);
     virtual ~HTMLCanvasElement();
+
+    void addObserver(CanvasObserver*);
+    void removeObserver(CanvasObserver*);
+
+    // Attributes and functions exposed to script
+    int width() const { return size().width(); }
+    int height() const { return size().height(); }
+
+    const IntSize& size() const { return m_size; }
 
     void setWidth(int);
     void setHeight(int);
-
-    CanvasRenderingContext* getContext(const String&, CanvasContextAttributes* attributes = 0);
 
     void setSize(const IntSize& newSize)
     { 
@@ -74,26 +80,44 @@ public:
         reset();
     }
 
-    virtual void willDraw(const FloatRect&);
+    CanvasRenderingContext* getContext(const String&, CanvasContextAttributes* attributes = 0);
+
+    String toDataURL(const String& mimeType, const double* quality, ExceptionCode&);
+    String toDataURL(const String& mimeType, ExceptionCode& ec) { return toDataURL(mimeType, 0, ec); }
+
+    // Used for rendering
+    void didDraw(const FloatRect&);
 
     void paint(GraphicsContext*, const IntRect&);
 
-    void setObserver(CanvasObserver* observer) { m_observer = observer; }
+    GraphicsContext* drawingContext() const;
 
     CanvasRenderingContext* renderingContext() const { return m_context.get(); }
 
-    RenderBox* renderBox() const { return HTMLElement::renderBox(); }
-    RenderStyle* computedStyle() { return HTMLElement::computedStyle(); }
+    ImageBuffer* buffer() const;
+    Image* copiedImage() const;
+    void clearCopiedImage();
+
+    IntRect convertLogicalToDevice(const FloatRect&) const;
+    IntSize convertLogicalToDevice(const FloatSize&) const;
+    IntPoint convertLogicalToDevice(const FloatPoint&) const;
+
+    const SecurityOrigin& securityOrigin() const;
+    void setOriginTainted() { m_originClean = false; }
+    bool originClean() const { return m_originClean; }
+
+    CSSStyleSelector* styleSelector();
+
+    AffineTransform baseTransform() const;
 
 #if ENABLE(3D_CANVAS)    
     bool is3D() const;
 #endif
 
+    void makeRenderingResultsAvailable();
+
 private:
-#if ENABLE(DASHBOARD_SUPPORT)
-    virtual HTMLTagStatus endTagRequirement() const;
-    virtual int tagPriority() const;
-#endif
+    HTMLCanvasElement(const QualifiedName&, Document*);
 
     virtual void parseMappedAttribute(Attribute*);
     virtual RenderObject* createRenderer(RenderArena*, RenderStyle*);
@@ -102,13 +126,30 @@ private:
 
     void reset();
 
-    bool m_rendererIsCanvas;
+    void createImageBuffer() const;
+
+    void setSurfaceSize(const IntSize&);
+    bool hasCreatedImageBuffer() const { return m_hasCreatedImageBuffer; }
+
+    HashSet<CanvasObserver*> m_observers;
+
+    IntSize m_size;
 
     OwnPtr<CanvasRenderingContext> m_context;
-    CanvasObserver* m_observer;
+
+    bool m_rendererIsCanvas;
 
     bool m_ignoreReset;
     FloatRect m_dirtyRect;
+
+    float m_pageScaleFactor;
+    bool m_originClean;
+
+    // m_createdImageBuffer means we tried to malloc the buffer.  We didn't necessarily get it.
+    mutable bool m_hasCreatedImageBuffer;
+    mutable OwnPtr<ImageBuffer> m_imageBuffer;
+    
+    mutable RefPtr<Image> m_copiedImage; // FIXME: This is temporary for platforms that have to copy the image buffer to render (and for CSSCanvasValue).
 };
 
 } //namespace

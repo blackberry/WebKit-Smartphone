@@ -91,13 +91,13 @@ public:
 
     virtual void clearTruncation();
 
-    virtual void paintBoxDecorations(RenderObject::PaintInfo&, int tx, int ty);
-    virtual void paintMask(RenderObject::PaintInfo&, int tx, int ty);
-    void paintFillLayers(const RenderObject::PaintInfo&, const Color&, const FillLayer*, int tx, int ty, int w, int h, CompositeOperator = CompositeSourceOver);
-    void paintFillLayer(const RenderObject::PaintInfo&, const Color&, const FillLayer*, int tx, int ty, int w, int h, CompositeOperator = CompositeSourceOver);
+    virtual void paintBoxDecorations(PaintInfo&, int tx, int ty);
+    virtual void paintMask(PaintInfo&, int tx, int ty);
+    void paintFillLayers(const PaintInfo&, const Color&, const FillLayer*, int tx, int ty, int w, int h, CompositeOperator = CompositeSourceOver);
+    void paintFillLayer(const PaintInfo&, const Color&, const FillLayer*, int tx, int ty, int w, int h, CompositeOperator = CompositeSourceOver);
     void paintBoxShadow(GraphicsContext*, RenderStyle*, ShadowStyle, int tx, int ty, int w, int h);
-    virtual void paintTextDecorations(RenderObject::PaintInfo&, int tx, int ty, bool paintedChildren = false);
-    virtual void paint(RenderObject::PaintInfo&, int tx, int ty);
+    virtual void paintTextDecorations(PaintInfo&, int tx, int ty, bool paintedChildren = false);
+    virtual void paint(PaintInfo&, int tx, int ty);
     virtual bool nodeAtPoint(const HitTestRequest&, HitTestResult&, int x, int y, int tx, int ty);
 
     virtual RenderLineBoxList* rendererLineBoxes() const;
@@ -127,7 +127,7 @@ public:
     void determineSpacingForFlowBoxes(bool lastLine, RenderObject* endObject);
     int getFlowSpacingWidth();
     bool onEndChain(RenderObject* endObject);
-    virtual int placeBoxesHorizontally(int x, bool& needsWordSpacing, GlyphOverflowAndFallbackFontsMap&);
+    int placeBoxesHorizontally(int x, bool& needsWordSpacing, GlyphOverflowAndFallbackFontsMap&);
     void computeLogicalBoxHeights(int& maxPositionTop, int& maxPositionBottom,
                                   int& maxAscent, int& maxDescent, bool strictMode, GlyphOverflowAndFallbackFontsMap&);
     void adjustMaxAscentAndDescent(int& maxAscent, int& maxDescent,
@@ -193,7 +193,7 @@ inline void InlineFlowBox::setHorizontalOverflowPositions(int leftLayoutOverflow
     if (!m_overflow) {
         if (leftLayoutOverflow == m_x && rightLayoutOverflow == m_x + m_width && leftVisualOverflow == m_x && rightVisualOverflow == m_x + m_width)
             return;
-        m_overflow.set(new RenderOverflow(IntRect(m_x, m_y, m_width, m_renderer->style(m_firstLine)->font().height())));    
+        m_overflow = adoptPtr(new RenderOverflow(IntRect(m_x, m_y, m_width, m_renderer->style(m_firstLine)->font().height())));    
     }
 
     m_overflow->setLeftLayoutOverflow(leftLayoutOverflow);
@@ -207,7 +207,7 @@ inline void InlineFlowBox::setVerticalOverflowPositions(int topLayoutOverflow, i
     if (!m_overflow) {
         if (topLayoutOverflow == m_y && bottomLayoutOverflow == m_y + boxHeight && topVisualOverflow == m_y && bottomVisualOverflow == m_y + boxHeight)
             return;
-        m_overflow.set(new RenderOverflow(IntRect(m_x, m_y, m_width, boxHeight)));
+        m_overflow = adoptPtr(new RenderOverflow(IntRect(m_x, m_y, m_width, boxHeight)));
     }
 
     m_overflow->setTopLayoutOverflow(topLayoutOverflow);

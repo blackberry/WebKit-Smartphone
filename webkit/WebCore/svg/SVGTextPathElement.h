@@ -1,21 +1,21 @@
 /*
-    Copyright (C) 2007 Nikolas Zimmermann <zimmermann@kde.org>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2007 Nikolas Zimmermann <zimmermann@kde.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #ifndef SVGTextPathElement_h
 #define SVGTextPathElement_h
@@ -51,18 +51,22 @@ namespace WebCore {
             TEXTPATH_SPACINGTYPE_EXACT = SVG_TEXTPATH_SPACINGTYPE_EXACT
         };
 
-        SVGTextPathElement(const QualifiedName&, Document*);
-        virtual ~SVGTextPathElement();
+        static PassRefPtr<SVGTextPathElement> create(const QualifiedName&, Document*);
  
+    private:
+        SVGTextPathElement(const QualifiedName&, Document*);
+
         virtual void insertedIntoDocument();
 
         virtual void parseMappedAttribute(Attribute*);
+        virtual void svgAttributeChanged(const QualifiedName&);
         virtual void synchronizeProperty(const QualifiedName&);
         virtual RenderObject* createRenderer(RenderArena*, RenderStyle*);
 
-        bool childShouldCreateRenderer(Node*) const;
+        virtual bool childShouldCreateRenderer(Node*) const;
 
-    private:
+        virtual bool selfHasRelativeLengths() const;
+
         DECLARE_ANIMATED_PROPERTY(SVGTextPathElement, SVGNames::startOffsetAttr, SVGLength, StartOffset, startOffset)
         DECLARE_ANIMATED_PROPERTY(SVGTextPathElement, SVGNames::methodAttr, int, Method, method)
         DECLARE_ANIMATED_PROPERTY(SVGTextPathElement, SVGNames::spacingAttr, int, Spacing, spacing)

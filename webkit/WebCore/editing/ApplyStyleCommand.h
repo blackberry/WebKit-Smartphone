@@ -42,6 +42,8 @@ enum ShouldIncludeTypingStyle {
 class ApplyStyleCommand : public CompositeEditCommand {
 public:
     enum EPropertyLevel { PropertyDefault, ForceBlockProperties };
+    enum InlineStyleRemovalMode { RemoveAttributesAndElements, RemoveNone };
+    enum EAddStyledElement { AddStyledElement, DoNotAddStyledElement };
 
     static PassRefPtr<ApplyStyleCommand> create(Document* document, CSSStyleDeclaration* style, EditAction action = EditActionChangeAttributes, EPropertyLevel level = PropertyDefault)
     {
@@ -69,32 +71,33 @@ private:
     CSSMutableStyleDeclaration* style() const { return m_style.get(); }
 
     // style-removal helpers
-    bool shouldRemoveTextDecorationTag(CSSStyleDeclaration* styleToApply, int textDecorationAddedByTag) const;
-    bool implicitlyStyledElementShouldBeRemovedWhenApplyingStyle(HTMLElement*, CSSMutableStyleDeclaration*);
+    bool removeInlineStyleFromElement(CSSMutableStyleDeclaration*, HTMLElement*, InlineStyleRemovalMode = RemoveAttributesAndElements);
+    inline bool shouldRemoveInlineStyleFromElement(CSSMutableStyleDeclaration* style, HTMLElement* element) {return removeInlineStyleFromElement(style, element, RemoveNone);}
+    bool removeImplicitlyStyledElement(CSSMutableStyleDeclaration*, HTMLElement*, InlineStyleRemovalMode, CSSMutableStyleDeclaration* extractedStyle = 0);
     void replaceWithSpanOrRemoveIfWithoutAttributes(HTMLElement*&);
-    void removeHTMLFontStyle(CSSMutableStyleDeclaration*, HTMLElement*);
-    void removeHTMLBidiEmbeddingStyle(CSSMutableStyleDeclaration*, HTMLElement*);
-    void removeCSSStyle(CSSMutableStyleDeclaration*, HTMLElement*);
+    bool removeCSSStyle(CSSMutableStyleDeclaration*, HTMLElement*, InlineStyleRemovalMode = RemoveAttributesAndElements);
+    HTMLElement* highestAncestorWithConflictingInlineStyle(CSSMutableStyleDeclaration*, Node*);
+    PassRefPtr<CSSMutableStyleDeclaration> extractInlineStyleToPushDown(CSSMutableStyleDeclaration*, Node*, bool isStyledElement);
+    void applyInlineStyleToPushDown(Node*, CSSMutableStyleDeclaration *style);
+    void pushDownInlineStyleAroundNode(CSSMutableStyleDeclaration*, Node*);
     void removeInlineStyle(PassRefPtr<CSSMutableStyleDeclaration>, const Position& start, const Position& end);
     bool nodeFullySelected(Node*, const Position& start, const Position& end) const;
     bool nodeFullyUnselected(Node*, const Position& start, const Position& end) const;
-    PassRefPtr<CSSMutableStyleDeclaration> extractTextDecorationStyle(Node*);
-    PassRefPtr<CSSMutableStyleDeclaration> extractAndNegateTextDecorationStyle(Node*);
-    void applyTextDecorationStyle(Node*, CSSMutableStyleDeclaration *style);
-    void pushDownTextDecorationStyleAroundNode(Node*, bool forceNegate);
-    void pushDownTextDecorationStyleAtBoundaries(const Position& start, const Position& end);
-    
+
     // style-application helpers
     void applyBlockStyle(CSSMutableStyleDeclaration*);
     void applyRelativeFontStyleChange(CSSMutableStyleDeclaration*);
     void applyInlineStyle(CSSMutableStyleDeclaration*);
-    void applyInlineStyleToRange(CSSMutableStyleDeclaration*, const Position& start, const Position& end);
+    void fixRangeAndApplyInlineStyle(CSSMutableStyleDeclaration*, const Position& start, const Position& end);
+    void applyInlineStyleToNodeRange(CSSMutableStyleDeclaration*, Node* startNode, Node* pastEndNode);
     void addBlockStyle(const StyleChange&, HTMLElement*);
-    void addInlineStyleIfNeeded(CSSMutableStyleDeclaration*, Node* start, Node* end);
-    bool splitTextAtStartIfNeeded(const Position& start, const Position& end);
-    bool splitTextAtEndIfNeeded(const Position& start, const Position& end);
-    bool splitTextElementAtStartIfNeeded(const Position& start, const Position& end);
-    bool splitTextElementAtEndIfNeeded(const Position& start, const Position& end);
+    void addInlineStyleIfNeeded(CSSMutableStyleDeclaration*, Node* start, Node* end, EAddStyledElement addStyledElement = AddStyledElement);
+    void splitTextAtStart(const Position& start, const Position& end);
+    void splitTextAtEnd(const Position& start, const Position& end);
+    void splitTextElementAtStart(const Position& start, const Position& end);
+    void splitTextElementAtEnd(const Position& start, const Position& end);
+    bool shouldSplitTextElement(Element* elem, CSSMutableStyleDeclaration*);
+    bool isValidCaretPositionInTextNode(const Position& position);
     bool mergeStartWithPreviousIfIdentical(const Position& start, const Position& end);
     bool mergeEndWithNextIfIdentical(const Position& start, const Position& end);
     void cleanupUnstyledAppleStyleSpans(Node* dummySpanAncestor);
@@ -103,7 +106,7 @@ private:
     float computedFontSize(const Node*);
     void joinChildTextNodes(Node*, const Position& start, const Position& end);
 
-    HTMLElement* splitAncestorsWithUnicodeBidi(Node*, bool before, RefPtr<CSSPrimitiveValue> allowedDirection);
+    HTMLElement* splitAncestorsWithUnicodeBidi(Node*, bool before, int allowedDirection);
     void removeEmbeddingUpToEnclosingBlock(Node* node, Node* unsplitAncestor);
 
     void updateStartEnd(const Position& newStart, const Position& newEnd);

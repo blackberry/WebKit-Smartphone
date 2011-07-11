@@ -48,13 +48,17 @@ static pthread_once_t initializeThreadingKeyOnce = PTHREAD_ONCE_INIT;
 
 static void initializeThreadingOnce()
 {
+    // StringImpl::empty() does not construct its static string in a threadsafe fashion,
+    // so ensure it has been initialized from here.
+    StringImpl::empty();
+
     WTF::initializeThreading();
     wtfThreadData();
-    initializeUString();
     JSGlobalData::storeVPtrs();
 #if ENABLE(JSC_MULTIPLE_THREADS)
     s_dtoaP5Mutex = new Mutex;
     initializeDates();
+    RegisterFile::initializeThreading();
 #endif
 }
 

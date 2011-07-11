@@ -28,6 +28,7 @@
 #include "TranslateTransformOperation.h"
 #include "UnitBezier.h"
 #include <QtCore/qabstractanimation.h>
+#include <QtCore/qdatetime.h>
 #include <QtCore/qdebug.h>
 #include <QtCore/qmetaobject.h>
 #include <QtCore/qset.h>
@@ -40,6 +41,12 @@
 #include <QtGui/qpixmap.h>
 #include <QtGui/qpixmapcache.h>
 #include <QtGui/qstyleoption.h>
+
+
+#define QT_DEBUG_RECACHE 0
+#define QT_DEBUG_CACHEDUMP 0
+
+#define QT_DEBUG_FPS 0
 
 namespace WebCore {
 
@@ -59,7 +66,12 @@ public:
         // (a) We don't need the QBrush abstraction - we always end up using QGraphicsItem::paint
         //     from the mask layer.
         // (b) QGraphicsOpacityEffect detaches the pixmap, which is inefficient on OpenGL.
-        QPixmap maskPixmap(sourceBoundingRect().toAlignedRect().size());
+        const QSize maskSize = sourceBoundingRect().toAlignedRect().size();
+        if (!maskSize.isValid() || maskSize.isEmpty()) {
+            drawSource(painter);
+            return;
+        }
+        QPixmap maskPixmap(maskSize);
 
         // We need to do this so the pixmap would have hasAlpha().
         maskPixmap.fill(Qt::transparent);
@@ -220,7 +232,10 @@ public:
     int m_changeMask;
 
     QSizeF m_size;
-    QPixmapCache::Key m_backingStoreKey;
+    struct {
+        QPixmapCache::Key key;
+        QSizeF size;
+    } m_backingStore;
 #ifndef QT_NO_ANIMATION
     QList<QWeakPointer<QAbstractAnimation> > m_animations;
 #endif
@@ -278,7 +293,6 @@ inline GraphicsLayerQtImpl* toGraphicsLayerQtImpl(QGraphicsItem* item)
 
 inline GraphicsLayerQtImpl* toGraphicsLayerQtImpl(QGraphicsObject* item)
 {
-    ASSERT(item);
     return qobject_cast<GraphicsLayerQtImpl*>(item);
 }
 
@@ -334,35 +348,109 @@ const GraphicsLayerQtImpl* GraphicsLayerQtImpl::rootLayer() const
 
 QPixmap GraphicsLayerQtImpl::recache(const QRegion& regionToUpdate)
 {
-    if (!m_layer->drawsContent())
+    if (!m_layer->drawsContent() || m_size.isEmpty() || !m_size.isValid())
         return QPixmap();
 
-    QRegion region = regionToUpdate;
     QPixmap pixmap;
-
-    // We might be drawing into an existing cache.
-    if (!QPixmapCache::find(m_backingStoreKey, &pixmap))
-        region = QRegion(QRect(0, 0, m_size.width(), m_size.height()));
-
-    if (m_size != pixmap.size()) {
-        pixmap = QPixmap(m_size.toSize());
-        if (!m_layer->contentsOpaque())
-            pixmap.fill(Qt::transparent);
-        m_pendingContent.regionToUpdate = QRegion(QRect(QPoint(0, 0), m_size.toSize()));
+    QRegion region = regionToUpdate;
+    if (QPixmapCache::find(m_backingStore.key, &pixmap)) {
+        if (region.isEmpty())
+            return pixmap;
+        QPixmapCache::remove(m_backingStore.key); // Remove the reference to the pixmap in the cache to avoid a detach.
     }
 
-    QPainter painter(&pixmap);
-    GraphicsContext gc(&painter);
+    {
+        bool erased = false;
 
-    // Clear the area in cache that we're drawing into
-    painter.setCompositionMode(QPainter::CompositionMode_Clear);
-    painter.fillRect(region.boundingRect(), Qt::transparent);
+        // If the pixmap is not in the cache or the view has grown since last cached.
+        if (pixmap.isNull() || m_size != m_backingStore.size) {
+#if QT_DEBUG_RECACHE
+            if (pixmap.isNull())
+                qDebug() << "CacheMiss" << this << m_size;
+#endif
+            bool fill = true;
+            QRegion newRegion;
+            QPixmap oldPixmap = pixmap;
 
-    // Render the actual contents into the cache
-    painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
-    m_layer->paintGraphicsLayerContents(gc, region.boundingRect());
+            // If the pixmap is two small to hold the view contents we enlarge, otherwise just use the old (large) pixmap.
+            if (pixmap.width() < m_size.width() || pixmap.height() < m_size.height()) {
+#if QT_DEBUG_RECACHE
+                qDebug() << "CacheGrow" << this << m_size;
+#endif
+                pixmap = QPixmap(m_size.toSize());
+                pixmap.fill(Qt::transparent);
+                newRegion = QRegion(0, 0, m_size.width(), m_size.height());
+            }
 
-    m_backingStoreKey = QPixmapCache::insert(pixmap);
+#if 1
+            // Blit the contents of oldPixmap back into the cached pixmap as we are just adding new pixels.
+            if (!oldPixmap.isNull()) {
+                const QRegion cleanRegion = (QRegion(0, 0, m_size.width(), m_size.height())
+                                             & QRegion(0, 0, m_backingStore.size.width(), m_backingStore.size.height())) - regionToUpdate;
+                if (!cleanRegion.isEmpty()) {
+#if QT_DEBUG_RECACHE
+                    qDebug() << "CacheBlit" << this << cleanRegion;
+#endif
+                    const QRect cleanBounds(cleanRegion.boundingRect());
+                    QPainter painter(&pixmap);
+                    painter.setCompositionMode(QPainter::CompositionMode_Source);
+                    painter.drawPixmap(cleanBounds.topLeft(), oldPixmap, cleanBounds);
+                    newRegion -= cleanRegion;
+                    fill = false; // We cannot just fill the pixmap.
+                }
+                oldPixmap = QPixmap();
+            }
+#endif
+            region += newRegion;
+            if (fill && !region.isEmpty()) { // Clear the entire pixmap with the background.
+#if QT_DEBUG_RECACHE
+                qDebug() << "CacheErase" << this << m_size << background;
+#endif
+                erased = true;
+                pixmap.fill(Qt::transparent);
+            }
+        }
+        region &= QRegion(0, 0, m_size.width(), m_size.height());
+
+        // If we have something to draw its time to erase it and render the contents.
+        if (!region.isEmpty()) {
+#if QT_DEBUG_CACHEDUMP
+            static int recacheCount = 0;
+            ++recacheCount;
+            qDebug() << "**** CACHEDUMP" << recacheCount << this << m_layer << region << m_size;
+            pixmap.save(QString().sprintf("/tmp/%05d_A.png", recacheCount), "PNG");
+#endif
+
+            QPainter painter(&pixmap);
+            GraphicsContext gc(&painter);
+
+            painter.setClipRegion(region);
+
+            if (!erased) { // Erase the area in cache that we're drawing into.
+                painter.setCompositionMode(QPainter::CompositionMode_Clear);
+                painter.fillRect(region.boundingRect(), Qt::transparent);
+
+#if QT_DEBUG_CACHEDUMP
+                qDebug() << "**** CACHEDUMP" << recacheCount << this << m_layer << region << m_size;
+                pixmap.save(QString().sprintf("/tmp/%05d_B.png", recacheCount), "PNG");
+#endif
+            }
+
+            // Render the actual contents into the cache.
+            painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+            m_layer->paintGraphicsLayerContents(gc, region.boundingRect());
+            painter.end();
+
+#if QT_DEBUG_CACHEDUMP
+            qDebug() << "**** CACHEDUMP" << recacheCount << this << m_layer << region << m_size;
+            pixmap.save(QString().sprintf("/tmp/%05d_C.png", recacheCount), "PNG");
+#endif
+        }
+        m_backingStore.size = m_size; // Store the used size of the pixmap.
+    }
+
+    // Finally insert into the cache and allow a reference there.
+    m_backingStore.key = QPixmapCache::insert(pixmap);
     return pixmap;
 }
 
@@ -481,8 +569,9 @@ void GraphicsLayerQtImpl::paint(QPainter* painter, const QStyleOptionGraphicsIte
         if (m_state.drawsContent) {
             QPixmap backingStore;
             // We might need to recache, in case we try to paint and the cache was purged (e.g. if it was full).
-            if (!QPixmapCache::find(m_backingStoreKey, &backingStore) || backingStore.size() != m_size.toSize())
+            if (!QPixmapCache::find(m_backingStore.key, &backingStore) || backingStore.size() != m_size.toSize())
                 backingStore = recache(QRegion(m_state.contentsRect));
+            const QRectF bounds(0, 0, m_backingStore.size.width(), m_backingStore.size.height());
             painter->drawPixmap(0, 0, backingStore);
         }
         break;
@@ -665,16 +754,19 @@ void GraphicsLayerQtImpl::flushChanges(bool recursive, bool forceUpdateTransform
 #ifndef QT_NO_GRAPHICSEFFECT
     if (m_maskEffect)
         m_maskEffect.data()->update();
-    else if (m_changeMask & DisplayChange) {
+    else
+#endif
+    if (m_changeMask & DisplayChange) {
+#ifndef QT_GRAPHICS_LAYER_NO_RECACHE_ON_DISPLAY_CHANGE
         // Recache now: all the content is ready and we don't want to wait until the paint event.
         // We only need to do this for HTML content, there's no point in caching directly composited
         // content like images or solid rectangles.
         if (m_pendingContent.contentType == HTMLContentType)
             recache(m_pendingContent.regionToUpdate);
+#endif
         update(m_pendingContent.regionToUpdate.boundingRect());
         m_pendingContent.regionToUpdate = QRegion();
     }
-#endif
 
     if ((m_changeMask & BackgroundColorChange)
         && (m_pendingContent.backgroundColor != m_currentContent.backgroundColor))
@@ -1095,6 +1187,15 @@ void GraphicsLayerQt::syncCompositingState()
 }
 
 /* \reimp (GraphicsLayer.h)
+*/
+void GraphicsLayerQt::syncCompositingStateForThisLayerOnly()
+{
+    // We can't call flushChanges recursively here
+    m_impl->flushChanges(false);
+    GraphicsLayer::syncCompositingStateForThisLayerOnly();
+}
+
+/* \reimp (GraphicsLayer.h)
  */
 NativeLayer GraphicsLayerQt::nativeLayer() const
 {
@@ -1112,7 +1213,7 @@ PlatformLayer* GraphicsLayerQt::platformLayer() const
 
 template <typename T>
 struct KeyframeValueQt {
-    TimingFunction timingFunction;
+    const TimingFunction* timingFunction;
     T value;
 };
 
@@ -1129,23 +1230,32 @@ static inline double solveCubicBezierFunction(qreal p1x, qreal p1y, qreal p2x, q
     return bezier.solve(t, solveEpsilon(duration));
 }
 
-static inline qreal applyTimingFunction(const TimingFunction& timingFunction, qreal progress, double duration)
+static inline double solveStepsFunction(int numSteps, bool stepAtStart, double t)
+{
+    if (stepAtStart)
+        return qMin(1.0, (floor(numSteps * t) + 1) / numSteps);
+    return floor(numSteps * t) / numSteps;
+}
+
+static inline qreal applyTimingFunction(const TimingFunction* timingFunction, qreal progress, double duration)
 {
     // We want the timing function to be as close as possible to what the web-developer intended, so
     // we're using the same function used by WebCore when compositing is disabled. Using easing-curves
     // would probably work for some of the cases, but wouldn't really buy us anything as we'd have to
     // convert the bezier function back to an easing curve.
 
-    if (timingFunction.type() == LinearTimingFunction)
-        return progress;
-    if (timingFunction.type() == CubicBezierTimingFunction) {
-        return solveCubicBezierFunction(timingFunction.x1(),
-                                        timingFunction.y1(),
-                                        timingFunction.x2(),
-                                        timingFunction.y2(),
+    if (timingFunction->isCubicBezierTimingFunction()) {
+        const CubicBezierTimingFunction* ctf = static_cast<const CubicBezierTimingFunction*>(timingFunction);
+        return solveCubicBezierFunction(ctf->x1(),
+                                        ctf->y1(),
+                                        ctf->x2(),
+                                        ctf->y2(),
                                         double(progress), double(duration) / 1000);
-    }
-    return progress;
+    } else if (timingFunction->isStepsTimingFunction()) {
+        const StepsTimingFunction* stf = static_cast<const StepsTimingFunction*>(timingFunction);
+        return solveStepsFunction(stf->numberOfSteps(), stf->stepAtStart(), double(progress));
+    } else
+        return progress;
 }
 
 // Helper functions to safely get a value out of WebCore's AnimationValue*.
@@ -1221,9 +1331,9 @@ public:
             const AnimationValue* animationValue = values.at(i);
             KeyframeValueQt<T> keyframeValue;
             if (animationValue->timingFunction())
-                keyframeValue.timingFunction = *animationValue->timingFunction();
+                keyframeValue.timingFunction = animationValue->timingFunction();
             else
-                keyframeValue.timingFunction = anim->timingFunction();
+                keyframeValue.timingFunction = anim->timingFunction().get();
             webkitAnimationToQtAnimationValue(animationValue, keyframeValue.value);
             m_keyframeValues[animationValue->keyTime()] = keyframeValue;
         }
@@ -1233,6 +1343,22 @@ protected:
 
     // This is the part that differs between animated properties.
     virtual void applyFrame(const T& fromValue, const T& toValue, qreal progress) = 0;
+
+    virtual void updateState(QAbstractAnimation::State newState, QAbstractAnimation::State oldState)
+    {
+#if QT_DEBUG_FPS
+        if (newState == Running && oldState == Stopped) {
+            qDebug("Animation Started!");
+            m_fps.frames = 0;
+            m_fps.duration.start();
+        } else if (newState == Stopped && oldState == Running) {
+            const int duration = m_fps.duration.elapsed();
+            qDebug("Animation Ended! %dms [%f FPS]", duration,
+                    (1000 / (((float)duration) / m_fps.frames)));
+        }
+#endif
+        AnimationQtBase::updateState(newState, oldState);
+    }
 
     virtual void updateCurrentTime(int currentTime)
     {
@@ -1264,7 +1390,7 @@ protected:
         const KeyframeValueQt<T>& fromKeyframe = it.value();
         const KeyframeValueQt<T>& toKeyframe = it2.value();
 
-        const TimingFunction& timingFunc = fromKeyframe.timingFunction;
+        const TimingFunction* timingFunc = fromKeyframe.timingFunction;
         const T& fromValue = fromKeyframe.value;
         const T& toValue = toKeyframe.value;
 
@@ -1273,9 +1399,18 @@ protected:
         progress = (!progress || progress == 1 || it.key() == it2.key()) ?
             progress : applyTimingFunction(timingFunc, (progress - it.key()) / (it2.key() - it.key()), duration());
         applyFrame(fromValue, toValue, progress);
+#if QT_DEBUG_FPS
+        ++m_fps.frames;
+#endif
     }
 
     QMap<qreal, KeyframeValueQt<T> > m_keyframeValues;
+#if QT_DEBUG_FPS
+    struct {
+        QTime duration;
+        int frames;
+    } m_fps;
+#endif
 };
 
 class TransformAnimationQt : public AnimationQt<TransformOperations> {
@@ -1327,7 +1462,7 @@ public:
 
     virtual void updateState(QAbstractAnimation::State newState, QAbstractAnimation::State oldState)
     {
-        AnimationQtBase::updateState(newState, oldState);
+        AnimationQt<TransformOperations>::updateState(newState, oldState);
         if (!m_layer)
             return;
 
@@ -1378,7 +1513,7 @@ public:
 
     virtual void updateState(QAbstractAnimation::State newState, QAbstractAnimation::State oldState)
     {
-        QAbstractAnimation::updateState(newState, oldState);
+        AnimationQt<qreal>::updateState(newState, oldState);
 
         if (m_layer)
             m_layer.data()->m_opacityAnimationRunning = (newState == QAbstractAnimation::Running);
@@ -1434,10 +1569,7 @@ bool GraphicsLayerQt::addAnimation(const KeyframeValueList& values, const IntSiz
     if (anim->fillsBackwards())
         newAnim->setCurrentTime(0);
 
-    if (anim->delay())
-        QTimer::singleShot(anim->delay() * 1000, newAnim, SLOT(start()));
-    else
-        newAnim->start();
+    newAnim->start();
 
     // We synchronize the animation's clock to WebCore's timeOffset.
     newAnim->setCurrentTime(timeOffset * 1000);

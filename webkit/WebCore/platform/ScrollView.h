@@ -40,6 +40,7 @@
 #endif
 
 #if PLATFORM(GTK)
+#include "GRefPtrGtk.h"
 typedef struct _GtkAdjustment GtkAdjustment;
 #endif
 
@@ -57,8 +58,11 @@ class ScrollView : public Widget, public ScrollbarClient {
 public:
     ~ScrollView();
 
-    // ScrollbarClient function. FrameView overrides the other two.
+    // ScrollbarClient functions.  FrameView overrides the others.
+    virtual int scrollSize(ScrollbarOrientation orientation) const;
+    virtual void setScrollOffsetFromAnimation(const IntPoint&);
     virtual void valueChanged(Scrollbar*);
+    virtual void valueChanged(const IntSize&);
     
     // The window thats hosts the ScrollView. The ScrollView will communicate scrolls and repaints to the
     // host window in the window's coordinate space.
@@ -126,6 +130,7 @@ public:
     int visibleWidth() const { return visibleContentRect().width(); }
     int visibleHeight() const { return visibleContentRect().height(); }
 
+#if ENABLE(FIXED_REPORTED_SIZE)
     // Methods for getting/setting the size reported by the DOMWindow as innerWidth and innerHeight.  By default this is the same as the
     // size of the widget.  Explicitly setting a reported size value will cause webkit to report the innerWidth and innerHeight using
     // this size instead.
@@ -134,6 +139,7 @@ public:
     IntSize fixedReportedSize() const;
     void setFixedReportedSize(const IntSize&);
     bool fixedReportedSizeChanged() const { return m_fixedReportedSizeChanged; }
+#endif
 
     // Functions for getting/setting the size webkit should use to layout the contents. By default this is the same as the visible
     // content size. Explicitly setting a layout size value will cause webkit to layout the contents using this size instead.
@@ -160,6 +166,9 @@ public:
     IntPoint scrollPosition() const { return visibleContentRect().location(); }
     IntSize scrollOffset() const { return visibleContentRect().location() - IntPoint(); } // Gets the scrolled position as an IntSize. Convenient for adding to other sizes.
     IntPoint maximumScrollPosition() const; // The maximum position we can be scrolled to.
+    IntPoint minimumScrollPosition() const; // The minimum position we can be scrolled to.
+    // Adjust the pass in scroll position within the minimum and maximum positions.
+    IntPoint adjustScrollPositionWithinRange(const IntPoint&) const; 
     int scrollX() const { return scrollPosition().x(); }
     int scrollY() const { return scrollPosition().y(); }
     
@@ -272,7 +281,14 @@ protected:
     virtual void updateScrollCorner();
     virtual void paintScrollCorner(GraphicsContext*, const IntRect& cornerRect);
 
+    // Scroll the content by blitting the pixels
+    virtual bool scrollContentsFastPath(const IntSize& scrollDelta, const IntRect& rectToScroll, const IntRect& clipRect);
+
+    void setScrollOriginX(int);
+
+#if ENABLE(FIXED_REPORTED_SIZE)
     void setFixedReportedSizeChanged(bool changed) { m_fixedReportedSizeChanged = changed; }
+#endif
 
 private:
     RefPtr<Scrollbar> m_horizontalScrollbar;
@@ -292,8 +308,10 @@ private:
     bool m_canBlitOnScroll;
 
     IntSize m_scrollOffset; // FIXME: Would rather store this as a position, but we will wait to make this change until more code is shared.
+#if ENABLE(FIXED_REPORTED_SIZE)
     IntSize m_fixedReportedSize;
     bool m_fixedReportedSizeChanged;
+#endif
     IntSize m_fixedLayoutSize;
     IntSize m_contentsSize;
     bool m_canOverscroll;
@@ -309,6 +327,11 @@ private:
     bool m_useFixedLayout;
 
     bool m_paintsEntireContents;
+
+    // m_scrollOriginX is 0 for LTR page. And it is negative of left layout
+    // overflow for RTL page. It is mainly used to set the horizontal scrollbar
+    // position for RTL page.
+    int m_scrollOriginX;
 
     void init();
     void destroy();
@@ -337,6 +360,8 @@ private:
     void platformSetScrollbarsSuppressed(bool repaintOnUnsuppress);
     void platformRepaintContentRectangle(const IntRect&, bool now);
     bool platformIsOffscreen() const;
+   
+    void platformSetScrollOriginX(int);
 
 #if PLATFORM(MAC) && defined __OBJC__
 public:
@@ -349,9 +374,11 @@ private:
 #if PLATFORM(GTK)
 public:
     void setGtkAdjustments(GtkAdjustment* hadj, GtkAdjustment* vadj, bool resetValues = true);
-    GtkAdjustment* m_horizontalAdjustment;
-    GtkAdjustment* m_verticalAdjustment;
     void setScrollOffset(const IntSize& offset) { m_scrollOffset = offset; }
+
+private:
+    PlatformRefPtr<GtkAdjustment> m_horizontalAdjustment;
+    PlatformRefPtr<GtkAdjustment> m_verticalAdjustment;
 #endif
 
 #if PLATFORM(WX)

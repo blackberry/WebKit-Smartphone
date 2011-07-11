@@ -10,9 +10,6 @@
  * 2.  Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer in the
  *     documentation and/or other materials provided with the distribution.
- * 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of
- *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -29,7 +26,7 @@
 #ifndef IDBDatabaseProxy_h
 #define IDBDatabaseProxy_h
 
-#include "IDBDatabase.h"
+#include "IDBDatabaseBackendInterface.h"
 #include <wtf/OwnPtr.h>
 #include <wtf/PassOwnPtr.h>
 #include <wtf/PassRefPtr.h>
@@ -40,17 +37,23 @@ namespace WebKit { class WebIDBDatabase; }
 
 namespace WebCore {
 
-class IDBDatabaseProxy : public IDBDatabase {
+class IDBDatabaseProxy : public IDBDatabaseBackendInterface {
 public:
-    static PassRefPtr<IDBDatabase> create(PassOwnPtr<WebKit::WebIDBDatabase>);
+    static PassRefPtr<IDBDatabaseBackendInterface> create(PassOwnPtr<WebKit::WebIDBDatabase>);
     virtual ~IDBDatabaseProxy();
 
-    virtual String name();
-    virtual String description();
-    virtual String version();
-    virtual PassRefPtr<DOMStringList> objectStores();
+    virtual String name() const;
+    virtual String description() const;
+    virtual String version() const;
+    virtual PassRefPtr<DOMStringList> objectStores() const;
 
-    // FIXME: Add other methods.
+    // FIXME: Add transaction and setVersion.
+
+    virtual void createObjectStore(const String& name, const String& keyPath, bool autoIncrement, PassRefPtr<IDBCallbacks>);
+    virtual PassRefPtr<IDBObjectStoreBackendInterface> objectStore(const String& name, unsigned short mode);
+    virtual void removeObjectStore(const String& name, PassRefPtr<IDBCallbacks>);
+    virtual void setVersion(const String& version, PassRefPtr<IDBCallbacks>);
+    virtual PassRefPtr<IDBTransactionBackendInterface> transaction(DOMStringList* storeNames, unsigned short mode, unsigned long timeout);
 
 private:
     IDBDatabaseProxy(PassOwnPtr<WebKit::WebIDBDatabase>);
@@ -63,4 +66,3 @@ private:
 #endif
 
 #endif // IDBDatabaseProxy_h
-

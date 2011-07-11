@@ -6,8 +6,21 @@ MACRO(WEBKIT_SET_EXTRA_COMPILER_FLAGS _target)
     IF (${OLD_COMPILE_FLAGS} STREQUAL "OLD_COMPILE_FLAGS-NOTFOUND")
         SET(OLD_COMPILE_FLAGS "")
     ENDIF ()
-    SET_TARGET_PROPERTIES (${_target} PROPERTIES
-       COMPILE_FLAGS "-fno-exceptions -fstrict-aliasing -fvisibility=hidden ${OLD_COMPILE_FLAGS}")
+
+    # Disable some optimizations on buggy compiler versions
+    # GCC 4.5.1 does not implement -ftree-sra correctly
+    EXEC_PROGRAM(${CMAKE_CXX_COMPILER} ARGS -dumpversion OUTPUT_VARIABLE COMPILER_VERSION)
+    IF (${COMPILER_VERSION} STREQUAL "4.5.1")
+        SET(OLD_COMPILE_FLAGS "${OLD_COMPILE_FLAGS} -fno-tree-sra")
+    ENDIF ()
+
+    IF (SHARED_CORE)
+        SET_TARGET_PROPERTIES (${_target} PROPERTIES
+            COMPILE_FLAGS "-fno-exceptions -fstrict-aliasing ${OLD_COMPILE_FLAGS}")
+    ELSE ()
+        SET_TARGET_PROPERTIES (${_target} PROPERTIES
+            COMPILE_FLAGS "-fPIC -fno-exceptions -fstrict-aliasing -fvisibility=hidden ${OLD_COMPILE_FLAGS}")
+    ENDIF ()
     UNSET(OLD_COMPILE_FLAGS)
   ENDIF ()
 ENDMACRO()

@@ -62,6 +62,9 @@ struct WebDynamicScrollBarsViewPrivate {
     bool alwaysHideVerticalScroller;
     bool horizontalScrollingAllowedButScrollerHidden;
     bool verticalScrollingAllowedButScrollerHidden;
+
+    // scrollOriginX is 0 for LTR page and is the negative of left layout overflow value for RTL page.
+    int scrollOriginX;
 };
 
 @implementation WebDynamicScrollBarsView
@@ -174,7 +177,7 @@ struct WebDynamicScrollBarsViewPrivate {
         [[self contentView] setFrame:[self contentViewFrame]];
 }
 
-- (void)setSuppressLayout:(BOOL)flag;
+- (void)setSuppressLayout:(BOOL)flag
 {
     _private->suppressLayout = flag;
 }
@@ -470,10 +473,8 @@ static const unsigned cMaxUpdateScrollbarsPass = 2;
 {
     float deltaX;
     float deltaY;
-    float wheelTicksX;
-    float wheelTicksY;
     BOOL isContinuous;
-    WKGetWheelEventDeltas(event, &deltaX, &deltaY, &wheelTicksX, &wheelTicksY, &isContinuous);
+    WKGetWheelEventDeltas(event, &deltaX, &deltaY, &isContinuous);
 
     BOOL isLatchingEvent = WKIsLatchingWheelEvent(event);
 
@@ -525,6 +526,25 @@ static const unsigned cMaxUpdateScrollbarsPass = 2;
         return YES;
     
     return [super accessibilityIsIgnored];
+}
+
+- (void)setScrollOriginX:(int)scrollOriginX
+{
+    _private->scrollOriginX = scrollOriginX;
+
+    // There appears to be a bug related to page zoom and page load.
+    // https://bugs.webkit.org/show_bug.cgi?id=42863.
+    if (scrollOriginX) {
+        // "-[self scrollOriginX]" equals to left layout overflow.
+        // Set left layout overflow into document view's bounds x-axis origin to cover the entire canvas.
+        NSView *documentView = [self documentView];
+        [documentView setBoundsOrigin:NSMakePoint(-scrollOriginX, [documentView bounds].origin.y)];
+    }
+}
+
+- (int)scrollOriginX
+{
+    return _private->scrollOriginX;
 }
 
 @end

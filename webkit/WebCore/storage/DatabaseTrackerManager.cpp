@@ -64,6 +64,30 @@ DatabaseTrackerManager& databaseTrackerManager()
     return manager;
 }
 
+#if OS(OLYMPIA)
+void DatabaseTrackerManager::reopenAllTrackerDatabases()
+{
+    DatabaseTrackerMap& trackers = databaseTrackerManager().m_trackers;
+    DatabaseTrackerMap::iterator it = trackers.begin();
+    for (DatabaseTrackerMap::iterator it = trackers.begin(); it != trackers.end(); ++it) {
+        it->second->reopenTrackerDatabase();
+    }
+    if (databaseTrackerManager().m_defaultTracker)
+        databaseTrackerManager().m_defaultTracker->reopenTrackerDatabase();
+}
+void DatabaseTrackerManager::closeAllTrackerDatabases()
+{
+    DatabaseTrackerMap& trackers = databaseTrackerManager().m_trackers;
+    DatabaseTrackerMap::iterator it = trackers.begin();
+    for (DatabaseTrackerMap::iterator it = trackers.begin(); it != trackers.end(); ++it) {
+        it->second->closeTrackerDatabase();
+    }
+    if (databaseTrackerManager().m_defaultTracker)
+        databaseTrackerManager().m_defaultTracker->closeTrackerDatabase();
+}
+
+#endif // OS(OLYMPIA)
+
 } // namespace WebCore
 
 #endif // ENABLE(DATABASE)

@@ -43,9 +43,15 @@
 // knowledge of the frame and editor or moved into the editing directory.
 
 #if PLATFORM(MAC)
+#ifdef __OBJC__
+@class NSFileWrapper;
+@class NSPasteboard;
+@class NSArray;
+#else
 class NSFileWrapper;
 class NSPasteboard;
 class NSArray;
+#endif
 #endif
 
 #if PLATFORM(WIN)
@@ -56,11 +62,6 @@ typedef struct HWND__* HWND;
 #if PLATFORM(CHROMIUM)
 #include "PasteboardPrivate.h"
 #endif
-
-namespace WTF {
-class CString;
-}
-using WTF::CString;
 
 namespace WebCore {
 
@@ -78,7 +79,7 @@ class HitTestResult;
 class KURL;
 class Node;
 class Range;
-class String;
+class ArchiveResource;
     
 class Pasteboard : public Noncopyable {
 public:
@@ -118,6 +119,8 @@ private:
 #if PLATFORM(MAC)
     Pasteboard(NSPasteboard *);
     RetainPtr<NSPasteboard> m_pasteboard;
+    PassRefPtr<DocumentFragment> documentFragmentWithImageResource(Frame* frame, PassRefPtr<ArchiveResource> resource);
+    PassRefPtr<DocumentFragment> documentFragmentWithRtf(Frame* frame, NSString* pboardType);
 #endif
 
 #if PLATFORM(WIN)

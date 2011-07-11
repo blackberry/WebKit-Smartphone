@@ -164,7 +164,7 @@ class CppStyleTestBase(unittest.TestCase):
         class_state = cpp_style._ClassState()
         file_state = cpp_style._FileState()
         for i in xrange(lines.num_lines()):
-            cpp_style.check_style(lines, i, file_extension, file_state, error_collector)
+            cpp_style.check_style(lines, i, file_extension, class_state, file_state, error_collector)
             cpp_style.check_for_non_standard_constructs(lines, i, class_state,
                                                         error_collector)
         class_state.check_finished(error_collector)
@@ -1164,28 +1164,30 @@ class CppStyleTest(CppStyleTestBase):
             '')
 
     def test_mismatching_spaces_in_parens(self):
-        self.assert_lint('if (foo ) {', 'Mismatching spaces inside () in if'
+        self.assert_lint('if (foo ) {', 'Extra space before ) in if'
                          '  [whitespace/parens] [5]')
-        self.assert_lint('switch ( foo) {', 'Mismatching spaces inside () in switch'
+        self.assert_lint('switch ( foo) {', 'Extra space after ( in switch'
                          '  [whitespace/parens] [5]')
-        self.assert_lint('for (foo; ba; bar ) {', 'Mismatching spaces inside () in for'
+        self.assert_lint('for (foo; ba; bar ) {', 'Extra space before ) in for'
                          '  [whitespace/parens] [5]')
-        self.assert_lint('for ((foo); (ba); (bar) ) {', 'Mismatching spaces inside () in for'
+        self.assert_lint('for ((foo); (ba); (bar) ) {', 'Extra space before ) in for'
                          '  [whitespace/parens] [5]')
         self.assert_lint('for (; foo; bar) {', '')
         self.assert_lint('for (; (foo); (bar)) {', '')
         self.assert_lint('for ( ; foo; bar) {', '')
         self.assert_lint('for ( ; (foo); (bar)) {', '')
-        self.assert_lint('for ( ; foo; bar ) {', '')
-        self.assert_lint('for ( ; (foo); (bar) ) {', '')
+        self.assert_lint('for ( ; foo; bar ) {', 'Extra space before ) in for'
+                         '  [whitespace/parens] [5]')
+        self.assert_lint('for ( ; (foo); (bar) ) {', 'Extra space before ) in for'
+                         '  [whitespace/parens] [5]')
         self.assert_lint('for (foo; bar; ) {', '')
         self.assert_lint('for ((foo); (bar); ) {', '')
-        self.assert_lint('foreach (foo, foos ) {', 'Mismatching spaces inside () in foreach'
+        self.assert_lint('foreach (foo, foos ) {', 'Extra space before ) in foreach'
                          '  [whitespace/parens] [5]')
-        self.assert_lint('foreach ( foo, foos) {', 'Mismatching spaces inside () in foreach'
+        self.assert_lint('foreach ( foo, foos) {', 'Extra space after ( in foreach'
                          '  [whitespace/parens] [5]')
-        self.assert_lint('while (  foo  ) {', 'Should have zero or one spaces inside'
-                         ' ( and ) in while  [whitespace/parens] [5]')
+        self.assert_lint('while (  foo) {', 'Extra space after ( in while'
+                         '  [whitespace/parens] [5]')
 
     def test_spacing_for_fncall(self):
         self.assert_lint('if (foo) {', '')
@@ -1541,6 +1543,13 @@ class CppStyleTest(CppStyleTestBase):
                           'Missing space after ,  [whitespace/comma] [3]'])
         self.assert_lint('f(a, /* name */ b);', '')
         self.assert_lint('f(a, /* name */b);', '')
+
+    def test_declaration(self):
+        self.assert_lint('int a;', '')
+        self.assert_lint('int   a;', 'Extra space between int and a  [whitespace/declaration] [3]')
+        self.assert_lint('int*  a;', 'Extra space between int* and a  [whitespace/declaration] [3]')
+        self.assert_lint('else if { }', '')
+        self.assert_lint('else   if { }', 'Extra space between else and if  [whitespace/declaration] [3]')
 
     def test_pointer_reference_marker_location(self):
         self.assert_lint('int* b;', '', 'foo.cpp')
@@ -2585,6 +2594,19 @@ class NoNonVirtualDestructorsTest(CppStyleTestBase):
         self.assert_multi_line_lint(
             'class Foo { void foo(); };',
             'More than one command on the same line  [whitespace/newline] [4]')
+        self.assert_multi_line_lint(
+            'class MyClass {\n'
+            '    int getIntValue() { ASSERT(m_ptr); return *m_ptr; }\n'
+            '};\n',
+            '')
+        self.assert_multi_line_lint(
+            'class MyClass {\n'
+            '    int getIntValue()\n'
+            '    {\n'
+            '        ASSERT(m_ptr); return *m_ptr;\n'
+            '    }\n'
+            '};\n',
+            'More than one command on the same line  [whitespace/newline] [4]')
 
         self.assert_multi_line_lint(
             '''class Qualified::Goo : public Foo {
@@ -3059,7 +3081,7 @@ class WebKitStyleTest(CppStyleTestBase):
             '')
         self.assert_multi_line_lint(
             '#define TEST_ASSERT(expression) do { if ( !(expression)) { TestsController::shared().testFailed(__FILE__, __LINE__, #expression); return; } } while (0)\n',
-            'Mismatching spaces inside () in if  [whitespace/parens] [5]')
+            'Extra space after ( in if  [whitespace/parens] [5]')
         # FIXME: currently we only check first conditional, so we cannot detect errors in next ones.
         # self.assert_multi_line_lint(
         #     '#define TEST_ASSERT(expression) do { if (!(expression)) { TestsController::shared().testFailed(__FILE__, __LINE__, #expression); return; } } while (0 )\n',
@@ -3437,6 +3459,21 @@ class WebKitStyleTest(CppStyleTestBase):
             'g_object_set(foo, "prop", bar, NULL);',
             '')
         self.assert_lint(
+            'g_build_filename(foo, bar, NULL);',
+            '')
+        self.assert_lint(
+            'gst_bin_add_many(foo, bar, boo, NULL);',
+            '')
+        self.assert_lint(
+            'gst_bin_remove_many(foo, bar, boo, NULL);',
+            '')
+        self.assert_lint(
+            'gst_element_link_many(foo, bar, boo, NULL);',
+            '')
+        self.assert_lint(
+            'gst_element_unlink_many(foo, bar, boo, NULL);',
+            '')
+        self.assert_lint(
             'gchar* result = g_strconcat("part1", "part2", "part3", NULL);',
             '')
         self.assert_lint(
@@ -3447,6 +3484,15 @@ class WebKitStyleTest(CppStyleTestBase):
             '')
         self.assert_lint(
             'gchar* result = g_strjoin(",", "part1", NULL);',
+            '')
+        self.assert_lint(
+            'gchar* result = gdk_pixbuf_save_to_callback(pixbuf, function, data, type, error, NULL);',
+            '')
+        self.assert_lint(
+            'gchar* result = gdk_pixbuf_save_to_buffer(pixbuf, function, data, type, error, NULL);',
+            '')
+        self.assert_lint(
+            'gchar* result = gdk_pixbuf_save_to_stream(pixbuf, function, data, type, error, NULL);',
             '')
 
         # 2. C++ and C bool values should be written as true and
@@ -3657,12 +3703,23 @@ class WebKitStyleTest(CppStyleTestBase):
         self.assert_lint('void QTFrame::qt_drt_is_awesome(int var1, int var2)', '')
         self.assert_lint('void qt_drt_is_awesome(int var1, int var2);', '')
 
+        # NPAPI functions that start with NPN_, NPP_ or NP_ are allowed.
+        self.assert_lint('void NPN_Status(NPP, const char*)', '')
+        self.assert_lint('NPError NPP_SetWindow(NPP instance, NPWindow *window)', '')
+        self.assert_lint('NPObject* NP_Allocate(NPP, NPClass*)', '')
+
         # const_iterator is allowed as well.
         self.assert_lint('typedef VectorType::const_iterator const_iterator;', '')
 
         # Bitfields.
         self.assert_lint('unsigned _fillRule : 1;',
                          '_fillRule' + name_underscore_error_message)
+
+        # new operators in initialization.
+        self.assert_lint('OwnPtr<uint32_t> variable(new uint32_t);', '')
+        self.assert_lint('OwnPtr<uint32_t> variable(new (expr) uint32_t);', '')
+        self.assert_lint('OwnPtr<uint32_t> under_score(new uint32_t);',
+                         'under_score' + name_underscore_error_message)
 
 
     def test_comments(self):

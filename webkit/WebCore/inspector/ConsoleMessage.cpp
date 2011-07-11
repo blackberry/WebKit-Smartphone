@@ -33,12 +33,45 @@
 
 #include "InjectedScript.h"
 #include "InjectedScriptHost.h"
-#include "InspectorFrontend.h"
+#include "InspectorValues.h"
 #include "ScriptCallStack.h"
-#include "ScriptObject.h"
-#include "SerializedScriptValue.h"
+#include "ScriptValue.h"
+
+#if ENABLE(INSPECTOR)
+#include "InspectorFrontend.h"
+#endif
 
 namespace WebCore {
+
+ConsoleMessage::CallFrame::CallFrame(const ScriptCallFrame& frame)
+    : m_functionName(frame.functionName())
+    , m_sourceURL(frame.sourceURL())
+    , m_lineNumber(frame.lineNumber())
+{
+}
+
+ConsoleMessage::CallFrame::CallFrame()
+    : m_lineNumber(0)
+{
+}
+
+bool ConsoleMessage::CallFrame::isEqual(const ConsoleMessage::CallFrame& o) const
+{
+    return m_functionName == o.m_functionName
+        && m_sourceURL == o.m_sourceURL
+        && m_lineNumber == o.m_lineNumber;
+}
+
+#if ENABLE(INSPECTOR)
+PassRefPtr<InspectorObject> ConsoleMessage::CallFrame::buildInspectorObject() const
+{
+    RefPtr<InspectorObject> frame = InspectorObject::create();
+    frame->setString("functionName", m_functionName);
+    frame->setString("sourceURL", m_sourceURL.string());
+    frame->setNumber("lineNumber", m_lineNumber);
+    return frame;
+}
+#endif
 
 ConsoleMessage::ConsoleMessage(MessageSource s, MessageType t, MessageLevel l, const String& m, unsigned li, const String& u, unsigned g)
     : m_source(s)
@@ -52,10 +85,11 @@ ConsoleMessage::ConsoleMessage(MessageSource s, MessageType t, MessageLevel l, c
 {
 }
 
-ConsoleMessage::ConsoleMessage(MessageSource s, MessageType t, MessageLevel l, ScriptCallStack* callStack, unsigned g, bool storeTrace)
+ConsoleMessage::ConsoleMessage(MessageSource s, MessageType t, MessageLevel l, const String& m, ScriptCallStack* callStack, unsigned g, bool storeTrace)
     : m_source(s)
     , m_type(t)
     , m_level(l)
+    , m_message(m)
 #if ENABLE(INSPECTOR)
     , m_arguments(callStack->at(0).argumentCount())
     , m_scriptState(callStack->globalState())
@@ -68,12 +102,9 @@ ConsoleMessage::ConsoleMessage(MessageSource s, MessageType t, MessageLevel l, S
     m_line = lastCaller.lineNumber();
     m_url = lastCaller.sourceURL().string();
 
-    // FIXME: For now, just store function names as strings.
-    // As ScriptCallStack start storing line number and source URL for all
-    // frames, refactor to use that, as well.
     if (storeTrace) {
         for (unsigned i = 0; i < callStack->size(); ++i)
-            m_frames[i] = callStack->at(i).functionName();
+            m_frames[i] = ConsoleMessage::CallFrame(callStack->at(i));
     }
 
 #if ENABLE(INSPECTOR)
@@ -85,23 +116,37 @@ ConsoleMessage::ConsoleMessage(MessageSource s, MessageType t, MessageLevel l, S
 #if ENABLE(INSPECTOR)
 void ConsoleMessage::addToFrontend(InspectorFrontend* frontend, InjectedScriptHost* injectedScriptHost)
 {
-    ScriptObject jsonObj = frontend->newScriptObject();
-    jsonObj.set("source", static_cast<int>(m_source));
-    jsonObj.set("type", static_cast<int>(m_type));
-    jsonObj.set("level", static_cast<int>(m_level));
-    jsonObj.set("line", static_cast<int>(m_line));
-    jsonObj.set("url", m_url);
-    jsonObj.set("groupLevel", static_cast<int>(m_groupLevel));
-    jsonObj.set("repeatCount", static_cast<int>(m_repeatCount));
-    Vector<RefPtr<SerializedScriptValue> > arguments;
+    RefPtr<InspectorObject> jsonObj = InspectorObject::create();
+    jsonObj->setNumber("source", static_cast<int>(m_source));
+    jsonObj->setNumber("type", static_cast<int>(m_type));
+    jsonObj->setNumber("level", static_cast<int>(m_level));
+    jsonObj->setNumber("line", static_cast<int>(m_line));
+    jsonObj->setString("url", m_url);
+    jsonObj->setNumber("groupLevel", static_cast<int>(m_groupLevel));
+    jsonObj->setNumber("repeatCount", static_cast<int>(m_repeatCount));
+    jsonObj->setString("message", m_message);
     if (!m_arguments.isEmpty()) {
         InjectedScript injectedScript = injectedScriptHost->injectedScriptFor(m_scriptState.get());
-        for (unsigned i = 0; i < m_arguments.size(); ++i) {
-            RefPtr<SerializedScriptValue> serializedValue = injectedScript.wrapForConsole(m_arguments[i]);
-            arguments.append(serializedValue);
+        if (!injectedScript.hasNoValue()) {
+            RefPtr<InspectorArray> jsonArgs = InspectorArray::create();
+            for (unsigned i = 0; i < m_arguments.size(); ++i) {
+                RefPtr<InspectorValue> inspectorValue = injectedScript.wrapForConsole(m_arguments[i]);
+                if (!inspectorValue) {
+                    ASSERT_NOT_REACHED();
+                    return;
+                }
+                jsonArgs->pushValue(inspectorValue);
+            }
+            jsonObj->setArray("parameters", jsonArgs);
         }
-    }   
-    frontend->addConsoleMessage(jsonObj, m_frames, arguments,  m_message);
+    }
+    if (!m_frames.isEmpty()) {
+        RefPtr<InspectorArray> frames = InspectorArray::create();
+        for (unsigned i = 0; i < m_frames.size(); i++)
+            frames->pushObject(m_frames.at(i).buildInspectorObject());
+        jsonObj->setArray("stackTrace", frames);
+    }
+    frontend->addConsoleMessage(jsonObj);
 }
 
 void ConsoleMessage::updateRepeatCountInConsole(InspectorFrontend* frontend)
@@ -133,7 +178,7 @@ bool ConsoleMessage::isEqual(ScriptState* state, ConsoleMessage* msg) const
         return false;
 
     for (size_t i = 0; i < frameCount; ++i) {
-        if (m_frames[i] != msg->m_frames[i])
+        if (!m_frames[i].isEqual(msg->m_frames[i]))
             return false;
     }
 

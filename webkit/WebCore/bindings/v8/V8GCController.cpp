@@ -39,6 +39,7 @@
 #include "HTMLNames.h"
 #include "MessagePort.h"
 #include "SVGElement.h"
+#include "V8Binding.h"
 #include "V8DOMMap.h"
 #include "V8MessagePort.h"
 #include "V8Proxy.h"
@@ -46,7 +47,6 @@
 
 #include <algorithm>
 #include <utility>
-#include <v8.h>
 #include <v8-debug.h>
 #include <wtf/HashMap.h>
 #include <wtf/StdLibExtras.h>
@@ -360,6 +360,10 @@ void V8GCController::gcPrologue()
     ObjectGrouperVisitor objectGrouperVisitor;
     visitDOMNodesInCurrentThread(&objectGrouperVisitor);
     objectGrouperVisitor.applyGrouping();
+
+    // Clean single element cache for string conversions.
+    lastStringImpl = 0;
+    lastV8String.Clear();
 }
 
 class GCEpilogueVisitor : public DOMWrapperMap<void>::Visitor {
@@ -402,6 +406,15 @@ int getMemoryUsageInMB()
 #endif
 }
 
+int getActualMemoryUsageInMB()
+{
+#if PLATFORM(CHROMIUM)
+    return ChromiumBridge::actualMemoryUsageMB();
+#else
+    return 0;
+#endif
+}
+
 }  // anonymous namespace
 
 void V8GCController::gcEpilogue()
@@ -413,7 +426,7 @@ void V8GCController::gcEpilogue()
     GCEpilogueVisitor epilogueVisitor;
     visitActiveDOMObjectsInCurrentThread(&epilogueVisitor);
 
-    workingSetEstimateMB = getMemoryUsageInMB();
+    workingSetEstimateMB = getActualMemoryUsageInMB();
 
 #ifndef NDEBUG
     // Check all survivals are weak.

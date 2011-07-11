@@ -28,11 +28,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef TestShell_h
+#define TestShell_h
+
 #include "AccessibilityController.h"
 #include "EventSender.h"
 #include "LayoutTestController.h"
 #include "NotificationPresenter.h"
 #include "PlainTextController.h"
+#include "TestEventPrinter.h"
 #include "TextInputController.h"
 #include "WebViewHost.h"
 #include <string>
@@ -43,6 +47,7 @@
 // various objects. Only one instance is created in one DRT process.
 
 namespace WebKit {
+class WebDevToolsAgentClient;
 class WebFrame;
 class WebNotificationPresenter;
 class WebPreferences;
@@ -53,11 +58,16 @@ namespace skia {
 class PlatformCanvas;
 }
 
+class DRTDevToolsAgent;
+class DRTDevToolsCallArgs;
+class DRTDevToolsClient;
+
 struct TestParams {
     bool dumpTree;
     bool dumpPixels;
     bool printSeparators;
     WebKit::WebURL testUrl;
+    // Resultant image file name. Reqruired only if the test_shell mode.
     std::string pixelFileName;
     std::string pixelHash;
 
@@ -69,8 +79,9 @@ struct TestParams {
 
 class TestShell {
 public:
-    TestShell();
+    TestShell(bool testShellMode);
     ~TestShell();
+
     // The main WebView.
     WebKit::WebView* webView() const { return m_webView; }
     // Returns the host for the main WebView.
@@ -79,6 +90,7 @@ public:
     EventSender* eventSender() const { return m_eventSender.get(); }
     AccessibilityController* accessibilityController() const { return m_accessibilityController.get(); }
     NotificationPresenter* notificationPresenter() const { return m_notificationPresenter.get(); }
+    TestEventPrinter* printer() const { return m_printer.get(); }
 
     void bindJSObjectsToWindow(WebKit::WebFrame*);
     void runFileTest(const TestParams&);
@@ -95,6 +107,7 @@ public:
     void setFocus(WebKit::WebWidget*, bool enable);
     bool shouldDumpFrameLoadCallbacks() const { return (m_testIsPreparing || m_testIsPending) && layoutTestController()->shouldDumpFrameLoadCallbacks(); }
     bool shouldDumpResourceLoadCallbacks() const  { return (m_testIsPreparing || m_testIsPending) && layoutTestController()->shouldDumpResourceLoadCallbacks(); }
+    bool shouldDumpResourceResponseMIMETypes() const  { return (m_testIsPreparing || m_testIsPending) && layoutTestController()->shouldDumpResourceResponseMIMETypes(); }
     void setIsLoading(bool flag) { m_isLoading = flag; }
 
     // Called by the LayoutTestController to signal test completion.
@@ -104,14 +117,18 @@ public:
     // the test results.
     void testTimedOut();
 
+    bool allowExternalPages() const { return m_allowExternalPages; }
+    void setAllowExternalPages(bool allowExternalPages) { m_allowExternalPages = allowExternalPages; }
+
 #if defined(OS_WIN)
     // Access to the finished event.  Used by the static WatchDog thread.
     HANDLE finishedEvent() { return m_finishedEvent; }
 #endif
 
     // Get the timeout for running a test in milliseconds.
-    static int layoutTestTimeout();
-    static int layoutTestTimeoutForWatchDog() { return layoutTestTimeout() + 1000; }
+    int layoutTestTimeout() { return m_timeout; }
+    int layoutTestTimeoutForWatchDog() { return layoutTestTimeout() + 1000; }
+    void setLayoutTestTimeout(int timeout) { m_timeout = timeout; }
 
     WebViewHost* createWebView();
     WebViewHost* createNewWindow(const WebKit::WebURL&);
@@ -119,29 +136,43 @@ public:
     void closeRemainingWindows();
     int windowCount();
     static void resizeWindowForTest(WebViewHost*, const WebKit::WebURL&);
-    void showDevTools() {} // FIXME: imeplement this.
+
+    void showDevTools();
+    void closeDevTools();
+
+    DRTDevToolsAgent* drtDevToolsAgent() { return m_drtDevToolsAgent.get(); }
+    DRTDevToolsClient* drtDevToolsClient() { return m_drtDevToolsClient.get(); }
 
     static const int virtualWindowBorder = 3;
 
 private:
+    void createDRTDevToolsClient(DRTDevToolsAgent*);
+
     static void resetWebSettings(WebKit::WebView&);
     void dump();
     std::string dumpAllBackForwardLists();
-    static std::string dumpImage(skia::PlatformCanvas*, const std::string& expectedHash);
+    void dumpImage(skia::PlatformCanvas*) const;
 
     bool m_testIsPending;
     bool m_testIsPreparing;
     bool m_isLoading;
     WebKit::WebView* m_webView;
     WebKit::WebWidget* m_focusedWidget;
+    bool m_testShellMode;
     WebViewHost* m_webViewHost;
-    OwnPtr<AccessibilityController*> m_accessibilityController;
-    OwnPtr<EventSender*> m_eventSender;
-    OwnPtr<LayoutTestController*> m_layoutTestController;
-    OwnPtr<PlainTextController*> m_plainTextController;
-    OwnPtr<TextInputController*> m_textInputController;
-    OwnPtr<NotificationPresenter*> m_notificationPresenter;
+    WebViewHost* m_devTools;
+    OwnPtr<DRTDevToolsAgent> m_drtDevToolsAgent;
+    OwnPtr<DRTDevToolsClient> m_drtDevToolsClient;
+    OwnPtr<AccessibilityController> m_accessibilityController;
+    OwnPtr<EventSender> m_eventSender;
+    OwnPtr<LayoutTestController> m_layoutTestController;
+    OwnPtr<PlainTextController> m_plainTextController;
+    OwnPtr<TextInputController> m_textInputController;
+    OwnPtr<NotificationPresenter> m_notificationPresenter;
+    OwnPtr<TestEventPrinter> m_printer;
     TestParams m_params;
+    int m_timeout; // timeout value in millisecond
+    bool m_allowExternalPages;
 
     // List of all windows in this process.
     // The main window should be put into windowList[0].
@@ -154,4 +185,8 @@ private:
 #endif
 };
 
-void platformInit();
+void platformInit(int*, char***);
+void openStartupDialog();
+bool checkLayoutTestSystemDependencies();
+
+#endif // TestShell_h

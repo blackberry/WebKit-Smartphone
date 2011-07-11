@@ -23,8 +23,6 @@
 #ifndef JSValue_h
 #define JSValue_h
 
-#include "CallData.h"
-#include "ConstructData.h"
 #include <math.h>
 #include <stddef.h> // for size_t
 #include <stdint.h>
@@ -35,6 +33,7 @@
 
 namespace JSC {
 
+    class ExecState;
     class Identifier;
     class JSCell;
     class JSGlobalData;
@@ -143,9 +142,6 @@ namespace JSC {
         UString getString(ExecState* exec) const; // null string if not a string
         JSObject* getObject() const; // 0 if not an object
 
-        CallType getCallData(CallData&);
-        ConstructType getConstructData(ConstructData&);
-
         // Extracting integer values.
         bool getUInt32(uint32_t&) const;
         
@@ -185,6 +181,7 @@ namespace JSC {
         JSValue get(ExecState*, unsigned propertyName) const;
         JSValue get(ExecState*, unsigned propertyName, PropertySlot&) const;
         void put(ExecState*, const Identifier& propertyName, JSValue, PutPropertySlot&);
+        void putDirect(ExecState*, const Identifier& propertyName, JSValue, PutPropertySlot&);
         void put(ExecState*, unsigned propertyName, JSValue);
 
         bool needsThisConversion() const;
@@ -400,16 +397,28 @@ namespace JSC {
     {
         if (isInt32())
             return asInt32();
+
+        double val = toNumber(exec);
+
+        if (val >= -2147483648.0 && val < 2147483648.0)
+            return static_cast<int32_t>(val);
+
         bool ignored;
-        return toInt32SlowCase(toNumber(exec), ignored);
+        return toInt32SlowCase(val, ignored);
     }
 
     inline uint32_t JSValue::toUInt32(ExecState* exec) const
     {
         if (isUInt32())
-            return asInt32();
+            return asUInt32();
+
+        double val = toNumber(exec);
+
+        if (val >= 0.0 && val < 4294967296.0)
+            return static_cast<uint32_t>(val);
+
         bool ignored;
-        return toUInt32SlowCase(toNumber(exec), ignored);
+        return toUInt32SlowCase(val, ignored);
     }
 
     inline int32_t JSValue::toInt32(ExecState* exec, bool& ok) const
@@ -418,7 +427,15 @@ namespace JSC {
             ok = true;
             return asInt32();
         }
-        return toInt32SlowCase(toNumber(exec), ok);
+
+        double val = toNumber(exec);
+
+        if (val >= -2147483648.0 && val < 2147483648.0) {
+            ok = true;
+            return static_cast<int32_t>(val);
+        }
+
+        return toInt32SlowCase(val, ok);
     }
 
     inline uint32_t JSValue::toUInt32(ExecState* exec, bool& ok) const
@@ -427,7 +444,15 @@ namespace JSC {
             ok = true;
             return asInt32();
         }
-        return toUInt32SlowCase(toNumber(exec), ok);
+
+        double val = toNumber(exec);
+
+        if (val >= 0.0 && val < 4294967296.0) {
+            ok = true;
+            return static_cast<uint32_t>(val);
+        }
+
+        return toUInt32SlowCase(val, ok);
     }
 
 #if USE(JSVALUE32_64)
@@ -848,7 +873,8 @@ namespace JSC {
         return asValue() == jsNull();
     }
 #endif // USE(JSVALUE32_64)
-
+    
+    typedef std::pair<JSValue, UString> ValueStringPair;
 } // namespace JSC
 
 #endif // JSValue_h

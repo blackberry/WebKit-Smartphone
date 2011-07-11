@@ -38,6 +38,7 @@
 #include "RenderBR.h"
 #include "RenderFileUploadControl.h"
 #include "RenderInline.h"
+#include "RenderLayer.h"
 #include "RenderListItem.h"
 #include "RenderListMarker.h"
 #include "RenderPart.h"
@@ -233,9 +234,9 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
     ts << " " << r;
 
     if (!(o.isText() && !o.isBR())) {
-        if (o.isFileUploadControl()) {
+        if (o.isFileUploadControl())
             ts << " " << quoteAndEscapeNonPrintables(toRenderFileUploadControl(&o)->fileTextValue());
-        }
+
         if (o.parent() && (o.parent()->style()->color() != o.style()->color()))
             ts << " [color=" << o.style()->color().name() << "]";
 
@@ -354,6 +355,24 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
             ts << ": " << text;
         }
     }
+    
+    if (behavior & RenderAsTextShowIDAndClass) {
+        if (Node* node = o.node()) {
+            if (node->hasID())
+                ts << " id=\"" + static_cast<Element*>(node)->getIdAttribute() + "\"";
+
+            if (node->hasClass()) {
+                StyledElement* styledElement = static_cast<StyledElement*>(node);
+                String classes;
+                for (size_t i = 0; i < styledElement->classNames().size(); ++i) {
+                    if (i > 0)
+                        classes += " ";
+                    classes += styledElement->classNames()[i];
+                }
+                ts << " class=\"" + classes + "\"";
+            }
+        }
+    }
 
 #if PLATFORM(QT)
     // Print attributes of embedded QWidgets. E.g. when the WebCore::Widget
@@ -415,14 +434,15 @@ void write(TextStream& ts, const RenderObject& o, int indent, RenderAsTextBehavi
         return;
     }
     if (o.isSVGText()) {
-        if (!o.isText())
-            writeSVGText(ts, *toRenderBlock(&o), indent);
-        else
-            writeSVGInlineText(ts, *toRenderText(&o), indent);
+        writeSVGText(ts, *toRenderBlock(&o), indent);
+        return;
+    }
+    if (o.isSVGInlineText()) {
+        writeSVGInlineText(ts, *toRenderText(&o), indent);
         return;
     }
     if (o.isSVGImage()) {
-        writeSVGImage(ts, *toRenderImage(&o), indent);
+        writeSVGImage(ts, *toRenderSVGImage(&o), indent);
         return;
     }
 #endif
@@ -578,6 +598,7 @@ static String nodePosition(Node* node)
 {
     String result;
 
+    Element* body = node->document()->body();
     Node* parent;
     for (Node* n = node; n; n = parent) {
         parent = n->parentNode();
@@ -585,9 +606,14 @@ static String nodePosition(Node* node)
             parent = n->shadowParentNode();
         if (n != node)
             result += " of ";
-        if (parent)
+        if (parent) {
+            if (body && n == body) {
+                // We don't care what offset body may be in the document.
+                result += "body";
+                break;
+            }
             result += "child " + String::number(n->nodeIndex()) + " {" + getTagName(n) + "}";
-        else
+        } else
             result += "document";
     }
 

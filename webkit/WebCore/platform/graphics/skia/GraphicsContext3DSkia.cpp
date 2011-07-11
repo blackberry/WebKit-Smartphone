@@ -31,6 +31,7 @@
 #include "GraphicsContext3D.h"
 
 #include "Image.h"
+#include "ImageSource.h"
 #include "NativeImageSkia.h"
 
 #include <algorithm>
@@ -38,40 +39,46 @@
 namespace WebCore {
 
 bool GraphicsContext3D::getImageData(Image* image,
-                                     Vector<uint8_t>& outputVector,
+                                     unsigned int format,
+                                     unsigned int type,
                                      bool premultiplyAlpha,
-                                     bool* hasAlphaChannel,
-                                     AlphaOp* neededAlphaOp,
-                                     unsigned int* format)
+                                     Vector<uint8_t>& outputVector)
 {
     if (!image)
         return false;
-    NativeImageSkia* skiaImage = image->nativeImageForCurrentFrame();
+    OwnPtr<NativeImageSkia> pixels;
+    NativeImageSkia* skiaImage = 0;
+    AlphaOp neededAlphaOp = kAlphaDoNothing;
+    if (image->data()) {
+        ImageSource decoder(false);
+        decoder.setData(image->data(), true);
+        if (!decoder.frameCount() || !decoder.frameIsCompleteAtIndex(0))
+            return false;
+        bool hasAlpha = decoder.frameHasAlphaAtIndex(0);
+        pixels = decoder.createFrameAtIndex(0);
+        if (!pixels.get() || !pixels->isDataComplete() || !pixels->width() || !pixels->height())
+            return false;
+        SkBitmap::Config skiaConfig = pixels->config();
+        if (skiaConfig != SkBitmap::kARGB_8888_Config)
+            return false;
+        skiaImage = pixels.get();
+        if (hasAlpha && premultiplyAlpha)
+            neededAlphaOp = kAlphaDoPremultiply;
+    } else {
+        // This is a special case for texImage2D with HTMLCanvasElement input.
+        skiaImage = image->nativeImageForCurrentFrame();
+        if (!premultiplyAlpha)
+            neededAlphaOp = kAlphaDoUnmultiply;
+    }
     if (!skiaImage)
-        return false;
-    SkBitmap::Config skiaConfig = skiaImage->config();
-    // FIXME: must support more image configurations.
-    if (skiaConfig != SkBitmap::kARGB_8888_Config)
         return false;
     SkBitmap& skiaImageRef = *skiaImage;
     SkAutoLockPixels lock(skiaImageRef);
-    int height = skiaImage->height();
-    int rowBytes = skiaImage->rowBytes();
-    ASSERT(rowBytes == skiaImage->width() * 4);
-    uint8_t* pixels = reinterpret_cast<uint8_t*>(skiaImage->getPixels());
-    outputVector.resize(rowBytes * height);
-    int size = rowBytes * height;
-    memcpy(outputVector.data(), pixels, size);
-    *hasAlphaChannel = true;
-    if (!premultiplyAlpha)
-        // FIXME: must fetch the image data before the premultiplication step
-        *neededAlphaOp = kAlphaDoUnmultiply;
-    // Convert from BGRA to RGBA. FIXME: add GL_BGRA extension support
-    // to all underlying OpenGL implementations.
-    for (int i = 0; i < size; i += 4)
-        std::swap(outputVector[i], outputVector[i + 2]);
-    *format = RGBA;
-    return true;
+    ASSERT(skiaImage->rowBytes() == skiaImage->width() * 4);
+    outputVector.resize(skiaImage->rowBytes() * skiaImage->height());
+    return packPixels(reinterpret_cast<const uint8_t*>(skiaImage->getPixels()),
+                      kSourceFormatBGRA8, skiaImage->width(), skiaImage->height(), 0,
+                      format, type, neededAlphaOp, outputVector.data());
 }
 
 } // namespace WebCore

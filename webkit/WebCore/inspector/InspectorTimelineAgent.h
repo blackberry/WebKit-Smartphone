@@ -34,11 +34,10 @@
 #if ENABLE(INSPECTOR)
 
 #include "Document.h"
+#include "InspectorValues.h"
 #include "ScriptExecutionContext.h"
 #include "ScriptGCEvent.h"
 #include "ScriptGCEventListener.h"
-#include "ScriptObject.h"
-#include "ScriptArray.h"
 #include <wtf/Vector.h>
 
 namespace WebCore {
@@ -97,9 +96,11 @@ public:
     void willPaint(const IntRect&);
     void didPaint();
 
+    // FIXME: |length| should be passed in didWrite instead willWrite
+    // as the parser can not know how much it will process until it tries.
     void willWriteHTML(unsigned int length, unsigned int startLine);
     void didWriteHTML(unsigned int endLine);
-        
+
     void didInstallTimer(int timerId, int timeout, bool singleShot);
     void didRemoveTimer(int timerId);
     void willFireTimer(int timerId);
@@ -132,22 +133,22 @@ public:
 
 private:
     struct TimelineRecordEntry {
-        TimelineRecordEntry(ScriptObject record, ScriptObject data, ScriptArray children, TimelineRecordType type)
+        TimelineRecordEntry(PassRefPtr<InspectorObject> record, PassRefPtr<InspectorObject> data, PassRefPtr<InspectorArray> children, TimelineRecordType type)
             : record(record), data(data), children(children), type(type)
         {
         }
-        ScriptObject record;
-        ScriptObject data;
-        ScriptArray children;
+        RefPtr<InspectorObject> record;
+        RefPtr<InspectorObject> data;
+        RefPtr<InspectorArray> children;
         TimelineRecordType type;
     };
         
-    void pushCurrentRecord(ScriptObject, TimelineRecordType);
-    void setHeapSizeStatistic(ScriptObject record);
+    void pushCurrentRecord(PassRefPtr<InspectorObject>, TimelineRecordType);
+    void setHeapSizeStatistic(InspectorObject* record);
         
     void didCompleteCurrentRecord(TimelineRecordType);
 
-    void addRecordToTimeline(ScriptObject, TimelineRecordType);
+    void addRecordToTimeline(PassRefPtr<InspectorObject>, TimelineRecordType);
 
     void pushGCEventRecords();
 

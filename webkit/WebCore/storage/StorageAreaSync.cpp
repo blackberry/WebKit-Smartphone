@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2009 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2008, 2009, 2010 Apple Inc. All Rights Reserved.
  * Copyright (C) Research In Motion Limited 2009. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,9 +30,11 @@
 #if ENABLE(DOM_STORAGE)
 
 #include "EventNames.h"
+#include "FileSystem.h"
 #include "HTMLElement.h"
-#include "SecurityOrigin.h"
+#include "SQLiteFileSystem.h"
 #include "SQLiteStatement.h"
+#include "SecurityOrigin.h"
 #include "StorageAreaImpl.h"
 #include "StorageSyncManager.h"
 #include "SuddenTermination.h"
@@ -48,12 +50,7 @@ static const double StorageSyncInterval = 1.0;
 // much harder to starve the rest of LocalStorage and the OS's IO subsystem in general.
 static const int MaxiumItemsToSync = 100;
 
-PassRefPtr<StorageAreaSync> StorageAreaSync::create(PassRefPtr<StorageSyncManager> storageSyncManager, PassRefPtr<StorageAreaImpl> storageArea, String databaseIdentifier)
-{
-    return adoptRef(new StorageAreaSync(storageSyncManager, storageArea, databaseIdentifier));
-}
-
-StorageAreaSync::StorageAreaSync(PassRefPtr<StorageSyncManager> storageSyncManager, PassRefPtr<StorageAreaImpl> storageArea, String databaseIdentifier)
+inline StorageAreaSync::StorageAreaSync(PassRefPtr<StorageSyncManager> storageSyncManager, PassRefPtr<StorageAreaImpl> storageArea, const String& databaseIdentifier)
     : m_syncTimer(this, &StorageAreaSync::syncTimerFired)
     , m_itemsCleared(false)
     , m_finalSyncScheduled(false)
@@ -63,15 +60,24 @@ StorageAreaSync::StorageAreaSync(PassRefPtr<StorageSyncManager> storageSyncManag
     , m_clearItemsWhileSyncing(false)
     , m_syncScheduled(false)
     , m_syncInProgress(false)
-#if !ENABLE(SINGLE_THREADED)
+    , m_databaseOpenFailed(false)
     , m_importComplete(false)
-#endif
 {
     ASSERT(isMainThread());
     ASSERT(m_storageArea);
     ASSERT(m_syncManager);
+}
 
-    scheduleImport();
+PassRefPtr<StorageAreaSync> StorageAreaSync::create(PassRefPtr<StorageSyncManager> storageSyncManager, PassRefPtr<StorageAreaImpl> storageArea, const String& databaseIdentifier)
+{
+    RefPtr<StorageAreaSync> area = adoptRef(new StorageAreaSync(storageSyncManager, storageArea, databaseIdentifier));
+
+    // FIXME: If it can't import, then the default WebKit behavior should be that of private browsing,
+    // not silently ignoring it. https://bugs.webkit.org/show_bug.cgi?id=25894
+    if (!area->m_syncManager->scheduleImport(area.get()))
+        area->m_importComplete = true;
+
+    return area.release();
 }
 
 StorageAreaSync::~StorageAreaSync()
@@ -99,6 +105,7 @@ void StorageAreaSync::scheduleFinalSync()
     // we should do it safely.
     m_finalSyncScheduled = true;
     syncTimerFired(&m_syncTimer);
+    m_syncManager->scheduleDeleteEmptyDatabase(this);
 }
 
 void StorageAreaSync::scheduleItemForSync(const String& key, const String& value)
@@ -138,7 +145,7 @@ void StorageAreaSync::syncTimerFired(Timer<StorageAreaSync>*)
 
     bool partialSync = false;
     {
-        StorageMutexLocker locker(m_syncLock);
+        MutexLocker locker(m_syncLock);
 
         // Do not schedule another sync if we're still trying to complete the
         // previous one.  But, if we're shutting down, schedule it anyway.
@@ -198,27 +205,46 @@ void StorageAreaSync::syncTimerFired(Timer<StorageAreaSync>*)
     }
 }
 
-void StorageAreaSync::performImport()
+void StorageAreaSync::openDatabase(OpenDatabaseParamType openingStrategy)
 {
-    ASSERT(isBackgroundThread());
+    ASSERT(!isMainThread());
     ASSERT(!m_database.isOpen());
+    ASSERT(!m_databaseOpenFailed);
 
     String databaseFilename = m_syncManager->fullDatabaseFilename(m_databaseIdentifier);
+
+    if (!fileExists(databaseFilename) && openingStrategy == SkipIfNonExistent)
+        return;
 
     if (databaseFilename.isEmpty()) {
         LOG_ERROR("Filename for local storage database is empty - cannot open for persistent storage");
         markImported();
+        m_databaseOpenFailed = true;
         return;
     }
 
     if (!m_database.open(databaseFilename)) {
         LOG_ERROR("Failed to open database file %s for local storage", databaseFilename.utf8().data());
         markImported();
+        m_databaseOpenFailed = true;
         return;
     }
 
     if (!m_database.executeCommand("CREATE TABLE IF NOT EXISTS ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value TEXT NOT NULL ON CONFLICT FAIL)")) {
         LOG_ERROR("Failed to create table ItemTable for local storage");
+        markImported();
+        m_databaseOpenFailed = true;
+        return;
+    }
+}
+
+void StorageAreaSync::performImport()
+{
+    ASSERT(!isMainThread());
+    ASSERT(!m_database.isOpen());
+
+    openDatabase(SkipIfNonExistent);
+    if (!m_database.isOpen()) {
         markImported();
         return;
     }
@@ -255,14 +281,42 @@ void StorageAreaSync::performImport()
 
 void StorageAreaSync::markImported()
 {
-    StorageMutexLocker locker(m_importLock);
-    markImportedWithoutLockingMutex();
+    MutexLocker locker(m_importLock);
+    m_importComplete = true;
+    m_importCondition.signal();
+}
+
+// FIXME: In the future, we should allow use of StorageAreas while it's importing (when safe to do so).
+// Blocking everything until the import is complete is by far the simplest and safest thing to do, but
+// there is certainly room for safe optimization: Key/length will never be able to make use of such an
+// optimization (since the order of iteration can change as items are being added). Get can return any
+// item currently in the map. Get/remove can work whether or not it's in the map, but we'll need a list
+// of items the import should not overwrite. Clear can also work, but it'll need to kill the import
+// job first.
+void StorageAreaSync::blockUntilImportComplete()
+{
+    ASSERT(isMainThread());
+
+    // Fast path.  We set m_storageArea to 0 only after m_importComplete being true.
+    if (!m_storageArea)
+        return;
+
+    MutexLocker locker(m_importLock);
+    while (!m_importComplete)
+        m_importCondition.wait(m_importLock);
+    m_storageArea = 0;
 }
 
 void StorageAreaSync::sync(bool clearItems, const HashMap<String, String>& items)
 {
-    ASSERT(isBackgroundThread());
+    ASSERT(!isMainThread());
 
+    if (items.isEmpty() && !clearItems)
+        return;
+    if (m_databaseOpenFailed)
+        return;
+    if (!m_database.isOpen())
+        openDatabase(CreateIfNonExistent);
     if (!m_database.isOpen())
         return;
 
@@ -317,12 +371,12 @@ void StorageAreaSync::sync(bool clearItems, const HashMap<String, String>& items
 
 void StorageAreaSync::performSync()
 {
-    ASSERT(isBackgroundThread());
+    ASSERT(!isMainThread());
 
     bool clearItems;
     HashMap<String, String> items;
     {
-        StorageMutexLocker locker(m_syncLock);
+        MutexLocker locker(m_syncLock);
 
         ASSERT(m_syncScheduled);
 
@@ -346,45 +400,33 @@ void StorageAreaSync::performSync()
     enableSuddenTermination();
 }
 
-#if !ENABLE(SINGLE_THREADED)
-
-// FIXME: In the future, we should allow use of StorageAreas while it's importing (when safe to do so).
-// Blocking everything until the import is complete is by far the simplest and safest thing to do, but
-// there is certainly room for safe optimization: Key/length will never be able to make use of such an
-// optimization (since the order of iteration can change as items are being added). Get can return any
-// item currently in the map. Get/remove can work whether or not it's in the map, but we'll need a list
-// of items the import should not overwrite. Clear can also work, but it'll need to kill the import
-// job first.
-void StorageAreaSync::blockUntilImportComplete()
+void StorageAreaSync::deleteEmptyDatabase()
 {
-    ASSERT(isMainThread());
-
-    // Fast path.  We set m_storageArea to 0 only after m_importComplete being true.
-    if (!m_storageArea)
+    ASSERT(!isMainThread());
+    if (!m_database.isOpen())
         return;
 
-    MutexLocker locker(m_importLock);
-    while (!m_importComplete)
-        m_importCondition.wait(m_importLock);
-    m_storageArea = 0;
-}
+    SQLiteStatement query(m_database, "SELECT COUNT(*) FROM ItemTable");
+    if (query.prepare() != SQLResultOk) {
+        LOG_ERROR("Unable to count number of rows in ItemTable for local storage");
+        return;
+    }
 
-void StorageAreaSync::scheduleImport()
-{
-    m_importComplete = false;
-    // FIXME: If it can't import, then the default WebKit behavior should be that of private browsing,
-    // not silently ignoring it.  https://bugs.webkit.org/show_bug.cgi?id=25894
-    if (!m_syncManager->scheduleImport(this))
-        m_importComplete = true;
-}
+    int result = query.step();
+    if (result != SQLResultRow) {
+        LOG_ERROR("No results when counting number of rows in ItemTable for local storage");
+        return;
+    }
 
-void StorageAreaSync::markImportedWithoutLockingMutex()
-{
-    m_importComplete = true;
-    m_importCondition.signal();
+    int count = query.getColumnInt(0);
+    if (!count) {
+        query.finalize();
+        m_database.close();
+        String databaseFilename = m_syncManager->fullDatabaseFilename(m_databaseIdentifier);
+        if (!SQLiteFileSystem::deleteDatabaseFile(databaseFilename))
+            LOG_ERROR("Failed to delete database file %s\n", databaseFilename.utf8().data());
+    }
 }
-
-#endif
 
 } // namespace WebCore
 

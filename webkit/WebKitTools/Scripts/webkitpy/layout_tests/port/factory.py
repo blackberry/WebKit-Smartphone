@@ -32,6 +32,10 @@
 
 import sys
 
+ALL_PORT_NAMES = ['test', 'dryrun', 'mac', 'win', 'gtk', 'qt', 'chromium-mac',
+                  'chromium-linux', 'chromium-win', 'google-chrome-win',
+                  'google-chrome-mac', 'google-chrome-linux32', 'google-chrome-linux64']
+
 
 def get(port_name=None, options=None):
     """Returns an object implementing the Port interface. If
@@ -83,5 +87,14 @@ def get(port_name=None, options=None):
     elif port_to_use.startswith('chromium-win'):
         import chromium_win
         return chromium_win.ChromiumWinPort(port_name, options)
+    elif port_to_use.startswith('google-chrome'):
+        import google_chrome
+        return google_chrome.GetGoogleChromePort(port_name, options)
 
     raise NotImplementedError('unsupported port: %s' % port_to_use)
+
+
+def get_all(options=None):
+    """Returns all the objects implementing the Port interface."""
+    return dict([(port_name, get(port_name, options=options))
+                 for port_name in ALL_PORT_NAMES])

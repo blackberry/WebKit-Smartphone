@@ -1,0 +1,29 @@
+/*
+ * Copyright (C) Research In Motion Limited 2009-2010. All rights reserved.
+ */
+
+/* form element styling */
+
+textarea {
+    font-family: monospace;
+}
+
+select:focus {
+    border: 1px solid black;
+    outline: none;
+}
+
+select[size],
+select[multiple],
+select[size][multiple] {
+    padding: 5px;
+    border-radius: 5px;
+    border: 1px solid rgb(139,139,139);
+}
+
+select[size]:focus,
+select[multiple]:focus,
+select[size][multiple]:focus {
+    border: 1px solid black;
+    outline: none;
+}

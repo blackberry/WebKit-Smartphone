@@ -30,6 +30,7 @@
 #include "EventNames.h"
 #include "Frame.h"
 #include "HTMLBRElement.h"
+#include "HTMLFormControlElement.h"
 #include "HTMLNames.h"
 #include "HitTestResult.h"
 #include "RenderLayer.h"
@@ -189,7 +190,7 @@ void RenderTextControl::createSubtreeIfNeeded(TextControlInnerElement* innerBloc
         // For non-search fields, there is no intermediate innerBlock as the shadow node.
         // m_innerText will be the shadow node in that case.        
         RenderStyle* parentStyle = innerBlock ? innerBlock->renderer()->style() : style();
-        m_innerText = new TextControlInnerTextElement(document(), innerBlock ? 0 : node());
+        m_innerText = TextControlInnerTextElement::create(document(), innerBlock ? 0 : static_cast<HTMLElement*>(node()));
         m_innerText->attachInnerElement(innerBlock ? innerBlock : node(), createInnerTextStyle(parentStyle), renderArena());
     }
 }
@@ -214,7 +215,7 @@ void RenderTextControl::setInnerTextValue(const String& innerTextValue)
     String value = innerTextValue;
     if (value != text() || !m_innerText->hasChildNodes()) {
         if (value != text()) {
-            if (Frame* frame = document()->frame()) {
+            if (Frame* frame = this->frame()) {
                 frame->editor()->clearUndoRedoOperations();
                 
                 if (AXObjectCache::accessibilityEnabled())
@@ -227,7 +228,7 @@ void RenderTextControl::setInnerTextValue(const String& innerTextValue)
         ASSERT(!ec);
 
         if (value.endsWith("\n") || value.endsWith("\r")) {
-            m_innerText->appendChild(new HTMLBRElement(brTag, document()), ec);
+            m_innerText->appendChild(HTMLBRElement::create(document()), ec);
             ASSERT(!ec);
         }
 
@@ -246,7 +247,7 @@ void RenderTextControl::setLastChangeWasUserEdit(bool lastChangeWasUserEdit)
 
 int RenderTextControl::selectionStart()
 {
-    Frame* frame = document()->frame();
+    Frame* frame = this->frame();
     if (!frame)
         return 0;
     return indexForVisiblePosition(frame->selection()->start());
@@ -254,7 +255,7 @@ int RenderTextControl::selectionStart()
 
 int RenderTextControl::selectionEnd()
 {
-    Frame* frame = document()->frame();
+    Frame* frame = this->frame();
     if (!frame)
         return 0;
     return indexForVisiblePosition(frame->selection()->end());
@@ -262,12 +263,14 @@ int RenderTextControl::selectionEnd()
 
 void RenderTextControl::setSelectionStart(int start)
 {
-    setSelectionRange(start, max(start, selectionEnd()));
+    HTMLTextFormControlElement* element = static_cast<HTMLTextFormControlElement*>(node());
+    setSelectionRange(start, max(start, element->selectionEnd()));
 }
 
 void RenderTextControl::setSelectionEnd(int end)
 {
-    setSelectionRange(min(end, selectionStart()), end);
+    HTMLTextFormControlElement* element = static_cast<HTMLTextFormControlElement*>(node());
+    setSelectionRange(min(end, element->selectionStart()), end);
 }
 
 void RenderTextControl::select()
@@ -300,7 +303,7 @@ void RenderTextControl::setSelectionRange(int start, int end)
     }
     VisibleSelection newSelection = VisibleSelection(startPosition, endPosition);
 
-    if (Frame* frame = document()->frame())
+    if (Frame* frame = this->frame())
         frame->selection()->setSelection(newSelection);
 }
 
@@ -460,26 +463,22 @@ String RenderTextControl::textWithHardLineBreaks()
 {
     if (!m_innerText)
         return "";
-    Node* firstChild = m_innerText->firstChild();
-    if (!firstChild)
-        return "";
 
-    RenderObject* renderer = firstChild->renderer();
+    RenderBlock* renderer = toRenderBlock(m_innerText->renderer());
     if (!renderer)
-        return "";
-
-    InlineBox* box = renderer->isText() ? toRenderText(renderer)->firstTextBox() : toRenderBox(renderer)->inlineBoxWrapper();
-    if (!box)
         return "";
 
     Node* breakNode;
     unsigned breakOffset;
-    RootInlineBox* line = box->root();
+    RootInlineBox* line = renderer->firstRootBox();
+    if (!line)
+        return "";
+
     getNextSoftBreak(line, breakNode, breakOffset);
 
     Vector<UChar> result;
 
-    for (Node* n = firstChild; n; n = n->traverseNextNode(m_innerText.get())) {
+    for (Node* n = m_innerText->firstChild(); n; n = n->traverseNextNode(m_innerText.get())) {
         if (n->hasTagName(brTag))
             result.append(&newlineCharacter, 1);
         else if (n->isTextNode()) {
@@ -653,7 +652,7 @@ void RenderTextControl::selectionChanged(bool userTriggered)
 {
     cacheSelection(selectionStart(), selectionEnd());
 
-    if (Frame* frame = document()->frame()) {
+    if (Frame* frame = this->frame()) {
         if (frame->selection()->isRange() && userTriggered)
             node()->dispatchEvent(Event::create(eventNames().selectEvent, true, false));
     }

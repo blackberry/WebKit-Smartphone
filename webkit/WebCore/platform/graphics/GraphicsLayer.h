@@ -33,9 +33,6 @@
 #include "FloatPoint.h"
 #include "FloatPoint3D.h"
 #include "FloatSize.h"
-#if ENABLE(3D_CANVAS)
-#include "GraphicsContext3D.h"
-#endif
 #include "GraphicsLayerClient.h"
 #include "IntRect.h"
 #include "TransformationMatrix.h"
@@ -88,19 +85,18 @@ class FloatPoint3D;
 class GraphicsContext;
 class Image;
 class TextStream;
-struct TimingFunction;
+class TimingFunction;
 
 // Base class for animation values (also used for transitions). Here to
 // represent values for properties being animated via the GraphicsLayer,
 // without pulling in style-related data from outside of the platform directory.
 class AnimationValue : public Noncopyable {
 public:
-    AnimationValue(float keyTime, const TimingFunction* timingFunction = 0)
+    AnimationValue(float keyTime, PassRefPtr<TimingFunction> timingFunction = 0)
         : m_keyTime(keyTime)
-        , m_timingFunction(0)
     {
         if (timingFunction)
-            m_timingFunction.set(new TimingFunction(*timingFunction));
+            m_timingFunction = timingFunction;
     }
     
     virtual ~AnimationValue() { }
@@ -110,13 +106,13 @@ public:
 
 private:
     float m_keyTime;
-    OwnPtr<TimingFunction> m_timingFunction;
+    RefPtr<TimingFunction> m_timingFunction;
 };
 
 // Used to store one float value of an animation.
 class FloatAnimationValue : public AnimationValue {
 public:
-    FloatAnimationValue(float keyTime, float value, const TimingFunction* timingFunction = 0)
+    FloatAnimationValue(float keyTime, float value, PassRefPtr<TimingFunction> timingFunction = 0)
         : AnimationValue(keyTime, timingFunction)
         , m_value(value)
     {
@@ -131,11 +127,11 @@ private:
 // Used to store one transform value in a keyframe list.
 class TransformAnimationValue : public AnimationValue {
 public:
-    TransformAnimationValue(float keyTime, const TransformOperations* value = 0, const TimingFunction* timingFunction = 0)
+    TransformAnimationValue(float keyTime, const TransformOperations* value = 0, PassRefPtr<TimingFunction> timingFunction = 0)
         : AnimationValue(keyTime, timingFunction)
     {
         if (value)
-            m_value.set(new TransformOperations(*value));
+            m_value = adoptPtr(new TransformOperations(*value));
     }
 
     const TransformOperations* value() const { return m_value.get(); }
@@ -281,6 +277,8 @@ public:
     virtual void setNeedsDisplay() = 0;
     // mark the given rect (in layer coords) as needing dispay. Never goes deep.
     virtual void setNeedsDisplayInRect(const FloatRect&) = 0;
+    
+    virtual void setContentsNeedsDisplay() { };
 
     // Set that the position/size of the contents (image or video).
     IntRect contentsRect() const { return m_contentsRect; }
@@ -300,11 +298,9 @@ public:
     virtual void setContentsToImage(Image*) { }
     virtual void setContentsToMedia(PlatformLayer*) { } // video or plug-in
     virtual void setContentsBackgroundColor(const Color&) { }
-    
-#if ENABLE(3D_CANVAS)
-    virtual void setContentsToGraphicsContext3D(const GraphicsContext3D*) { }
-    virtual void setGraphicsContext3DNeedsDisplay() { }
-#endif
+    virtual void setContentsToCanvas(PlatformLayer*) { }
+    virtual bool hasContentsLayer() const { return false; }
+
     // Callback from the underlying graphics system to draw layer contents.
     void paintGraphicsLayerContents(GraphicsContext&, const IntRect& clip);
     // Callback from the underlying graphics system when the layer has been displayed
@@ -345,12 +341,16 @@ public:
     virtual float accumulatedOpacity() const;
 
     // Some compositing systems may do internal batching to synchronize compositing updates
-    // with updates drawn into the window. This is a signal to flush any internal batched state.
+    // with updates drawn into the window. These methods flush internal batched state on this layer
+    // and descendant layers, and this layer only.
     virtual void syncCompositingState() { }
+    virtual void syncCompositingStateForThisLayerOnly() { }
     
     // Return a string with a human readable form of the layer tree, If debug is true 
     // pointers for the layers and timing data will be included in the returned string.
     String layerTreeAsText(LayerTreeAsTextBehavior = LayerTreeAsTextBehaviorNormal) const;
+
+    bool usingTiledLayer() const { return m_usingTiledLayer; }
 
 protected:
 

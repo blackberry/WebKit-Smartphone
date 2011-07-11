@@ -26,34 +26,40 @@
 #ifndef WebFrame_h
 #define WebFrame_h
 
+#include "APIObject.h"
+#include "ImmutableArray.h"
 #include "WebFrameLoaderClient.h"
+#include <JavaScriptCore/JSBase.h>
 #include <WebCore/FrameLoaderClient.h>
 #include <WebCore/FrameLoaderTypes.h>
 #include <WebCore/PolicyChecker.h>
+#include <wtf/Forward.h>
 #include <wtf/PassRefPtr.h>
-#include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 
 namespace WebCore {
     class Frame;
     class HTMLFrameOwnerElement;
-    class String;
 }
 
 namespace WebKit {
 
+class InjectedBundleNodeHandle;
+class InjectedBundleScriptWorld;
 class WebPage;
 
-class WebFrame : public RefCounted<WebFrame> {
+class WebFrame : public APIObject {
 public:
+    static const Type APIType = TypeBundleFrame;
+
     static PassRefPtr<WebFrame> createMainFrame(WebPage*);
-    static PassRefPtr<WebFrame> createSubframe(WebPage*, const WebCore::String& frameName, WebCore::HTMLFrameOwnerElement*);
+    static PassRefPtr<WebFrame> createSubframe(WebPage*, const WTF::String& frameName, WebCore::HTMLFrameOwnerElement*);
     ~WebFrame();
 
     // Called when the FrameLoaderClient (and therefore the WebCore::Frame) is being torn down.
     void invalidate();
 
-    WebPage* page() const { return m_page; }
+    WebPage* page() const;
     WebCore::Frame* coreFrame() const { return m_coreFrame; }
 
     uint64_t frameID() const { return m_frameID; }
@@ -62,17 +68,53 @@ public:
     void invalidatePolicyListener();
     void didReceivePolicyDecision(uint64_t listenerID, WebCore::PolicyAction);
 
-private:
-    WebFrame(WebPage*, const WebCore::String& frameName, WebCore::HTMLFrameOwnerElement*);
+    String source() const;
 
-    WebPage* m_page;
+    // WKBundleFrame API and SPI functions
+    bool isMainFrame() const;
+    WTF::String name() const;
+    WTF::String url() const;
+    WTF::String innerText() const;
+    PassRefPtr<ImmutableArray> childFrames();
+    JSValueRef computedStyleIncludingVisitedInfo(JSObjectRef element);
+    JSGlobalContextRef jsContext();
+    JSGlobalContextRef jsContextForWorld(InjectedBundleScriptWorld*);
+
+    JSValueRef jsWrapperForWorld(InjectedBundleNodeHandle*, InjectedBundleScriptWorld*);
+
+    static WTF::String counterValue(JSObjectRef element);
+    static WTF::String markerText(JSObjectRef element);
+
+    unsigned numberOfActiveAnimations();
+    bool pauseAnimationOnElementWithId(const WTF::String& animationName, const WTF::String& elementID, double time);
+
+    unsigned pendingUnloadCount();
+
+    // Simple listener class used by plug-ins to know when frames finish or fail loading.
+    class LoadListener {
+    public:
+        virtual ~LoadListener() { }
+
+        virtual void didFinishLoad(WebFrame*) = 0;
+        virtual void didFailLoad(WebFrame*, bool wasCancelled) = 0;
+    };
+    void setLoadListener(LoadListener* loadListener) { m_loadListener = loadListener; }
+    LoadListener* loadListener() const { return m_loadListener; }
+
+private:
+    static PassRefPtr<WebFrame> create(WebPage*, const WTF::String& frameName, WebCore::HTMLFrameOwnerElement*);
+    WebFrame(WebPage*, const WTF::String& frameName, WebCore::HTMLFrameOwnerElement*);
+
+    virtual Type type() const { return APIType; }
+
     WebCore::Frame* m_coreFrame;
 
     uint64_t m_policyListenerID;
     WebCore::FramePolicyFunction m_policyFunction;
 
     WebFrameLoaderClient m_frameLoaderClient;
-
+    LoadListener* m_loadListener;
+    
     uint64_t m_frameID;
 };
 

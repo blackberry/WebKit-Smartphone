@@ -42,6 +42,7 @@ WebViewGraphicsBased::WebViewGraphicsBased(QWidget* parent)
     , m_numPaintsSinceLastMeasure(0)
     , m_measureFps(false)
     , m_resizesToContents(false)
+    , m_machine(0)
 {
     setScene(new QGraphicsScene(this));
     scene()->addItem(m_item);
@@ -50,54 +51,75 @@ WebViewGraphicsBased::WebViewGraphicsBased(QWidget* parent)
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
-#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
-    QStateMachine* machine = new QStateMachine(this);
-    QState* s0 = new QState(machine);
-    s0->assignProperty(this, "yRotation", 0);
-
-    QState* s1 = new QState(machine);
-    s1->assignProperty(this, "yRotation", 90);
-
-    QAbstractTransition* t1 = s0->addTransition(this, SIGNAL(yFlipRequest()), s1);
-    QPropertyAnimation* yRotationAnim = new QPropertyAnimation(this, "yRotation", this);
-    yRotationAnim->setDuration(1000);
-    t1->addAnimation(yRotationAnim);
-
-    QState* s2 = new QState(machine);
-    s2->assignProperty(this, "yRotation", -90);
-    s1->addTransition(s1, SIGNAL(propertiesAssigned()), s2);
-
-    QAbstractTransition* t2 = s2->addTransition(s0);
-    t2->addAnimation(yRotationAnim);
-
-    machine->setInitialState(s0);
-    machine->start();
-#endif
-
     m_updateTimer = new QTimer(this);
     m_updateTimer->setInterval(1000);
     connect(m_updateTimer, SIGNAL(timeout()), this, SLOT(updateFrameRate()));
 }
 
+void WebViewGraphicsBased::setPage(QWebPage* page)
+{
+    connect(page->mainFrame(), SIGNAL(contentsSizeChanged(const QSize&)), SLOT(contentsSizeChanged(const QSize&)));
+    m_item->setPage(page);
+}
+
+void WebViewGraphicsBased::contentsSizeChanged(const QSize& size)
+{
+    if (m_resizesToContents)
+        scene()->setSceneRect(0, 0, size.width(), size.height());
+}
+
 void WebViewGraphicsBased::setResizesToContents(bool b)
 {
+    if (b == m_resizesToContents)
+        return;
+
     m_resizesToContents = b;
     m_item->setResizesToContents(m_resizesToContents);
+
+    // When setting resizesToContents ON, our web view widget will always size as big as the
+    // web content being displayed, and so will the QWebPage's viewport. It implies that internally
+    // WebCore will work as if there was no content rendered offscreen, and then no scrollbars need
+    // drawing. In order to keep scrolling working, we:
+    //
+    // 1) Set QGraphicsView's scrollbars policy back to 'auto'.
+    // 2) Set scene's boundaries rect to an invalid size, which automatically makes it to be as big
+    //    as it needs to enclose all items onto it. We do that because QGraphicsView also calculates
+    //    the size of its scrollable area according to the amount of content in scene that is rendered
+    //    offscreen.
+    // 3) Set QWebPage's preferredContentsSize according to the size of QGraphicsView's viewport,
+    //    so WebCore properly lays pages out.
+    //
+    // On the other hand, when toggling resizesToContents OFF, we set back the default values, as
+    // opposite as described above.
     if (m_resizesToContents) {
         setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        m_item->page()->setPreferredContentsSize(size());
+        QRectF itemRect(m_item->geometry().topLeft(), m_item->page()->mainFrame()->contentsSize());
+        m_item->setGeometry(itemRect);
+        scene()->setSceneRect(itemRect);
     } else {
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        m_item->page()->setPreferredContentsSize(QSize());
+        QRect viewportRect(QPoint(0, 0), size());
+        m_item->setGeometry(viewportRect);
+        scene()->setSceneRect(viewportRect);
     }
 }
 
 void WebViewGraphicsBased::resizeEvent(QResizeEvent* event)
 {
     QGraphicsView::resizeEvent(event);
-    if (m_resizesToContents)
+
+    QSize size(event->size());
+
+    if (m_resizesToContents) {
+        m_item->page()->setPreferredContentsSize(size);
         return;
-    QRectF rect(QPoint(0, 0), event->size());
+    }
+
+    QRectF rect(QPoint(0, 0), size);
     m_item->setGeometry(rect);
     scene()->setSceneRect(rect);
 }
@@ -148,7 +170,39 @@ void WebViewGraphicsBased::animatedFlip()
 
 void WebViewGraphicsBased::animatedYFlip()
 {
-    emit yFlipRequest();
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
+    if (!m_machine) {
+        m_machine = new QStateMachine(this);
+
+        QState* s0 = new QState(m_machine);
+        s0->assignProperty(this, "yRotation", 0);
+
+        QState* s1 = new QState(m_machine);
+        s1->assignProperty(this, "yRotation", 90);
+
+        QAbstractTransition* t1 = s0->addTransition(s1);
+        QPropertyAnimation* yRotationAnim = new QPropertyAnimation(this, "yRotation", this);
+        t1->addAnimation(yRotationAnim);
+
+        QState* s2 = new QState(m_machine);
+        s2->assignProperty(this, "yRotation", -90);
+        s1->addTransition(s1, SIGNAL(propertiesAssigned()), s2);
+
+        QState* s3 = new QState(m_machine);
+        s3->assignProperty(this, "yRotation", 0);
+
+        QAbstractTransition* t2 = s2->addTransition(s3);
+        t2->addAnimation(yRotationAnim);
+
+        QFinalState* final = new QFinalState(m_machine);
+        s3->addTransition(s3, SIGNAL(propertiesAssigned()), final);
+
+        m_machine->setInitialState(s0);
+        yRotationAnim->setDuration(1000);
+    }
+
+    m_machine->start();
+#endif
 }
 
 void WebViewGraphicsBased::paintEvent(QPaintEvent* event)
@@ -192,14 +246,14 @@ void WebViewTraditional::mousePressEvent(QMouseEvent* event)
 void GraphicsWebView::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 {
     QMenu* menu = createContextMenu(page(), event->pos().toPoint());
-    menu->exec(mapToScene(event->pos()).toPoint());
+    menu->exec(event->screenPos());
     delete menu;
 }
 
 void WebViewTraditional::contextMenuEvent(QContextMenuEvent* event)
 {
     QMenu* menu = createContextMenu(page(), event->pos());
-    menu->exec(mapToGlobal(event->pos()));
+    menu->exec(event->globalPos());
     delete menu;
 }
 

@@ -1,0 +1,38 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x301
+  RenderBlock {HTML} at (0,0) size 800x301
+    RenderBody {BODY} at (8,16) size 784x277
+      RenderBlock {P} at (0,0) size 784x21
+        RenderText {#text} at (0,1) size 382x19
+          text run at (0,1) width 382: "There should be a tall solid unbroken column of blue below."
+      RenderBlock {DIV} at (0,37) size 432x24 [color=#0000FF]
+        RenderText {#text} at (0,0) size 48x25
+          text run at (0,0) width 48: " x"
+      RenderBlock {DIV} at (0,61) size 432x24 [color=#0000FF]
+        RenderText {#text} at (24,0) size 24x25
+          text run at (24,0) width 24: "x"
+      RenderBlock {DIV} at (0,85) size 432x24 [color=#0000FF]
+        RenderText {#text} at (24,0) size 24x25
+          text run at (24,0) width 24: "x"
+      RenderBlock {DIV} at (0,109) size 432x24 [color=#0000FF]
+        RenderText {#text} at (24,0) size 24x25
+          text run at (24,0) width 24: "x"
+      RenderBlock {DIV} at (0,133) size 432x24 [color=#0000FF]
+        RenderText {#text} at (24,0) size 24x25
+          text run at (24,0) width 24: "x"
+      RenderBlock {DIV} at (0,157) size 432x24 [color=#0000FF]
+        RenderText {#text} at (24,0) size 24x25
+          text run at (24,0) width 24: "x"
+      RenderBlock {DIV} at (0,181) size 432x24 [color=#0000FF]
+        RenderText {#text} at (24,0) size 24x25
+          text run at (24,0) width 24: "x"
+      RenderBlock {DIV} at (0,205) size 432x24 [color=#0000FF]
+        RenderText {#text} at (31,0) size 24x25
+          text run at (31,0) width 24: "x"
+      RenderBlock {DIV} at (0,229) size 432x24 [color=#0000FF]
+        RenderText {#text} at (24,0) size 24x25
+          text run at (24,0) width 24: "x"
+      RenderBlock {DIV} at (0,253) size 432x24 [color=#0000FF]
+        RenderText {#text} at (0,0) size 48x25
+          text run at (0,0) width 48: " x"

@@ -10,6 +10,11 @@
   </bookinfo>
 
   <chapter>
+    <title>Global functions</title>
+    <xi:include href="xml/webkit.xml"/>
+  </chapter>
+
+  <chapter>
     <title>Class Overview</title>
     <xi:include href="xml/webkitwebview.xml"/>
     <xi:include href="xml/webkitwebframe.xml"/>
@@ -30,7 +35,6 @@
     <xi:include href="xml/webkitsoupauthdialog.xml"/>
     <xi:include href="xml/webkitsecurityorigin.xml"/>
     <xi:include href="xml/webkitwebwindowfeatures.xml"/>
-    <xi:include href="xml/webkitcachemodel.xml"/>
   </chapter>
 
   <chapter>
@@ -106,5 +110,17 @@
   </index>
   <index id="index-1.1.23" role="1.1.23">
     <title>Index of new symbols in 1.1.23</title>
+  </index>
+  <index id="index-1.3.1" role="1.3.1">
+    <title>Index of new symbols in 1.3.1</title>
+  </index>
+  <index id="index-1.3.2" role="1.3.2">
+    <title>Index of new symbols in 1.3.2</title>
+  </index>
+  <index id="index-1.3.3" role="1.3.3">
+    <title>Index of new symbols in 1.3.3</title>
+  </index>
+  <index id="index-1.3.4" role="1.3.4">
+    <title>Index of new symbols in 1.3.4</title>
   </index>
 </book>

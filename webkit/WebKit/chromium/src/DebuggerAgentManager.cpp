@@ -50,9 +50,7 @@ bool DebuggerAgentManager::s_inHostDispatchHandler = false;
 
 DebuggerAgentManager::DeferrersMap DebuggerAgentManager::s_pageDeferrers;
 
-bool DebuggerAgentManager::s_inUtilityContext = false;
-
-bool DebuggerAgentManager::s_debugBreakDelayed = false;
+bool DebuggerAgentManager::s_exposeV8DebuggerProtocol = false;
 
 namespace {
 
@@ -117,9 +115,8 @@ DebuggerAgentManager::AttachedAgentsMap* DebuggerAgentManager::s_attachedAgentsM
 
 void DebuggerAgentManager::debugAttach(DebuggerAgentImpl* debuggerAgent)
 {
-#if ENABLE(V8_SCRIPT_DEBUG_SERVER)
-    return;
-#endif
+    if (!s_exposeV8DebuggerProtocol)
+        return;
     if (!s_attachedAgentsMap) {
         s_attachedAgentsMap = new AttachedAgentsMap();
         v8::Debug::SetMessageHandler2(&DebuggerAgentManager::onV8DebugMessage);
@@ -132,9 +129,8 @@ void DebuggerAgentManager::debugAttach(DebuggerAgentImpl* debuggerAgent)
 
 void DebuggerAgentManager::debugDetach(DebuggerAgentImpl* debuggerAgent)
 {
-#if ENABLE(V8_SCRIPT_DEBUG_SERVER)
-    return;
-#endif
+    if (!s_exposeV8DebuggerProtocol)
+        return;
     if (!s_attachedAgentsMap) {
         ASSERT_NOT_REACHED();
         return;
@@ -157,7 +153,7 @@ void DebuggerAgentManager::debugDetach(DebuggerAgentImpl* debuggerAgent)
         }
     } else {
       // Remove all breakpoints set by the agent.
-      String clearBreakpointGroupCmd = String::format(
+      WTF::String clearBreakpointGroupCmd = WTF::String::format(
           "{\"seq\":1,\"type\":\"request\",\"command\":\"clearbreakpointgroup\","
               "\"arguments\":{\"groupId\":%d}}",
           hostId);
@@ -176,7 +172,7 @@ void DebuggerAgentManager::onV8DebugMessage(const v8::Debug::Message& message)
 {
     v8::HandleScope scope;
     v8::String::Value value(message.GetJSON());
-    String out(reinterpret_cast<const UChar*>(*value), value.length());
+    WTF::String out(reinterpret_cast<const UChar*>(*value), value.length());
 
     // If callerData is not 0 the message is a response to a debugger command.
     if (v8::Debug::ClientData* callerData = message.GetClientData()) {
@@ -208,28 +204,20 @@ void DebuggerAgentManager::onV8DebugMessage(const v8::Debug::Message& message)
         return;
     }
 
-    if (s_inUtilityContext && message.GetEvent() == v8::Break) {
-        // This may happen when two tabs are being debugged in the same process.
-        // Suppose that first debugger is pauesed on an exception. It will run
-        // nested MessageLoop which may process Break request from the second
-        // debugger.
-        s_debugBreakDelayed = true;
-    } else {
-        // If the context is from one of the inpected tabs or injected extension
-        // scripts it must have hostId in the data field.
-        int hostId = WebCore::V8Proxy::contextDebugId(context);
-        if (hostId != -1) {
-            DebuggerAgentImpl* agent = debuggerAgentForHostId(hostId);
-            if (agent) {
-                if (agent->autoContinueOnException()
-                    && message.GetEvent() == v8::Exception) {
-                    sendContinueCommandToV8();
-                    return;
-                }
-
-                agent->debuggerOutput(out);
+    // If the context is from one of the inpected tabs or injected extension
+    // scripts it must have hostId in the data field.
+    int hostId = WebCore::V8Proxy::contextDebugId(context);
+    if (hostId != -1) {
+        DebuggerAgentImpl* agent = debuggerAgentForHostId(hostId);
+        if (agent) {
+            if (agent->autoContinueOnException()
+                && message.GetEvent() == v8::Exception) {
+                sendContinueCommandToV8();
                 return;
             }
+
+            agent->debuggerOutput(out);
+            return;
         }
     }
 
@@ -242,13 +230,10 @@ void DebuggerAgentManager::onV8DebugMessage(const v8::Debug::Message& message)
 
 void DebuggerAgentManager::pauseScript()
 {
-    if (s_inUtilityContext)
-        s_debugBreakDelayed = true;
-    else
-        v8::Debug::DebugBreak();
+    v8::Debug::DebugBreak();
 }
 
-void DebuggerAgentManager::executeDebuggerCommand(const String& command, int callerId)
+void DebuggerAgentManager::executeDebuggerCommand(const WTF::String& command, int callerId)
 {
     sendCommandToV8(command, new CallerIdWrapper(callerId));
 }
@@ -256,6 +241,12 @@ void DebuggerAgentManager::executeDebuggerCommand(const String& command, int cal
 void DebuggerAgentManager::setMessageLoopDispatchHandler(WebDevToolsAgent::MessageLoopDispatchHandler handler)
 {
     s_messageLoopDispatchHandler = handler;
+}
+
+void DebuggerAgentManager::setExposeV8DebuggerProtocol(bool value)
+{
+    s_exposeV8DebuggerProtocol = value;
+    WebCore::ScriptDebugServer::shared().setEnabled(!s_exposeV8DebuggerProtocol);
 }
 
 void DebuggerAgentManager::setHostId(WebFrameImpl* webframe, int hostId)
@@ -280,14 +271,14 @@ void DebuggerAgentManager::onNavigate()
         DebuggerAgentManager::sendContinueCommandToV8();
 }
 
-void DebuggerAgentManager::sendCommandToV8(const String& cmd, v8::Debug::ClientData* data)
+void DebuggerAgentManager::sendCommandToV8(const WTF::String& cmd, v8::Debug::ClientData* data)
 {
     v8::Debug::SendCommand(reinterpret_cast<const uint16_t*>(cmd.characters()), cmd.length(), data);
 }
 
 void DebuggerAgentManager::sendContinueCommandToV8()
 {
-    String continueCmd("{\"seq\":1,\"type\":\"request\",\"command\":\"continue\"}");
+    WTF::String continueCmd("{\"seq\":1,\"type\":\"request\",\"command\":\"continue\"}");
     sendCommandToV8(continueCmd, new CallerIdWrapper());
 }
 

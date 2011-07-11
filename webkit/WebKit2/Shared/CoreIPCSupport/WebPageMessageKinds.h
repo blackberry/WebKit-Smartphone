@@ -35,20 +35,34 @@ namespace WebPageMessage {
 enum Kind {
     Close,
     DidReceivePolicyDecision,
+    DidRemoveEditCommand,
     GetRenderTreeExternalRepresentation,
+    GetSourceForFrame,
     GoBack,
     GoForward,
+    GoToBackForwardItem,
     KeyEvent,
     LoadURL,
+    LoadURLRequest,
     MouseEvent,
     PreferencesDidChange,
+    ReapplyEditCommand,
     Reload,
     RunJavaScriptInMainFrame,
     SetActive,
+    SetCustomUserAgent,
     SetFocused,
+    SetIsInWindow,
+    SetPageAndTextZoomFactors,
+    SetPageZoomFactor,
+    SetTextZoomFactor,
     StopLoading,
     TryClose,
+    UnapplyEditCommand,
     WheelEvent
+#if ENABLE(TOUCH_EVENTS)
+    , TouchEvent
+#endif
 };
 
 }

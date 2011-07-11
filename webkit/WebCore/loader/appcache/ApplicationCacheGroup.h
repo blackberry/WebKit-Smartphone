@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2009 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2008, 2009, 2010 Apple Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,16 +28,16 @@
 
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
 
-#include <wtf/Noncopyable.h>
-#include <wtf/HashMap.h>
-#include <wtf/HashSet.h>
-
 #include "DOMApplicationCache.h"
 #include "KURL.h"
 #include "PlatformString.h"
 #include "ResourceHandle.h"
 #include "ResourceHandleClient.h"
 #include "SharedBuffer.h"
+
+#include <wtf/Noncopyable.h>
+#include <wtf/HashMap.h>
+#include <wtf/HashSet.h>
 
 namespace WebCore {
 
@@ -47,6 +47,7 @@ class ApplicationCacheStorage;
 class Document;
 class DocumentLoader;
 class Frame;
+class SecurityOrigin;
 
 enum ApplicationCacheUpdateOption {
     ApplicationCacheUpdateWithBrowsingContext,
@@ -71,13 +72,15 @@ public:
     static void selectCacheWithoutManifestURL(Frame*);
     
     const KURL& manifestURL() const { return m_manifestURL; }
+    const SecurityOrigin* origin() const { return m_origin.get(); }
     UpdateStatus updateStatus() const { return m_updateStatus; }
+    void setUpdateStatus(UpdateStatus status);
 
     void setStorageID(unsigned storageID) { m_storageID = storageID; }
     unsigned storageID() const { return m_storageID; }
     void clearStorageID();
     
-    void update(Frame*, ApplicationCacheUpdateOption); // FIXME: Frame should not bee needed when updating witout browsing context.
+    void update(Frame*, ApplicationCacheUpdateOption); // FIXME: Frame should not be needed when updating without browsing context.
     void cacheDestroyed(ApplicationCache*);
 
     bool cacheIsBeingUpdated(const ApplicationCache* cache) const { return cache == m_cacheBeingUpdated; }
@@ -100,9 +103,13 @@ public:
 #endif
 
 private:
-    static void postListenerTask(ApplicationCacheHost::EventID, const HashSet<DocumentLoader*>&);
-    static void postListenerTask(ApplicationCacheHost::EventID, DocumentLoader*);
+    static void postListenerTask(ApplicationCacheHost::EventID id, const HashSet<DocumentLoader*>& set) { postListenerTask(id, 0, 0, set); }
+    static void postListenerTask(ApplicationCacheHost::EventID id, DocumentLoader* loader)  { postListenerTask(id, 0, 0, loader); }
+    static void postListenerTask(ApplicationCacheHost::EventID, int progressTotal, int progressDone, const HashSet<DocumentLoader*>&);
+    static void postListenerTask(ApplicationCacheHost::EventID, int progressTotal, int progressDone, DocumentLoader*);
+
     void scheduleReachedMaxAppCacheSizeCallback();
+    void scheduleReachedOriginQuotaCallback();
 
     PassRefPtr<ResourceHandle> createResourceHandle(const KURL&, ApplicationCacheResource* newestCachedResource);
 
@@ -110,8 +117,11 @@ private:
     // the existing client callback cannot be used, so assume that any client that enables application cache also wants it to use credential storage.
     virtual bool shouldUseCredentialStorage(ResourceHandle*) { return true; }
 
+#if ENABLE(INSPECTOR)
+    virtual void willSendRequest(ResourceHandle*, ResourceRequest&, const ResourceResponse&);
+#endif
     virtual void didReceiveResponse(ResourceHandle*, const ResourceResponse&);
-    virtual void didReceiveData(ResourceHandle*, const char*, int, int lengthReceived);
+    virtual void didReceiveData(ResourceHandle*, const char*, int length, int lengthReceived);
     virtual void didFinishLoading(ResourceHandle*);
     virtual void didFail(ResourceHandle*, const ResourceError&);
 
@@ -119,11 +129,13 @@ private:
     void didReceiveManifestData(const char*, int);
     void didFinishLoadingManifest();
     void didReachMaxAppCacheSize();
+    void didReachOriginQuota(PassRefPtr<Frame> frame);
     
     void startLoadingEntry();
     void deliverDelayedMainResources();
     void checkIfLoadIsComplete();
     void cacheUpdateFailed();
+    void cacheUpdateFailedDueToOriginQuota();
     void manifestNotFound();
     
     void addEntry(const String&, unsigned type);
@@ -133,6 +145,7 @@ private:
     void stopLoading();
     
     KURL m_manifestURL;
+    RefPtr<SecurityOrigin> m_origin;
     UpdateStatus m_updateStatus;
     
     // This is the newest complete cache in the group.
@@ -156,6 +169,10 @@ private:
     // The URLs and types of pending cache entries.
     typedef HashMap<String, unsigned> EntryMap;
     EntryMap m_pendingEntries;
+    
+    // The total number of items to be processed to update the cache group and the number that have been done.
+    int m_progressTotal;
+    int m_progressDone;
 
     // Frame used for fetching resources when updating.
     // FIXME: An update started by a particular frame should not stop if it is destroyed, but there are other frames associated with the same cache group.
@@ -184,15 +201,23 @@ private:
     
     RefPtr<ResourceHandle> m_currentHandle;
     RefPtr<ApplicationCacheResource> m_currentResource;
-    
+
+#if ENABLE(INSPECTOR)
+    unsigned long m_currentResourceIdentifier;
+#endif
+
     RefPtr<ApplicationCacheResource> m_manifestResource;
     RefPtr<ResourceHandle> m_manifestHandle;
 
+    int64_t m_loadedSize;
+    int64_t m_availableSpaceInQuota;
+    bool m_originQuotaReached;
 #if OS(OLYMPIA)
     ApplicationCacheStorage* m_cacheStorage;
 #endif
 
     friend class ChromeClientCallbackTimer;
+    friend class OriginQuotaReachedCallbackTimer;
 };
 
 } // namespace WebCore

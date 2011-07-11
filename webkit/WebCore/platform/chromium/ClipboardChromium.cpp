@@ -32,6 +32,7 @@
 #include "ChromiumDataObject.h"
 #include "ClipboardUtilitiesChromium.h"
 #include "Document.h"
+#include "DragData.h"
 #include "Element.h"
 #include "FileList.h"
 #include "Frame.h"
@@ -43,6 +44,7 @@
 #include "PlatformString.h"
 #include "Range.h"
 #include "RenderImage.h"
+#include "ScriptExecutionContext.h"
 #include "StringBuilder.h"
 #include "markup.h"
 
@@ -89,18 +91,25 @@ static ClipboardDataType clipboardTypeFromMIMEType(const String& type)
     return ClipboardDataTypeOther;
 }
 
+PassRefPtr<Clipboard> Clipboard::create(ClipboardAccessPolicy policy, DragData* dragData, Frame* frame)
+{
+    return ClipboardChromium::create(true, dragData->platformData(), policy, frame);
+}
+
 ClipboardChromium::ClipboardChromium(bool isForDragging,
                                      PassRefPtr<ChromiumDataObject> dataObject,
-                                     ClipboardAccessPolicy policy)
+                                     ClipboardAccessPolicy policy,
+                                     Frame* frame)
     : Clipboard(policy, isForDragging)
     , m_dataObject(dataObject)
+    , m_frame(frame)
 {
 }
 
 PassRefPtr<ClipboardChromium> ClipboardChromium::create(bool isForDragging,
-    PassRefPtr<ChromiumDataObject> dataObject, ClipboardAccessPolicy policy)
+    PassRefPtr<ChromiumDataObject> dataObject, ClipboardAccessPolicy policy, Frame* frame)
 {
-    return adoptRef(new ClipboardChromium(isForDragging, dataObject, policy));
+    return adoptRef(new ClipboardChromium(isForDragging, dataObject, policy, frame));
 }
 
 void ClipboardChromium::clearData(const String& type)
@@ -390,7 +399,12 @@ void ClipboardChromium::setDragImageElement(Node* node, const IntPoint& loc)
 DragImageRef ClipboardChromium::createDragImage(IntPoint& loc) const
 {
     DragImageRef result = 0;
-    if (m_dragImage) {
+    if (m_dragImageElement) {
+        if (m_frame) {
+            result = m_frame->nodeImage(m_dragImageElement.get());
+            loc = m_dragLoc;
+        }
+    } else if (m_dragImage) {
         result = createDragImageFromImage(m_dragImage->image());
         loc = m_dragLoc;
     }
@@ -495,8 +509,11 @@ void ClipboardChromium::writeURL(const KURL& url, const String& title, Frame*)
 {
     if (!m_dataObject)
         return;
+    ASSERT(!url.isEmpty());
     m_dataObject->url = url;
     m_dataObject->urlTitle = title;
+    m_dataObject->uriList.clear();
+    m_dataObject->uriList.append(url);
 
     // The URL can also be used as plain text.
     m_dataObject->plainText = url.string();
@@ -512,11 +529,10 @@ void ClipboardChromium::writeRange(Range* selectedRange, Frame* frame)
     if (!m_dataObject)
          return;
 
-    m_dataObject->textHtml = createMarkup(selectedRange, 0,
-        AnnotateForInterchange);
+    m_dataObject->textHtml = createMarkup(selectedRange, 0, AnnotateForInterchange, false, AbsoluteURLs);
     m_dataObject->htmlBaseUrl = frame->document()->url();
 
-    String str = frame->selectedText();
+    String str = frame->editor()->selectedText();
 #if OS(WINDOWS)
     replaceNewlinesWithWindowsStyleNewlines(str);
 #endif

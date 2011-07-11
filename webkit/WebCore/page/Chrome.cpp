@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2006, 2007, 2009 Apple Inc. All rights reserved.
- * Copyright (C) 2008 Nokia Corporation and/or its subsidiary(-ies)
+ * Copyright (C) 2008, 2010 Nokia Corporation and/or its subsidiary(-ies)
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -318,16 +318,6 @@ bool Chrome::shouldInterruptJavaScript()
     return m_client->shouldInterruptJavaScript();
 }
 
-void Chrome::registerProtocolHandler(const String& scheme, const String& baseURL, const String& url, const String& title)
-{
-    m_client->registerProtocolHandler(scheme, baseURL, url, title);
-}
-
-void Chrome::registerContentHandler(const String& mimeType, const String& baseURL, const String& url, const String& title)
-{
-    m_client->registerContentHandler(mimeType,  baseURL, url,  title);
-}
-
 IntRect Chrome::windowResizerRect() const
 {
     return m_client->windowResizerRect();
@@ -436,9 +426,9 @@ void Chrome::chooseIconForFiles(const Vector<String>& filenames, FileChooser* fi
     m_client->chooseIconForFiles(filenames, fileChooser);
 }
 
-bool Chrome::setCursor(PlatformCursorHandle cursor)
+void Chrome::setCursor(const Cursor& cursor)
 {
-    return m_client->setCursor(cursor);
+    m_client->setCursor(cursor);
 }
 
 #if ENABLE(NOTIFICATIONS)
@@ -492,6 +482,20 @@ bool ChromeClient::paintCustomScrollCorner(GraphicsContext*, const FloatRect&)
     return false;
 }
 
+bool Chrome::selectItemWritingDirectionIsNatural()
+{
+    return m_client->selectItemWritingDirectionIsNatural();
+}
+
+PassRefPtr<PopupMenu> Chrome::createPopupMenu(PopupMenuClient* client) const
+{
+    return m_client->createPopupMenu(client);
+}
+
+PassRefPtr<SearchPopupMenu> Chrome::createSearchPopupMenu(PopupMenuClient* client) const
+{
+    return m_client->createSearchPopupMenu(client);
+}
 #if PLATFORM(OLYMPIA)
 void Chrome::layoutFinished(Frame* frame) const
 {

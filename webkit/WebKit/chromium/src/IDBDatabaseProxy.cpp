@@ -10,9 +10,6 @@
  * 2.  Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer in the
  *     documentation and/or other materials provided with the distribution.
- * 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of
- *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -30,15 +27,22 @@
 #include "IDBDatabaseProxy.h"
 
 #include "DOMStringList.h"
-#include "IDBDatabaseError.h"
+#include "IDBCallbacks.h"
+#include "IDBObjectStoreProxy.h"
+#include "IDBTransactionBackendProxy.h"
+#include "WebDOMStringList.h"
+#include "WebFrameImpl.h"
+#include "WebIDBCallbacksImpl.h"
 #include "WebIDBDatabase.h"
 #include "WebIDBDatabaseError.h"
+#include "WebIDBObjectStore.h"
+#include "WebIDBTransaction.h"
 
 #if ENABLE(INDEXED_DATABASE)
 
 namespace WebCore {
 
-PassRefPtr<IDBDatabase> IDBDatabaseProxy::create(PassOwnPtr<WebKit::WebIDBDatabase> database)
+PassRefPtr<IDBDatabaseBackendInterface> IDBDatabaseProxy::create(PassOwnPtr<WebKit::WebIDBDatabase> database)
 {
     return adoptRef(new IDBDatabaseProxy(database));
 }
@@ -52,27 +56,56 @@ IDBDatabaseProxy::~IDBDatabaseProxy()
 {
 }
 
-String IDBDatabaseProxy::name()
+String IDBDatabaseProxy::name() const
 {
     return m_webIDBDatabase->name();
 }
 
-String IDBDatabaseProxy::description()
+String IDBDatabaseProxy::description() const
 {
     return m_webIDBDatabase->description();
 }
 
-String IDBDatabaseProxy::version()
+String IDBDatabaseProxy::version() const
 {
     return m_webIDBDatabase->version();
 }
 
-PassRefPtr<DOMStringList> IDBDatabaseProxy::objectStores()
+PassRefPtr<DOMStringList> IDBDatabaseProxy::objectStores() const
 {
     return m_webIDBDatabase->objectStores();
+}
+
+void IDBDatabaseProxy::createObjectStore(const String& name, const String& keyPath, bool autoIncrement, PassRefPtr<IDBCallbacks> callbacks)
+{
+    m_webIDBDatabase->createObjectStore(name, keyPath, autoIncrement, new WebIDBCallbacksImpl(callbacks));
+}
+
+PassRefPtr<IDBObjectStoreBackendInterface> IDBDatabaseProxy::objectStore(const String& name, unsigned short mode)
+{
+    WebKit::WebIDBObjectStore* objectStore = m_webIDBDatabase->objectStore(name, mode);
+    if (!objectStore)
+        return 0;
+    return IDBObjectStoreProxy::create(objectStore);
+}
+
+void IDBDatabaseProxy::removeObjectStore(const String& name, PassRefPtr<IDBCallbacks> callbacks)
+{
+    m_webIDBDatabase->removeObjectStore(name, new WebIDBCallbacksImpl(callbacks));
+}
+
+void IDBDatabaseProxy::setVersion(const String& version, PassRefPtr<IDBCallbacks> callbacks)
+{
+    m_webIDBDatabase->setVersion(version, new WebIDBCallbacksImpl(callbacks));
+}
+
+PassRefPtr<IDBTransactionBackendInterface> IDBDatabaseProxy::transaction(DOMStringList* storeNames, unsigned short mode, unsigned long timeout)
+{
+    WebKit::WebDOMStringList names(storeNames);
+    WebKit::WebIDBTransaction* transaction = m_webIDBDatabase->transaction(names, mode, timeout);
+    return IDBTransactionBackendProxy::create(transaction);
 }
 
 } // namespace WebCore
 
 #endif // ENABLE(INDEXED_DATABASE)
-

@@ -1,0 +1,86 @@
+layer at (0,0) size 800x1422
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x1422
+  RenderBlock {HTML} at (0,0) size 800x1422
+    RenderBody {BODY} at (8,8) size 784x1406 [bgcolor=#CCCCCC]
+      RenderBlock {P} at (0,0) size 784x21
+        RenderText {#text} at (0,1) size 356x19
+          text run at (0,1) width 356: "The style declarations which apply to the text below are:"
+      RenderBlock {PRE} at (0,37) size 784x45
+        RenderText {#text} at (0,0) size 152x45
+          text run at (0,0) width 152: ".one {width: 50px;}"
+          text run at (152,0) width 0: " "
+          text run at (0,15) width 144: ".two {width: 50%;}"
+          text run at (144,15) width 0: " "
+          text run at (0,30) width 152: "TABLE {width: 50%;}"
+          text run at (152,30) width 0: " "
+      RenderBlock {HR} at (0,95) size 784x2 [border: (1px inset #000000)]
+      RenderBlock (anonymous) at (0,105) size 784x50
+        RenderImage {IMG} at (0,0) size 50x50
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,171) size 784x21
+        RenderText {#text} at (0,1) size 287x19
+          text run at (0,1) width 287: "The square above should be fifty pixels wide."
+      RenderBlock (anonymous) at (0,208) size 784x392
+        RenderImage {IMG} at (0,0) size 392x392
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,616) size 784x21
+        RenderText {#text} at (0,1) size 671x19
+          text run at (0,1) width 671: "The square above should be half as wide as the image's parent element (either the BODY or the table cell)."
+      RenderBlock {P} at (0,653) size 392x105
+        RenderText {#text} at (0,1) size 382x82
+          text run at (0,1) width 382: "This paragraph should be half the width of its parent element"
+          text run at (0,22) width 379: "(either the BODY or the table, which should itself be half as"
+          text run at (0,43) width 188: "wide as the BODY element). "
+          text run at (188,43) width 178: "This is extra text included to"
+          text run at (0,64) width 246: "ensure that this will be a fair test of the "
+        RenderInline {CODE} at (0,0) size 40x15
+          RenderText {#text} at (246,68) size 40x15
+            text run at (246,68) width 40: "width"
+        RenderText {#text} at (286,64) size 373x40
+          text run at (286,64) width 57: " property"
+          text run at (0,85) width 373: "without the need for the user to resize the viewing window."
+      RenderTable {TABLE} at (0,774) size 392x632 [border: (1px outset #808080)]
+        RenderTableSection {TBODY} at (1,1) size 390x630
+          RenderTableRow {TR} at (0,0) size 390x29
+            RenderTableCell {TD} at (0,0) size 390x29 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=0 c=0 rs=1 cs=2]
+              RenderInline {STRONG} at (0,0) size 161x19
+                RenderText {#text} at (4,5) size 161x19
+                  text run at (4,5) width 161: "TABLE Testing Section"
+          RenderTableRow {TR} at (0,29) size 390x601
+            RenderTableCell {TD} at (0,315) size 12x29 [bgcolor=#C0C0C0] [border: (1px inset #808080)] [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (4,5) size 4x19
+                text run at (4,5) width 4: " "
+            RenderTableCell {TD} at (12,29) size 378x601 [border: (1px inset #808080)] [r=1 c=1 rs=1 cs=1]
+              RenderBlock (anonymous) at (4,4) size 370x50
+                RenderImage {IMG} at (0,0) size 50x50
+                RenderText {#text} at (0,0) size 0x0
+              RenderBlock {P} at (4,70) size 370x21
+                RenderText {#text} at (0,1) size 287x19
+                  text run at (0,1) width 287: "The square above should be fifty pixels wide."
+              RenderBlock (anonymous) at (4,107) size 370x185
+                RenderImage {IMG} at (0,0) size 185x185
+                RenderText {#text} at (0,0) size 0x0
+              RenderBlock {P} at (4,308) size 370x42
+                RenderText {#text} at (0,1) size 348x40
+                  text run at (0,1) width 348: "The square above should be half as wide as the image's"
+                  text run at (0,22) width 320: "parent element (either the BODY or the table cell)."
+              RenderBlock {P} at (4,366) size 185x231
+                RenderText {#text} at (0,1) size 184x187
+                  text run at (0,1) width 160: "This paragraph should be"
+                  text run at (0,22) width 165: "half the width of its parent"
+                  text run at (0,43) width 184: "element (either the BODY or"
+                  text run at (0,64) width 180: "the table, which should itself"
+                  text run at (0,85) width 136: "be half as wide as the"
+                  text run at (0,106) width 113: "BODY element). "
+                  text run at (113,106) width 42: "This is"
+                  text run at (0,127) width 177: "extra text included to ensure"
+                  text run at (0,148) width 174: "that this will be a fair test of"
+                  text run at (0,169) width 23: "the "
+                RenderInline {CODE} at (0,0) size 40x15
+                  RenderText {#text} at (23,173) size 40x15
+                    text run at (23,173) width 40: "width"
+                RenderText {#text} at (63,169) size 184x61
+                  text run at (63,169) width 109: " property without"
+                  text run at (0,190) width 184: "the need for the user to resize"
+                  text run at (0,211) width 133: "the viewing window."

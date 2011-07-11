@@ -26,10 +26,13 @@
 #include "RenderSVGRoot.h"
 
 #include "GraphicsContext.h"
+#include "HitTestResult.h"
 #include "RenderSVGContainer.h"
+#include "RenderSVGResource.h"
 #include "RenderView.h"
 #include "SVGLength.h"
 #include "SVGRenderSupport.h"
+#include "SVGResources.h"
 #include "SVGSVGElement.h"
 #include "SVGStyledElement.h"
 #include "TransformState.h"
@@ -44,6 +47,8 @@ namespace WebCore {
 
 RenderSVGRoot::RenderSVGRoot(SVGStyledElement* node)
     : RenderBox(node)
+    , m_isLayoutSizeChanged(false)
+    , m_needsBoundariesOrTransformUpdate(true)
 {
     setReplaced(true);
 }
@@ -107,33 +112,40 @@ void RenderSVGRoot::layout()
     view()->disableLayoutState();
 
     bool needsLayout = selfNeedsLayout();
-    LayoutRepainter repainter(*this, checkForRepaintDuringLayout() && needsLayout);
+    LayoutRepainter repainter(*this, needsLayout && m_everHadLayout && checkForRepaintDuringLayout());
 
     IntSize oldSize(width(), height());
     calcWidth();
     calcHeight();
-
     calcViewport();
 
-    // RenderSVGRoot needs to take special care to propagate window size changes to the children,
-    // if the outermost <svg> is using relative x/y/width/height values. Hence the additonal parameters.
     SVGSVGElement* svg = static_cast<SVGSVGElement*>(node());
-    layoutChildren(this, needsLayout || (svg->hasRelativeValues() && oldSize != size()));
+    m_isLayoutSizeChanged = svg->hasRelativeLengths() && oldSize != size();
+
+    SVGRenderSupport::layoutChildren(this, needsLayout);
+    m_isLayoutSizeChanged = false;
+
+    // At this point LayoutRepainter already grabbed the old bounds,
+    // recalculate them now so repaintAfterLayout() uses the new bounds.
+    if (m_needsBoundariesOrTransformUpdate) {
+        updateCachedBoundaries();
+        m_needsBoundariesOrTransformUpdate = false;
+    }
+
     repainter.repaintAfterLayout();
 
     view()->enableLayoutState();
     setNeedsLayout(false);
 }
 
-bool RenderSVGRoot::selfWillPaint() const
+bool RenderSVGRoot::selfWillPaint()
 {
 #if ENABLE(FILTERS)
-    const SVGRenderStyle* svgStyle = style()->svgStyle();
-    RenderSVGResourceFilter* filter = getRenderSVGResourceById<RenderSVGResourceFilter>(document(), svgStyle->filterResource());
-    if (filter)
-        return true;
-#endif
+    SVGResources* resources = SVGResourcesCache::cachedResourcesForRenderObject(this);
+    return resources && resources->filter();
+#else
     return false;
+#endif
 }
 
 void RenderSVGRoot::paint(PaintInfo& paintInfo, int parentX, int parentY)
@@ -141,11 +153,15 @@ void RenderSVGRoot::paint(PaintInfo& paintInfo, int parentX, int parentY)
     if (paintInfo.context->paintingDisabled())
         return;
 
+    bool isVisible = style()->visibility() == VISIBLE;
     IntPoint parentOriginInContainer(parentX, parentY);
     IntPoint borderBoxOriginInContainer = parentOriginInContainer + parentOriginToBorderBox();
 
-    if (hasBoxDecorations() && (paintInfo.phase == PaintPhaseForeground || paintInfo.phase == PaintPhaseSelection)) 
+    if (hasBoxDecorations() && (paintInfo.phase == PaintPhaseBlockBackground || paintInfo.phase == PaintPhaseChildBlockBackground) && isVisible)
         paintBoxDecorations(paintInfo, borderBoxOriginInContainer.x(), borderBoxOriginInContainer.y());
+
+    if (paintInfo.phase == PaintPhaseBlockBackground)
+        return;
 
     // An empty viewport disables rendering.  FIXME: Should we still render filters?
     if (m_viewportSize.isEmpty())
@@ -155,8 +171,8 @@ void RenderSVGRoot::paint(PaintInfo& paintInfo, int parentX, int parentY)
     if (!firstChild() && !selfWillPaint())
         return;
 
-    // Make a copy of the PaintInfo because applyTransformToPaintInfo will modify the damage rect.
-    RenderObject::PaintInfo childPaintInfo(paintInfo);
+    // Make a copy of the PaintInfo because applyTransform will modify the damage rect.
+    PaintInfo childPaintInfo(paintInfo);
     childPaintInfo.context->save();
 
     // Apply initial viewport clip - not affected by overflow handling
@@ -164,39 +180,52 @@ void RenderSVGRoot::paint(PaintInfo& paintInfo, int parentX, int parentY)
 
     // Convert from container offsets (html renderers) to a relative transform (svg renderers).
     // Transform from our paint container's coordinate system to our local coords.
-    applyTransformToPaintInfo(childPaintInfo, localToRepaintContainerTransform(parentOriginInContainer));
-
-    RenderSVGResourceFilter* filter = 0;
-    FloatRect boundingBox = repaintRectInLocalCoordinates();
+    childPaintInfo.applyTransform(localToRepaintContainerTransform(parentOriginInContainer));
 
     bool continueRendering = true;
     if (childPaintInfo.phase == PaintPhaseForeground)
-        continueRendering = prepareToRenderSVGContent(this, childPaintInfo, boundingBox, filter);
+        continueRendering = SVGRenderSupport::prepareToRenderSVGContent(this, childPaintInfo);
 
     if (continueRendering)
         RenderBox::paint(childPaintInfo, 0, 0);
 
     if (childPaintInfo.phase == PaintPhaseForeground)
-        finishRenderSVGContent(this, childPaintInfo, filter, paintInfo.context);
+        SVGRenderSupport::finishRenderSVGContent(this, childPaintInfo, paintInfo.context);
 
     childPaintInfo.context->restore();
 
-    if ((paintInfo.phase == PaintPhaseOutline || paintInfo.phase == PaintPhaseSelfOutline) && style()->outlineWidth() && style()->visibility() == VISIBLE)
+    if ((paintInfo.phase == PaintPhaseOutline || paintInfo.phase == PaintPhaseSelfOutline) && style()->outlineWidth() && isVisible)
         paintOutline(paintInfo.context, borderBoxOriginInContainer.x(), borderBoxOriginInContainer.y(), width(), height());
 }
 
 void RenderSVGRoot::destroy()
 {
-    deregisterFromResources(this);
+    SVGResourcesCache::clientDestroyed(this);
     RenderBox::destroy();
+}
+
+void RenderSVGRoot::styleWillChange(StyleDifference diff, const RenderStyle* newStyle)
+{
+    if (diff == StyleDifferenceLayout)
+        setNeedsBoundariesUpdate();
+    RenderBox::styleWillChange(diff, newStyle);
+}
+
+void RenderSVGRoot::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
+{
+    RenderBox::styleDidChange(diff, oldStyle);
+    SVGResourcesCache::clientStyleChanged(this, diff, style());
+}
+
+void RenderSVGRoot::updateFromElement()
+{
+    RenderBox::updateFromElement();
+    SVGResourcesCache::clientUpdatedFromElement(this, style());
 }
 
 void RenderSVGRoot::calcViewport()
 {
     SVGSVGElement* svg = static_cast<SVGSVGElement*>(node());
-
-    if (!selfNeedsLayout() && !svg->hasRelativeValues())
-        return;
 
     if (!svg->hasSetContainerSize()) {
         // In the normal case of <svg> being stand-alone or in a CSSBoxModel object we use
@@ -253,22 +282,9 @@ const AffineTransform& RenderSVGRoot::localToParentTransform() const
     return m_localToParentTransform;
 }
 
-FloatRect RenderSVGRoot::objectBoundingBox() const
+IntRect RenderSVGRoot::clippedOverflowRectForRepaint(RenderBoxModelObject* repaintContainer)
 {
-    return computeContainerBoundingBox(this, false);
-}
-
-FloatRect RenderSVGRoot::repaintRectInLocalCoordinates() const
-{
-    // FIXME: This does not include the border but it should!
-    FloatRect repaintRect = computeContainerBoundingBox(this, true);
-    style()->svgStyle()->inflateForShadow(repaintRect);
-    return repaintRect;
-}
-
-AffineTransform RenderSVGRoot::localTransform() const
-{
-    return AffineTransform();
+    return SVGRenderSupport::clippedOverflowRectForRepaint(this, repaintContainer);
 }
 
 void RenderSVGRoot::computeRectForRepaint(RenderBoxModelObject* repaintContainer, IntRect& repaintRect, bool fixed)
@@ -280,7 +296,10 @@ void RenderSVGRoot::computeRectForRepaint(RenderBoxModelObject* repaintContainer
     // Apply initial viewport clip - not affected by overflow settings    
     repaintRect.intersect(enclosingIntRect(FloatRect(FloatPoint(), m_viewportSize)));
 
-    style()->svgStyle()->inflateForShadow(repaintRect);
+    const SVGRenderStyle* svgStyle = style()->svgStyle();
+    if (const ShadowData* shadow = svgStyle->shadow())
+        shadow->adjustRectForShadow(repaintRect);
+
     RenderBox::computeRectForRepaint(repaintContainer, repaintRect, fixed);
 }
 
@@ -292,6 +311,17 @@ void RenderSVGRoot::mapLocalToContainer(RenderBoxModelObject* repaintContainer, 
     // Transform to our border box and let RenderBox transform the rest of the way.
     transformState.applyTransform(localToBorderBoxTransform());
     RenderBox::mapLocalToContainer(repaintContainer, fixed, useTransforms, transformState);
+}
+
+void RenderSVGRoot::updateCachedBoundaries()
+{
+    m_objectBoundingBox = FloatRect();
+    m_strokeBoundingBox = FloatRect();
+    m_repaintBoundingBox = FloatRect();
+
+    SVGRenderSupport::computeContainerBoundingBoxes(this, m_objectBoundingBox, m_strokeBoundingBox, m_repaintBoundingBox);
+    SVGRenderSupport::intersectRepaintRectWithResources(this, m_repaintBoundingBox);
+    m_repaintBoundingBox.inflate(borderAndPaddingWidth());
 }
 
 bool RenderSVGRoot::nodeAtPoint(const HitTestRequest& request, HitTestResult& result, int _x, int _y, int _tx, int _ty, HitTestAction hitTestAction)
@@ -313,12 +343,22 @@ bool RenderSVGRoot::nodeAtPoint(const HitTestRequest& request, HitTestResult& re
         if (child->nodeAtFloatPoint(request, result, localPoint, hitTestAction)) {
             // FIXME: CSS/HTML assumes the local point is relative to the border box, right?
             updateHitTestResult(result, pointInBorderBox);
+            // FIXME: nodeAtFloatPoint() doesn't handle rect-based hit tests yet.
+            result.addNodeToRectBasedTestResult(child->node(), _x, _y);
             return true;
         }
     }
 
-    // Spec: Only graphical elements can be targeted by the mouse, so we don't check self here.
-    // 16.4: "If there are no graphics elements whose relevant graphics content is under the pointer (i.e., there is no target element), the event is not dispatched."
+    // If we didn't early exit above, we've just hit the container <svg> element. Unlike SVG 1.1, 2nd Edition allows container elements to be hit.
+    if (hitTestAction == HitTestBlockBackground) {
+        // Only return true here, if the last hit testing phase 'BlockBackground' is executed. If we'd return true in the 'Foreground' phase,
+        // hit testing would stop immediately. For SVG only trees this doesn't matter. Though when we have a <foreignObject> subtree we need
+        // to be able to detect hits on the background of a <div> element. If we'd return true here in the 'Foreground' phase, we are not able 
+        // to detect these hits anymore.
+        updateHitTestResult(result, roundedIntPoint(localPoint));
+        return true;
+    }
+
     return false;
 }
 

@@ -25,16 +25,18 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
+/*
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
+*/
 #ifndef DatabaseTracker_h
 #define DatabaseTracker_h
 
 #if ENABLE(DATABASE)
 
 #include "PlatformString.h"
-#include "StringHash.h"
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
+#include <wtf/text/StringHash.h>
 
 #if !PLATFORM(CHROMIUM)
 #include "DatabaseDetails.h"
@@ -44,7 +46,7 @@
 
 namespace WebCore {
 
-class Database;
+class AbstractDatabase;
 class ScriptExecutionContext;
 class SecurityOrigin;
 
@@ -64,7 +66,7 @@ class DatabaseTracker : public Noncopyable {
 public:
 #if OS(OLYMPIA)
     static void initializeTracker(const String& groupName, const String& databasePath);
-    static DatabaseTracker& tracker(const String& groupName = String());
+    static DatabaseTracker& tracker(const String& groupName);
 #else
     static void initializeTracker(const String& databasePath);
     static DatabaseTracker& tracker();
@@ -73,24 +75,32 @@ public:
     // This singleton will potentially be used from multiple worker threads and the page's context thread simultaneously.  To keep this safe, it's
     // currently using 4 locks.  In order to avoid deadlock when taking multiple locks, you must take them in the correct order:
     // m_databaseGuard before quotaManager if both locks are needed.
-    // no other lock is taken in the code locked on m_openDatabaseMapGuard.
+    // m_openDatabaseMapGuard before quotaManager if both locks are needed.
+    // m_databaseGuard and m_openDatabaseMapGuard currently don't overlap.
     // notificationMutex() is currently independent of the other locks.
 
     bool canEstablishDatabase(ScriptExecutionContext*, const String& name, const String& displayName, unsigned long estimatedSize);
     void setDatabaseDetails(SecurityOrigin*, const String& name, const String& displayName, unsigned long estimatedSize);
     String fullPathForDatabase(SecurityOrigin*, const String& name, bool createIfDoesNotExist = true);
 
-    void addOpenDatabase(Database*);
-    void removeOpenDatabase(Database*);
-    void getOpenDatabases(SecurityOrigin* origin, const String& name, HashSet<RefPtr<Database> >* databases);
+    void addOpenDatabase(AbstractDatabase*);
+    void removeOpenDatabase(AbstractDatabase*);
+    void getOpenDatabases(SecurityOrigin* origin, const String& name, HashSet<RefPtr<AbstractDatabase> >* databases);
 
-    unsigned long long getMaxSizeForDatabase(const Database*);
-    void databaseChanged(Database*);
+    unsigned long long getMaxSizeForDatabase(const AbstractDatabase*);
+    void databaseChanged(AbstractDatabase*);
+
+    void interruptAllDatabasesForContext(const ScriptExecutionContext*);
+
+#if OS(OLYMPIA)
+    void reopenTrackerDatabase();
+    void closeTrackerDatabase();
+#endif // OS(OLYMPIA)
 
 private:
     DatabaseTracker(const String& databasePath);
 
-    typedef HashSet<Database*> DatabaseSet;
+    typedef HashSet<AbstractDatabase*> DatabaseSet;
     typedef HashMap<String, DatabaseSet*> DatabaseNameMap;
     typedef HashMap<RefPtr<SecurityOrigin>, DatabaseNameMap*, SecurityOriginHash> DatabaseOriginMap;
 

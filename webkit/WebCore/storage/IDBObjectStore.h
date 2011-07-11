@@ -26,29 +26,52 @@
 #ifndef IDBObjectStore_h
 #define IDBObjectStore_h
 
+#include "IDBCursor.h"
+#include "IDBKeyRange.h"
+#include "IDBObjectStoreBackendInterface.h"
+#include "IDBRequest.h"
 #include "PlatformString.h"
-#include <wtf/Threading.h>
+#include <wtf/PassRefPtr.h>
+#include <wtf/RefCounted.h>
+#include <wtf/RefPtr.h>
 
 #if ENABLE(INDEXED_DATABASE)
 
 namespace WebCore {
 
-class IDBObjectStore : public ThreadSafeShared<IDBObjectStore> {
-public:
-    static PassRefPtr<IDBObjectStore> create()
-    {
-        return adoptRef(new IDBObjectStore());
-    }
-    virtual ~IDBObjectStore() { }
+class DOMStringList;
+class IDBAny;
+class IDBIndexRequest;
+class IDBKey;
+class SerializedScriptValue;
 
-    String name() const { return m_name; }
-    String keyPath() const { return m_keyPath; }
+class IDBObjectStore : public RefCounted<IDBObjectStore> {
+public:
+    static PassRefPtr<IDBObjectStore> create(PassRefPtr<IDBObjectStoreBackendInterface> idbObjectStore)
+    {
+        return adoptRef(new IDBObjectStore(idbObjectStore));
+    }
+    ~IDBObjectStore() { }
+
+    String name() const;
+    String keyPath() const;
+    PassRefPtr<DOMStringList> indexNames() const;
+
+    PassRefPtr<IDBRequest> get(ScriptExecutionContext*, PassRefPtr<IDBKey> key);
+    PassRefPtr<IDBRequest> add(ScriptExecutionContext*, PassRefPtr<SerializedScriptValue> value, PassRefPtr<IDBKey> key = 0);
+    PassRefPtr<IDBRequest> put(ScriptExecutionContext*, PassRefPtr<SerializedScriptValue> value, PassRefPtr<IDBKey> key = 0);
+    PassRefPtr<IDBRequest> remove(ScriptExecutionContext*, PassRefPtr<IDBKey> key);
+
+    PassRefPtr<IDBRequest> createIndex(ScriptExecutionContext*, const String& name, const String& keyPath, bool unique = false);
+    PassRefPtr<IDBIndex> index(const String& name);
+    PassRefPtr<IDBRequest> removeIndex(ScriptExecutionContext*, const String& name);
+
+    PassRefPtr<IDBRequest> openCursor(ScriptExecutionContext*, PassRefPtr<IDBKeyRange> = 0, unsigned short direction = IDBCursor::NEXT);
 
 private:
-    IDBObjectStore() { }
+    IDBObjectStore(PassRefPtr<IDBObjectStoreBackendInterface>);
 
-    String m_name;
-    String m_keyPath;
+    RefPtr<IDBObjectStoreBackendInterface> m_objectStore;
 };
 
 } // namespace WebCore

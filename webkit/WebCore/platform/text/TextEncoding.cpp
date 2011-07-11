@@ -252,7 +252,7 @@ const TextEncoding& ASCIIEncoding()
 
 const TextEncoding& Latin1Encoding()
 {
-    static TextEncoding globalLatin1Encoding("Latin-1");
+    static TextEncoding globalLatin1Encoding("latin1");
     return globalLatin1Encoding;
 }
 

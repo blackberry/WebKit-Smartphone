@@ -21,8 +21,12 @@
 #include "config.h"
 #include "qwebframe.h"
 
+#if USE(JSC)
 #include "Bridge.h"
 #include "CallFrame.h"
+#elif USE(V8)
+#include "V8Binding.h"
+#endif
 #include "Document.h"
 #include "DocumentLoader.h"
 #include "DragData.h"
@@ -32,22 +36,35 @@
 #include "FrameLoaderClientQt.h"
 #include "FrameTree.h"
 #include "FrameView.h"
+#if USE(JSC)
 #include "GCController.h"
+#elif USE(V8)
+#include "V8GCController.h"
+#endif
 #include "GraphicsContext.h"
 #include "HTMLMetaElement.h"
 #include "HitTestResult.h"
+#include "HTTPParsers.h"
 #include "IconDatabase.h"
 #include "InspectorController.h"
+#if USE(JSC)
 #include "JSDOMBinding.h"
 #include "JSDOMWindowBase.h"
 #include "JSLock.h"
 #include "JSObject.h"
+#elif USE(V8)
+#include "V8DOMWrapper.h"
+#include "V8DOMWindowShell.h"
+#endif
 #include "NodeList.h"
 #include "Page.h"
 #include "PlatformMouseEvent.h"
 #include "PlatformWheelEvent.h"
 #include "PrintContext.h"
+#if USE(JSC)
 #include "PutPropertySlot.h"
+#endif
+#include "RenderLayer.h"
 #include "RenderTreeAsText.h"
 #include "RenderView.h"
 #include "ResourceRequest.h"
@@ -62,16 +79,22 @@
 #include "TiledBackingStore.h"
 #include "htmlediting.h"
 #include "markup.h"
+#if USE(JSC)
 #include "qt_instance.h"
 #include "qt_runtime.h"
+#endif
 #include "qwebelement.h"
 #include "qwebframe_p.h"
 #include "qwebpage.h"
 #include "qwebpage_p.h"
 #include "qwebsecurityorigin.h"
 #include "qwebsecurityorigin_p.h"
+#include "qwebscriptworld.h"
+#include "qwebscriptworld_p.h"
+#if USE(JSC)
 #include "runtime_object.h"
 #include "runtime_root.h"
+#endif
 #include "wtf/HashMap.h"
 #include <QMultiMap>
 #include <qdebug.h>
@@ -175,7 +198,7 @@ void QWEBKIT_EXPORT qtwebkit_webframe_scrollRecursively(QWebFrame* qFrame, int d
 
 QWebFrameData::QWebFrameData(WebCore::Page* parentPage, WebCore::Frame* parentFrame,
                              WebCore::HTMLFrameOwnerElement* ownerFrameElement,
-                             const WebCore::String& frameName)
+                             const WTF::String& frameName)
     : name(frameName)
     , ownerElement(ownerFrameElement)
     , page(parentPage)
@@ -282,7 +305,7 @@ void QWebFramePrivate::renderRelativeCoords(GraphicsContext* context, QWebFrame:
     QPainter* painter = context->platformContext();
 
     WebCore::FrameView* view = frame->view();
-    view->layoutIfNeededRecursive();
+    view->updateLayoutAndStyleIfNeededRecursive();
 
     for (int i = 0; i < vector.size(); ++i) {
         const QRect& clipRect = vector.at(i);
@@ -472,10 +495,15 @@ void QWebFrame::addToJavaScriptWindowObject(const QString &name, QObject *object
 {
     if (!page()->settings()->testAttribute(QWebSettings::JavascriptEnabled))
         return;
-
+#if USE(JSC)
     JSC::JSLock lock(JSC::SilenceAssertionsOnly);
     JSDOMWindow* window = toJSDOMWindow(d->frame, mainThreadNormalWorld());
-    JSC::Bindings::RootObject* root = d->frame->script()->bindingRootObject();
+    JSC::Bindings::RootObject* root;
+    if (ownership == QScriptEngine::QtOwnership)
+        root = d->frame->script()->cacheableBindingRootObject();
+    else
+        root = d->frame->script()->bindingRootObject();
+
     if (!window) {
         qDebug() << "Warning: couldn't get window object";
         return;
@@ -487,7 +515,14 @@ void QWebFrame::addToJavaScriptWindowObject(const QString &name, QObject *object
             JSC::Bindings::QtInstance::getQtInstance(object, root, ownership)->createRuntimeObject(exec);
 
     JSC::PutPropertySlot slot;
-    window->put(exec, JSC::Identifier(exec, (const UChar *) name.constData(), name.length()), runtimeObject, slot);
+    window->put(exec, JSC::Identifier(exec, reinterpret_cast_ptr<const UChar*>(name.constData()), name.length()), runtimeObject, slot);
+#elif USE(V8)
+    QScriptEngine* engine = d->frame->script()->qtScriptEngine();
+    if (!engine)
+        return;
+    QScriptValue v = engine->newQObject(object, ownership);
+    engine->globalObject().property("window").setProperty(name, v);
+#endif
 }
 
 /*!
@@ -613,9 +648,10 @@ static inline QUrl ensureAbsoluteUrl(const QUrl &url)
 
 void QWebFrame::setUrl(const QUrl &url)
 {
-    d->frame->loader()->writer()->begin(ensureAbsoluteUrl(url));
+    const QUrl absolute = ensureAbsoluteUrl(url);
+    d->frame->loader()->writer()->begin(absolute);
     d->frame->loader()->writer()->end();
-    load(ensureAbsoluteUrl(url));
+    load(absolute);
 }
 
 QUrl QWebFrame::url() const
@@ -706,7 +742,8 @@ QWebPage *QWebFrame::page() const
 */
 void QWebFrame::load(const QUrl &url)
 {
-    load(QNetworkRequest(ensureAbsoluteUrl(url)));
+    // The load() overload ensures that the url is absolute.
+    load(QNetworkRequest(url));
 }
 
 /*!
@@ -743,7 +780,7 @@ void QWebFrame::load(const QNetworkRequest &req,
         case QNetworkAccessManager::PostOperation:
             request.setHTTPMethod("POST");
             break;
-#if QT_VERSION >= 0x040600
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
         case QNetworkAccessManager::DeleteOperation:
             request.setHTTPMethod("DELETE");
             break;
@@ -774,14 +811,23 @@ void QWebFrame::load(const QNetworkRequest &req,
 
   The \a html is loaded immediately; external objects are loaded asynchronously.
 
+  If a script in the \a html runs longer than the default script timeout (currently 10 seconds),
+  for example due to being blocked by a modal JavaScript alert dialog, this method will return
+  as soon as possible after the timeout and any subsequent \a html will be loaded asynchronously.
+
   When using this method WebKit assumes that external resources such as JavaScript programs or style
   sheets are encoded in UTF-8 unless otherwise specified. For example, the encoding of an external
   script can be specified through the charset attribute of the HTML script tag. It is also possible
   for the encoding to be specified by web server.
 
+  This is a convenience function equivalent to setContent(html, "text/html", baseUrl).
+
   \note This method will not affect session or global history for the frame.
 
-  \sa toHtml(), setContent()
+  \warning This function works only for HTML, for other mime types (i.e. XHTML, SVG)
+  setContent() should be used instead.
+
+  \sa toHtml(), setContent(), load()
 */
 void QWebFrame::setHtml(const QString &html, const QUrl &baseUrl)
 {
@@ -789,7 +835,7 @@ void QWebFrame::setHtml(const QString &html, const QUrl &baseUrl)
     WebCore::ResourceRequest request(kurl);
     const QByteArray utf8 = html.toUtf8();
     WTF::RefPtr<WebCore::SharedBuffer> data = WebCore::SharedBuffer::create(utf8.constData(), utf8.length());
-    WebCore::SubstituteData substituteData(data, WebCore::String("text/html"), WebCore::String("utf-8"), KURL());
+    WebCore::SubstituteData substituteData(data, WTF::String("text/html"), WTF::String("utf-8"), KURL());
     d->frame->loader()->load(request, substituteData, false);
 }
 
@@ -811,10 +857,15 @@ void QWebFrame::setContent(const QByteArray &data, const QString &mimeType, cons
     KURL kurl(baseUrl);
     WebCore::ResourceRequest request(kurl);
     WTF::RefPtr<WebCore::SharedBuffer> buffer = WebCore::SharedBuffer::create(data.constData(), data.length());
-    QString actualMimeType = mimeType;
-    if (actualMimeType.isEmpty())
+    QString actualMimeType;
+    WTF::String encoding;
+    if (mimeType.isEmpty())
         actualMimeType = QLatin1String("text/html");
-    WebCore::SubstituteData substituteData(buffer, WebCore::String(actualMimeType), WebCore::String(), KURL());
+    else {
+        actualMimeType = extractMIMETypeFromMediaType(mimeType);
+        encoding = extractCharsetFromMediaType(mimeType);
+    }
+    WebCore::SubstituteData substituteData(buffer, WTF::String(actualMimeType), encoding, KURL());
     d->frame->loader()->load(request, substituteData, false);
 }
 
@@ -904,7 +955,7 @@ void QWebFrame::setScrollBarValue(Qt::Orientation orientation, int value)
             value = 0;
         else if (value > scrollBarMaximum(orientation))
             value = scrollBarMaximum(orientation);
-        sb->setValue(value);
+        sb->setValue(value, Scrollbar::NotFromScrollAnimator);
     }
 }
 
@@ -1084,7 +1135,9 @@ void QWebFrame::setTextSizeMultiplier(qreal factor)
     if (!view)
         return;
 
-    view->setZoomFactor(factor, ZoomTextOnly);
+    page()->settings()->setAttribute(QWebSettings::ZoomTextOnly, true);
+
+    view->setPageAndTextZoomFactors(1, factor);
 }
 
 /*!
@@ -1096,7 +1149,7 @@ qreal QWebFrame::textSizeMultiplier() const
     if (!view)
         return 1;
 
-    return view->zoomFactor();
+    return d->zoomTextOnly ? view->textZoomFactor() : view->pageZoomFactor();
 }
 
 /*!
@@ -1115,7 +1168,10 @@ void QWebFrame::setZoomFactor(qreal factor)
     if (!view)
         return;
 
-    view->setZoomFactor(factor, page->settings()->zoomMode());
+    if (d->zoomTextOnly)
+        view->setTextZoomFactor(factor);
+    else
+        view->setPageZoomFactor(factor);
 }
 
 qreal QWebFrame::zoomFactor() const
@@ -1124,7 +1180,7 @@ qreal QWebFrame::zoomFactor() const
     if (!view)
         return 1;
 
-    return view->zoomFactor();
+    return d->zoomTextOnly ? view->textZoomFactor() : view->pageZoomFactor();
 }
 
 /*!
@@ -1266,8 +1322,8 @@ void QWebFrame::print(QPrinter *printer) const
     if (!painter.begin(printer))
         return;
 
-    const qreal zoomFactorX = printer->logicalDpiX() / qt_defaultDpi();
-    const qreal zoomFactorY = printer->logicalDpiY() / qt_defaultDpi();
+    const qreal zoomFactorX = (qreal)printer->logicalDpiX() / qt_defaultDpi();
+    const qreal zoomFactorY = (qreal)printer->logicalDpiY() / qt_defaultDpi();
 
     PrintContext printContext(d->frame);
     float pageHeight = 0;
@@ -1363,9 +1419,17 @@ QVariant QWebFrame::evaluateJavaScript(const QString& scriptSource)
     ScriptController *proxy = d->frame->script();
     QVariant rc;
     if (proxy) {
-        JSC::JSValue v = d->frame->script()->executeScript(ScriptSourceCode(scriptSource)).jsValue();
+#if USE(JSC)
         int distance = 0;
+        JSC::JSValue v = d->frame->script()->executeScript(ScriptSourceCode(scriptSource)).jsValue();
+
         rc = JSC::Bindings::convertValueToQVariant(proxy->globalObject(mainThreadNormalWorld())->globalExec(), v, QMetaType::Void, &distance);
+#elif USE(V8)
+        QScriptEngine* engine = d->frame->script()->qtScriptEngine();
+        if (!engine)
+            return rc;
+        rc = engine->evaluate(scriptSource).toVariant();
+#endif
     }
     return rc;
 }
@@ -1382,12 +1446,12 @@ QWebSecurityOrigin QWebFrame::securityOrigin() const
     return QWebSecurityOrigin(priv);
 }
 
-WebCore::Frame* QWebFramePrivate::core(QWebFrame* webFrame)
+WebCore::Frame* QWebFramePrivate::core(const QWebFrame* webFrame)
 {
     return webFrame->d->frame;
 }
 
-QWebFrame* QWebFramePrivate::kit(WebCore::Frame* coreFrame)
+QWebFrame* QWebFramePrivate::kit(const WebCore::Frame* coreFrame)
 {
     return static_cast<FrameLoaderClientQt*>(coreFrame->loader()->client())->webFrame();
 }

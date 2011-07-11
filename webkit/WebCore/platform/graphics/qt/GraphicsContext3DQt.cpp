@@ -20,26 +20,16 @@
 
 #include "GraphicsContext3D.h"
 
-#include "CanvasObject.h"
+#include "WebGLObject.h"
+#include "CanvasRenderingContext.h"
 #include "GraphicsContext.h"
 #include "HTMLCanvasElement.h"
 #include "HostWindow.h"
 #include "ImageBuffer.h"
 #include "NotImplemented.h"
 #include "QWebPageClient.h"
-#include "WebGLActiveInfo.h"
-#include "ArrayBufferView.h"
-#include "WebGLBuffer.h"
-#include "FloatArray.h"
-#include "WebGLFramebuffer.h"
-#include "Int32Array.h"
-#include "WebGLProgram.h"
-#include "WebGLRenderbuffer.h"
-#include "WebGLRenderingContext.h"
-#include "WebGLShader.h"
-#include "WebGLTexture.h"
-#include "Uint8Array.h"
 #include <QAbstractScrollArea>
+#include <QGLContext>
 #include <wtf/UnusedParam.h>
 #include <wtf/text/CString.h>
 
@@ -55,8 +45,13 @@ typedef char GLchar;
 #define APIENTRY
 #endif
 
+#ifdef QT_OPENGL_ES_2
+typedef GLsizeiptr GLsizeiptrType;
+typedef GLintptr GLintptrType;
+#else
 typedef ptrdiff_t GLsizeiptrType;
 typedef ptrdiff_t GLintptrType;
+#endif
 
 typedef void (APIENTRY* glActiveTextureType) (GLenum);
 typedef void (APIENTRY* glAttachShaderType) (GLuint, GLuint);
@@ -90,6 +85,7 @@ typedef void (APIENTRY* glGenFramebuffersType) (GLsizei, GLuint*);
 typedef void (APIENTRY* glGenRenderbuffersType) (GLsizei, GLuint*);
 typedef void (APIENTRY* glGetActiveAttribType) (GLuint, GLuint, GLsizei, GLsizei*, GLint*, GLenum*, GLchar*);
 typedef void (APIENTRY* glGetActiveUniformType) (GLuint, GLuint, GLsizei, GLsizei*, GLint*, GLenum*, GLchar*);
+typedef void (APIENTRY* glGetAttachedShadersType) (GLuint, GLsizei, GLsizei*, GLuint*);
 typedef GLint (APIENTRY* glGetAttribLocationType) (GLuint, const char*);
 typedef void (APIENTRY* glGetBufferParameterivType) (GLenum, GLenum, GLint*);
 typedef void (APIENTRY* glGetFramebufferAttachmentParameterivType) (GLenum, GLenum, GLenum, GLint* params);
@@ -188,6 +184,7 @@ public:
     glGenRenderbuffersType genRenderbuffers;
     glGetActiveAttribType getActiveAttrib;
     glGetActiveUniformType getActiveUniform;
+    glGetAttachedShadersType getAttachedShaders;
     glGetAttribLocationType getAttribLocation;
     glGetBufferParameterivType getBufferParameteriv;
     glGetFramebufferAttachmentParameterivType getFramebufferAttachmentParameteriv;
@@ -277,6 +274,18 @@ bool GraphicsContext3D::isGLES2Compliant() const
 #endif
 }
 
+// Even with underlying GLES2 driver, the below flags should still be set to
+// false if extentions exist (and they almost always do).
+bool GraphicsContext3D::isGLES2NPOTStrict() const
+{
+    return false;
+}
+
+bool GraphicsContext3D::isErrorGeneratedOnOutOfBoundsAccesses() const
+{
+    return false;
+}
+
  
 GraphicsContext3DInternal::GraphicsContext3DInternal(GraphicsContext3D::Attributes attrs, HostWindow* hostWindow)
     : m_attrs(attrs)
@@ -350,6 +359,7 @@ GraphicsContext3DInternal::GraphicsContext3DInternal(GraphicsContext3D::Attribut
     genRenderbuffers = GET_PROC_ADDRESS(glGenRenderbuffers);
     getActiveAttrib = GET_PROC_ADDRESS(glGetActiveAttrib);
     getActiveUniform = GET_PROC_ADDRESS(glGetActiveUniform);
+    getAttachedShaders = GET_PROC_ADDRESS(glGetAttachedShaders);
     getAttribLocation = GET_PROC_ADDRESS(glGetAttribLocation);
     getBufferParameteriv = GET_PROC_ADDRESS(glGetBufferParameteriv);
     getFramebufferAttachmentParameteriv = GET_PROC_ADDRESS(glGetFramebufferAttachmentParameteriv);
@@ -513,25 +523,13 @@ void GraphicsContext3D::makeContextCurrent()
     m_internal->m_glWidget->makeCurrent();
 }
 
-void GraphicsContext3D::beginPaint(WebGLRenderingContext* context)
+void GraphicsContext3D::paintRenderingResultsToCanvas(CanvasRenderingContext* context)
 {
     m_internal->m_glWidget->makeCurrent();
-
     HTMLCanvasElement* canvas = context->canvas();
     ImageBuffer* imageBuffer = canvas->buffer();
-
-    m_internal->bindFramebuffer(GraphicsContext3D::FRAMEBUFFER, m_internal->m_mainFbo);
-
-    glReadPixels(/* x */ 0, /* y */ 0, m_currentWidth, m_currentHeight, GraphicsContext3D::RGBA, GraphicsContext3D::UNSIGNED_BYTE, m_internal->m_pixels.bits());
-
-    QPainter* p = imageBuffer->context()->platformContext();
-    p->drawImage(/* x */ 0, /* y */ 0, m_internal->m_pixels.rgbSwapped().transformed(QMatrix().rotate(180)));
-
-    m_internal->bindFramebuffer(GraphicsContext3D::FRAMEBUFFER, m_internal->m_currentFbo);
-}
-
-void GraphicsContext3D::endPaint()
-{
+    QPainter* painter = imageBuffer->context()->platformContext();
+    paint(painter, QRect(QPoint(0, 0), QSize(m_currentWidth, m_currentHeight)));
 }
 
 void GraphicsContext3D::paint(QPainter* painter, const QRect& rect) const
@@ -540,7 +538,7 @@ void GraphicsContext3D::paint(QPainter* painter, const QRect& rect) const
     QWebPageClient* webPageClient = m_internal->m_hostWindow->platformPageClient();
     QGLWidget* ownerGLWidget  = m_internal->getOwnerGLWidget(webPageClient);
     if (ownerGLWidget) {
-        ownerGLWidget->drawTexture(QPointF(0, 0), m_internal->m_texture);
+        ownerGLWidget->drawTexture(rect, m_internal->m_texture);
         return;
     } 
 #endif
@@ -595,44 +593,55 @@ void GraphicsContext3D::activeTexture(unsigned long texture)
     m_internal->activeTexture(texture);
 }
 
-void GraphicsContext3D::attachShader(WebGLProgram* program, WebGLShader* shader)
+void GraphicsContext3D::attachShader(Platform3DObject program, Platform3DObject shader)
 {
     ASSERT(program);
     ASSERT(shader);
     m_internal->m_glWidget->makeCurrent();
-    m_internal->attachShader((GLuint) program->object(), (GLuint) shader->object());
+    m_internal->attachShader((GLuint) program, (GLuint) shader);
 }
 
-void GraphicsContext3D::bindAttribLocation(WebGLProgram* program, unsigned long index, const String& name)
+void GraphicsContext3D::getAttachedShaders(Platform3DObject program, int maxCount, int* count, unsigned int* shaders)
+{
+    if (!program) {
+        synthesizeGLError(INVALID_VALUE);
+        return;
+    }
+
+    m_internal->m_glWidget->makeCurrent();
+    getAttachedShaders((GLuint) program, maxCount, count, shaders);
+}
+
+void GraphicsContext3D::bindAttribLocation(Platform3DObject program, unsigned long index, const String& name)
 {
     ASSERT(program);
     m_internal->m_glWidget->makeCurrent();
-    m_internal->bindAttribLocation((GLuint) program->object(), index, name.utf8().data());
+    m_internal->bindAttribLocation((GLuint) program, index, name.utf8().data());
 }
 
-void GraphicsContext3D::bindBuffer(unsigned long target, WebGLBuffer* buffer)
+void GraphicsContext3D::bindBuffer(unsigned long target, Platform3DObject buffer)
 {
     m_internal->m_glWidget->makeCurrent();
-    m_internal->bindBuffer(target, buffer ? (GLuint) buffer->object() : 0);
+    m_internal->bindBuffer(target, (GLuint) buffer);
 }
 
-void GraphicsContext3D::bindFramebuffer(unsigned long target, WebGLFramebuffer* buffer)
+void GraphicsContext3D::bindFramebuffer(unsigned long target, Platform3DObject buffer)
 {
     m_internal->m_glWidget->makeCurrent();
-    m_internal->m_currentFbo = (buffer && buffer->object()) ? (GLuint) buffer->object() : m_internal->m_mainFbo;
+    m_internal->m_currentFbo = buffer ? (GLuint) buffer : m_internal->m_mainFbo;
     m_internal->bindFramebuffer(target, m_internal->m_currentFbo);
 }
 
-void GraphicsContext3D::bindRenderbuffer(unsigned long target, WebGLRenderbuffer* renderbuffer)
+void GraphicsContext3D::bindRenderbuffer(unsigned long target, Platform3DObject renderbuffer)
 {
     m_internal->m_glWidget->makeCurrent();
-    m_internal->bindRenderbuffer(target, renderbuffer ? (GLuint) renderbuffer->object() : 0);
+    m_internal->bindRenderbuffer(target, (GLuint) renderbuffer);
 }
 
-void GraphicsContext3D::bindTexture(unsigned long target, WebGLTexture* texture)
+void GraphicsContext3D::bindTexture(unsigned long target, Platform3DObject texture)
 {
     m_internal->m_glWidget->makeCurrent();
-    glBindTexture(target, texture ? (GLuint) texture->object() : 0);
+    glBindTexture(target, (GLuint) texture);
 }
 
 void GraphicsContext3D::blendColor(double red, double green, double blue, double alpha)
@@ -671,22 +680,16 @@ void GraphicsContext3D::bufferData(unsigned long target, int size, unsigned long
     m_internal->bufferData(target, size, /* data */ 0, usage);
 }
 
-void GraphicsContext3D::bufferData(unsigned long target, ArrayBufferView* array, unsigned long usage)
+void GraphicsContext3D::bufferData(unsigned long target, int size, const void* data, unsigned long usage)
 {
-    if (!array || !array->length())
-        return;
-    
     m_internal->m_glWidget->makeCurrent();
-    m_internal->bufferData(target, array->byteLength(), array->baseAddress(), usage);
+    m_internal->bufferData(target, size, data, usage);
 }
 
-void GraphicsContext3D::bufferSubData(unsigned long target, long offset, ArrayBufferView* array)
+void GraphicsContext3D::bufferSubData(unsigned long target, long offset, int size, const void* data)
 {
-    if (!array || !array->length())
-        return;
-    
     m_internal->m_glWidget->makeCurrent();
-    m_internal->bufferSubData(target, offset, array->byteLength(), array->baseAddress());
+    m_internal->bufferSubData(target, offset, size, data);
 }
 
 unsigned long GraphicsContext3D::checkFramebufferStatus(unsigned long target)
@@ -729,11 +732,11 @@ void GraphicsContext3D::colorMask(bool red, bool green, bool blue, bool alpha)
     glColorMask(red, green, blue, alpha);
 }
 
-void GraphicsContext3D::compileShader(WebGLShader* shader)
+void GraphicsContext3D::compileShader(Platform3DObject shader)
 {
     ASSERT(shader);
     m_internal->m_glWidget->makeCurrent();
-    m_internal->compileShader((GLuint) shader->object());
+    m_internal->compileShader((GLuint) shader);
 }
 
 void GraphicsContext3D::copyTexImage2D(unsigned long target, long level, unsigned long internalformat, long x, long y, unsigned long width, unsigned long height, long border)
@@ -776,12 +779,12 @@ void GraphicsContext3D::depthRange(double zNear, double zFar)
 #endif
 }
 
-void GraphicsContext3D::detachShader(WebGLProgram* program, WebGLShader* shader)
+void GraphicsContext3D::detachShader(Platform3DObject program, Platform3DObject shader)
 {
     ASSERT(program);
     ASSERT(shader);
     m_internal->m_glWidget->makeCurrent();
-    m_internal->detachShader((GLuint) program->object(), (GLuint) shader->object());
+    m_internal->detachShader((GLuint) program, (GLuint) shader);
 }
 
 void GraphicsContext3D::disable(unsigned long cap)
@@ -832,16 +835,16 @@ void GraphicsContext3D::flush()
     glFlush();
 }
 
-void GraphicsContext3D::framebufferRenderbuffer(unsigned long target, unsigned long attachment, unsigned long renderbuffertarget, WebGLRenderbuffer* buffer)
+void GraphicsContext3D::framebufferRenderbuffer(unsigned long target, unsigned long attachment, unsigned long renderbuffertarget, Platform3DObject buffer)
 {
     m_internal->m_glWidget->makeCurrent();
-    m_internal->framebufferRenderbuffer(target, attachment, renderbuffertarget, buffer ? (GLuint) buffer->object() : 0);
+    m_internal->framebufferRenderbuffer(target, attachment, renderbuffertarget, (GLuint) buffer);
 }
 
-void GraphicsContext3D::framebufferTexture2D(unsigned long target, unsigned long attachment, unsigned long textarget, WebGLTexture* texture, long level)
+void GraphicsContext3D::framebufferTexture2D(unsigned long target, unsigned long attachment, unsigned long textarget, Platform3DObject texture, long level)
 {
     m_internal->m_glWidget->makeCurrent();
-    m_internal->framebufferTexture2D(target, attachment, textarget, texture ? (GLuint) texture->object() : 0, level);
+    m_internal->framebufferTexture2D(target, attachment, textarget, (GLuint) texture, level);
 }
 
 void GraphicsContext3D::frontFace(unsigned long mode)
@@ -856,9 +859,9 @@ void GraphicsContext3D::generateMipmap(unsigned long target)
     m_internal->generateMipmap(target);
 }
 
-bool GraphicsContext3D::getActiveAttrib(WebGLProgram* program, unsigned long index, ActiveInfo& info)
+bool GraphicsContext3D::getActiveAttrib(Platform3DObject program, unsigned long index, ActiveInfo& info)
 {
-    if (!program->object()) {
+    if (!program) {
         synthesizeGLError(INVALID_VALUE);
         return false;
     }
@@ -866,14 +869,14 @@ bool GraphicsContext3D::getActiveAttrib(WebGLProgram* program, unsigned long ind
     m_internal->m_glWidget->makeCurrent();
 
     GLint maxLength;
-    m_internal->getProgramiv(static_cast<GLuint>(program->object()), GraphicsContext3D::ACTIVE_ATTRIBUTE_MAX_LENGTH, &maxLength);
+    m_internal->getProgramiv(static_cast<GLuint>(program), GraphicsContext3D::ACTIVE_ATTRIBUTE_MAX_LENGTH, &maxLength);
 
     GLchar* name = (GLchar*) fastMalloc(maxLength);
     GLsizei nameLength;
     GLint size;
     GLenum type;
 
-    m_internal->getActiveAttrib(static_cast<GLuint>(program->object()), index, maxLength, &nameLength, &size, &type, name);
+    m_internal->getActiveAttrib(static_cast<GLuint>(program), index, maxLength, &nameLength, &size, &type, name);
 
     if (!nameLength) {
         fastFree(name);
@@ -888,9 +891,9 @@ bool GraphicsContext3D::getActiveAttrib(WebGLProgram* program, unsigned long ind
     return true;
 }
     
-bool GraphicsContext3D::getActiveUniform(WebGLProgram* program, unsigned long index, ActiveInfo& info)
+bool GraphicsContext3D::getActiveUniform(Platform3DObject program, unsigned long index, ActiveInfo& info)
 {
-    if (!program->object()) {
+    if (!program) {
         synthesizeGLError(INVALID_VALUE);
         return false;
     }
@@ -898,14 +901,14 @@ bool GraphicsContext3D::getActiveUniform(WebGLProgram* program, unsigned long in
     m_internal->m_glWidget->makeCurrent();
 
     GLint maxLength;
-    m_internal->getProgramiv(static_cast<GLuint>(program->object()), GraphicsContext3D::ACTIVE_UNIFORM_MAX_LENGTH, &maxLength);
+    m_internal->getProgramiv(static_cast<GLuint>(program), GraphicsContext3D::ACTIVE_UNIFORM_MAX_LENGTH, &maxLength);
 
     GLchar* name = (GLchar*) fastMalloc(maxLength);
     GLsizei nameLength;
     GLint size;
     GLenum type;
 
-    m_internal->getActiveUniform(static_cast<GLuint>(program->object()), index, maxLength, &nameLength, &size, &type, name);
+    m_internal->getActiveUniform(static_cast<GLuint>(program), index, maxLength, &nameLength, &size, &type, name);
 
     if (!nameLength) {
         fastFree(name);
@@ -920,13 +923,13 @@ bool GraphicsContext3D::getActiveUniform(WebGLProgram* program, unsigned long in
     return true;
 }
 
-int GraphicsContext3D::getAttribLocation(WebGLProgram* program, const String& name)
+int GraphicsContext3D::getAttribLocation(Platform3DObject program, const String& name)
 {
     if (!program)
         return -1;
     
     m_internal->m_glWidget->makeCurrent();
-    return m_internal->getAttribLocation((GLuint) program->object(), name.utf8().data());
+    return m_internal->getAttribLocation((GLuint) program, name.utf8().data());
 }
 
 GraphicsContext3D::Attributes GraphicsContext3D::getContextAttributes()
@@ -959,13 +962,13 @@ void GraphicsContext3D::hint(unsigned long target, unsigned long mode)
     glHint(target, mode);
 }
 
-bool GraphicsContext3D::isBuffer(WebGLBuffer* buffer)
+bool GraphicsContext3D::isBuffer(Platform3DObject buffer)
 {
     if (!buffer)
         return false;
     
     m_internal->m_glWidget->makeCurrent();
-    return m_internal->isBuffer((GLuint) buffer->object());
+    return m_internal->isBuffer((GLuint) buffer);
 }
 
 bool GraphicsContext3D::isEnabled(unsigned long cap)
@@ -974,49 +977,49 @@ bool GraphicsContext3D::isEnabled(unsigned long cap)
     return glIsEnabled(cap);
 }
 
-bool GraphicsContext3D::isFramebuffer(WebGLFramebuffer* framebuffer)
+bool GraphicsContext3D::isFramebuffer(Platform3DObject framebuffer)
 {
     if (!framebuffer)
         return false;
     
     m_internal->m_glWidget->makeCurrent();
-    return m_internal->isFramebuffer((GLuint) framebuffer->object());
+    return m_internal->isFramebuffer((GLuint) framebuffer);
 }
 
-bool GraphicsContext3D::isProgram(WebGLProgram* program)
+bool GraphicsContext3D::isProgram(Platform3DObject program)
 {
     if (!program)
         return false;
     
     m_internal->m_glWidget->makeCurrent();
-    return m_internal->isProgram((GLuint) program->object());
+    return m_internal->isProgram((GLuint) program);
 }
 
-bool GraphicsContext3D::isRenderbuffer(WebGLRenderbuffer* renderbuffer)
+bool GraphicsContext3D::isRenderbuffer(Platform3DObject renderbuffer)
 {
     if (!renderbuffer)
         return false;
     
     m_internal->m_glWidget->makeCurrent();
-    return m_internal->isRenderbuffer((GLuint) renderbuffer->object());
+    return m_internal->isRenderbuffer((GLuint) renderbuffer);
 }
 
-bool GraphicsContext3D::isShader(WebGLShader* shader)
+bool GraphicsContext3D::isShader(Platform3DObject shader)
 {
     if (!shader)
         return false;
     
     m_internal->m_glWidget->makeCurrent();
-    return m_internal->isShader((GLuint) shader->object());
+    return m_internal->isShader((GLuint) shader);
 }
 
-bool GraphicsContext3D::isTexture(WebGLTexture* texture)
+bool GraphicsContext3D::isTexture(Platform3DObject texture)
 {
     if (!texture)
         return false;
     
     m_internal->m_glWidget->makeCurrent();
-    return glIsTexture((GLuint) texture->object());
+    return glIsTexture((GLuint) texture);
 }
 
 void GraphicsContext3D::lineWidth(double width)
@@ -1025,11 +1028,11 @@ void GraphicsContext3D::lineWidth(double width)
     glLineWidth(static_cast<float>(width));
 }
 
-void GraphicsContext3D::linkProgram(WebGLProgram* program)
+void GraphicsContext3D::linkProgram(Platform3DObject program)
 {
     ASSERT(program);
     m_internal->m_glWidget->makeCurrent();
-    m_internal->linkProgram((GLuint) program->object());
+    m_internal->linkProgram((GLuint) program);
 }
 
 void GraphicsContext3D::pixelStorei(unsigned long paramName, long param)
@@ -1078,16 +1081,24 @@ void GraphicsContext3D::scissor(long x, long y, unsigned long width, unsigned lo
     glScissor(x, y, width, height);
 }
 
-void GraphicsContext3D::shaderSource(WebGLShader* shader, const String& source)
+void GraphicsContext3D::shaderSource(Platform3DObject shader, const String& source)
 {
     ASSERT(shader);
-    
+
     m_internal->m_glWidget->makeCurrent();
 
-    CString sourceCS = source.utf8();
+    String prefixedSource;
+
+#if defined (QT_OPENGL_ES_2)
+    prefixedSource.append("precision mediump float;\n");
+#endif
+
+    prefixedSource.append(source);
+
+    CString sourceCS = prefixedSource.utf8();
     const char* data = sourceCS.data();
-    int length = source.length();
-    m_internal->shaderSource((GLuint) shader->object(), /* count */ 1, &data, &length);
+    int length = prefixedSource.length();
+    m_internal->shaderSource((GLuint) shader, /* count */ 1, &data, &length);
 }
 
 void GraphicsContext3D::stencilFunc(unsigned long func, long ref, unsigned long mask)
@@ -1252,20 +1263,20 @@ void GraphicsContext3D::uniformMatrix4fv(long location, bool transpose, float* a
     m_internal->uniformMatrix4fv(location, size, transpose, array);
 }
 
-void GraphicsContext3D::useProgram(WebGLProgram* program)
+void GraphicsContext3D::useProgram(Platform3DObject program)
 {
     ASSERT(program);
     
     m_internal->m_glWidget->makeCurrent();
-    m_internal->useProgram((GLuint) program->object());
+    m_internal->useProgram((GLuint) program);
 }
 
-void GraphicsContext3D::validateProgram(WebGLProgram* program)
+void GraphicsContext3D::validateProgram(Platform3DObject program)
 {
     ASSERT(program);
     
     m_internal->m_glWidget->makeCurrent();
-    m_internal->validateProgram((GLuint) program->object());
+    m_internal->validateProgram((GLuint) program);
 }
 
 void GraphicsContext3D::vertexAttrib1f(unsigned long indx, float v0)
@@ -1358,18 +1369,18 @@ void GraphicsContext3D::getIntegerv(unsigned long paramName, int* value)
     glGetIntegerv(paramName, value);
 }
 
-void GraphicsContext3D::getProgramiv(WebGLProgram* program, unsigned long paramName, int* value)
+void GraphicsContext3D::getProgramiv(Platform3DObject program, unsigned long paramName, int* value)
 {
     m_internal->m_glWidget->makeCurrent();
-    m_internal->getProgramiv((GLuint) program->object(), paramName, value);
+    m_internal->getProgramiv((GLuint) program, paramName, value);
 }
 
-String GraphicsContext3D::getProgramInfoLog(WebGLProgram* program)
+String GraphicsContext3D::getProgramInfoLog(Platform3DObject program)
 {
     m_internal->m_glWidget->makeCurrent();
 
     GLint length;
-    m_internal->getProgramiv((GLuint) program->object(), GraphicsContext3D::INFO_LOG_LENGTH, &length);
+    m_internal->getProgramiv((GLuint) program, GraphicsContext3D::INFO_LOG_LENGTH, &length);
 
     GLsizei size;
 
@@ -1377,7 +1388,7 @@ String GraphicsContext3D::getProgramInfoLog(WebGLProgram* program)
     if (!info)
         return "";
 
-    m_internal->getProgramInfoLog((GLuint) program->object(), length, &size, info);
+    m_internal->getProgramInfoLog((GLuint) program, length, &size, info);
 
     String result(info);
     fastFree(info);
@@ -1391,26 +1402,26 @@ void GraphicsContext3D::getRenderbufferParameteriv(unsigned long target, unsigne
     m_internal->getRenderbufferParameteriv(target, paramName, value);
 }
 
-void GraphicsContext3D::getShaderiv(WebGLShader* shader, unsigned long paramName, int* value)
+void GraphicsContext3D::getShaderiv(Platform3DObject shader, unsigned long paramName, int* value)
 {
     ASSERT(shader);
     m_internal->m_glWidget->makeCurrent();
-    m_internal->getShaderiv((GLuint) shader->object(), paramName, value);
+    m_internal->getShaderiv((GLuint) shader, paramName, value);
 }
 
-String GraphicsContext3D::getShaderInfoLog(WebGLShader* shader)
+String GraphicsContext3D::getShaderInfoLog(Platform3DObject shader)
 {
     m_internal->m_glWidget->makeCurrent();
 
     GLint length;
-    m_internal->getShaderiv((GLuint) shader->object(), GraphicsContext3D::INFO_LOG_LENGTH, &length);
+    m_internal->getShaderiv((GLuint) shader, GraphicsContext3D::INFO_LOG_LENGTH, &length);
 
     GLsizei size;
     GLchar* info = (GLchar*) fastMalloc(length);
     if (!info)
         return "";
 
-    m_internal->getShaderInfoLog((GLuint) shader->object(), length, &size, info);
+    m_internal->getShaderInfoLog((GLuint) shader, length, &size, info);
 
     String result(info);
     fastFree(info);
@@ -1418,19 +1429,19 @@ String GraphicsContext3D::getShaderInfoLog(WebGLShader* shader)
     return result;
 }
 
-String GraphicsContext3D::getShaderSource(WebGLShader* shader)
+String GraphicsContext3D::getShaderSource(Platform3DObject shader)
 {
     m_internal->m_glWidget->makeCurrent();
 
     GLint length;
-    m_internal->getShaderiv((GLuint) shader->object(), GraphicsContext3D::SHADER_SOURCE_LENGTH, &length);
+    m_internal->getShaderiv((GLuint) shader, GraphicsContext3D::SHADER_SOURCE_LENGTH, &length);
 
     GLsizei size;
     GLchar* info = (GLchar*) fastMalloc(length);
     if (!info)
         return "";
 
-    m_internal->getShaderSource((GLuint) shader->object(), length, &size, info);
+    m_internal->getShaderSource((GLuint) shader, length, &size, info);
 
     String result(info);
     fastFree(info);
@@ -1450,24 +1461,24 @@ void GraphicsContext3D::getTexParameteriv(unsigned long target, unsigned long pa
     glGetTexParameteriv(target, paramName, value);
 }
 
-void GraphicsContext3D::getUniformfv(WebGLProgram* program, long location, float* value)
+void GraphicsContext3D::getUniformfv(Platform3DObject program, long location, float* value)
 {
     m_internal->m_glWidget->makeCurrent();
-    m_internal->getUniformfv((GLuint) program->object(), location, value);
+    m_internal->getUniformfv((GLuint) program, location, value);
 }
 
-void GraphicsContext3D::getUniformiv(WebGLProgram* program, long location, int* value)
+void GraphicsContext3D::getUniformiv(Platform3DObject program, long location, int* value)
 {
     m_internal->m_glWidget->makeCurrent();
-    m_internal->getUniformiv((GLuint) program->object(), location, value);
+    m_internal->getUniformiv((GLuint) program, location, value);
 }
 
-long GraphicsContext3D::getUniformLocation(WebGLProgram* program, const String& name)
+long GraphicsContext3D::getUniformLocation(Platform3DObject program, const String& name)
 {
     ASSERT(program);
     
     m_internal->m_glWidget->makeCurrent();
-    return m_internal->getUniformLocation((GLuint) program->object(), name.utf8().data());
+    return m_internal->getUniformLocation((GLuint) program, name.utf8().data());
 }
 
 void GraphicsContext3D::getVertexAttribfv(unsigned long index, unsigned long paramName, float* value)
@@ -1614,25 +1625,25 @@ void GraphicsContext3D::synthesizeGLError(unsigned long error)
 }
 
 bool GraphicsContext3D::getImageData(Image* image,
-                                     Vector<uint8_t>& outputVector,
+                                     unsigned int format,
+                                     unsigned int type,
                                      bool premultiplyAlpha,
-                                     bool* hasAlphaChannel,
-                                     AlphaOp* neededAlphaOp,
-                                     unsigned int* format)
+                                     Vector<uint8_t>& outputVector)
 {
+    if (!image)
+        return false;
+    QPixmap* nativePixmap = image->nativeImageForCurrentFrame();
+    if (!nativePixmap)
+        return false;
 
-    *hasAlphaChannel = true;
-    *format = GraphicsContext3D::RGBA;
-
-    *neededAlphaOp = kAlphaDoNothing;
-    if (!premultiplyAlpha && *hasAlphaChannel)
-        *neededAlphaOp = kAlphaDoUnmultiply;
-    
-    QPixmap* nativePixmap = image->nativeImageForCurrentFrame(); 
+    AlphaOp neededAlphaOp = kAlphaDoNothing;
+    if (!premultiplyAlpha)
+        // FIXME: must fetch the image data before the premultiplication step
+        neededAlphaOp = kAlphaDoUnmultiply;
     QImage nativeImage = nativePixmap->toImage().convertToFormat(QImage::Format_ARGB32);
-    outputVector.append(nativeImage.rgbSwapped().bits(), nativeImage.byteCount());
-
-    return true;
+    outputVector.resize(nativeImage.byteCount());
+    return packPixels(nativeImage.rgbSwapped().bits(), kSourceFormatRGBA8, image->width(), image->height(), 0,
+                      format, type, neededAlphaOp, outputVector.data());
 }
 
 }

@@ -26,6 +26,7 @@
 #include <limits.h>
 #include <wtf/ASCIICType.h>
 #include <wtf/CrossThreadRefCounted.h>
+#include <wtf/Forward.h>
 #include <wtf/OwnFastMallocPtr.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/StringHashFunctions.h>
@@ -44,21 +45,14 @@ typedef const struct __CFString * CFStringRef;
 // FIXME: This is a temporary layering violation while we move string code to WTF.
 // Landing the file moves in one patch, will follow on with patches to change the namespaces.
 namespace JSC {
-
 struct IdentifierCStringTranslator;
 struct IdentifierUCharBufferTranslator;
-
 }
 
-// FIXME: This is a temporary layering violation while we move string code to WTF.
-// Landing the file moves in one patch, will follow on with patches to change the namespaces.
-namespace WebCore {
-
-class StringBuffer;
+namespace WTF {
 
 struct CStringTranslator;
 struct HashAndCharactersTranslator;
-struct StringHash;
 struct UCharBufferTranslator;
 
 enum TextCaseSensitivity { TextCaseSensitive, TextCaseInsensitive };
@@ -70,9 +64,9 @@ typedef bool (*CharacterMatchFunctionPtr)(UChar);
 class StringImpl : public StringImplBase {
     friend struct JSC::IdentifierCStringTranslator;
     friend struct JSC::IdentifierUCharBufferTranslator;
-    friend struct CStringTranslator;
-    friend struct HashAndCharactersTranslator;
-    friend struct UCharBufferTranslator;
+    friend struct WTF::CStringTranslator;
+    friend struct WTF::HashAndCharactersTranslator;
+    friend struct WTF::UCharBufferTranslator;
     friend class AtomicStringImpl;
 private:
     // Used to construct static strings, which have an special refCount that can never hit zero.
@@ -296,23 +290,24 @@ public:
 
     PassRefPtr<StringImpl> removeCharacters(CharacterMatchFunctionPtr);
 
-    int find(const char*, int index = 0, bool caseSensitive = true);
-    int find(UChar, int index = 0);
-    int find(CharacterMatchFunctionPtr, int index = 0);
-    int find(StringImpl*, int index, bool caseSensitive = true);
+    size_t find(UChar, unsigned index = 0);
+    size_t find(CharacterMatchFunctionPtr, unsigned index = 0);
+    size_t find(const char*, unsigned index = 0);
+    size_t find(StringImpl*, unsigned index = 0);
+    size_t findIgnoringCase(const char*, unsigned index = 0);
+    size_t findIgnoringCase(StringImpl*, unsigned index = 0);
 
-    int reverseFind(UChar, int index);
-    int reverseFind(StringImpl*, int index, bool caseSensitive = true);
-    
-    bool startsWith(StringImpl* str, bool caseSensitive = true) { return reverseFind(str, 0, caseSensitive) == 0; }
+    size_t reverseFind(UChar, unsigned index = UINT_MAX);
+    size_t reverseFind(StringImpl*, unsigned index = UINT_MAX);
+    size_t reverseFindIgnoringCase(StringImpl*, unsigned index = UINT_MAX);
+
+    bool startsWith(StringImpl* str, bool caseSensitive = true) { return (caseSensitive ? reverseFind(str, 0) : reverseFindIgnoringCase(str, 0)) == 0; }
     bool endsWith(StringImpl*, bool caseSensitive = true);
 
     PassRefPtr<StringImpl> replace(UChar, UChar);
     PassRefPtr<StringImpl> replace(UChar, StringImpl*);
     PassRefPtr<StringImpl> replace(StringImpl*, StringImpl*);
     PassRefPtr<StringImpl> replace(unsigned index, unsigned len, StringImpl*);
-
-    Vector<char> ascii();
 
     WTF::Unicode::Direction defaultWritingDirection();
 
@@ -352,6 +347,8 @@ inline bool equalIgnoringCase(const char* a, const UChar* b, unsigned length) { 
 
 bool equalIgnoringNullity(StringImpl*, StringImpl*);
 
+int codePointCompare(const StringImpl*, const StringImpl*);
+
 static inline bool isSpaceOrNewline(UChar c)
 {
     // Use isASCIISpace() for basic Latin-1.
@@ -382,21 +379,23 @@ inline PassRefPtr<StringImpl> StringImpl::createStrippingNullCharacters(const UC
     return StringImpl::createStrippingNullCharactersSlowCase(characters, length);
 }
 
-}
+struct StringHash;
 
-using WebCore::equal;
-
-namespace WTF {
-
-    // WebCore::StringHash is the default hash for StringImpl* and RefPtr<StringImpl>
-    template<typename T> struct DefaultHash;
-    template<> struct DefaultHash<WebCore::StringImpl*> {
-        typedef WebCore::StringHash Hash;
-    };
-    template<> struct DefaultHash<RefPtr<WebCore::StringImpl> > {
-        typedef WebCore::StringHash Hash;
-    };
+// StringHash is the default hash for StringImpl* and RefPtr<StringImpl>
+template<typename T> struct DefaultHash;
+template<> struct DefaultHash<StringImpl*> {
+    typedef StringHash Hash;
+};
+template<> struct DefaultHash<RefPtr<StringImpl> > {
+    typedef StringHash Hash;
+};
 
 }
+
+using WTF::StringImpl;
+using WTF::equal;
+using WTF::TextCaseSensitivity;
+using WTF::TextCaseSensitive;
+using WTF::TextCaseInsensitive;
 
 #endif

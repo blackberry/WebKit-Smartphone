@@ -25,13 +25,25 @@
 
 #include "WebEditorClient.h"
 
+#define DISABLE_NOT_IMPLEMENTED_WARNINGS 1
 #include "NotImplemented.h"
-#include "WebPage.h"
 
+#include "WebFrameLoaderClient.h"
+#include "WebPage.h"
+#include "WebPageProxyMessageKinds.h"
+#include "WebProcess.h"
+#include <WebCore/ArchiveResource.h>
+#include <WebCore/DocumentFragment.h>
 #include <WebCore/EditCommand.h>
+#include <WebCore/Frame.h>
+#include <WebCore/HTMLInputElement.h>
+#include <WebCore/HTMLNames.h>
+#include <WebCore/HTMLTextAreaElement.h>
 #include <WebCore/KeyboardEvent.h>
+#include <WebCore/UserTypingGestureIndicator.h>
 
 using namespace WebCore;
+using namespace HTMLNames;
 
 namespace WebKit {
 
@@ -40,10 +52,11 @@ void WebEditorClient::pageDestroyed()
     delete this;
 }
 
-bool WebEditorClient::shouldDeleteRange(Range*)
+bool WebEditorClient::shouldDeleteRange(Range* range)
 {
+    bool result = m_page->injectedBundleEditorClient().shouldDeleteRange(m_page, range);
     notImplemented();
-    return true;
+    return result;
 }
 
 bool WebEditorClient::shouldShowDeleteInterface(HTMLElement*)
@@ -100,38 +113,46 @@ bool WebEditorClient::isEditable()
 }
 
 
-bool WebEditorClient::shouldBeginEditing(Range*)
+bool WebEditorClient::shouldBeginEditing(Range* range)
 {
+    bool result = m_page->injectedBundleEditorClient().shouldBeginEditing(m_page, range);
     notImplemented();
-    return true;
+    return result;
 }
 
-bool WebEditorClient::shouldEndEditing(Range*)
+bool WebEditorClient::shouldEndEditing(Range* range)
 {
+    bool result = m_page->injectedBundleEditorClient().shouldEndEditing(m_page, range);
     notImplemented();
-    return true;
+    return result;
 }
 
-bool WebEditorClient::shouldInsertNode(Node*, Range*, EditorInsertAction)
+bool WebEditorClient::shouldInsertNode(Node* node, Range* rangeToReplace, EditorInsertAction action)
 {
+    bool result = m_page->injectedBundleEditorClient().shouldInsertNode(m_page, node, rangeToReplace, action);
     notImplemented();
-    return true;
+    return result;
 }
 
-bool WebEditorClient::shouldInsertText(const String&, Range*, EditorInsertAction)
+bool WebEditorClient::shouldInsertText(const String& text, Range* rangeToReplace, EditorInsertAction action)
 {
-    return true;
+    bool result = m_page->injectedBundleEditorClient().shouldInsertText(m_page, text.impl(), rangeToReplace, action);
+    notImplemented();
+    return result;
 }
 
-bool WebEditorClient::shouldChangeSelectedRange(Range* fromRange, Range* toRange, EAffinity, bool stillSelecting)
+bool WebEditorClient::shouldChangeSelectedRange(Range* fromRange, Range* toRange, EAffinity affinity, bool stillSelecting)
 {
-    return true;
+    bool result = m_page->injectedBundleEditorClient().shouldChangeSelectedRange(m_page, fromRange, toRange, affinity, stillSelecting);
+    notImplemented();
+    return result;
 }
     
-bool WebEditorClient::shouldApplyStyle(CSSStyleDeclaration*, Range*)
+bool WebEditorClient::shouldApplyStyle(CSSStyleDeclaration* style, Range* range)
 {
+    bool result = m_page->injectedBundleEditorClient().shouldApplyStyle(m_page, style, range);
     notImplemented();
-    return true;
+    return result;
 }
 
 bool WebEditorClient::shouldMoveRangeAfterDelete(Range*, Range*)
@@ -142,21 +163,30 @@ bool WebEditorClient::shouldMoveRangeAfterDelete(Range*, Range*)
 
 void WebEditorClient::didBeginEditing()
 {
+    // FIXME: What good is a notification name, if it's always the same?
+    static const String WebViewDidBeginEditingNotification = "WebViewDidBeginEditingNotification";
+    m_page->injectedBundleEditorClient().didBeginEditing(m_page, WebViewDidBeginEditingNotification.impl());
     notImplemented();
 }
 
 void WebEditorClient::respondToChangedContents()
 {
+    static const String WebViewDidChangeNotification = "WebViewDidChangeNotification";
+    m_page->injectedBundleEditorClient().didChange(m_page, WebViewDidChangeNotification.impl());
     notImplemented();
 }
 
 void WebEditorClient::respondToChangedSelection()
 {
+    static const String WebViewDidChangeSelectionNotification = "WebViewDidChangeSelectionNotification";
+    m_page->injectedBundleEditorClient().didChangeSelection(m_page, WebViewDidChangeSelectionNotification.impl());
     notImplemented();
 }
 
 void WebEditorClient::didEndEditing()
 {
+    static const String WebViewDidEndEditingNotification = "WebViewDidEndEditingNotification";
+    m_page->injectedBundleEditorClient().didEndEditing(m_page, WebViewDidEndEditingNotification.impl());
     notImplemented();
 }
 
@@ -170,19 +200,28 @@ void WebEditorClient::didSetSelectionTypesForPasteboard()
     notImplemented();
 }
 
-void WebEditorClient::registerCommandForUndo(PassRefPtr<EditCommand>)
+void WebEditorClient::registerCommandForUndo(PassRefPtr<EditCommand> command)
 {
-    notImplemented();
+    // FIXME: Add assertion that the command being reapplied is the same command that is
+    // being passed to us.
+    if (m_page->isInRedo())
+        return;
+
+    RefPtr<WebEditCommand> webCommand = WebEditCommand::create(command);
+    m_page->addWebEditCommand(webCommand->commandID(), webCommand.get());
+    uint32_t editAction = static_cast<uint32_t>(webCommand->command()->editingAction());
+
+    WebProcess::shared().connection()->send(WebPageProxyMessage::RegisterEditCommandForUndo, m_page->pageID(),
+                                            CoreIPC::In(webCommand->commandID(), editAction));
 }
 
 void WebEditorClient::registerCommandForRedo(PassRefPtr<EditCommand>)
 {
-    notImplemented();
 }
 
 void WebEditorClient::clearUndoRedoOperations()
 {
-    notImplemented();
+    WebProcess::shared().connection()->send(WebPageProxyMessage::ClearAllEditCommands, m_page->pageID(), CoreIPC::In());
 }
 
 bool WebEditorClient::canUndo() const
@@ -218,19 +257,43 @@ void WebEditorClient::handleInputMethodKeydown(KeyboardEvent*)
     notImplemented();
 }
 
-void WebEditorClient::textFieldDidBeginEditing(Element*)
+void WebEditorClient::textFieldDidBeginEditing(Element* element)
 {
-    notImplemented();
+    if (!element->hasTagName(inputTag))
+        return;
+
+    WebFrame* webFrame =  static_cast<WebFrameLoaderClient*>(element->document()->frame()->loader()->client())->webFrame();
+    m_page->injectedBundleFormClient().textFieldDidBeginEditing(m_page, static_cast<HTMLInputElement*>(element), webFrame);
 }
 
-void WebEditorClient::textFieldDidEndEditing(Element*)
+void WebEditorClient::textFieldDidEndEditing(Element* element)
 {
-    notImplemented();
+    if (!element->hasTagName(inputTag))
+        return;
+
+    WebFrame* webFrame =  static_cast<WebFrameLoaderClient*>(element->document()->frame()->loader()->client())->webFrame();
+    m_page->injectedBundleFormClient().textFieldDidEndEditing(m_page, static_cast<HTMLInputElement*>(element), webFrame);
 }
 
-void WebEditorClient::textDidChangeInTextField(Element*)
+void WebEditorClient::textDidChangeInTextField(Element* element)
 {
-    notImplemented();
+    if (!element->hasTagName(inputTag))
+        return;
+
+    if (!UserTypingGestureIndicator::processingUserTypingGesture() || UserTypingGestureIndicator::focusedElementAtGestureStart() != element)
+        return;
+
+    WebFrame* webFrame =  static_cast<WebFrameLoaderClient*>(element->document()->frame()->loader()->client())->webFrame();
+    m_page->injectedBundleFormClient().textDidChangeInTextField(m_page, static_cast<HTMLInputElement*>(element), webFrame);
+}
+
+void WebEditorClient::textDidChangeInTextArea(Element* element)
+{
+    if (!element->hasTagName(textareaTag))
+        return;
+
+    WebFrame* webFrame =  static_cast<WebFrameLoaderClient*>(element->document()->frame()->loader()->client())->webFrame();
+    m_page->injectedBundleFormClient().textDidChangeInTextArea(m_page, static_cast<HTMLTextAreaElement*>(element), webFrame);
 }
 
 bool WebEditorClient::doTextFieldCommandFromEvent(Element*, KeyboardEvent*)
@@ -244,16 +307,23 @@ void WebEditorClient::textWillBeDeletedInTextField(Element*)
     notImplemented();
 }
 
-void WebEditorClient::textDidChangeInTextArea(Element*)
-{
-    notImplemented();
-}
 
 #if PLATFORM(MAC)
 NSString* WebEditorClient::userVisibleString(NSURL*)
 {
     notImplemented();
     return nil;
+}
+
+DocumentFragment* WebEditorClient::documentFragmentFromAttributedString(NSAttributedString*, Vector<ArchiveResource*>&)
+{
+    // FIXME: add code here to create fake WebView and load WebKit 1
+    notImplemented();
+    return 0;
+}
+
+void WebEditorClient::setInsertionPasteboard(NSPasteboard*)
+{
 }
 
 #ifdef BUILDING_ON_TIGER
@@ -413,10 +483,26 @@ void WebEditorClient::getGuessesForWord(const String&, Vector<String>&)
     notImplemented();
 }
 
+void WebEditorClient::willSetInputMethodState()
+{
+    notImplemented();
+}
+
 void WebEditorClient::setInputMethodState(bool)
 {
     notImplemented();
 }
 
-} // namespace WebKit
+#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+void WebEditorClient::showCorrectionPanel(const WebCore::FloatRect& boundingBoxOfReplacedString, const WTF::String& replacedString, const WTF::String& replacementString, WebCore::Editor*)
+{
+    notImplemented();
+}
 
+void WebEditorClient::dismissCorrectionPanel(bool correctionAccepted)
+{
+    notImplemented();
+}
+#endif
+
+} // namespace WebKit

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
- * Copyright (C) 2008 Nokia Corporation and/or its subsidiary(-ies)
+ * Copyright (C) 2008, 2010 Nokia Corporation and/or its subsidiary(-ies)
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,6 +41,7 @@
 #import "WebKitSystemInterface.h"
 #import "WebNSURLRequestExtras.h"
 #import "WebPlugin.h"
+#import "WebQuotaManager.h"
 #import "WebSecurityOriginInternal.h"
 #import "WebUIDelegatePrivate.h"
 #import "WebView.h"
@@ -48,6 +49,7 @@
 #import <Foundation/Foundation.h>
 #import <WebCore/BlockExceptions.h>
 #import <WebCore/Console.h>
+#import <WebCore/Cursor.h>
 #import <WebCore/Element.h>
 #import <WebCore/FileChooser.h>
 #import <WebCore/FloatRect.h>
@@ -61,7 +63,9 @@
 #import <WebCore/Page.h>
 #import <WebCore/PlatformScreen.h>
 #import <WebCore/PlatformString.h>
+#import <WebCore/PopupMenuMac.h>
 #import <WebCore/ResourceRequest.h>
+#import <WebCore/SearchPopupMenuMac.h>
 #import <WebCore/Widget.h>
 #import <WebCore/WindowFeatures.h>
 #import <wtf/PassRefPtr.h>
@@ -71,7 +75,7 @@
 #import <WebCore/GraphicsLayer.h>
 #endif
 
-#if USE(PLUGIN_HOST_PROCESS)
+#if USE(PLUGIN_HOST_PROCESS) && ENABLE(NETSCAPE_PLUGIN_API)
 #import "NetscapePluginHostManager.h"
 #endif
 
@@ -103,6 +107,18 @@ using namespace WebCore;
 }
 - (id)initWithGeolocation:(Geolocation*)geolocation;
 @end
+
+#if ENABLE(FULLSCREEN_API)
+
+@interface WebKitFullScreenListener : NSObject <WebKitFullScreenListener>
+{
+    RefPtr<Element> _element;
+}
+
+- (id)initWithElement:(Element*)element;
+@end
+
+#endif
 
 WebChromeClient::WebChromeClient(WebView *webView) 
     : m_webView(webView)
@@ -244,7 +260,7 @@ Page* WebChromeClient::createWindow(Frame* frame, const FrameLoadRequest& reques
         newWebView = CallUIDelegate(m_webView, @selector(webView:createWebViewWithRequest:), URLRequest);
     }
 
-#if USE(PLUGIN_HOST_PROCESS)
+#if USE(PLUGIN_HOST_PROCESS) && ENABLE(NETSCAPE_PLUGIN_API)
     if (newWebView)
         WebKit::NetscapePluginHostManager::shared().didCreateWindow();
 #endif
@@ -516,6 +532,16 @@ void WebChromeClient::scrollRectIntoView(const IntRect& r, const ScrollView*) co
 
 // End host window methods.
 
+bool WebChromeClient::shouldMissingPluginMessageBeButton() const
+{
+    return [[m_webView UIDelegate] respondsToSelector:@selector(webView:didPressMissingPluginButton:)];
+}
+
+void WebChromeClient::missingPluginButtonClicked(Element* element) const
+{
+    CallUIDelegate(m_webView, @selector(webView:didPressMissingPluginButton:), kit(element));
+}
+
 void WebChromeClient::mouseDidMoveOverElement(const HitTestResult& result, unsigned modifierFlags)
 {
     WebElementDictionary *element = [[WebElementDictionary alloc] initWithHitTestResult:result];
@@ -538,6 +564,7 @@ void WebChromeClient::print(Frame* frame)
 }
 
 #if ENABLE(DATABASE)
+
 void WebChromeClient::exceededDatabaseQuota(Frame* frame, const String& databaseName)
 {
     BEGIN_BLOCK_OBJC_EXCEPTIONS;
@@ -546,20 +573,34 @@ void WebChromeClient::exceededDatabaseQuota(Frame* frame, const String& database
     // FIXME: remove this workaround once shipping Safari has the necessary delegate implemented.
     if (WKAppVersionCheckLessThan(@"com.apple.Safari", -1, 3.1)) {
         const unsigned long long defaultQuota = 5 * 1024 * 1024; // 5 megabytes should hopefully be enough to test storage support.
-        [webOrigin setQuota:defaultQuota];
+        [[webOrigin databaseQuotaManager] setQuota:defaultQuota];
     } else
         CallUIDelegate(m_webView, @selector(webView:frame:exceededDatabaseQuotaForSecurityOrigin:database:), kit(frame), webOrigin, (NSString *)databaseName);
     [webOrigin release];
 
     END_BLOCK_OBJC_EXCEPTIONS;
 }
+
 #endif
 
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
+
 void WebChromeClient::reachedMaxAppCacheSize(int64_t spaceNeeded)
 {
     // FIXME: Free some space.
 }
+
+void WebChromeClient::reachedApplicationCacheOriginQuota(SecurityOrigin* origin)
+{
+    BEGIN_BLOCK_OBJC_EXCEPTIONS;
+
+    WebSecurityOrigin *webOrigin = [[WebSecurityOrigin alloc] _initWithWebCoreSecurityOrigin:origin];
+    CallUIDelegate(m_webView, @selector(webView:exceededApplicationCacheOriginQuotaForSecurityOrigin:), webOrigin);
+    [webOrigin release];
+
+    END_BLOCK_OBJC_EXCEPTIONS;
+}
+
 #endif
     
 void WebChromeClient::populateVisitedLinks()
@@ -579,17 +620,14 @@ void WebChromeClient::populateVisitedLinks()
 }
 
 #if ENABLE(DASHBOARD_SUPPORT)
+
 void WebChromeClient::dashboardRegionsChanged()
 {
     BEGIN_BLOCK_OBJC_EXCEPTIONS;
-
-    NSMutableDictionary *regions = core([m_webView mainFrame])->dashboardRegionsDictionary();
-    [m_webView _addScrollerDashboardRegions:regions];
-
-    CallUIDelegate(m_webView, @selector(webView:dashboardRegionsChanged:), regions);
-
+    CallUIDelegate(m_webView, @selector(webView:dashboardRegionsChanged:), [m_webView _dashboardRegions]);
     END_BLOCK_OBJC_EXCEPTIONS;
 }
+
 #endif
 
 FloatRect WebChromeClient::customHighlightRect(Node* node, const AtomicString& type, const FloatRect& lineRect)
@@ -649,6 +687,14 @@ void WebChromeClient::chooseIconForFiles(const Vector<String>& filenames, FileCh
     chooser->iconLoaded(Icon::createIconForFiles(filenames));
 }
 
+void WebChromeClient::setCursor(const WebCore::Cursor& cursor)
+{
+    NSCursor *platformCursor = cursor.platformCursor();
+    if ([NSCursor currentCursor] == platformCursor)
+        return;
+    [platformCursor set];
+}
+
 KeyboardUIMode WebChromeClient::keyboardUIMode()
 {
     BEGIN_BLOCK_OBJC_EXCEPTIONS;
@@ -703,6 +749,21 @@ void WebChromeClient::formDidFocus(const WebCore::Node* node)
 void WebChromeClient::formDidBlur(const WebCore::Node* node)
 {
     CallUIDelegate(m_webView, @selector(webView:formDidBlurNode:), kit(const_cast<WebCore::Node*>(node)));
+}
+
+bool WebChromeClient::selectItemWritingDirectionIsNatural()
+{
+    return true;
+}
+
+PassRefPtr<WebCore::PopupMenu> WebChromeClient::createPopupMenu(WebCore::PopupMenuClient* client) const
+{
+    return adoptRef(new PopupMenuMac(client));
+}
+
+PassRefPtr<WebCore::SearchPopupMenu> WebChromeClient::createSearchPopupMenu(WebCore::PopupMenuClient* client) const
+{
+    return adoptRef(new SearchPopupMenuMac(client));
 }
 
 #if USE(ACCELERATED_COMPOSITING)
@@ -761,6 +822,29 @@ void WebChromeClient::exitFullscreenForNode(Node*)
     BEGIN_BLOCK_OBJC_EXCEPTIONS;
     [m_webView _exitFullscreen];
     END_BLOCK_OBJC_EXCEPTIONS;    
+}
+
+#endif
+
+#if ENABLE(FULLSCREEN_API)
+
+bool WebChromeClient::supportsFullScreenForElement(const Element* element)
+{
+    return CallUIDelegateReturningBoolean(false, m_webView, @selector(webView:supportsFullScreenForElement:), kit(const_cast<WebCore::Element*>(element)));
+}
+
+void WebChromeClient::enterFullScreenForElement(Element* element)
+{
+    WebKitFullScreenListener* listener = [[WebKitFullScreenListener alloc] initWithElement:element];
+    CallUIDelegate(m_webView, @selector(webView:enterFullScreenForElement:listener:), kit(element), listener);
+    [listener release];
+}
+
+void WebChromeClient::exitFullScreenForElement(Element* element)
+{
+    WebKitFullScreenListener* listener = [[WebKitFullScreenListener alloc] initWithElement:element];
+    CallUIDelegate(m_webView, @selector(webView:exitFullScreenForElement:listener:), kit(element), listener);
+    [listener release];
 }
 
 #endif
@@ -869,3 +953,44 @@ void WebChromeClient::requestGeolocationPermissionForFrame(Frame* frame, Geoloca
 }
 
 @end
+
+#if ENABLE(FULLSCREEN_API)
+
+@implementation WebKitFullScreenListener
+
+- (id)initWithElement:(Element*)element
+{
+    if (!(self = [super init]))
+        return nil;
+    
+    _element = element;
+    return self;
+}
+
+- (void)webkitWillEnterFullScreen
+{
+    if (_element)
+        _element->document()->webkitWillEnterFullScreenForElement(_element.get());
+}
+
+- (void)webkitDidEnterFullScreen
+{
+    if (_element)
+        _element->document()->webkitDidEnterFullScreenForElement(_element.get());
+}
+
+- (void)webkitWillExitFullScreen
+{
+    if (_element)
+        _element->document()->webkitWillExitFullScreenForElement(_element.get());
+}
+
+- (void)webkitDidExitFullScreen
+{
+    if (_element)
+        _element->document()->webkitDidExitFullScreenForElement(_element.get());
+}
+
+@end
+
+#endif

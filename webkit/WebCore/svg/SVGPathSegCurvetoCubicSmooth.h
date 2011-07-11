@@ -1,28 +1,29 @@
 /*
-    Copyright (C) 2004, 2005, 2006 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2008 Rob Buis <buis@kde.org>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2008 Rob Buis <buis@kde.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #ifndef SVGPathSegCurvetoCubicSmooth_h
 #define SVGPathSegCurvetoCubicSmooth_h
 
 #if ENABLE(SVG)
 
+#include "PlatformString.h"
 #include "SVGPathSeg.h"
 
 namespace WebCore {
@@ -30,9 +31,12 @@ namespace WebCore {
     class SVGPathSegCurvetoCubicSmooth : public SVGPathSeg {
     public:
         SVGPathSegCurvetoCubicSmooth(float x, float y, float x2, float y2)
-        : m_x(x), m_y(y), m_x2(x2), m_y2(y2) { }
-
-        virtual String toString() const { return pathSegTypeAsLetter() + String::format(" %.6lg %.6lg %.6lg %.6lg", m_x2, m_y2, m_x, m_y); }
+            : m_x(x)
+            , m_y(y)
+            , m_x2(x2)
+            , m_y2(y2)
+        {
+        }
 
         void setX(float x) { m_x = x; }
         float x() const { return m_x; }
@@ -57,27 +61,25 @@ namespace WebCore {
     public:
         static PassRefPtr<SVGPathSegCurvetoCubicSmoothAbs> create(float x, float y, float x2, float y2) { return adoptRef(new SVGPathSegCurvetoCubicSmoothAbs(x, y, x2, y2)); }
 
-        virtual unsigned short pathSegType() const { return PATHSEG_CURVETO_CUBIC_SMOOTH_ABS; }
-        virtual String pathSegTypeAsLetter() const { return "S"; }
-
     private:
         SVGPathSegCurvetoCubicSmoothAbs(float x, float y, float x2, float y2);
+
+        virtual unsigned short pathSegType() const { return PATHSEG_CURVETO_CUBIC_SMOOTH_ABS; }
+        virtual String pathSegTypeAsLetter() const { return "S"; }
     };
 
     class SVGPathSegCurvetoCubicSmoothRel : public SVGPathSegCurvetoCubicSmooth { 
     public:
         static PassRefPtr<SVGPathSegCurvetoCubicSmoothRel> create(float x, float y, float x2, float y2) { return adoptRef(new SVGPathSegCurvetoCubicSmoothRel(x, y, x2, y2)); }
 
-        virtual unsigned short pathSegType() const { return PATHSEG_CURVETO_CUBIC_SMOOTH_REL; }
-        virtual String pathSegTypeAsLetter() const { return "s"; }
-
     private:
         SVGPathSegCurvetoCubicSmoothRel(float x, float y, float x2, float y2);
+
+        virtual unsigned short pathSegType() const { return PATHSEG_CURVETO_CUBIC_SMOOTH_REL; }
+        virtual String pathSegTypeAsLetter() const { return "s"; }
     };
 
 } // namespace WebCore
 
 #endif // ENABLE(SVG)
 #endif
-
-// vim:ts=4:noet

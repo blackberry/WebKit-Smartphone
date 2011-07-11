@@ -1,9 +1,0 @@
-layer at (0,0) size 800x600
-  RenderView at (0,0) size 800x600
-layer at (0,0) size 800x126
-  RenderBlock {HTML} at (0,0) size 800x126
-    RenderBody {BODY} at (8,8) size 784x110
-      RenderListBox {SELECT} at (0,0) size 35x110 [bgcolor=#FFFFFF] [border: (1px solid #8B8B8B)]
-      RenderText {#text} at (0,0) size 0x0
-      RenderText {#text} at (0,0) size 0x0
-      RenderText {#text} at (0,0) size 0x0

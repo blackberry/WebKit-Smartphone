@@ -33,17 +33,20 @@
 #include "AffineTransform.h"
 #include "BitmapImage.h"
 #include "BitmapImageSingleFrameSkia.h"
-#include "ChromiumBridge.h"
 #include "FloatConversion.h"
 #include "FloatRect.h"
+#include "GLES2Canvas.h"
+#include "GLES2Context.h"
 #include "GraphicsContext.h"
 #include "Logging.h"
 #include "NativeImageSkia.h"
 #include "PlatformContextSkia.h"
 #include "PlatformString.h"
-#include "SkiaUtils.h"
+#include "SkPixelRef.h"
 #include "SkRect.h"
 #include "SkShader.h"
+#include "SkiaUtils.h"
+#include "Texture.h"
 
 #include "skia/ext/image_operations.h"
 #include "skia/ext/platform_canvas.h"
@@ -64,8 +67,18 @@ enum ResamplingMode {
     RESAMPLE_AWESOME,
 };
 
-static ResamplingMode computeResamplingMode(const NativeImageSkia& bitmap, int srcWidth, int srcHeight, float destWidth, float destHeight)
+static ResamplingMode computeResamplingMode(PlatformContextSkia* platformContext, const NativeImageSkia& bitmap, int srcWidth, int srcHeight, float destWidth, float destHeight)
 {
+    if (platformContext->hasImageResamplingHint()) {
+        IntSize srcSize;
+        FloatSize dstSize;
+        platformContext->getImageResamplingHint(&srcSize, &dstSize);
+        srcWidth = srcSize.width();
+        srcHeight = srcSize.height();
+        destWidth = dstSize.width();
+        destHeight = dstSize.height();
+    }
+
     int destIWidth = static_cast<int>(destWidth);
     int destIHeight = static_cast<int>(destHeight);
 
@@ -130,7 +143,11 @@ static ResamplingMode computeResamplingMode(const NativeImageSkia& bitmap, int s
         return RESAMPLE_LINEAR;
 
     // Everything else gets resampled.
-    return RESAMPLE_AWESOME;
+    // If the platform context permits high quality interpolation, use it.
+    if (platformContext->interpolationQuality() == InterpolationHigh)
+        return RESAMPLE_AWESOME;
+    
+    return RESAMPLE_LINEAR;
 }
 
 // Draws the given bitmap to the given canvas. The subset of the source bitmap
@@ -230,7 +247,7 @@ static void paintSkBitmap(PlatformContextSkia* platformContext, const NativeImag
     skia::PlatformCanvas* canvas = platformContext->canvas();
 
     ResamplingMode resampling = platformContext->isPrinting() ? RESAMPLE_NONE :
-        computeResamplingMode(bitmap, srcRect.width(), srcRect.height(),
+        computeResamplingMode(platformContext, bitmap, srcRect.width(), srcRect.height(),
                               SkScalarToFloat(destRect.width()),
                               SkScalarToFloat(destRect.height()));
     if (resampling == RESAMPLE_AWESOME) {
@@ -293,11 +310,6 @@ bool FrameData::clear(bool clearMetadata)
     return false;
 }
 
-PassRefPtr<Image> Image::loadPlatformResource(const char *name)
-{
-    return ChromiumBridge::loadPlatformImageResource(name);
-}
-
 void Image::drawPattern(GraphicsContext* context,
                         const FloatRect& floatSrcRect,
                         const AffineTransform& patternTransform,
@@ -336,7 +348,7 @@ void Image::drawPattern(GraphicsContext* context,
     if (context->platformContext()->isPrinting())
       resampling = RESAMPLE_LINEAR;
     else {
-      resampling = computeResamplingMode(*bitmap,
+      resampling = computeResamplingMode(context->platformContext(), *bitmap,
                                          srcRect.width(), srcRect.height(),
                                          destBitmapWidth, destBitmapHeight);
     }
@@ -390,6 +402,22 @@ void Image::drawPattern(GraphicsContext* context,
     context->platformContext()->paintSkPaint(destRect, paint);
 }
 
+static void drawBitmapGLES2(GraphicsContext* ctxt, NativeImageSkia* bitmap, const FloatRect& srcRect, const FloatRect& dstRect, ColorSpace styleColorSpace, CompositeOperator compositeOp)
+{
+    ctxt->platformContext()->prepareForHardwareDraw();
+    GLES2Canvas* gpuCanvas = ctxt->platformContext()->gpuCanvas();
+    Texture* texture = gpuCanvas->getTexture(bitmap);
+    if (!texture) {
+        ASSERT(bitmap->config() == SkBitmap::kARGB_8888_Config);
+        ASSERT(bitmap->rowBytes() == bitmap->width() * 4);
+        texture = gpuCanvas->createTexture(bitmap, Texture::BGRA8, bitmap->width(), bitmap->height());
+        SkAutoLockPixels lock(*bitmap);
+        ASSERT(bitmap->getPixels());
+        texture->load(bitmap->getPixels());
+    }
+    gpuCanvas->drawTexturedRect(texture, srcRect, dstRect, styleColorSpace, compositeOp);
+}
+
 // ================================================
 // BitmapImage Class
 // ================================================
@@ -415,7 +443,7 @@ void BitmapImage::checkForSolidColor()
 }
 
 void BitmapImage::draw(GraphicsContext* ctxt, const FloatRect& dstRect,
-                       const FloatRect& srcRect, ColorSpace, CompositeOperator compositeOp)
+                       const FloatRect& srcRect, ColorSpace colorSpace, CompositeOperator compositeOp)
 {
     if (!m_source.initialized())
         return;
@@ -425,7 +453,7 @@ void BitmapImage::draw(GraphicsContext* ctxt, const FloatRect& dstRect,
     // causing flicker and wasting CPU.
     startAnimation();
 
-    const NativeImageSkia* bm = nativeImageForCurrentFrame();
+    NativeImageSkia* bm = nativeImageForCurrentFrame();
     if (!bm)
         return;  // It's too early and we don't have an image yet.
 
@@ -434,6 +462,13 @@ void BitmapImage::draw(GraphicsContext* ctxt, const FloatRect& dstRect,
 
     if (normSrcRect.isEmpty() || normDstRect.isEmpty())
         return;  // Nothing to draw.
+
+    if (ctxt->platformContext()->useGPU() && ctxt->platformContext()->canAccelerate()) {
+        drawBitmapGLES2(ctxt, bm, normSrcRect, normDstRect, colorSpace, compositeOp);
+        return;
+    }
+
+    ctxt->platformContext()->prepareForSoftwareDraw();
 
     paintSkBitmap(ctxt->platformContext(),
                   *bm,
@@ -456,6 +491,13 @@ void BitmapImageSingleFrameSkia::draw(GraphicsContext* ctxt,
     if (normSrcRect.isEmpty() || normDstRect.isEmpty())
         return;  // Nothing to draw.
 
+    if (ctxt->platformContext()->useGPU() && ctxt->platformContext()->canAccelerate()) {
+        drawBitmapGLES2(ctxt, &m_nativeImage, srcRect, dstRect, styleColorSpace, compositeOp);
+        return;
+    }
+
+    ctxt->platformContext()->prepareForSoftwareDraw();
+
     paintSkBitmap(ctxt->platformContext(),
                   m_nativeImage,
                   enclosingIntRect(normSrcRect),
@@ -463,11 +505,19 @@ void BitmapImageSingleFrameSkia::draw(GraphicsContext* ctxt,
                   WebCoreCompositeToSkiaComposite(compositeOp));
 }
 
-PassRefPtr<BitmapImageSingleFrameSkia> BitmapImageSingleFrameSkia::create(const SkBitmap& bitmap)
+BitmapImageSingleFrameSkia::BitmapImageSingleFrameSkia(const SkBitmap& bitmap)
+    : m_nativeImage(bitmap)
 {
-    RefPtr<BitmapImageSingleFrameSkia> image(adoptRef(new BitmapImageSingleFrameSkia()));
-    bitmap.copyTo(&image->m_nativeImage, bitmap.config());
-    return image.release();
+}
+
+PassRefPtr<BitmapImageSingleFrameSkia> BitmapImageSingleFrameSkia::create(const SkBitmap& bitmap, bool copyPixels)
+{
+    if (copyPixels) {
+        SkBitmap temp;
+        bitmap.copyTo(&temp, bitmap.config());
+        return adoptRef(new BitmapImageSingleFrameSkia(temp));
+    }
+    return adoptRef(new BitmapImageSingleFrameSkia(bitmap));
 }
 
 }  // namespace WebCore

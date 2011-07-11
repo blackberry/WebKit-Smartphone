@@ -1,0 +1,17 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x575
+      RenderBlock {PRE} at (0,0) size 784x21
+        RenderText {#text} at (0,0) size 130x21
+          text run at (0,0) width 130: "text      col"
+          text run at (130,0) width 0: " "
+      RenderBlock {PRE} at (0,38) size 784x21
+        RenderText {#text} at (0,0) size 130x21
+          text run at (0,0) width 130: "          col"
+          text run at (130,0) width 0: " "
+      RenderBlock {PRE} at (0,76) size 784x21
+        RenderText {#text} at (0,0) size 130x21
+          text run at (0,0) width 130: "thistextiscol"
+          text run at (130,0) width 0: " "

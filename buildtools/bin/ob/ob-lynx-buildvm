@@ -3,10 +3,14 @@
 pushd $OLYMPIAJAVA/lynx
 
 cmd.exe //c build.bat $OLYMPIABUILDCHOICE build_vm
-if [ $OLYMPIABUILDCHOICE = "fledge" ] ;then
-    OBJFILE=$OLYMPIAJAVA/lynx/Debug/JvmFledgeSimulator.dll
-else
-    OBJFILE=$OLYMPIAJAVA/lynx/jvm/arm/ReleaseARM/$SFINAME
+OBJFILE="$OLYMPIAJAVA/Lynx/build/$OLYMPIABUILDCHOICE/Release/jvm/$SFINAME"
+
+if [ -f $OBJFILE ] ; then
+    if [ $OLYMPIABUILDCHOICE = "fledge" ] ;then
+        OBJFILE=$OLYMPIAJAVA/lynx/Debug/JvmFledgeSimulator.dll
+    else
+        OBJFILE=$OLYMPIAJAVA/lynx/jvm/arm/ReleaseARM/$SFINAME
+    fi
 fi
 
 if [ -f $OBJFILE ] ; then

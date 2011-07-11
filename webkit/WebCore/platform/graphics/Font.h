@@ -1,4 +1,5 @@
 /*
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  * Copyright (C) 2000 Lars Knoll (knoll@kde.org)
  *           (C) 2000 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Dirk Mueller (mueller@kde.org)
@@ -50,7 +51,6 @@ class FontSelector;
 class GlyphBuffer;
 class GlyphPageTreeNode;
 class GraphicsContext;
-class IntPoint;
 class SVGFontElement;
 
 struct GlyphData;
@@ -77,7 +77,7 @@ public:
     Font();
     Font(const FontDescription&, short letterSpacing, short wordSpacing);
     // This constructor is only used if the platform wants to start with a native font.
-    Font(const FontPlatformData&, bool isPrinting);
+    Font(const FontPlatformData&, bool isPrinting, FontSmoothingMode = AutoSmoothing);
     ~Font();
 
     Font(const Font&);
@@ -99,9 +99,12 @@ public:
     float floatWidth(const TextRun&, HashSet<const SimpleFontData*>* fallbackFonts = 0, GlyphOverflow* glyphOverflow = 0) const;
     float floatWidth(const TextRun& run, int extraCharsAvailable, int& charsConsumed, String& glyphName) const;
 
-    int offsetForPosition(const TextRun&, int position, bool includePartialGlyphs) const;
-    FloatRect selectionRectForText(const TextRun&, const IntPoint&, int h, int from = 0, int to = -1) const;
-
+    int offsetForPosition(const TextRun&, float position, bool includePartialGlyphs) const;
+#if OS(OLYMPIA)
+    FloatRect selectionRectForText(const TextRun&, const FloatPoint&, int h, int from = 0, int to = -1, int width = 0) const;
+#else
+    FloatRect selectionRectForText(const TextRun&, const FloatPoint&, int h, int from = 0, int to = -1) const;
+#endif
     bool isSmallCaps() const { return m_fontDescription.smallCaps(); }
 
     short wordSpacing() const { return m_wordSpacing; }
@@ -136,7 +139,7 @@ public:
     float xHeight() const { return primaryFont()->xHeight(); }
     unsigned unitsPerEm() const { return primaryFont()->unitsPerEm(); }
     int spaceWidth() const { return (int)ceilf(primaryFont()->adjustedSpaceWidth() + m_letterSpacing); }
-    int tabWidth() const { return 8 * spaceWidth(); }
+    float tabWidth(const SimpleFontData& fontData) const { return 8 * ceilf(fontData.adjustedSpaceWidth() + letterSpacing()); }
 
     const SimpleFontData* primaryFont() const;
     const FontData* fontDataAt(unsigned) const;
@@ -151,41 +154,44 @@ public:
     static void setShouldUseSmoothing(bool);
     static bool shouldUseSmoothing();
 
-#if USE(FONT_FAST_PATH)
     enum CodePath { Auto, Simple, Complex, SimpleWithGlyphOverflow };
-#endif
 
 private:
 #if ENABLE(SVG_FONTS)
     void drawTextUsingSVGFont(GraphicsContext*, const TextRun&, const FloatPoint&, int from, int to) const;
     float floatWidthUsingSVGFont(const TextRun&) const;
     float floatWidthUsingSVGFont(const TextRun&, int extraCharsAvailable, int& charsConsumed, String& glyphName) const;
-    FloatRect selectionRectForTextUsingSVGFont(const TextRun&, const IntPoint&, int h, int from, int to) const;
-    int offsetForPositionForTextUsingSVGFont(const TextRun&, int position, bool includePartialGlyphs) const;
+    FloatRect selectionRectForTextUsingSVGFont(const TextRun&, const FloatPoint&, int h, int from, int to) const;
+    int offsetForPositionForTextUsingSVGFont(const TextRun&, float position, bool includePartialGlyphs) const;
 #endif
 
-#if USE(FONT_FAST_PATH)
-    CodePath codePath(const TextRun&) const;
     void drawSimpleText(GraphicsContext*, const TextRun&, const FloatPoint&, int from, int to) const;
     void drawGlyphs(GraphicsContext*, const SimpleFontData*, const GlyphBuffer&, int from, int to, const FloatPoint&) const;
     void drawGlyphBuffer(GraphicsContext*, const GlyphBuffer&, const TextRun&, const FloatPoint&) const;
     float floatWidthForSimpleText(const TextRun&, GlyphBuffer*, HashSet<const SimpleFontData*>* fallbackFonts = 0, GlyphOverflow* = 0) const;
-    int offsetForPositionForSimpleText(const TextRun&, int position, bool includePartialGlyphs) const;
-    FloatRect selectionRectForSimpleText(const TextRun&, const IntPoint&, int h, int from, int to) const;
-
-    static bool canReturnFallbackFontsForComplexText();
+    int offsetForPositionForSimpleText(const TextRun&, float position, bool includePartialGlyphs) const;
+#if OS(OLYMPIA)
+    FloatRect selectionRectForSimpleText(const TextRun&, const FloatPoint&, int h, int from, int to, int width = 0) const;
+#else
+    FloatRect selectionRectForSimpleText(const TextRun&, const FloatPoint&, int h, int from, int to) const;
 #endif
 
+    static bool canReturnFallbackFontsForComplexText();
+
+    CodePath codePath(const TextRun&) const;
     void drawComplexText(GraphicsContext*, const TextRun&, const FloatPoint&, int from, int to) const;
     float floatWidthForComplexText(const TextRun&, HashSet<const SimpleFontData*>* fallbackFonts = 0, GlyphOverflow* = 0) const;
-    int offsetForPositionForComplexText(const TextRun&, int position, bool includePartialGlyphs) const;
-    FloatRect selectionRectForComplexText(const TextRun&, const IntPoint&, int h, int from, int to) const;
+    int offsetForPositionForComplexText(const TextRun&, float position, bool includePartialGlyphs) const;
+#if OS(OLYMPIA)
+    FloatRect selectionRectForComplexText(const TextRun&, const FloatPoint&, int h, int from, int to, int width = 0) const;
+#else
+    FloatRect selectionRectForComplexText(const TextRun&, const FloatPoint&, int h, int from, int to) const;
+#endif
 
     friend struct WidthIterator;
 
 public:
     // Useful for debugging the different font rendering code paths.
-#if USE(FONT_FAST_PATH)
     static void setCodePath(CodePath);
     static CodePath codePath();
     static CodePath s_codePath;
@@ -195,7 +201,6 @@ public:
     {
         return (((c & ~0xFF) == 0 && gRoundingHackCharacterTable[c]));
     }
-#endif
 
     FontSelector* fontSelector() const;
     static bool treatAsSpace(UChar c) { return c == ' ' || c == '\t' || c == '\n' || c == 0x00A0; }

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="resources/pass-escape-key-utilities.js"></script>
+<script>
+function runTest()
+{
+    document.getElementById("input").focus();
+    testEscapeKeyCaptured(document.getElementById("input"));
+}
+window.onload = runTest;
+</script>
+</head>
+<body>
+<p>This tests that the escape keyboard key, triggered by the BlackBerry Escape (back) button, is passed to a &lt;textarea&gt;. This test PASSED if you see a PASS message below. Otherwise, it FAILED.</p>
+<textarea id="input"></textarea>
+<pre id="console"></pre>
+</body>
+</html>

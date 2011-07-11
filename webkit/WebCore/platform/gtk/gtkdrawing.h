@@ -75,6 +75,9 @@ typedef struct {
   gint stepper_size;
   gint stepper_spacing;
   gint min_slider_size;
+  gboolean trough_under_steppers;
+  gboolean has_secondary_forward_stepper;
+  gboolean has_secondary_backward_stepper;
 } MozGtkScrollbarMetrics;
 
 typedef struct _GtkThemeParts {
@@ -180,6 +183,8 @@ typedef enum {
   /* Paints the slider (thumb) of a GtkScrollbar. */
   MOZ_GTK_SCROLLBAR_THUMB_HORIZONTAL,
   MOZ_GTK_SCROLLBAR_THUMB_VERTICAL,
+  /* Paints the background of a scrolled window */
+  MOZ_GTK_SCROLLED_WINDOW,
   /* Paints a GtkScale. */
   MOZ_GTK_SCALE_HORIZONTAL,
   MOZ_GTK_SCALE_VERTICAL,
@@ -484,6 +489,12 @@ gint moz_gtk_get_tab_thickness(void);
  * If TRUE, use images in menus.
  */
 gboolean moz_gtk_images_in_menus(void);
+
+/**
+ * Retrieve an actual GTK progress bar widget for style analysis. It will not
+ * be modified.
+ */
+GtkWidget* moz_gtk_get_progress_widget(void);
 
 #ifdef __cplusplus
 }

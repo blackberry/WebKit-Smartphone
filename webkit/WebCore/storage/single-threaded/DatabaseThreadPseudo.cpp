@@ -95,7 +95,7 @@ void DatabaseThread::timerFired(Timer<DatabaseThread>*)
 
 void DatabaseThread::scheduleTask(PassOwnPtr<DatabaseTask> task)
 {
-    m_queue.append(task.release());
+    m_queue.append(task.leakPtr());
     if (!m_timer.isActive())
         m_timer.startOneShot(0);
 }
@@ -117,7 +117,7 @@ void DatabaseThread::scheduleImmediateTask(PassOwnPtr<DatabaseTask> taskIn, bool
     }
 
     // Make this task the first one in the queue
-    m_queue.prepend(task.release());
+    m_queue.prepend(task.leakPtr());
     if (!m_timer.isActive())
         m_timer.startOneShot(0);
 }

@@ -68,8 +68,6 @@ public:
     void suspend();
     void resume();
 
-    void stop();
-
     void setIsAllowed(bool);
     Frame* frame() const { return m_frame; }
 
@@ -132,10 +130,18 @@ private:
     void sendError(Vector<RefPtr<GeoNotifier> >&, PositionError*);
     void sendPosition(Vector<RefPtr<GeoNotifier> >&, Geoposition*);
 
+#if OS(OLYMPIA)
+    void startTimerForGeoNotifiers(HashSet<RefPtr<GeoNotifier> >&);
+    void startTimerForGeoNotifiers(Vector<RefPtr<GeoNotifier> >&);
+#endif
+
     static void stopTimer(Vector<RefPtr<GeoNotifier> >&);
     void stopTimersForOneShots();
     void stopTimersForWatchers();
     void stopTimers();
+
+    void cancelRequests(Vector<RefPtr<GeoNotifier> >&);
+    void cancelAllRequests();
 
     void positionChangedInternal();
     void makeSuccessCallbacks();
@@ -145,6 +151,10 @@ private:
 
     bool startUpdating(GeoNotifier*);
     void stopUpdating();
+
+#if USE(PREEMPT_GEOLOCATION_PERMISSION)
+    void handlePendingPermissionNotifiers();
+#endif
 
 #if !ENABLE(CLIENT_BASED_GEOLOCATION) && ENABLE(GEOLOCATION)
     // GeolocationServiceClient
@@ -167,8 +177,9 @@ private:
     Frame* m_frame;
 #if !ENABLE(CLIENT_BASED_GEOLOCATION)
     OwnPtr<GeolocationService> m_service;
-#else
-    RefPtr<GeoNotifier> m_startRequestPermissionNotifier;
+#endif
+#if USE(PREEMPT_GEOLOCATION_PERMISSION)
+    GeoNotifierSet m_pendingForPermissionNotifiers;
 #endif
     RefPtr<Geoposition> m_lastPosition;
 

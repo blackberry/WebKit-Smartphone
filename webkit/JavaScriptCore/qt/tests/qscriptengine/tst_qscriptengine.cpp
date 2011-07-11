@@ -35,6 +35,8 @@ public slots:
     void cleanup() {}
 
 private slots:
+    void newFunction();
+    void newObject();
     void globalObject();
     void evaluate();
     void collectGarbage();
@@ -46,6 +48,8 @@ private slots:
     void checkSyntax();
     void toObject();
     void toObjectTwoEngines();
+    void newArray();
+    void uncaughtException();
 };
 
 /* Evaluating a script that throw an unhandled exception should return an invalid value. */
@@ -56,6 +60,158 @@ void tst_QScriptEngine::evaluate()
     QVERIFY2(engine.evaluate("ping").isValid(), "Script throwing an unhandled exception should return an exception value");
 }
 
+static QScriptValue myFunction(QScriptContext*, QScriptEngine* eng)
+{
+    return eng->nullValue();
+}
+
+static QScriptValue myFunctionWithArg(QScriptContext*, QScriptEngine* eng, void* arg)
+{
+    int* result = reinterpret_cast<int*>(arg);
+    return QScriptValue(eng, *result);
+}
+
+static QScriptValue myFunctionThatReturns(QScriptContext*, QScriptEngine* eng)
+{
+    return QScriptValue(eng, 42);
+}
+
+static QScriptValue myFunctionThatReturnsWithoutEngine(QScriptContext*, QScriptEngine*)
+{
+    return QScriptValue(1024);
+}
+
+static QScriptValue myFunctionThatReturnsWrongEngine(QScriptContext*, QScriptEngine*, void* arg)
+{
+    QScriptEngine* wrongEngine = reinterpret_cast<QScriptEngine*>(arg);
+    return QScriptValue(wrongEngine, 42);
+}
+
+void tst_QScriptEngine::newFunction()
+{
+    QScriptEngine eng;
+    {
+        QScriptValue fun = eng.newFunction(myFunction);
+        QCOMPARE(fun.isValid(), true);
+        QCOMPARE(fun.isFunction(), true);
+        QCOMPARE(fun.isObject(), true);
+        // QCOMPARE(fun.scriptClass(), (QScriptClass*)0);
+        // a prototype property is automatically constructed
+        {
+            QScriptValue prot = fun.property("prototype", QScriptValue::ResolveLocal);
+            QVERIFY(prot.isObject());
+            QVERIFY(prot.property("constructor").strictlyEquals(fun));
+            QEXPECT_FAIL("", "JSCallbackObject::getOwnPropertyDescriptor() doesn't return correct information yet", Continue);
+            QCOMPARE(fun.propertyFlags("prototype"), QScriptValue::Undeletable);
+            QEXPECT_FAIL("", "WebKit bug: 40613 (The JSObjectSetProperty doesn't overwrite property flags)", Continue);
+            QCOMPARE(prot.propertyFlags("constructor"), QScriptValue::PropertyFlags(QScriptValue::Undeletable | QScriptValue::SkipInEnumeration));
+        }
+        // prototype should be Function.prototype
+        QCOMPARE(fun.prototype().isValid(), true);
+        QCOMPARE(fun.prototype().isFunction(), true);
+        QCOMPARE(fun.prototype().strictlyEquals(eng.evaluate("Function.prototype")), true);
+
+        QCOMPARE(fun.call().isNull(), true);
+        // QCOMPARE(fun.construct().isObject(), true);
+    }
+    // the overload that takes an extra argument
+    {
+        int expectedResult = 42;
+        QScriptValue fun = eng.newFunction(myFunctionWithArg, reinterpret_cast<void*>(&expectedResult));
+        QVERIFY(fun.isFunction());
+        // QCOMPARE(fun.scriptClass(), (QScriptClass*)0);
+        // a prototype property is automatically constructed
+        {
+            QScriptValue prot = fun.property("prototype", QScriptValue::ResolveLocal);
+            QVERIFY(prot.isObject());
+            QVERIFY(prot.property("constructor").strictlyEquals(fun));
+            QEXPECT_FAIL("", "JSCallbackObject::getOwnPropertyDescriptor() doesn't return correct information yet", Continue);
+            QCOMPARE(fun.propertyFlags("prototype"), QScriptValue::Undeletable);
+            QEXPECT_FAIL("", "WebKit bug: 40613 (The JSObjectSetProperty doesn't overwrite property flags)", Continue);
+            QCOMPARE(prot.propertyFlags("constructor"), QScriptValue::PropertyFlags(QScriptValue::Undeletable | QScriptValue::SkipInEnumeration));
+        }
+        // prototype should be Function.prototype
+        QCOMPARE(fun.prototype().isValid(), true);
+        QCOMPARE(fun.prototype().isFunction(), true);
+        QCOMPARE(fun.prototype().strictlyEquals(eng.evaluate("Function.prototype")), true);
+
+        QScriptValue result = fun.call();
+        QCOMPARE(result.isNumber(), true);
+        QCOMPARE(result.toInt32(), expectedResult);
+    }
+    // the overload that takes a prototype
+    {
+        QScriptValue proto = eng.newObject();
+        QScriptValue fun = eng.newFunction(myFunction, proto);
+        QCOMPARE(fun.isValid(), true);
+        QCOMPARE(fun.isFunction(), true);
+        QCOMPARE(fun.isObject(), true);
+        // internal prototype should be Function.prototype
+        QCOMPARE(fun.prototype().isValid(), true);
+        QCOMPARE(fun.prototype().isFunction(), true);
+        QCOMPARE(fun.prototype().strictlyEquals(eng.evaluate("Function.prototype")), true);
+        // public prototype should be the one we passed
+        QCOMPARE(fun.property("prototype").strictlyEquals(proto), true);
+        QEXPECT_FAIL("", "JSCallbackObject::getOwnPropertyDescriptor() doesn't return correct information yet", Continue);
+        QCOMPARE(fun.propertyFlags("prototype"), QScriptValue::Undeletable);
+        QCOMPARE(proto.property("constructor").strictlyEquals(fun), true);
+        QEXPECT_FAIL("", "WebKit bug: 40613 (The JSObjectSetProperty doesn't overwrite property flags)", Continue);
+        QCOMPARE(proto.propertyFlags("constructor"), QScriptValue::PropertyFlags(QScriptValue::Undeletable | QScriptValue::SkipInEnumeration));
+
+        QCOMPARE(fun.call().isNull(), true);
+        // QCOMPARE(fun.construct().isObject(), true);
+    }
+    // whether the return value is correct
+    {
+        QScriptValue fun = eng.newFunction(myFunctionThatReturns);
+        QCOMPARE(fun.isValid(), true);
+        QCOMPARE(fun.isFunction(), true);
+        QCOMPARE(fun.isObject(), true);
+
+        QScriptValue result = fun.call();
+        QCOMPARE(result.isNumber(), true);
+        QCOMPARE(result.toInt32(), 42);
+    }
+    // whether the return value is assigned to the correct engine
+    {
+        QScriptValue fun = eng.newFunction(myFunctionThatReturnsWithoutEngine);
+        QCOMPARE(fun.isValid(), true);
+        QCOMPARE(fun.isFunction(), true);
+        QCOMPARE(fun.isObject(), true);
+
+        QScriptValue result = fun.call();
+        QCOMPARE(result.engine(), &eng);
+        QCOMPARE(result.isNumber(), true);
+        QCOMPARE(result.toInt32(), 1024);
+    }
+    // whether the return value is undefined when returning a value with wrong engine
+    {
+        QScriptEngine wrongEngine;
+
+        QScriptValue fun = eng.newFunction(myFunctionThatReturnsWrongEngine, reinterpret_cast<void*>(&wrongEngine));
+        QCOMPARE(fun.isValid(), true);
+        QCOMPARE(fun.isFunction(), true);
+        QCOMPARE(fun.isObject(), true);
+
+        QTest::ignoreMessage(QtWarningMsg, "Value from different engine returned from native function, returning undefined value instead.");
+        QScriptValue result = fun.call();
+        QCOMPARE(result.isValid(), true);
+        QCOMPARE(result.isUndefined(), true);
+    }
+}
+
+void tst_QScriptEngine::newObject()
+{
+    QScriptEngine engine;
+    QScriptValue object = engine.newObject();
+    QVERIFY(object.isObject());
+    QVERIFY(object.engine() == &engine);
+    QVERIFY(!object.isError());
+    QVERIFY(!object.equals(engine.newObject()));
+    QVERIFY(!object.strictlyEquals(engine.newObject()));
+    QCOMPARE(object.toString(), QString::fromAscii("[object Object]"));
+}
+
 void tst_QScriptEngine::globalObject()
 {
     QScriptEngine engine;
@@ -63,7 +219,6 @@ void tst_QScriptEngine::globalObject()
     QScriptValue self = engine.evaluate("this");
     QVERIFY(global.isObject());
     QVERIFY(engine.globalObject().equals(engine.evaluate("this")));
-    QEXPECT_FAIL("", "strictlyEquals is broken - bug 36600 in bugs.webkit.org", Continue);
     QVERIFY(engine.globalObject().strictlyEquals(self));
 }
 
@@ -394,6 +549,135 @@ void tst_QScriptEngine::toObjectTwoEngines()
         QTest::ignoreMessage(QtWarningMsg, "QScriptEngine::toObject: cannot convert value created in a different engine");
         QVERIFY(engine2.toObject(object).engine() != &engine2);
         QVERIFY(object.isObject());
+    }
+}
+
+void tst_QScriptEngine::newArray()
+{
+    QScriptEngine eng;
+    QScriptValue array = eng.newArray();
+    QCOMPARE(array.isValid(), true);
+    QCOMPARE(array.isArray(), true);
+    QCOMPARE(array.isObject(), true);
+    QVERIFY(!array.isFunction());
+    // QCOMPARE(array.scriptClass(), (QScriptClass*)0);
+
+    // Prototype should be Array.prototype.
+    QCOMPARE(array.prototype().isValid(), true);
+    QCOMPARE(array.prototype().isArray(), true);
+    QCOMPARE(array.prototype().strictlyEquals(eng.evaluate("Array.prototype")), true);
+
+    QScriptValue arrayWithSize = eng.newArray(42);
+    QCOMPARE(arrayWithSize.isValid(), true);
+    QCOMPARE(arrayWithSize.isArray(), true);
+    QCOMPARE(arrayWithSize.isObject(), true);
+    QCOMPARE(arrayWithSize.property("length").toInt32(), 42);
+
+    // task 218092
+    {
+        QScriptValue ret = eng.evaluate("[].splice(0, 0, 'a')");
+        QVERIFY(ret.isArray());
+        QCOMPARE(ret.property("length").toInt32(), 0);
+    }
+    {
+        QScriptValue ret = eng.evaluate("['a'].splice(0, 1, 'b')");
+        QVERIFY(ret.isArray());
+        QCOMPARE(ret.property("length").toInt32(), 1);
+    }
+    {
+        QScriptValue ret = eng.evaluate("['a', 'b'].splice(0, 1, 'c')");
+        QVERIFY(ret.isArray());
+        QCOMPARE(ret.property("length").toInt32(), 1);
+    }
+    {
+        QScriptValue ret = eng.evaluate("['a', 'b', 'c'].splice(0, 2, 'd')");
+        QVERIFY(ret.isArray());
+        QCOMPARE(ret.property("length").toInt32(), 2);
+    }
+    {
+        QScriptValue ret = eng.evaluate("['a', 'b', 'c'].splice(1, 2, 'd', 'e', 'f')");
+        QVERIFY(ret.isArray());
+        QCOMPARE(ret.property("length").toInt32(), 2);
+    }
+}
+
+void tst_QScriptEngine::uncaughtException()
+{
+    QScriptEngine eng;
+    QScriptValue fun = eng.evaluate("(function foo () { return null; });");
+    QVERIFY(!eng.uncaughtException().isValid());
+    QVERIFY(fun.isFunction());
+    QScriptValue throwFun = eng.evaluate("( function() { throw new Error('Pong'); });");
+    QVERIFY(throwFun.isFunction());
+    {
+        eng.evaluate("a = 10");
+        QVERIFY(!eng.hasUncaughtException());
+        QVERIFY(!eng.uncaughtException().isValid());
+    }
+    {
+        eng.evaluate("1 = 2");
+        QVERIFY(eng.hasUncaughtException());
+        eng.clearExceptions();
+        QVERIFY(!eng.hasUncaughtException());
+    }
+    {
+        // Check if the call or toString functions can remove the last exception.
+        QVERIFY(throwFun.call().isError());
+        QVERIFY(eng.hasUncaughtException());
+        QScriptValue exception = eng.uncaughtException();
+        fun.call();
+        exception.toString();
+        QVERIFY(eng.hasUncaughtException());
+        QVERIFY(eng.uncaughtException().strictlyEquals(exception));
+    }
+    eng.clearExceptions();
+    {
+        // Check if in the call function a new exception can override an existing one.
+        throwFun.call();
+        QVERIFY(eng.hasUncaughtException());
+        QScriptValue exception = eng.uncaughtException();
+        throwFun.call();
+        QVERIFY(eng.hasUncaughtException());
+        QVERIFY(!exception.strictlyEquals(eng.uncaughtException()));
+    }
+    {
+        eng.evaluate("throwFun = (function foo () { throw new Error('bla') });");
+        eng.evaluate("1;\nthrowFun();");
+        QVERIFY(eng.hasUncaughtException());
+        QCOMPARE(eng.uncaughtExceptionLineNumber(), 1);
+        eng.clearExceptions();
+        QVERIFY(!eng.hasUncaughtException());
+    }
+    for (int x = 1; x < 4; ++x) {
+        QScriptValue ret = eng.evaluate("a = 10;\nb = 20;\n0 = 0;\n",
+                                        QString::fromLatin1("FooScript") + QString::number(x),
+                                        /* lineNumber */ x);
+        QVERIFY(eng.hasUncaughtException());
+        QCOMPARE(eng.uncaughtExceptionLineNumber(), x + 2);
+        QVERIFY(eng.uncaughtException().strictlyEquals(ret));
+        QVERIFY(eng.hasUncaughtException());
+        QVERIFY(eng.uncaughtException().strictlyEquals(ret));
+        QString backtrace = QString::fromLatin1("<anonymous>()@FooScript") + QString::number(x) + ":" + QString::number(x + 2);
+        QCOMPARE(eng.uncaughtExceptionBacktrace().join(""), backtrace);
+        QVERIFY(fun.call().isNull());
+        QVERIFY(eng.hasUncaughtException());
+        QCOMPARE(eng.uncaughtExceptionLineNumber(), x + 2);
+        QVERIFY(eng.uncaughtException().strictlyEquals(ret));
+        eng.clearExceptions();
+        QVERIFY(!eng.hasUncaughtException());
+        QCOMPARE(eng.uncaughtExceptionLineNumber(), -1);
+        QVERIFY(!eng.uncaughtException().isValid());
+        eng.evaluate("2 = 3");
+        QVERIFY(eng.hasUncaughtException());
+        QScriptValue ret2 = throwFun.call();
+        QVERIFY(ret2.isError());
+        QVERIFY(eng.hasUncaughtException());
+        QVERIFY(eng.uncaughtException().strictlyEquals(ret2));
+        QCOMPARE(eng.uncaughtExceptionLineNumber(), 1);
+        eng.clearExceptions();
+        QVERIFY(!eng.hasUncaughtException());
+        eng.evaluate("1 + 2");
+        QVERIFY(!eng.hasUncaughtException());
     }
 }
 

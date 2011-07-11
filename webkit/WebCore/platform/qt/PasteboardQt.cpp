@@ -61,14 +61,11 @@ Pasteboard* Pasteboard::generalPasteboard()
 void Pasteboard::writeSelection(Range* selectedRange, bool canSmartCopyOrDelete, Frame* frame)
 {
     QMimeData* md = new QMimeData;
-    QString text = frame->selectedText();
+    QString text = frame->editor()->selectedText();
     text.replace(QChar(0xa0), QLatin1Char(' '));
     md->setText(text);
 
-    QString html = QLatin1String("<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" /></head><body>");
-    html += createMarkup(selectedRange, 0, AnnotateForInterchange);
-    html += QLatin1String("</body></html>");
-    md->setHtml(html);
+    md->setHtml(createMarkup(selectedRange, 0, AnnotateForInterchange, false, AbsoluteURLs));
 
 #ifndef QT_NO_CLIPBOARD
     QApplication::clipboard()->setMimeData(md, m_selectionMode ?
@@ -162,8 +159,8 @@ void Pasteboard::writeImage(Node* node, const KURL&, const String&)
     ASSERT(image);
 
     QPixmap* pixmap = image->nativeImageForCurrentFrame();
-    ASSERT(pixmap);
-
+    if (!pixmap)
+        return;
     QApplication::clipboard()->setPixmap(*pixmap, QClipboard::Clipboard);
 #endif
 }

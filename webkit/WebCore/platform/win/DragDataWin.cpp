@@ -26,9 +26,7 @@
 #include "config.h"
 #include "DragData.h"
 
-#include "ClipboardWin.h"
 #include "ClipboardUtilitiesWin.h"
-#include "ClipboardAccessPolicy.h"
 #include "DocumentFragment.h"
 #include "PlatformString.h"
 #include "Markup.h"
@@ -39,23 +37,19 @@
 
 namespace WebCore {
 
-PassRefPtr<Clipboard> DragData::createClipboard(ClipboardAccessPolicy policy) const
-{
-    return ClipboardWin::create(true, m_platformDragData, policy);
-}
-
-bool DragData::containsURL() const
+bool DragData::containsURL(FilenameConversionPolicy filenamePolicy) const
 {
     return SUCCEEDED(m_platformDragData->QueryGetData(urlWFormat())) 
         || SUCCEEDED(m_platformDragData->QueryGetData(urlFormat()))
-        || SUCCEEDED(m_platformDragData->QueryGetData(filenameWFormat())) 
-        || SUCCEEDED(m_platformDragData->QueryGetData(filenameFormat()));
+        || (filenamePolicy == ConvertFilenames
+            && (SUCCEEDED(m_platformDragData->QueryGetData(filenameWFormat()))
+                || SUCCEEDED(m_platformDragData->QueryGetData(filenameFormat()))));
 }
 
-String DragData::asURL(String* title) const
+String DragData::asURL(FilenameConversionPolicy filenamePolicy, String* title) const
 {
     bool success;
-    return getURL(m_platformDragData, success, title);
+    return getURL(m_platformDragData, filenamePolicy, success, title);
 }
 
 bool DragData::containsFiles() const

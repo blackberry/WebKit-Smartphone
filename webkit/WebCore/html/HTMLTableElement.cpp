@@ -4,7 +4,7 @@
  *           (C) 1998 Waldo Bastian (bastian@kde.org)
  *           (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
- * Copyright (C) 2003, 2004, 2005, 2006, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2003, 2004, 2005, 2006, 2008, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -42,8 +42,8 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-HTMLTableElement::HTMLTableElement(const QualifiedName& tagName, Document* doc)
-    : HTMLElement(tagName, doc)
+HTMLTableElement::HTMLTableElement(const QualifiedName& tagName, Document* document)
+    : HTMLElement(tagName, document)
     , m_borderAttr(false)
     , m_borderColorAttr(false)
     , m_frameAttr(false)
@@ -53,15 +53,14 @@ HTMLTableElement::HTMLTableElement(const QualifiedName& tagName, Document* doc)
     ASSERT(hasTagName(tableTag));
 }
 
-bool HTMLTableElement::checkDTD(const Node* newChild)
+PassRefPtr<HTMLTableElement> HTMLTableElement::create(Document* document)
 {
-    if (newChild->isTextNode())
-        return static_cast<const Text*>(newChild)->containsOnlyWhitespace();
-    return newChild->hasTagName(captionTag) ||
-           newChild->hasTagName(colTag) || newChild->hasTagName(colgroupTag) ||
-           newChild->hasTagName(theadTag) || newChild->hasTagName(tfootTag) ||
-           newChild->hasTagName(tbodyTag) || newChild->hasTagName(formTag) ||
-           newChild->hasTagName(scriptTag);
+    return adoptRef(new HTMLTableElement(tableTag, document));
+}
+
+PassRefPtr<HTMLTableElement> HTMLTableElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new HTMLTableElement(tagName, document));
 }
 
 HTMLTableCaptionElement* HTMLTableElement::caption() const
@@ -125,7 +124,7 @@ PassRefPtr<HTMLElement> HTMLTableElement::createTHead()
 {
     if (HTMLTableSectionElement* existingHead = tHead())
         return existingHead;
-    RefPtr<HTMLTableSectionElement> head = new HTMLTableSectionElement(theadTag, document());
+    RefPtr<HTMLTableSectionElement> head = HTMLTableSectionElement::create(theadTag, document());
     ExceptionCode ec;
     setTHead(head, ec);
     return head.release();
@@ -141,7 +140,7 @@ PassRefPtr<HTMLElement> HTMLTableElement::createTFoot()
 {
     if (HTMLTableSectionElement* existingFoot = tFoot())
         return existingFoot;
-    RefPtr<HTMLTableSectionElement> foot = new HTMLTableSectionElement(tfootTag, document());
+    RefPtr<HTMLTableSectionElement> foot = HTMLTableSectionElement::create(tfootTag, document());
     ExceptionCode ec;
     setTFoot(foot, ec);
     return foot.release();
@@ -157,7 +156,7 @@ PassRefPtr<HTMLElement> HTMLTableElement::createCaption()
 {
     if (HTMLTableCaptionElement* existingCaption = caption())
         return existingCaption;
-    RefPtr<HTMLTableCaptionElement> caption = new HTMLTableCaptionElement(captionTag, document());
+    RefPtr<HTMLTableCaptionElement> caption = HTMLTableCaptionElement::create(captionTag, document());
     ExceptionCode ec;
     setCaption(caption, ec);
     return caption.release();
@@ -209,15 +208,15 @@ PassRefPtr<HTMLElement> HTMLTableElement::insertRow(int index, ExceptionCode& ec
     else {
         parent = lastBody();
         if (!parent) {
-            RefPtr<HTMLTableSectionElement> newBody = new HTMLTableSectionElement(tbodyTag, document());
-            RefPtr<HTMLTableRowElement> newRow = new HTMLTableRowElement(trTag, document());
+            RefPtr<HTMLTableSectionElement> newBody = HTMLTableSectionElement::create(tbodyTag, document());
+            RefPtr<HTMLTableRowElement> newRow = HTMLTableRowElement::create(document());
             newBody->appendChild(newRow, ec);
             appendChild(newBody.release(), ec);
             return newRow.release();
         }
     }
 
-    RefPtr<HTMLTableRowElement> newRow = new HTMLTableRowElement(trTag, document());
+    RefPtr<HTMLTableRowElement> newRow = HTMLTableRowElement::create(document());
     parent->insertBefore(newRow, row, ec);
     return newRow.release();
 }
@@ -239,20 +238,6 @@ void HTMLTableElement::deleteRow(int index, ExceptionCode& ec)
         return;
     }
     row->remove(ec);
-}
-
-ContainerNode* HTMLTableElement::addChild(PassRefPtr<Node> child)
-{
-    if (child->hasTagName(formTag)) {
-        // First add the child.
-        HTMLElement::addChild(child);
-
-        // Now simply return ourselves as the container to insert into.
-        // This has the effect of demoting the form to a leaf and moving it safely out of the way.
-        return this;
-    }
-
-    return HTMLElement::addChild(child.get());
 }
 
 bool HTMLTableElement::mapToEntry(const QualifiedName& attrName, MappedAttributeEntry& result) const
@@ -659,94 +644,14 @@ PassRefPtr<HTMLCollection> HTMLTableElement::tBodies()
     return HTMLCollection::create(this, TableTBodies);
 }
 
-String HTMLTableElement::align() const
-{
-    return getAttribute(alignAttr);
-}
-
-void HTMLTableElement::setAlign(const String &value)
-{
-    setAttribute(alignAttr, value);
-}
-
-String HTMLTableElement::bgColor() const
-{
-    return getAttribute(bgcolorAttr);
-}
-
-void HTMLTableElement::setBgColor(const String &value)
-{
-    setAttribute(bgcolorAttr, value);
-}
-
-String HTMLTableElement::border() const
-{
-    return getAttribute(borderAttr);
-}
-
-void HTMLTableElement::setBorder(const String &value)
-{
-    setAttribute(borderAttr, value);
-}
-
-String HTMLTableElement::cellPadding() const
-{
-    return getAttribute(cellpaddingAttr);
-}
-
-void HTMLTableElement::setCellPadding(const String &value)
-{
-    setAttribute(cellpaddingAttr, value);
-}
-
-String HTMLTableElement::cellSpacing() const
-{
-    return getAttribute(cellspacingAttr);
-}
-
-void HTMLTableElement::setCellSpacing(const String &value)
-{
-    setAttribute(cellspacingAttr, value);
-}
-
-String HTMLTableElement::frame() const
-{
-    return getAttribute(frameAttr);
-}
-
-void HTMLTableElement::setFrame(const String &value)
-{
-    setAttribute(frameAttr, value);
-}
-
 String HTMLTableElement::rules() const
 {
     return getAttribute(rulesAttr);
 }
 
-void HTMLTableElement::setRules(const String &value)
-{
-    setAttribute(rulesAttr, value);
-}
-
 String HTMLTableElement::summary() const
 {
     return getAttribute(summaryAttr);
-}
-
-void HTMLTableElement::setSummary(const String &value)
-{
-    setAttribute(summaryAttr, value);
-}
-
-String HTMLTableElement::width() const
-{
-    return getAttribute(widthAttr);
-}
-
-void HTMLTableElement::setWidth(const String &value)
-{
-    setAttribute(widthAttr, value);
 }
 
 void HTMLTableElement::addSubresourceAttributeURLs(ListHashSet<KURL>& urls) const

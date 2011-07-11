@@ -26,6 +26,7 @@
 #include "BytecodeGenerator.h"
 #include "Completion.h"
 #include "CurrentTime.h"
+#include "ExceptionHelpers.h"
 #include "InitializeThreading.h"
 #include "JSArray.h"
 #include "JSFunction.h"
@@ -85,24 +86,25 @@ using namespace WTF;
 static void cleanupGlobalData(JSGlobalData*);
 static bool fillBufferWithContentsOfFile(const UString& fileName, Vector<char>& buffer);
 
-static JSValue JSC_HOST_CALL functionPrint(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL functionDebug(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL functionGC(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL functionVersion(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL functionRun(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL functionLoad(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL functionCheckSyntax(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL functionReadline(ExecState*, JSObject*, JSValue, const ArgList&);
-static NO_RETURN_WITH_VALUE JSValue JSC_HOST_CALL functionQuit(ExecState*, JSObject*, JSValue, const ArgList&);
+static EncodedJSValue JSC_HOST_CALL functionPrint(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionDebug(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionGC(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionVersion(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionRun(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionLoad(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionCheckSyntax(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionReadline(ExecState*);
+static NO_RETURN_WITH_VALUE EncodedJSValue JSC_HOST_CALL functionQuit(ExecState*);
+
 #if PLATFORM(OLYMPIA)
-static JSValue JSC_HOST_CALL functionAlert(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL functionConfirm(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL functionPrompt(ExecState*, JSObject*, JSValue, const ArgList&);
+static EncodedJSValue JSC_HOST_CALL functionAlert(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionConfirm(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionPrompt(ExecState*);
 #endif
 
 #if ENABLE(SAMPLING_FLAGS)
-static JSValue JSC_HOST_CALL functionSetSamplingFlags(ExecState*, JSObject*, JSValue, const ArgList&);
-static JSValue JSC_HOST_CALL functionClearSamplingFlags(ExecState*, JSObject*, JSValue, const ArgList&);
+static EncodedJSValue JSC_HOST_CALL functionSetSamplingFlags(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionClearSamplingFlags(ExecState*);
 #endif
 
 struct Script {
@@ -180,9 +182,9 @@ GlobalObject::GlobalObject(const Vector<UString>& arguments)
     putDirectFunction(globalExec(), new (globalExec()) NativeFunctionWrapper(globalExec(), this, prototypeFunctionStructure(), 0, Identifier(globalExec(), "readline"), functionReadline));
 
 #if PLATFORM(OLYMPIA)
-    putDirectFunction(globalExec(), new (globalExec()) NativeFunctionWrapper(globalExec(), prototypeFunctionStructure(), 1, Identifier(globalExec(), "alert"), functionAlert));
-    putDirectFunction(globalExec(), new (globalExec()) NativeFunctionWrapper(globalExec(), prototypeFunctionStructure(), 1, Identifier(globalExec(), "confirm"), functionConfirm));
-    putDirectFunction(globalExec(), new (globalExec()) NativeFunctionWrapper(globalExec(), prototypeFunctionStructure(), 1, Identifier(globalExec(), "prompt"), functionPrompt));
+    putDirectFunction(globalExec(), new (globalExec()) NativeFunctionWrapper(globalExec(), this, prototypeFunctionStructure(), 1, Identifier(globalExec(), "alert"), functionAlert));
+    putDirectFunction(globalExec(), new (globalExec()) NativeFunctionWrapper(globalExec(), this, prototypeFunctionStructure(), 1, Identifier(globalExec(), "confirm"), functionConfirm));
+    putDirectFunction(globalExec(), new (globalExec()) NativeFunctionWrapper(globalExec(), this, prototypeFunctionStructure(), 1, Identifier(globalExec(), "prompt"), functionPrompt));
 #endif
 
 #if ENABLE(SAMPLING_FLAGS)
@@ -196,47 +198,47 @@ GlobalObject::GlobalObject(const Vector<UString>& arguments)
     putDirect(Identifier(globalExec(), "arguments"), array);
 }
 
-JSValue JSC_HOST_CALL functionPrint(ExecState* exec, JSObject*, JSValue, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL functionPrint(ExecState* exec)
 {
-    for (unsigned i = 0; i < args.size(); ++i) {
+    for (unsigned i = 0; i < exec->argumentCount(); ++i) {
         if (i)
             putchar(' ');
 
-        printf("%s", args.at(i).toString(exec).UTF8String().data());
+        printf("%s", exec->argument(i).toString(exec).utf8().data());
     }
 
     putchar('\n');
     fflush(stdout);
-    return jsUndefined();
+    return JSValue::encode(jsUndefined());
 }
 
-JSValue JSC_HOST_CALL functionDebug(ExecState* exec, JSObject*, JSValue, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL functionDebug(ExecState* exec)
 {
-    fprintf(stderr, "--> %s\n", args.at(0).toString(exec).UTF8String().data());
-    return jsUndefined();
+    fprintf(stderr, "--> %s\n", exec->argument(0).toString(exec).utf8().data());
+    return JSValue::encode(jsUndefined());
 }
 
-JSValue JSC_HOST_CALL functionGC(ExecState* exec, JSObject*, JSValue, const ArgList&)
+EncodedJSValue JSC_HOST_CALL functionGC(ExecState* exec)
 {
     JSLock lock(SilenceAssertionsOnly);
     exec->heap()->collectAllGarbage();
-    return jsUndefined();
+    return JSValue::encode(jsUndefined());
 }
 
-JSValue JSC_HOST_CALL functionVersion(ExecState*, JSObject*, JSValue, const ArgList&)
+EncodedJSValue JSC_HOST_CALL functionVersion(ExecState*)
 {
     // We need this function for compatibility with the Mozilla JS tests but for now
     // we don't actually do any version-specific handling
-    return jsUndefined();
+    return JSValue::encode(jsUndefined());
 }
 
-JSValue JSC_HOST_CALL functionRun(ExecState* exec, JSObject*, JSValue, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL functionRun(ExecState* exec)
 {
     StopWatch stopWatch;
-    UString fileName = args.at(0).toString(exec);
+    UString fileName = exec->argument(0).toString(exec);
     Vector<char> script;
     if (!fillBufferWithContentsOfFile(fileName, script))
-        return throwError(exec, GeneralError, "Could not open file.");
+        return JSValue::encode(throwError(exec, createError(exec, "Could not open file.")));
 
     JSGlobalObject* globalObject = exec->lexicalGlobalObject();
 
@@ -244,64 +246,60 @@ JSValue JSC_HOST_CALL functionRun(ExecState* exec, JSObject*, JSValue, const Arg
     evaluate(globalObject->globalExec(), globalObject->globalScopeChain(), makeSource(script.data(), fileName));
     stopWatch.stop();
 
-    return jsNumber(globalObject->globalExec(), stopWatch.getElapsedMS());
+    return JSValue::encode(jsNumber(globalObject->globalExec(), stopWatch.getElapsedMS()));
 }
 
-JSValue JSC_HOST_CALL functionLoad(ExecState* exec, JSObject* o, JSValue v, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL functionLoad(ExecState* exec)
 {
-    UNUSED_PARAM(o);
-    UNUSED_PARAM(v);
-    UString fileName = args.at(0).toString(exec);
+    UString fileName = exec->argument(0).toString(exec);
     Vector<char> script;
     if (!fillBufferWithContentsOfFile(fileName, script))
-        return throwError(exec, GeneralError, "Could not open file.");
+        return JSValue::encode(throwError(exec, createError(exec, "Could not open file.")));
 
     JSGlobalObject* globalObject = exec->lexicalGlobalObject();
     Completion result = evaluate(globalObject->globalExec(), globalObject->globalScopeChain(), makeSource(script.data(), fileName));
     if (result.complType() == Throw)
-        exec->setException(result.value());
-    return result.value();
+        throwError(exec, result.value());
+    return JSValue::encode(result.value());
 }
 
-JSValue JSC_HOST_CALL functionCheckSyntax(ExecState* exec, JSObject* o, JSValue v, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL functionCheckSyntax(ExecState* exec)
 {
-    UNUSED_PARAM(o);
-    UNUSED_PARAM(v);
-    UString fileName = args.at(0).toString(exec);
+    UString fileName = exec->argument(0).toString(exec);
     Vector<char> script;
     if (!fillBufferWithContentsOfFile(fileName, script))
-        return throwError(exec, GeneralError, "Could not open file.");
+        return JSValue::encode(throwError(exec, createError(exec, "Could not open file.")));
 
     JSGlobalObject* globalObject = exec->lexicalGlobalObject();
     Completion result = checkSyntax(globalObject->globalExec(), makeSource(script.data(), fileName));
     if (result.complType() == Throw)
-        exec->setException(result.value());
-    return result.value();
+        throwError(exec, result.value());
+    return JSValue::encode(result.value());
 }
 
 #if ENABLE(SAMPLING_FLAGS)
-JSValue JSC_HOST_CALL functionSetSamplingFlags(ExecState* exec, JSObject*, JSValue, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL functionSetSamplingFlags(ExecState* exec)
 {
-    for (unsigned i = 0; i < args.size(); ++i) {
-        unsigned flag = static_cast<unsigned>(args.at(i).toNumber(exec));
+    for (unsigned i = 0; i < exec->argumentCount(); ++i) {
+        unsigned flag = static_cast<unsigned>(exec->argument(i).toNumber(exec));
         if ((flag >= 1) && (flag <= 32))
             SamplingFlags::setFlag(flag);
     }
-    return jsNull();
+    return JSValue::encode(jsNull());
 }
 
-JSValue JSC_HOST_CALL functionClearSamplingFlags(ExecState* exec, JSObject*, JSValue, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL functionClearSamplingFlags(ExecState* exec)
 {
-    for (unsigned i = 0; i < args.size(); ++i) {
-        unsigned flag = static_cast<unsigned>(args.at(i).toNumber(exec));
+    for (unsigned i = 0; i < exec->argumentCount(); ++i) {
+        unsigned flag = static_cast<unsigned>(exec->argument(i).toNumber(exec));
         if ((flag >= 1) && (flag <= 32))
             SamplingFlags::clearFlag(flag);
     }
-    return jsNull();
+    return JSValue::encode(jsNull());
 }
 #endif
 
-JSValue JSC_HOST_CALL functionReadline(ExecState* exec, JSObject*, JSValue, const ArgList&)
+EncodedJSValue JSC_HOST_CALL functionReadline(ExecState* exec)
 {
     Vector<char, 256> line;
     int c;
@@ -312,10 +310,10 @@ JSValue JSC_HOST_CALL functionReadline(ExecState* exec, JSObject*, JSValue, cons
         line.append(c);
     }
     line.append('\0');
-    return jsString(exec, line.data());
+    return JSValue::encode(jsString(exec, line.data()));
 }
 
-JSValue JSC_HOST_CALL functionQuit(ExecState* exec, JSObject*, JSValue, const ArgList&)
+EncodedJSValue JSC_HOST_CALL functionQuit(ExecState* exec)
 {
     // Technically, destroying the heap in the middle of JS execution is a no-no,
     // but we want to maintain compatibility with the Mozilla test suite, so
@@ -327,7 +325,7 @@ JSValue JSC_HOST_CALL functionQuit(ExecState* exec, JSObject*, JSValue, const Ar
 
 #if COMPILER(MSVC) && OS(WINCE)
     // Without this, Visual Studio will complain that this method does not return a value.
-    return jsUndefined();
+    return JSValue::encode(jsUndefined());
 #endif
 }
 
@@ -336,7 +334,7 @@ JSValue JSC_HOST_CALL functionQuit(ExecState* exec, JSObject*, JSValue, const Ar
 // be in a separate main function because the jscmain function requires object
 // unwinding.
 
-#if COMPILER(MSVC) && !defined(_DEBUG)
+#if COMPILER(MSVC) && !defined(_DEBUG) && !OS(WINCE)
 #define TRY       __try {
 #define EXCEPT(x) } __except (EXCEPTION_EXECUTE_HANDLER) { x; }
 #else
@@ -496,9 +494,9 @@ static bool runWithScripts(GlobalObject* globalObject, const Vector<Script>& scr
         success = success && completion.complType() != Throw;
         if (dump) {
             if (completion.complType() == Throw)
-                printf("Exception: %s\n", completion.value().toString(globalObject->globalExec()).ascii());
+                printf("Exception: %s\n", completion.value().toString(globalObject->globalExec()).utf8().data());
             else
-                printf("End: %s\n", completion.value().toString(globalObject->globalExec()).ascii());
+                printf("End: %s\n", completion.value().toString(globalObject->globalExec()).utf8().data());
         }
 
         globalData->stopSampling();
@@ -511,6 +509,9 @@ static bool runWithScripts(GlobalObject* globalObject, const Vector<Script>& scr
     globalData->dumpSampleData(globalObject->globalExec());
 #if ENABLE(SAMPLING_COUNTERS)
     AbstractSamplingCounter::dump();
+#endif
+#if ENABLE(REGEXP_TRACING)
+    globalData->dumpRegExpTrace();
 #endif
     return success;
 }
@@ -544,9 +545,9 @@ static void runInteractive(GlobalObject* globalObject)
         Completion completion = evaluate(globalObject->globalExec(), globalObject->globalScopeChain(), makeSource(line.data(), interpreterName));
 #endif
         if (completion.complType() == Throw)
-            printf("Exception: %s\n", completion.value().toString(globalObject->globalExec()).ascii());
+            printf("Exception: %s\n", completion.value().toString(globalObject->globalExec()).utf8().data());
         else
-            printf("%s\n", completion.value().toString(globalObject->globalExec()).UTF8String().data());
+            printf("%s\n", completion.value().toString(globalObject->globalExec()).utf8().data());
 
         globalObject->globalExec()->clearException();
     }
@@ -636,9 +637,9 @@ int jscmain(int argc, char** argv, JSGlobalData* globalData)
 
 static bool fillBufferWithContentsOfFile(const UString& fileName, Vector<char>& buffer)
 {
-    FILE* f = fopen(fileName.UTF8String().data(), "r");
+    FILE* f = fopen(fileName.utf8().data(), "r");
     if (!f) {
-        fprintf(stderr, "Could not open file: %s\n", fileName.UTF8String().data());
+        fprintf(stderr, "Could not open file: %s\n", fileName.utf8().data());
         return false;
     }
 
@@ -735,11 +736,11 @@ static void jscPutChar(const char c)
     jscClient->output(string);
 }
 
-JSValue JSC_HOST_CALL functionAlert(ExecState* exec, JSObject*, JSValue, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL functionAlert(ExecState* exec)
 {
     if (jscClient) {
-        if (args.size()) {
-            UString message = args.at(0).toString(exec);
+        if (exec->argumentCount()) {
+            UString message = exec->argument(0).toString(exec);
             jscClient->alert(message.data(), message.size());
         } else
             jscClient->alert(0, 0);
@@ -747,12 +748,12 @@ JSValue JSC_HOST_CALL functionAlert(ExecState* exec, JSObject*, JSValue, const A
     return jsNull();
 }
 
-JSValue JSC_HOST_CALL functionConfirm(ExecState* exec, JSObject*, JSValue, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL functionConfirm(ExecState* exec)
 {
     bool returnValue = false;
     if (jscClient) {
-        if (args.size()) {
-            UString message = args.at(0).toString(exec);
+        if (exec->argumentCount()) {
+            UString message = exec->argument(0).toString(exec);
             returnValue = jscClient->confirm(message.data(), message.size());
         } else
             returnValue = jscClient->confirm(0, 0);
@@ -775,21 +776,21 @@ struct JSCPromptCallbackImp: JSCPromptCallback
     UString& result;
 };
 
-JSValue JSC_HOST_CALL functionPrompt(ExecState* exec, JSObject*, JSValue, const ArgList& args)
+EncodedJSValue JSC_HOST_CALL functionPrompt(ExecState* exec)
 {
     UString returnValue;
     if (jscClient) {
         JSCPromptCallbackImp callback(returnValue);
-        unsigned numArgs = args.size();
+        unsigned numArgs = exec->argumentCount();
         const unsigned short* message = 0;
         if (!numArgs) {
             jscClient->prompt(0, 0, 0, 0, &callback);
         } else {
-            UString message = args.at(0).toString(exec);
+            UString message = exec->argument(0).toString(exec);
             if (numArgs == 1) {
                 jscClient->prompt(message.data(), message.size(), 0, 0, &callback);
             } else {
-                UString defaultValue = args.at(1).toString(exec);
+                UString defaultValue = exec->argument(1).toString(exec);
                 jscClient->prompt(message.data(), message.size(), defaultValue.data(), defaultValue.size(), &callback);
             }
         }

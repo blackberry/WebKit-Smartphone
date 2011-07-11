@@ -99,6 +99,7 @@ ALWAYS_INLINE JIT::Call JIT::emitNakedCall(CodePtr function)
 
 ALWAYS_INLINE void JIT::beginUninterruptedSequence(int insnSpace, int constSpace)
 {
+    JSInterfaceJIT::beginUninterruptedSequence();
 #if CPU(ARM_TRADITIONAL)
 #ifndef NDEBUG
     // Ensure the label after the sequence can also fit
@@ -124,6 +125,7 @@ ALWAYS_INLINE void JIT::endUninterruptedSequence(int insnSpace, int constSpace)
     ASSERT(differenceBetween(m_uninterruptedInstructionSequenceBegin, label()) == insnSpace);
     ASSERT(sizeOfConstantPool() - m_uninterruptedConstantSequenceBegin == constSpace);
 #endif
+    JSInterfaceJIT::endUninterruptedSequence();
 }
 
 #endif
@@ -181,18 +183,12 @@ ALWAYS_INLINE void JIT::restoreReturnAddressBeforeReturn(Address address)
 
 #endif
 
-#if USE(JIT_STUB_ARGUMENT_VA_LIST)
-ALWAYS_INLINE void JIT::restoreArgumentReference()
-{
-    poke(callFrameRegister, OBJECT_OFFSETOF(struct JITStackFrame, callFrame) / sizeof (void*));
-}
-ALWAYS_INLINE void JIT::restoreArgumentReferenceForTrampoline() {}
-#else
 ALWAYS_INLINE void JIT::restoreArgumentReference()
 {
     move(stackPointerRegister, firstArgumentRegister);
     poke(callFrameRegister, OBJECT_OFFSETOF(struct JITStackFrame, callFrame) / sizeof (void*));
 }
+
 ALWAYS_INLINE void JIT::restoreArgumentReferenceForTrampoline()
 {
 #if CPU(X86)
@@ -203,7 +199,6 @@ ALWAYS_INLINE void JIT::restoreArgumentReferenceForTrampoline()
 #endif
     // In the trampoline on x86-64, the first argument register is not overwritten.
 }
-#endif
 
 ALWAYS_INLINE JIT::Jump JIT::checkStructure(RegisterID reg, Structure* structure)
 {
@@ -645,7 +640,7 @@ ALWAYS_INLINE bool JIT::isOperandConstantImmediateInt(unsigned src)
 ALWAYS_INLINE void JIT::emitPutVirtualRegister(unsigned dst, RegisterID from)
 {
     storePtr(from, Address(callFrameRegister, dst * sizeof(Register)));
-    m_lastResultBytecodeRegister = (from == cachedResultRegister) ? dst : std::numeric_limits<int>::max();
+    m_lastResultBytecodeRegister = (from == cachedResultRegister) ? static_cast<int>(dst) : std::numeric_limits<int>::max();
 }
 
 ALWAYS_INLINE void JIT::emitInitRegister(unsigned dst)

@@ -1,0 +1,48 @@
+Tests the Timeline API instrumentation of a network resource load
+
+
+ResourceSendRequest Properties:
+{
+    startTime : <number>
+    stackTrace : <object>
+    data : {
+        identifier : <number>
+        url : <string>
+        requestMethod : "GET"
+        isMainResource : false
+    }
+    type : 12
+    usedHeapSize : <number>
+    totalHeapSize : <number>
+}
+
+ResourceReceiveResponse Properties:
+{
+    startTime : <number>
+    data : {
+        identifier : <number>
+        statusCode : 0
+        mimeType : <string>
+        expectedContentLength : 210
+        url : <string>
+    }
+    children : <object>
+    endTime : <number>
+    type : 13
+    usedHeapSize : <number>
+    totalHeapSize : <number>
+}
+
+ResourceFinish Properties:
+{
+    startTime : <number>
+    data : {
+        identifier : <number>
+        didFail : false
+        url : <string>
+    }
+    type : 14
+    usedHeapSize : <number>
+    totalHeapSize : <number>
+}
+Script resource loaded

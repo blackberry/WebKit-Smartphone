@@ -29,7 +29,7 @@ function constructorPropertiesOnWindow(globalObject)
         // Ignore these properties because they do not exist in all implementations. They will be tested separately
         if (type == "WebGLRenderingContextConstructor" ||
             type == "ArrayBufferConstructor" ||
-            type =="FloatArrayConstructor" ||
+            type =="Float32ArrayConstructor" ||
             type =="Int8ArrayConstructor" ||
             type =="Int16ArrayConstructor" ||
             type =="Int32ArrayConstructor" ||
@@ -37,7 +37,8 @@ function constructorPropertiesOnWindow(globalObject)
             type =="Uint16ArrayConstructor" ||
             type =="Uint32ArrayConstructor" ||
             type == "FileErrorConstructor" ||
-            type == "FileReaderConstructor")
+            type == "FileReaderConstructor" ||
+            type == "BlobBuilderConstructor")
             continue;
         if (!type.match('Constructor$'))
             continue;

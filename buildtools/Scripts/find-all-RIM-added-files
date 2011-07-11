@@ -1,0 +1,37 @@
+#! /bin/bash
+# Copyright (C) Research In Motion Limited 2010. All rights reserved.
+#
+# List all files that have been added by RIM to master_29 since the last rebase
+
+# FIXME: We shouldn't hardcode the SHA of both the first RIM and WebKit commit. Instead, we should determine them.
+FirstRIMCommitSHA="aec53525980085a1f317295371ed2344ea591658"
+LastRIMCommitSHA="upstream/master_29"
+FirstWebKitCommitSHA="949e26452cfa153a7f4afe593da97e2fe9e1b706"
+LastWebKitCommitSHA="upstream/svn/master"
+
+# Temporary files that save intermediate computations. Files are removed when the script ends.
+FilesAddedToRIMRepository="_FilesAddedToRIMRepository.txt"
+FilesDeletedFromRIMRepository="_FilesDeletedFromRIMRepository.txt"
+FilesAddedToWebKitRepository="_FilesAddedToWebKitRepository.txt"
+FilesThatMayHaveBeenAddedByRIMThatStillExist="_FilesThatMayHaveBeenAddedByRIMThatStillExist.txt" # {FilesAddedToRIMRepository} - {FilesDeletedFromRIMRepository}; May contain WebKit files that were cherry-picked by hand.
+
+cd $OLYMPIAROOT/olympia
+
+# Save the list of files added by RIM commits since the last rebase
+git show --pretty="format:" --name-only $FirstRIMCommitSHA^..$LastRIMCommitSHA --diff-filter=A | sort -u > $FilesAddedToRIMRepository
+
+# Save the list of files deleted by RIM commits since the last rebase
+git show --pretty="format:" --name-only $FirstRIMCommitSHA^..$LastRIMCommitSHA --diff-filter=D | sort -u > $FilesDeletedFromRIMRepository
+
+# Save the list of files ever added by a commit on Webkit.org
+git show --pretty="format:" --name-only $FirstWebKitCommitSHA..$LastWebKitCommitSHA --diff-filter=A | sort -u > $FilesAddedToWebKitRepository
+
+# Subtract from the list of files added to RIM repo those files that have been deleted by a RIM commit
+sort $FilesDeletedFromRIMRepository $FilesDeletedFromRIMRepository $FilesAddedToRIMRepository | uniq -u > $FilesThatMayHaveBeenAddedByRIMThatStillExist
+
+# Subtract from the list of files added to RIM repo those files that were added by a commit in Webkit.org
+# Output to STDOUT
+sort $FilesAddedToWebKitRepository $FilesAddedToWebKitRepository $FilesThatMayHaveBeenAddedByRIMThatStillExist | uniq -u
+
+# Remove temporary files
+rm $FilesAddedToRIMRepository $FilesDeletedFromRIMRepository $FilesAddedToWebKitRepository $FilesThatMayHaveBeenAddedByRIMThatStillExist

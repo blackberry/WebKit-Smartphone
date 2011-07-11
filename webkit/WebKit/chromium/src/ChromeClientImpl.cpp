@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2009 Google Inc. All rights reserved.
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,8 +32,8 @@
 #include "config.h"
 #include "ChromeClientImpl.h"
 
-#include "AccessibilityObject.h"
 #include "AXObjectCache.h"
+#include "AccessibilityObject.h"
 #include "CharacterNames.h"
 #include "Console.h"
 #include "Cursor.h"
@@ -43,18 +44,23 @@
 #include "FloatRect.h"
 #include "FrameLoadRequest.h"
 #include "FrameView.h"
+#include "GLES2Context.h"
 #include "Geolocation.h"
 #include "GeolocationService.h"
-#include "WebGeolocationService.h"
 #include "GeolocationServiceChromium.h"
 #include "GraphicsLayer.h"
+#include "HTMLNames.h"
 #include "HitTestResult.h"
 #include "IntRect.h"
 #include "Node.h"
 #include "NotificationPresenterImpl.h"
 #include "Page.h"
 #include "PopupMenuChromium.h"
+#include "SearchPopupMenuChromium.h"
 #include "ScriptController.h"
+#include "SecurityOrigin.h"
+#include "SharedGraphicsContext3D.h"
+#include "WebGeolocationService.h"
 #if USE(V8)
 #include "V8Proxy.h"
 #endif
@@ -159,35 +165,8 @@ float ChromeClientImpl::scaleFactor()
 
 void ChromeClientImpl::focus()
 {
-    if (!m_webView->client())
-        return;
-
-    m_webView->client()->didFocus();
-
-    // If accessibility is enabled, we should notify assistive technology that
-    // the active AccessibilityObject changed.
-    const Frame* frame = m_webView->focusedWebCoreFrame();
-    if (!frame)
-        return;
-
-    Document* doc = frame->document();
-
-    if (doc && doc->axObjectCache()->accessibilityEnabled()) {
-        Node* focusedNode = m_webView->focusedWebCoreNode();
-
-        if (!focusedNode) {
-            // Could not retrieve focused Node.
-            return;
-        }
-
-        // Retrieve the focused AccessibilityObject.
-        AccessibilityObject* focusedAccObj =
-            doc->axObjectCache()->getOrCreate(focusedNode->renderer());
-
-        // Alert assistive technology that focus changed.
-        if (focusedAccObj)
-            m_webView->client()->focusAccessibilityObject(WebAccessibilityObject(focusedAccObj));
-    }
+    if (m_webView->client())
+        m_webView->client()->didFocus();
 }
 
 void ChromeClientImpl::unfocus()
@@ -217,17 +196,37 @@ void ChromeClientImpl::focusedNodeChanged(Node* node)
 {
     m_webView->client()->focusedNodeChanged(WebNode(node));
 
-    WebURL focus_url;
+    WebURL focusURL;
     if (node && node->isLink()) {
         // This HitTestResult hack is the easiest way to get a link URL out of a
         // WebCore::Node.
-        HitTestResult hit_test(IntPoint(0, 0));
+        HitTestResult hitTest(IntPoint(0, 0));
         // This cast must be valid because of the isLink() check.
-        hit_test.setURLElement(reinterpret_cast<Element*>(node));
-        if (hit_test.isLiveLink())
-            focus_url = hit_test.absoluteLinkURL();
+        hitTest.setURLElement(static_cast<Element*>(node));
+        if (hitTest.isLiveLink())
+            focusURL = hitTest.absoluteLinkURL();
     }
-    m_webView->client()->setKeyboardFocusURL(focus_url);
+    m_webView->client()->setKeyboardFocusURL(focusURL);
+    
+    if (!node)
+        return;
+
+    // If accessibility is enabled, we should notify assistive technology that
+    // the active AccessibilityObject changed.
+    Document* document = node->document();
+    if (!document) {
+        ASSERT_NOT_REACHED();
+        return;
+    } 
+    if (document && document->axObjectCache()->accessibilityEnabled()) {
+        // Retrieve the focused AccessibilityObject.
+        AccessibilityObject* focusedAccObj =
+            document->axObjectCache()->getOrCreate(node->renderer());
+
+        // Alert assistive technology that focus changed.
+        if (focusedAccObj)
+            m_webView->client()->focusAccessibilityObject(WebAccessibilityObject(focusedAccObj));
+    }
 }
 
 Page* ChromeClientImpl::createWindow(
@@ -237,7 +236,7 @@ Page* ChromeClientImpl::createWindow(
         return 0;
 
     WebViewImpl* newView = static_cast<WebViewImpl*>(
-        m_webView->client()->createView(WebFrameImpl::fromFrame(frame), features));
+        m_webView->client()->createView(WebFrameImpl::fromFrame(frame), features, r.frameName()));
     if (!newView)
         return 0;
 
@@ -494,8 +493,15 @@ void ChromeClientImpl::invalidateContentsAndWindow(const IntRect& updateRect, bo
 {
     if (updateRect.isEmpty())
         return;
-    if (m_webView->client())
-        m_webView->client()->didInvalidateRect(updateRect);
+#if USE(ACCELERATED_COMPOSITING)
+    if (!m_webView->isAcceleratedCompositingActive()) {
+#endif
+        if (m_webView->client())
+            m_webView->client()->didInvalidateRect(updateRect);
+#if USE(ACCELERATED_COMPOSITING)
+    } else
+        m_webView->invalidateRootLayerRect(updateRect);
+#endif
 }
 
 void ChromeClientImpl::invalidateContentsForSlowScroll(const IntRect& updateRect, bool immediate)
@@ -509,11 +515,18 @@ void ChromeClientImpl::scroll(
     const IntRect& clipRect)
 {
     m_webView->hidePopups();
-    if (m_webView->client()) {
-        int dx = scrollDelta.width();
-        int dy = scrollDelta.height();
-        m_webView->client()->didScrollRect(dx, dy, clipRect);
-    }
+#if USE(ACCELERATED_COMPOSITING)
+    if (!m_webView->isAcceleratedCompositingActive()) {
+#endif
+        if (m_webView->client()) {
+            int dx = scrollDelta.width();
+            int dy = scrollDelta.height();
+            m_webView->client()->didScrollRect(dx, dy, clipRect);
+        }
+#if USE(ACCELERATED_COMPOSITING)
+    } else
+        m_webView->scrollRootLayerRect(scrollDelta, clipRect);
+#endif
 }
 
 IntPoint ChromeClientImpl::screenToWindow(const IntPoint&) const
@@ -584,6 +597,11 @@ void ChromeClientImpl::reachedMaxAppCacheSize(int64_t spaceNeeded)
 {
     ASSERT_NOT_REACHED();
 }
+
+void ChromeClientImpl::reachedApplicationCacheOriginQuota(SecurityOrigin*)
+{
+    ASSERT_NOT_REACHED();
+}
 #endif
 
 void ChromeClientImpl::runOpenPanel(Frame* frame, PassRefPtr<FileChooser> fileChooser)
@@ -594,6 +612,11 @@ void ChromeClientImpl::runOpenPanel(Frame* frame, PassRefPtr<FileChooser> fileCh
 
     WebFileChooserParams params;
     params.multiSelect = fileChooser->allowsMultipleFiles();
+#if ENABLE(DIRECTORY_UPLOAD)
+    params.directory = fileChooser->allowsDirectoryUpload();
+#else
+    params.directory = false;
+#endif
     params.acceptTypes = fileChooser->acceptTypes();
     params.selectedFiles = fileChooser->filenames();
     if (params.selectedFiles.size() > 0)
@@ -608,7 +631,7 @@ void ChromeClientImpl::runOpenPanel(Frame* frame, PassRefPtr<FileChooser> fileCh
     chooserCompletion->didChooseFile(WebVector<WebString>());
 }
 
-void ChromeClientImpl::chooseIconForFiles(const Vector<WebCore::String>&, WebCore::FileChooser*)
+void ChromeClientImpl::chooseIconForFiles(const Vector<WTF::String>&, WebCore::FileChooser*)
 {
     notImplemented();
 }
@@ -704,6 +727,13 @@ void ChromeClientImpl::didChangeAccessibilityObjectState(AccessibilityObject* ob
         m_webView->client()->didChangeAccessibilityObjectState(WebAccessibilityObject(obj));
 }
 
+void ChromeClientImpl::didChangeAccessibilityObjectChildren(WebCore::AccessibilityObject* obj)
+{
+    // Alert assistive technology about the accessibility object children change
+    if (obj)
+        m_webView->client()->didChangeAccessibilityObjectChildren(WebAccessibilityObject(obj));
+}
+
 #if ENABLE(NOTIFICATIONS)
 NotificationPresenter* ChromeClientImpl::notificationPresenter() const
 {
@@ -734,6 +764,50 @@ void ChromeClientImpl::scheduleCompositingLayerSync()
 {
     m_webView->setRootLayerNeedsDisplay();
 }
+
+bool ChromeClientImpl::allowsAcceleratedCompositing() const
+{
+    return m_webView->allowsAcceleratedCompositing();
+}
 #endif
+
+WebCore::SharedGraphicsContext3D* ChromeClientImpl::getSharedGraphicsContext3D()
+{
+    return m_webView->getSharedGraphicsContext3D();
+}
+
+bool ChromeClientImpl::supportsFullscreenForNode(const WebCore::Node* node)
+{
+    if (m_webView->client() && node->hasTagName(WebCore::HTMLNames::videoTag))
+        return m_webView->client()->supportsFullscreen();
+    return false;
+}
+
+void ChromeClientImpl::enterFullscreenForNode(WebCore::Node* node)
+{
+    if (m_webView->client())
+        m_webView->client()->enterFullscreenForNode(WebNode(node));
+}
+
+void ChromeClientImpl::exitFullscreenForNode(WebCore::Node* node)
+{
+    if (m_webView->client())
+        m_webView->client()->exitFullscreenForNode(WebNode(node));
+}
+
+bool ChromeClientImpl::selectItemWritingDirectionIsNatural()
+{
+    return false;
+}
+
+PassRefPtr<PopupMenu> ChromeClientImpl::createPopupMenu(PopupMenuClient* client) const
+{
+    return adoptRef(new PopupMenuChromium(client));
+}
+
+PassRefPtr<SearchPopupMenu> ChromeClientImpl::createSearchPopupMenu(PopupMenuClient* client) const
+{
+    return adoptRef(new SearchPopupMenuChromium(client));
+}
 
 } // namespace WebKit

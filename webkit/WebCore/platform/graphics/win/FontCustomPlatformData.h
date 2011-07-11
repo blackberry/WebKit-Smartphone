@@ -23,6 +23,7 @@
 
 #include "FontRenderingMode.h"
 #include "PlatformString.h"
+#include <wtf/Forward.h>
 #include <wtf/Noncopyable.h>
 
 typedef struct CGFont* CGFontRef;
@@ -42,6 +43,8 @@ struct FontCustomPlatformData : Noncopyable {
     ~FontCustomPlatformData();
 
     FontPlatformData fontPlatformData(int size, bool bold, bool italic, FontRenderingMode = NormalRenderingMode);
+
+    static bool supportsFormat(const String&);
 
     HANDLE m_fontReference;
     String m_name;

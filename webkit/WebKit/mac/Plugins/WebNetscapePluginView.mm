@@ -30,7 +30,7 @@
 
 #import "WebNetscapePluginView.h"
 
-#import "WebBaseNetscapePluginStream.h"
+#import "QuickDrawCompatibility.h"
 #import "WebDataSourceInternal.h"
 #import "WebDefaultUIDelegate.h"
 #import "WebFrameInternal.h" 
@@ -49,6 +49,7 @@
 #import "WebNetscapeContainerCheckPrivate.h"
 #import "WebNetscapePluginEventHandler.h"
 #import "WebNetscapePluginPackage.h"
+#import "WebNetscapePluginStream.h"
 #import "WebPluginContainerCheck.h"
 #import "WebPluginRequest.h"
 #import "WebPreferences.h"
@@ -1234,7 +1235,7 @@ static inline void getNPRect(const NSRect& nr, NPRect& npr)
         cValues = (char **)malloc([values count] * sizeof(char *));
     }
 
-    BOOL isWMP = [[[_pluginPackage.get() bundle] bundleIdentifier] isEqualToString:@"com.microsoft.WMP.defaultplugin"];
+    BOOL isWMP = [_pluginPackage.get() bundleIdentifier] == "com.microsoft.WMP.defaultplugin";
     
     unsigned i;
     unsigned count = [keys count];
@@ -1727,7 +1728,7 @@ static inline void getNPRect(const NSRect& nr, NPRect& npr)
             return NPERR_INVALID_PARAM;
         }
     } else {
-        if (!SecurityOrigin::canLoad(URL, String(), core([self webFrame])->document()))
+        if (!core([self webFrame])->document()->securityOrigin()->canDisplay(URL))
             return NPERR_GENERIC_ERROR;
     }
         
@@ -2370,9 +2371,9 @@ static inline void getNPRect(const NSRect& nr, NPRect& npr)
     ASSERT(pluginFunctionCallDepth == 0);
 
     PluginMainThreadScheduler::scheduler().registerPlugin(plugin);
-    
-    _isFlash = [[[_pluginPackage.get() bundle] bundleIdentifier] isEqualToString:@"com.macromedia.Flash Player.plugin"];
-    _isSilverlight = [[[_pluginPackage.get() bundle] bundleIdentifier] isEqualToString:@"com.microsoft.SilverlightPlugin"];
+
+    _isFlash = [_pluginPackage.get() bundleIdentifier] == "com.macromedia.Flash Player.plugin";
+    _isSilverlight = [_pluginPackage.get() bundleIdentifier] == "com.microsoft.SilverlightPlugin";
 
     [[self class] setCurrentPluginView:self];
     NPError npErr = [_pluginPackage.get() pluginFuncs]->newp((char *)[_MIMEType.get() cString], plugin, _mode, argsCount, cAttributes, cValues, NULL);

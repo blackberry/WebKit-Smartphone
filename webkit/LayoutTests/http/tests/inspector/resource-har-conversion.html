@@ -1,0 +1,46 @@
+<html>
+<head>
+<script src="resource-test2.js"></script>
+<script src="inspector-test2.js"></script>
+
+<script>
+
+var test = function()
+{
+    function getHAR(id)
+    {
+        return new WebInspector.HAREntry(WebInspector.resources[id]).build();
+    }
+
+    InspectorTest.enableResourceTracking(function() {
+        InjectedScriptAccess.getDefault().evaluate("doXHR()", "console", function() {
+            var resources = Object.keys(WebInspector.resources).map(getHAR).sort(InspectorTest.resourceURLComparer);
+            InspectorTest.addObject(resources, InspectorTest.HARNondeterministicPropertiesWithSize);
+            InspectorTest.disableResourceTracking();
+            InspectorTest.completeTest();
+        });
+    });
+}
+
+// Make a POST requests to see we handle non-post form data well.
+
+function doXHR()
+{
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "resources/post-target.cgi", false);
+    xhr.setRequestHeader("Content-Type", "text/xml");
+    xhr.send("<xml></xml>");
+}
+
+</script>
+
+
+</head>
+
+<body onload="runTest()">
+<p>
+Tests conversion of Inspector's resource representation into HAR format.
+</p>
+
+</body>
+</html>

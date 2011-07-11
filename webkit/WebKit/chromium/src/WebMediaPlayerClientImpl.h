@@ -34,21 +34,31 @@
 #if ENABLE(VIDEO)
 
 #include "MediaPlayerPrivate.h"
+#include "VideoFrameChromium.h"
+#include "VideoFrameProvider.h"
 #include "WebMediaPlayerClient.h"
 #include <wtf/OwnPtr.h>
 
 namespace WebKit {
 
+class WebMediaElement;
 class WebMediaPlayer;
 
 // This class serves as a bridge between WebCore::MediaPlayer and
 // WebKit::WebMediaPlayer.
-class WebMediaPlayerClientImpl : public WebMediaPlayerClient
-                               , public WebCore::MediaPlayerPrivateInterface {
+class WebMediaPlayerClientImpl : public WebCore::MediaPlayerPrivateInterface
+                               , public WebCore::VideoFrameProvider
+                               , public WebMediaPlayerClient {
+
 public:
     static bool isEnabled();
     static void setIsEnabled(bool);
     static void registerSelf(WebCore::MediaEngineRegistrar);
+
+    static WebMediaPlayerClientImpl* fromMediaElement(const WebMediaElement* element);
+
+    // Returns the encapsulated WebKit::WebMediaPlayer.
+    WebMediaPlayer* mediaPlayer() const;
 
     // WebMediaPlayerClient methods:
     virtual void networkStateChanged();
@@ -64,8 +74,12 @@ public:
     virtual float volume() const;
 
     // MediaPlayerPrivateInterface methods:
-    virtual void load(const WebCore::String& url);
+    virtual void load(const WTF::String& url);
     virtual void cancelLoad();
+#if USE(ACCELERATED_COMPOSITING)
+    virtual WebCore::PlatformLayer* platformLayer() const;
+#endif
+    virtual WebCore::PlatformMedia platformMedia() const;
     virtual void play();
     virtual void pause();
     virtual bool supportsFullscreen() const;
@@ -94,18 +108,30 @@ public:
     virtual void setSize(const WebCore::IntSize&);
     virtual void paint(WebCore::GraphicsContext*, const WebCore::IntRect&);
     virtual bool hasSingleSecurityOrigin() const;
+#if USE(ACCELERATED_COMPOSITING)
+    virtual bool supportsAcceleratedRendering() const;
+#endif
+
     virtual WebCore::MediaPlayer::MovieLoadType movieLoadType() const;
+
+    // VideoFrameProvider methods:
+    virtual WebCore::VideoFrameChromium* getCurrentFrame();
+    virtual void putCurrentFrame(WebCore::VideoFrameChromium*);
 
 private:
     WebMediaPlayerClientImpl();
 
     static WebCore::MediaPlayerPrivateInterface* create(WebCore::MediaPlayer*);
-    static void getSupportedTypes(WTF::HashSet<WebCore::String>&);
+    static void getSupportedTypes(WTF::HashSet<WTF::String>&);
     static WebCore::MediaPlayer::SupportsType supportsType(
-        const WebCore::String& type, const WebCore::String& codecs);
+        const WTF::String& type, const WTF::String& codecs);
 
     WebCore::MediaPlayer* m_mediaPlayer;
     OwnPtr<WebMediaPlayer> m_webMediaPlayer;
+#if USE(ACCELERATED_COMPOSITING)
+    RefPtr<WebCore::PlatformLayer> m_videoLayer;
+    bool m_supportsAcceleratedCompositing;
+#endif
     static bool m_isEnabled;
 };
 

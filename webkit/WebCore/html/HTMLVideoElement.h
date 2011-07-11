@@ -36,19 +36,14 @@ class HTMLImageLoader;
 
 class HTMLVideoElement : public HTMLMediaElement {
 public:
-    HTMLVideoElement(const QualifiedName&, Document*);
+    static PassRefPtr<HTMLVideoElement> create(const QualifiedName&, Document*);
 
     unsigned width() const;
-    void setWidth(unsigned);
     unsigned height() const;
-    void setHeight(unsigned);
     
     unsigned videoWidth() const;
     unsigned videoHeight() const;
     
-    virtual const KURL poster() const { return m_posterURL; }
-    void setPoster(const String&);
-
     // Fullscreen
     void webkitEnterFullscreen(bool isUserGesture, ExceptionCode&);
     void webkitExitFullscreen();
@@ -60,13 +55,14 @@ public:
     void webkitEnterFullScreen(bool isUserGesture, ExceptionCode& ec) { webkitEnterFullscreen(isUserGesture, ec); }
     void webkitExitFullScreen() { webkitExitFullscreen(); }
 
-    bool shouldDisplayPosterImage() const { return m_shouldDisplayPosterImage; }
-
     // Used by canvas to gain raw pixel access
     void paintCurrentFrameInContext(GraphicsContext*, const IntRect&);
 
+    bool shouldDisplayPosterImage() const { return displayMode() == Poster; }
+
 private:
-    virtual int tagPriority() const { return 5; }
+    HTMLVideoElement(const QualifiedName&, Document*);
+
     virtual bool rendererIsNeeded(RenderStyle*);
 #if !ENABLE(PLUGIN_PROXY_FOR_VIDEO)
     virtual RenderObject* createRenderer(RenderArena*, RenderStyle*);
@@ -81,12 +77,14 @@ private:
     virtual const QualifiedName& imageSourceAttributeName() const;
 
     virtual bool hasAvailableVideoFrame() const;
-    virtual void updatePosterImage();
+    virtual void updateDisplayState();
+
     virtual void willMoveToNewOwnerDocument();
 
+    virtual void setDisplayMode(DisplayMode);
+
     OwnPtr<HTMLImageLoader> m_imageLoader;
-    KURL m_posterURL;
-    bool m_shouldDisplayPosterImage;
+
 };
 
 } //namespace

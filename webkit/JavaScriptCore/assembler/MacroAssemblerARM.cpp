@@ -56,8 +56,11 @@ static bool isVFPPresent()
         close(fd);
     }
 #endif
-
+#if defined(__TARGET_FPU_VFP)
+    return true;
+#else
     return false;
+#endif
 }
 
 const bool MacroAssemblerARM::s_isVFPPresent = isVFPPresent();

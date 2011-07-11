@@ -33,6 +33,7 @@
 
 #include "Notification.h"
 #include "NotificationContents.h"
+#include "ScriptExecutionContext.h"
 #include "WorkerThread.h"
 #include <wtf/OwnPtr.h>
 #include <wtf/PassRefPtr.h>
@@ -43,13 +44,11 @@
 
 namespace WebCore {
 
-    class ScriptExecutionContext;
-
     class NotificationCenter : public RefCounted<NotificationCenter>, public ActiveDOMObject { 
     public:
         static PassRefPtr<NotificationCenter> create(ScriptExecutionContext* context, NotificationPresenter* presenter) { return adoptRef(new NotificationCenter(context, presenter)); }
 
-        Notification* createHTMLNotification(const String& URI, ExceptionCode& ec)
+        PassRefPtr<Notification> createHTMLNotification(const String& URI, ExceptionCode& ec)
         {
             if (!presenter()) {
                 ec = INVALID_STATE_ERR;
@@ -59,17 +58,17 @@ namespace WebCore {
                 ec = SYNTAX_ERR;
                 return 0;
             }
-            return Notification::create(m_scriptExecutionContext->completeURL(URI), context(), ec, presenter());
+            return Notification::create(m_scriptExecutionContext->completeURL(URI), context(), ec, this);
         }
 
-        Notification* createNotification(const String& iconURI, const String& title, const String& body, ExceptionCode& ec)
+        PassRefPtr<Notification> createNotification(const String& iconURI, const String& title, const String& body, ExceptionCode& ec)
         {
             if (!presenter()) {
                 ec = INVALID_STATE_ERR;
                 return 0;
             }
             NotificationContents contents(iconURI.isEmpty() ? KURL() : m_scriptExecutionContext->completeURL(iconURI), title, body);
-            return Notification::create(contents, context(), ec, presenter());
+            return Notification::create(contents, context(), ec, this);
         }
 
         ScriptExecutionContext* context() const { return m_scriptExecutionContext; }
@@ -78,7 +77,7 @@ namespace WebCore {
         int checkPermission();
         void requestPermission(PassRefPtr<VoidCallback> callback);
 
-        void disconnectFrame() { m_notificationPresenter = 0; }
+        void disconnectFrame();
 
     private:
         NotificationCenter(ScriptExecutionContext*, NotificationPresenter*);

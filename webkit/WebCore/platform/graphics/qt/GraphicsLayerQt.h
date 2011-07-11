@@ -20,6 +20,9 @@
 #ifndef GraphicsLayerQt_h
 #define GraphicsLayerQt_h
 
+#if ENABLE(3D_CANVAS)
+#include "GraphicsContext3D.h"
+#endif
 #include "GraphicsLayer.h"
 #include "GraphicsLayerClient.h"
 
@@ -83,6 +86,7 @@ public:
     virtual void distributeOpacity(float);
     virtual float accumulatedOpacity() const;
     virtual void syncCompositingState();
+    virtual void syncCompositingStateForThisLayerOnly();
 
 private:
     OwnPtr<GraphicsLayerQtImpl> m_impl;

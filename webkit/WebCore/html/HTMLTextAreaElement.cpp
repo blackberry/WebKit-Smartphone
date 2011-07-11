@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004, 2005, 2006, 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2005, 2006, 2007, 2008, 2010 Apple Inc. All rights reserved.
  *           (C) 2006 Alexey Proskuryakov (ap@nypop.com)
  * Copyright (C) 2007 Samuel Weinig (sam@webkit.org)
  *
@@ -75,6 +75,11 @@ HTMLTextAreaElement::HTMLTextAreaElement(const QualifiedName& tagName, Document*
 {
     ASSERT(hasTagName(textareaTag));
     setFormControlValueMatchesRenderer(true);
+}
+
+PassRefPtr<HTMLTextAreaElement> HTMLTextAreaElement::create(const QualifiedName& tagName, Document* document, HTMLFormElement* form)
+{
+    return adoptRef(new HTMLTextAreaElement(tagName, document, form));
 }
 
 const AtomicString& HTMLTextAreaElement::formControlType() const
@@ -217,7 +222,7 @@ void HTMLTextAreaElement::updateFocusAppearance(bool restorePreviousSelection)
     }
 
     if (document()->frame())
-        document()->frame()->revealSelection();
+        document()->frame()->selection()->revealSelection();
 }
 
 void HTMLTextAreaElement::defaultEventHandler(Event* event)
@@ -377,31 +382,26 @@ void HTMLTextAreaElement::setMaxLength(int newValue, ExceptionCode& ec)
         setAttribute(maxlengthAttr, String::number(newValue));
 }
 
-bool HTMLTextAreaElement::tooLong() const
+bool HTMLTextAreaElement::tooLong(const String& value, NeedsToCheckDirtyFlag check) const
 {
     // Return false for the default value even if it is longer than maxLength.
-    if (!m_isDirty)
+    if (check == CheckDirtyFlag && !m_isDirty)
         return false;
 
     int max = maxLength();
     if (max < 0)
         return false;
-    return numGraphemeClusters(value()) > static_cast<unsigned>(max);
+    return numGraphemeClusters(value) > static_cast<unsigned>(max);
+}
+
+bool HTMLTextAreaElement::isValidValue(const String& candidate) const
+{
+    return !valueMissing(candidate) && !tooLong(candidate, IgnoreDirtyFlag);
 }
 
 void HTMLTextAreaElement::accessKeyAction(bool)
 {
     focus();
-}
-
-const AtomicString& HTMLTextAreaElement::accessKey() const
-{
-    return getAttribute(accesskeyAttr);
-}
-
-void HTMLTextAreaElement::setAccessKey(const String& value)
-{
-    setAttribute(accesskeyAttr, value);
 }
 
 void HTMLTextAreaElement::setCols(int cols)

@@ -40,6 +40,13 @@ namespace WebCore {
 class KeyframeList;
 class RenderLayerCompositor;
 
+enum CompositingLayerType {
+    NormalCompositingLayer, // non-tiled layer with backing store
+    TiledCompositingLayer, // tiled layer (always has backing store)
+    MediaCompositingLayer, // layer that contains an image, video, webGL or plugin
+    ContainerCompositingLayer // layer with no backing store
+};
+
 // RenderLayerBacking controls the compositing behavior for a single RenderLayer.
 // It holds the various GraphicsLayers, and makes decisions about intra-layer rendering
 // optimizations.
@@ -110,6 +117,8 @@ public:
     IntRect compositedBounds() const;
     void setCompositedBounds(const IntRect&);
     void updateCompositedBounds();
+    
+    void updateAfterWidgetResize();
 
     FloatPoint graphicsLayerToContentsCoordinates(const GraphicsLayer*, const FloatPoint&);
     FloatPoint contentsToGraphicsLayerCoordinates(const GraphicsLayer*, const FloatPoint&);
@@ -124,6 +133,9 @@ public:
     virtual bool showRepaintCounter() const;
 
     IntRect contentsBox() const;
+    
+    // For informative purposes only.
+    CompositingLayerType compositingLayerType() const;
     
 private:
     void createGraphicsLayer();
@@ -161,7 +173,7 @@ private:
     bool rendererHasBackground() const;
     const Color rendererBackgroundColor() const;
 
-    bool hasNonCompositingContent() const;
+    bool hasNonCompositingDescendants() const;
     
     void paintIntoLayer(RenderLayer* rootLayer, GraphicsContext*, const IntRect& paintDirtyRect,
                     PaintBehavior paintBehavior, GraphicsLayerPaintingPhase, RenderObject* paintingRoot);

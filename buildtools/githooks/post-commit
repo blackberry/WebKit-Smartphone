@@ -1,8 +1,0 @@
-#!/bin/sh -e
-#
-# Copyright (C) Research In Motion Limited 2010. All rights reserved.
-#
-
-for check in `ls -1 $GIT_DIR/hooks/post-commit-* 2>/dev/null` ; do
-    $check
-done

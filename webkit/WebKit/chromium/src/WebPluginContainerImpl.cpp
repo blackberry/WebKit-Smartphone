@@ -33,14 +33,18 @@
 
 #include "Chrome.h"
 #include "ChromeClientImpl.h"
+#include "WebClipboard.h"
 #include "WebCursorInfo.h"
 #include "WebDataSourceImpl.h"
 #include "WebElement.h"
 #include "WebInputEvent.h"
 #include "WebInputEventConversion.h"
 #include "WebKit.h"
+#include "WebKitClient.h"
 #include "WebPlugin.h"
 #include "WebRect.h"
+#include "WebString.h"
+#include "WebURL.h"
 #include "WebURLError.h"
 #include "WebURLRequest.h"
 #include "WebVector.h"
@@ -57,9 +61,11 @@
 #include "HTMLFormElement.h"
 #include "HTMLNames.h"
 #include "HTMLPlugInElement.h"
+#include "KeyboardCodes.h"
 #include "KeyboardEvent.h"
 #include "MouseEvent.h"
 #include "Page.h"
+#include "RenderBox.h"
 #include "ScrollView.h"
 #include "WheelEvent.h"
 
@@ -166,6 +172,11 @@ void WebPluginContainerImpl::handleEvent(Event* event)
         handleWheelEvent(static_cast<WheelEvent*>(event));
     else if (event->isKeyboardEvent())
         handleKeyboardEvent(static_cast<KeyboardEvent*>(event));
+
+    // FIXME: it would be cleaner if Widget::handleEvent returned true/false and
+    // HTMLPluginElement called setDefaultHandled or defaultEventHandler.
+    if (!event->defaultHandled())
+        m_element->Node::defaultEventHandler(event);
 }
 
 void WebPluginContainerImpl::frameRectsChanged()
@@ -238,6 +249,14 @@ bool WebPluginContainerImpl::printPage(int pageNumber,
 void WebPluginContainerImpl::printEnd()
 {
     return m_webPlugin->printEnd();
+}
+
+void WebPluginContainerImpl::copy()
+{
+    if (!plugin()->hasSelection())
+        return;
+
+    webKitClient()->clipboard()->writeHTML(plugin()->selectionAsMarkup(), WebURL(), plugin()->selectionAsText(), false);
 }
 
 WebElement WebPluginContainerImpl::element()
@@ -384,7 +403,7 @@ void WebPluginContainerImpl::handleMouseEvent(MouseEvent* event)
     // in the call to HandleEvent. See http://b/issue?id=1362948
     FrameView* parentView = static_cast<FrameView*>(parent());
 
-    WebMouseEventBuilder webEvent(parentView, *event);
+    WebMouseEventBuilder webEvent(this, *event);
     if (webEvent.type == WebInputEvent::Undefined)
         return;
 
@@ -414,8 +433,7 @@ void WebPluginContainerImpl::handleMouseEvent(MouseEvent* event)
 
 void WebPluginContainerImpl::handleWheelEvent(WheelEvent* event)
 {
-    FrameView* parentView = static_cast<FrameView*>(parent());
-    WebMouseWheelEventBuilder webEvent(parentView, *event);
+    WebMouseWheelEventBuilder webEvent(this, *event);
     if (webEvent.type == WebInputEvent::Undefined)
         return;
 
@@ -429,6 +447,19 @@ void WebPluginContainerImpl::handleKeyboardEvent(KeyboardEvent* event)
     WebKeyboardEventBuilder webEvent(*event);
     if (webEvent.type == WebInputEvent::Undefined)
         return;
+
+    if (webEvent.type == WebInputEvent::KeyDown) {
+#if defined(OS_MACOSX)
+        if (webEvent.modifiers == WebInputEvent::MetaKey
+#else
+        if (webEvent.modifiers == WebInputEvent::ControlKey
+#endif
+            && webEvent.windowsKeyCode == VKEY_C) {
+            copy();
+            event->setDefaultHandled();
+            return;
+        }
+    }
 
     WebCursorInfo cursorInfo;
     if (m_webPlugin->handleInputEvent(webEvent, cursorInfo))

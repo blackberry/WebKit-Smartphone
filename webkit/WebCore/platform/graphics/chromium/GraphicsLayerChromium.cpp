@@ -45,12 +45,17 @@
 
 #include "GraphicsLayerChromium.h"
 
+#include "Canvas2DLayerChromium.h"
+#include "ContentLayerChromium.h"
+#include "DrawingBuffer.h"
 #include "FloatConversion.h"
 #include "FloatRect.h"
 #include "Image.h"
+#include "ImageLayerChromium.h"
 #include "LayerChromium.h"
 #include "PlatformString.h"
 #include "SystemTime.h"
+
 #include <wtf/CurrentTime.h>
 #include <wtf/StringExtras.h>
 #include <wtf/text/CString.h>
@@ -66,7 +71,7 @@ static void setLayerBorderColor(LayerChromium& layer, const Color& color)
 
 static void clearBorderColor(LayerChromium& layer)
 {
-    layer.setBorderColor(0);
+    layer.setBorderColor(static_cast<RGBA32>(0));
 }
 
 static void setLayerBackgroundColor(LayerChromium& layer, const Color& color)
@@ -76,7 +81,7 @@ static void setLayerBackgroundColor(LayerChromium& layer, const Color& color)
 
 static void clearLayerBackgroundColor(LayerChromium& layer)
 {
-    layer.setBackgroundColor(0);
+    layer.setBackgroundColor(static_cast<RGBA32>(0));
 }
 
 GraphicsLayer::CompositingCoordinatesOrientation GraphicsLayer::compositingCoordinatesOrientation()
@@ -94,13 +99,19 @@ GraphicsLayerChromium::GraphicsLayerChromium(GraphicsLayerClient* client)
     , m_contentsLayerPurpose(NoContentsLayer)
     , m_contentsLayerHasBackgroundColor(false)
 {
-    m_layer = LayerChromium::create(LayerChromium::Layer, this);
+    m_layer = ContentLayerChromium::create(this);
 
     updateDebugIndicators();
 }
 
 GraphicsLayerChromium::~GraphicsLayerChromium()
 {
+    if (m_layer)
+        m_layer->setOwner(0);
+    if (m_contentsLayer)
+        m_contentsLayer->setOwner(0);
+    if (m_transformLayer)
+        m_transformLayer->setOwner(0);
 }
 
 void GraphicsLayerChromium::setName(const String& inName)
@@ -282,6 +293,12 @@ void GraphicsLayerChromium::setOpacity(float opacity)
     primaryLayer()->setOpacity(opacity);
 }
 
+void GraphicsLayerChromium::setContentsNeedsDisplay()
+{
+    if (m_contentsLayer)
+        m_contentsLayer->setNeedsDisplay();
+}
+
 void GraphicsLayerChromium::setNeedsDisplay()
 {
     if (drawsContent())
@@ -307,26 +324,80 @@ void GraphicsLayerChromium::setContentsToImage(Image* image)
 {
     bool childrenChanged = false;
     if (image) {
-        m_pendingContentsImage = image->nativeImageForCurrentFrame();
-        m_contentsLayerPurpose = ContentsLayerForImage;
-        if (!m_contentsLayer)
+        NativeImagePtr nativeImage = image->nativeImageForCurrentFrame();
+        if (!m_contentsLayer.get() || m_contentsLayerPurpose != ContentsLayerForImage) {
+            RefPtr<ImageLayerChromium> imageLayer = ImageLayerChromium::create(this);
+            setupContentsLayer(imageLayer.get());
+            m_contentsLayer = imageLayer;
+            m_contentsLayerPurpose = ContentsLayerForImage;
             childrenChanged = true;
+        }
+        ImageLayerChromium* imageLayer = static_cast<ImageLayerChromium*>(m_contentsLayer.get());
+        imageLayer->setContents(nativeImage);
+        updateContentsRect();
     } else {
-        m_pendingContentsImage = 0;
-        m_contentsLayerPurpose = NoContentsLayer;
-        if (m_contentsLayer)
+        if (m_contentsLayer) {
             childrenChanged = true;
-    }
 
-    updateContentsImage();
+            // The old contents layer will be removed via updateSublayerList.
+            m_contentsLayer = 0;
+        }
+    }
 
     if (childrenChanged)
         updateSublayerList();
 }
 
-void GraphicsLayerChromium::setContentsToVideo(PlatformLayer* videoLayer)
+void GraphicsLayerChromium::setContentsToCanvas(PlatformLayer* platformLayer)
 {
-    // FIXME: Implement
+    bool childrenChanged = false;
+    if (platformLayer) {
+        platformLayer->setOwner(this);
+        if (m_contentsLayer.get() != platformLayer) {
+            setupContentsLayer(platformLayer);
+            m_contentsLayer = platformLayer;
+            m_contentsLayerPurpose = ContentsLayerForCanvas;
+            childrenChanged = true;
+        }
+        m_contentsLayer->setNeedsDisplay();
+        updateContentsRect();
+    } else {
+        if (m_contentsLayer) {
+            childrenChanged = true;
+
+            // The old contents layer will be removed via updateSublayerList.
+            m_contentsLayer = 0;
+        }
+    }
+
+    if (childrenChanged)
+        updateSublayerList();
+}
+
+void GraphicsLayerChromium::setContentsToMedia(PlatformLayer* layer)
+{
+    bool childrenChanged = false;
+    if (layer) {
+        if (!m_contentsLayer.get() || m_contentsLayerPurpose != ContentsLayerForVideo) {
+            setupContentsLayer(layer);
+            m_contentsLayer = layer;
+            m_contentsLayerPurpose = ContentsLayerForVideo;
+            childrenChanged = true;
+        }
+        layer->setOwner(this);
+        layer->setNeedsDisplay();
+        updateContentsRect();
+    } else {
+        if (m_contentsLayer) {
+            childrenChanged = true;
+  
+            // The old contents layer will be removed via updateSublayerList.
+            m_contentsLayer = 0;
+        }
+    }
+  
+    if (childrenChanged)
+        updateSublayerList();
 }
 
 void GraphicsLayerChromium::setGeometryOrientation(CompositingCoordinatesOrientation orientation)
@@ -474,7 +545,50 @@ void GraphicsLayerChromium::updateBackfaceVisibility()
 
 void GraphicsLayerChromium::updateLayerPreserves3D()
 {
-    // FIXME: implement
+    if (m_preserves3D && !m_transformLayer) {
+        // Create the transform layer.
+        m_transformLayer = LayerChromium::create(this);
+
+        // Copy the position from this layer.
+        updateLayerPosition();
+        updateLayerSize();
+        updateAnchorPoint();
+        updateTransform();
+        updateChildrenTransform();
+
+        m_layer->setPosition(FloatPoint(m_size.width() / 2.0f, m_size.height() / 2.0f));
+
+        m_layer->setAnchorPoint(FloatPoint(0.5f, 0.5f));
+        TransformationMatrix identity;
+        m_layer->setTransform(identity);
+        
+        // Set the old layer to opacity of 1. Further down we will set the opacity on the transform layer.
+        m_layer->setOpacity(1);
+
+        // Move this layer to be a child of the transform layer.
+        if (m_layer->superlayer())
+            m_layer->superlayer()->replaceSublayer(m_layer.get(), m_transformLayer.get());
+        m_transformLayer->addSublayer(m_layer.get());
+
+        updateSublayerList();
+    } else if (!m_preserves3D && m_transformLayer) {
+        // Relace the transformLayer in the parent with this layer.
+        m_layer->removeFromSuperlayer();
+        m_transformLayer->superlayer()->replaceSublayer(m_transformLayer.get(), m_layer.get());
+
+        // Release the transform layer.
+        m_transformLayer = 0;
+
+        updateLayerPosition();
+        updateLayerSize();
+        updateAnchorPoint();
+        updateTransform();
+        updateChildrenTransform();
+
+        updateSublayerList();
+    }
+
+    updateOpacityOnLayer();
 }
 
 void GraphicsLayerChromium::updateLayerDrawsContent()
@@ -497,26 +611,6 @@ void GraphicsLayerChromium::updateLayerBackgroundColor()
         clearLayerBackgroundColor(*m_contentsLayer);
 }
 
-void GraphicsLayerChromium::updateContentsImage()
-{
-    if (m_pendingContentsImage) {
-        if (!m_contentsLayer.get()) {
-            RefPtr<LayerChromium> imageLayer = LayerChromium::create(LayerChromium::Layer, this);
-
-            setupContentsLayer(imageLayer.get());
-            m_contentsLayer = imageLayer;
-            // m_contentsLayer will be parented by updateSublayerList.
-        }
-        m_contentsLayer->setContents(m_pendingContentsImage);
-        m_pendingContentsImage = 0;
-
-        updateContentsRect();
-    } else {
-        // No image. m_contentsLayer will be removed via updateSublayerList.
-        m_contentsLayer = 0;
-    }
-}
-
 void GraphicsLayerChromium::updateContentsVideo()
 {
     // FIXME: Implement
@@ -527,8 +621,7 @@ void GraphicsLayerChromium::updateContentsRect()
     if (!m_contentsLayer)
         return;
 
-    // The position of the layer is the center of quad.
-    m_contentsLayer->setPosition(FloatPoint(m_contentsRect.x() + m_contentsRect.width() / 2, m_contentsRect.y() + m_contentsRect.height() / 2));
+    m_contentsLayer->setPosition(FloatPoint(m_contentsRect.x(), m_contentsRect.y()));
     m_contentsLayer->setBounds(IntSize(m_contentsRect.width(), m_contentsRect.height()));
 }
 

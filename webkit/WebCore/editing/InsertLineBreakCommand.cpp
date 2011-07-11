@@ -90,10 +90,15 @@ void InsertLineBreakCommand::doApply()
 {
     deleteSelection();
     VisibleSelection selection = endingSelection();
-    if (selection.isNone())
+    if (!selection.isNonOrphanedCaretOrRange())
         return;
     
     VisiblePosition caret(selection.visibleStart());
+    // FIXME: If the node is hidden, we should still be able to insert text. 
+    // For now, we return to avoid a crash.  https://bugs.webkit.org/show_bug.cgi?id=40342
+    if (caret.isNull())
+        return;
+
     Position pos(caret.deepEquivalent());
 
     pos = positionAvoidingSpecialElementBoundary(pos);
@@ -160,7 +165,7 @@ void InsertLineBreakCommand::doApply()
 
     // Handle the case where there is a typing style.
     
-    CSSMutableStyleDeclaration* typingStyle = document()->frame()->typingStyle();
+    CSSMutableStyleDeclaration* typingStyle = document()->frame()->selection()->typingStyle();
     
     if (typingStyle && typingStyle->length() > 0) {
         // Apply the typing style to the inserted line break, so that if the selection

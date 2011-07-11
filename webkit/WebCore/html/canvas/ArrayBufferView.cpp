@@ -28,6 +28,7 @@
 #if ENABLE(3D_CANVAS)
 
 #include "ArrayBufferView.h"
+
 #include "ArrayBuffer.h"
 
 namespace WebCore {
@@ -46,9 +47,9 @@ ArrayBufferView::~ArrayBufferView()
 
 void ArrayBufferView::setImpl(ArrayBufferView* array, unsigned byteOffset, ExceptionCode& ec)
 {
-    if (byteOffset > byteLength() ||
-        byteOffset + array->byteLength() > byteLength() ||
-        byteOffset + array->byteLength() < byteOffset) {
+    if (byteOffset > byteLength()
+        || byteOffset + array->byteLength() > byteLength()
+        || byteOffset + array->byteLength() < byteOffset) {
         // Out of range offset or overflow
         ec = INDEX_SIZE_ERR;
         return;
@@ -56,6 +57,34 @@ void ArrayBufferView::setImpl(ArrayBufferView* array, unsigned byteOffset, Excep
 
     char* base = static_cast<char*>(baseAddress());
     memmove(base + byteOffset, array->baseAddress(), array->byteLength());
+}
+
+void ArrayBufferView::setRangeImpl(const char* data, size_t dataByteLength, unsigned byteOffset, ExceptionCode& ec)
+{
+    if (byteOffset > byteLength()
+        || byteOffset + dataByteLength > byteLength()
+        || byteOffset + dataByteLength < byteOffset) {
+        // Out of range offset or overflow
+        ec = INDEX_SIZE_ERR;
+        return;
+    }
+
+    char* base = static_cast<char*>(baseAddress());
+    memmove(base + byteOffset, data, dataByteLength);
+}
+
+void ArrayBufferView::zeroRangeImpl(unsigned byteOffset, size_t rangeByteLength, ExceptionCode& ec)
+{
+    if (byteOffset > byteLength()
+        || byteOffset + rangeByteLength > byteLength()
+        || byteOffset + rangeByteLength < byteOffset) {
+        // Out of range offset or overflow
+        ec = INDEX_SIZE_ERR;
+        return;
+    }
+
+    char* base = static_cast<char*>(baseAddress());
+    memset(base + byteOffset, 0, rangeByteLength);
 }
 
 void ArrayBufferView::calculateOffsetAndLength(int start, int end, unsigned arraySize,

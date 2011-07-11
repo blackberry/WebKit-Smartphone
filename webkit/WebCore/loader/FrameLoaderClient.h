@@ -53,6 +53,7 @@ namespace WebCore {
     class FormState;
     class Frame;
     class FrameLoader;
+    class FrameNetworkingContext;
     class Geolocation;
     class HistoryItem;
     class HTMLAppletElement;
@@ -77,7 +78,6 @@ namespace WebCore {
     class SecurityOrigin;
     class SharedBuffer;
     class SubstituteData;
-    class String;
     class Widget;
 
     typedef void (PolicyChecker::*FramePolicyFunction)(PolicyAction);
@@ -206,6 +206,7 @@ namespace WebCore {
 
         virtual bool canHandleRequest(const ResourceRequest&) const = 0;
         virtual bool canShowMIMEType(const String& MIMEType) const = 0;
+        virtual bool canShowMIMETypeAsHTML(const String& MIMEType) const = 0;
         virtual bool representationExistsForURLScheme(const String& URLScheme) const = 0;
         virtual String generatedMIMETypeForURLScheme(const String& URLScheme) const = 0;
 
@@ -239,6 +240,8 @@ namespace WebCore {
         virtual void dispatchDidFailToStartPlugin(const PluginView*) const { }
 #if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
         virtual PassRefPtr<Widget> createMediaPlayerProxyPlugin(const IntSize&, HTMLMediaElement*, const KURL&, const Vector<String>&, const Vector<String>&, const String&) = 0;
+        virtual void hideMediaPlayerProxyPlugin(Widget*) = 0;
+        virtual void showMediaPlayerProxyPlugin(Widget*) = 0;
 #endif
 
         virtual ObjectContentType objectContentType(const KURL& url, const String& mimeType) = 0;
@@ -284,6 +287,7 @@ namespace WebCore {
         // This callback is similar, but for plugins.
         virtual void didNotAllowPlugins() { }
 
+        virtual PassRefPtr<FrameNetworkingContext> createNetworkingContext() = 0;
 #if PLATFORM(OLYMPIA)
         virtual void willDeferLoading() { }
         virtual void didResumeLoading() { }

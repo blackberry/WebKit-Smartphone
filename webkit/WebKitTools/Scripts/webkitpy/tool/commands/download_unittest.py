@@ -32,7 +32,7 @@ from webkitpy.common.system.outputcapture import OutputCapture
 from webkitpy.thirdparty.mock import Mock
 from webkitpy.tool.commands.commandtest import CommandsTest
 from webkitpy.tool.commands.download import *
-from webkitpy.tool.mocktool import MockTool
+from webkitpy.tool.mocktool import MockOptions, MockTool
 
 
 class AbstractRolloutPrepCommandTest(unittest.TestCase):
@@ -56,7 +56,7 @@ class AbstractRolloutPrepCommandTest(unittest.TestCase):
 
 class DownloadCommandsTest(CommandsTest):
     def _default_options(self):
-        options = Mock()
+        options = MockOptions()
         options.force_clean = False
         options.clean = True
         options.check_builders = True
@@ -100,6 +100,12 @@ class DownloadCommandsTest(CommandsTest):
         self.assertEqual(mock_tool.scm().create_patch.call_count, 0)
         self.assertEqual(mock_tool.checkout().modified_changelogs.call_count, 1)
 
+    def test_land_red_builders(self):
+        expected_stderr = '\nWARNING: Builders ["Builder2"] are red, please watch your commit carefully.\nSee http://dummy_buildbot_host/console?category=core\n\nBuilding WebKit\nRunning Python unit tests\nRunning Perl unit tests\nRunning JavaScriptCore tests\nRunning run-webkit-tests\nUpdating bug 42\n'
+        mock_tool = MockTool()
+        mock_tool.buildbot.light_tree_on_fire()
+        self.assert_execute_outputs(Land(), [42], options=self._default_options(), expected_stderr=expected_stderr, tool=mock_tool)
+
     def test_check_style(self):
         expected_stderr = "Processing 1 patch from 1 bug.\nUpdating working directory\nProcessing patch 197 from bug 42.\nRunning check-webkit-style\n"
         self.assert_execute_outputs(CheckStyle(), [197], options=self._default_options(), expected_stderr=expected_stderr)
@@ -107,6 +113,10 @@ class DownloadCommandsTest(CommandsTest):
     def test_build_attachment(self):
         expected_stderr = "Processing 1 patch from 1 bug.\nUpdating working directory\nProcessing patch 197 from bug 42.\nBuilding WebKit\n"
         self.assert_execute_outputs(BuildAttachment(), [197], options=self._default_options(), expected_stderr=expected_stderr)
+
+    def test_post_attachment_to_rietveld(self):
+        expected_stderr = "Processing 1 patch from 1 bug.\nUpdating working directory\nProcessing patch 197 from bug 42.\nMOCK: Uploading patch to rietveld\nMOCK setting flag 'in-rietveld' to '+' on attachment '197' with comment 'None' and additional comment 'None'\n"
+        self.assert_execute_outputs(PostAttachmentToRietveld(), [197], options=self._default_options(), expected_stderr=expected_stderr)
 
     def test_land_attachment(self):
         # FIXME: This expected result is imperfect, notice how it's seeing the same patch as still there after it thought it would have cleared the flags.

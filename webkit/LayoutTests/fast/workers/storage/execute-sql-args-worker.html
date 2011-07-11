@@ -1,23 +1,12 @@
 <html>
 <head>
 <script src="resources/database-worker-controller.js"></script>
-<script>
-
-function setupAndRunTest()
-{
-    if (window.layoutTestController) {
-        layoutTestController.dumpAsText();
-        layoutTestController.waitUntilDone();
-    }
-    databaseWorker.postMessage("importScripts:../../../storage/execute-sql-args.js");
-    databaseWorker.postMessage("runTest");
-}
-
-</script>
 </head>
 
-<body onload="setupAndRunTest()">
-<pre id="console"></pre>
+<body onload="runTest('execute-sql-args.js')">
+<pre id="console"> 
+FAILURE: test didn't run.
+</pre> 
 </body>
 
 </html>

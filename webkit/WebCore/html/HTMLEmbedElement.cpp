@@ -42,16 +42,15 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-inline HTMLEmbedElement::HTMLEmbedElement(const QualifiedName& tagName, Document* document)
-    : HTMLPlugInImageElement(tagName, document)
-    , m_needWidgetUpdate(false)
+inline HTMLEmbedElement::HTMLEmbedElement(const QualifiedName& tagName, Document* document, bool createdByParser)
+    : HTMLPlugInImageElement(tagName, document, createdByParser)
 {
     ASSERT(hasTagName(embedTag));
 }
 
-PassRefPtr<HTMLEmbedElement> HTMLEmbedElement::create(const QualifiedName& tagName, Document* document)
+PassRefPtr<HTMLEmbedElement> HTMLEmbedElement::create(const QualifiedName& tagName, Document* document, bool createdByParser)
 {
-    return adoptRef(new HTMLEmbedElement(tagName, document));
+    return adoptRef(new HTMLEmbedElement(tagName, document, createdByParser));
 }
 
 static inline RenderWidget* findWidgetRenderer(const Node* n) 
@@ -80,7 +79,7 @@ bool HTMLEmbedElement::mapToEntry(const QualifiedName& attrName, MappedAttribute
         return false;
     }
         
-    return HTMLPlugInElement::mapToEntry(attrName, result);
+    return HTMLPlugInImageElement::mapToEntry(attrName, result);
 }
 
 void HTMLEmbedElement::parseMappedAttribute(Attribute* attr)
@@ -89,8 +88,8 @@ void HTMLEmbedElement::parseMappedAttribute(Attribute* attr)
   
     if (attr->name() == typeAttr) {
         m_serviceType = value.string().lower();
-        int pos = m_serviceType.find(";");
-        if (pos != -1)
+        size_t pos = m_serviceType.find(";");
+        if (pos != notFound)
             m_serviceType = m_serviceType.left(pos);
         if (!isImageType() && m_imageLoader)
             m_imageLoader.clear();
@@ -100,7 +99,7 @@ void HTMLEmbedElement::parseMappedAttribute(Attribute* attr)
         m_url = deprecatedParseURL(value.string());
         if (renderer() && isImageType()) {
             if (!m_imageLoader)
-                m_imageLoader.set(new HTMLImageLoader(this));
+                m_imageLoader = adoptPtr(new HTMLImageLoader(this));
             m_imageLoader->updateFromElementIgnoringPreviousError();
         }
     } else if (attr->name() == hiddenAttr) {
@@ -118,22 +117,73 @@ void HTMLEmbedElement::parseMappedAttribute(Attribute* attr)
         }
         m_name = value;
     } else
-        HTMLPlugInElement::parseMappedAttribute(attr);
+        HTMLPlugInImageElement::parseMappedAttribute(attr);
+}
+
+void HTMLEmbedElement::parametersForPlugin(Vector<String>& paramNames, Vector<String>& paramValues)
+{
+    NamedNodeMap* attributes = this->attributes(true);
+    if (!attributes)
+        return;
+
+    for (unsigned i = 0; i < attributes->length(); ++i) {
+        Attribute* it = attributes->attributeItem(i);
+        paramNames.append(it->localName().string());
+        paramValues.append(it->value().string());
+    }
+}
+
+// FIXME: This should be unified with HTMLObjectElement::updateWidget and
+// moved down into HTMLPluginImageElement.cpp
+void HTMLEmbedElement::updateWidget(bool onlyCreateNonNetscapePlugins)
+{
+    ASSERT(!renderEmbeddedObject()->pluginCrashedOrWasMissing());
+    // FIXME: We should ASSERT(needsWidgetUpdate()), but currently
+    // FrameView::updateWidget() calls updateWidget(false) without checking if
+    // the widget actually needs updating!
+    setNeedsWidgetUpdate(false);
+
+    if (m_url.isEmpty() && m_serviceType.isEmpty())
+        return;
+
+    // Note these pass m_url and m_serviceType to allow better code sharing with
+    // <object> which modifies url and serviceType before calling these.
+    if (!allowedToLoadFrameURL(m_url))
+        return;
+    if (onlyCreateNonNetscapePlugins && wouldLoadAsNetscapePlugin(m_url, m_serviceType))
+        return;
+
+    // FIXME: These should be joined into a PluginParameters class.
+    Vector<String> paramNames;
+    Vector<String> paramValues;
+    parametersForPlugin(paramNames, paramValues);
+
+    if (!dispatchBeforeLoadEvent(m_url))
+        return;
+
+    SubframeLoader* loader = document()->frame()->loader()->subframeLoader();
+    // FIXME: beforeLoad could have detached the renderer!  Just like in the <object> case above.
+    loader->requestObject(this, m_url, getAttribute(nameAttr), m_serviceType, paramNames, paramValues);
 }
 
 bool HTMLEmbedElement::rendererIsNeeded(RenderStyle* style)
 {
     if (isImageType())
-        return HTMLPlugInElement::rendererIsNeeded(style);
+        return HTMLPlugInImageElement::rendererIsNeeded(style);
 
     Frame* frame = document()->frame();
     if (!frame)
         return false;
 
+    // If my parent is an <object> and is not set to use fallback content, I
+    // should be ignored and not get a renderer.
     Node* p = parentNode();
     if (p && p->hasTagName(objectTag)) {
         ASSERT(p->renderer());
-        return false;
+        if (!static_cast<HTMLObjectElement*>(p)->useFallbackContent()) {
+            ASSERT(!p->renderer()->isEmbeddedObject());
+            return false;
+        }
     }
 
 #if ENABLE(DASHBOARD_SUPPORT)
@@ -144,42 +194,7 @@ bool HTMLEmbedElement::rendererIsNeeded(RenderStyle* style)
     }
 #endif
 
-    return HTMLPlugInElement::rendererIsNeeded(style);
-}
-
-RenderObject* HTMLEmbedElement::createRenderer(RenderArena* arena, RenderStyle*)
-{
-    if (isImageType())
-        return new (arena) RenderImage(this);
-    return new (arena) RenderEmbeddedObject(this);
-}
-
-void HTMLEmbedElement::attach()
-{
-    m_needWidgetUpdate = true;
-
-    bool isImage = isImageType();
-
-    if (!isImage)
-        queuePostAttachCallback(&HTMLPlugInElement::updateWidgetCallback, this);
-
-    HTMLPlugInElement::attach();
-
-    if (isImage && renderer()) {
-        if (!m_imageLoader)
-            m_imageLoader.set(new HTMLImageLoader(this));
-        m_imageLoader->updateFromElement();
-
-        if (renderer())
-            toRenderImage(renderer())->setCachedImage(m_imageLoader->image());
-    }
-}
-
-void HTMLEmbedElement::updateWidget()
-{
-    document()->updateStyleIfNeeded();
-    if (m_needWidgetUpdate && renderer() && !isImageType())
-        toRenderEmbeddedObject(renderer())->updateWidget(true);
+    return HTMLPlugInImageElement::rendererIsNeeded(style);
 }
 
 void HTMLEmbedElement::insertedIntoDocument()
@@ -201,7 +216,7 @@ void HTMLEmbedElement::insertedIntoDocument()
         }
     }
 
-    HTMLPlugInElement::insertedIntoDocument();
+    HTMLPlugInImageElement::insertedIntoDocument();
 }
 
 void HTMLEmbedElement::removedFromDocument()
@@ -209,12 +224,12 @@ void HTMLEmbedElement::removedFromDocument()
     if (document()->isHTMLDocument())
         static_cast<HTMLDocument*>(document())->removeNamedItem(m_name);
 
-    HTMLPlugInElement::removedFromDocument();
+    HTMLPlugInImageElement::removedFromDocument();
 }
 
 void HTMLEmbedElement::attributeChanged(Attribute* attr, bool preserveDecls)
 {
-    HTMLPlugInElement::attributeChanged(attr, preserveDecls);
+    HTMLPlugInImageElement::attributeChanged(attr, preserveDecls);
 
     if ((attr->name() == widthAttr || attr->name() == heightAttr) && !attr->isEmpty()) {
         Node* n = parent();

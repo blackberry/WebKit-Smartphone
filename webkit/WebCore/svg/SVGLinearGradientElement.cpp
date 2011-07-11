@@ -1,25 +1,25 @@
 /*
-    Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-                  2008 Eric Seidel <eric@webkit.org>
-                  2008 Dirk Schulze <krit@webkit.org>
-    Copyright (C) Research In Motion Limited 2010. All rights reserved.
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ * Copyright (C) 2008 Eric Seidel <eric@webkit.org>
+ * Copyright (C) 2008 Dirk Schulze <krit@webkit.org>
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -39,8 +39,8 @@
 
 namespace WebCore {
 
-SVGLinearGradientElement::SVGLinearGradientElement(const QualifiedName& tagName, Document* doc)
-    : SVGGradientElement(tagName, doc)
+inline SVGLinearGradientElement::SVGLinearGradientElement(const QualifiedName& tagName, Document* document)
+    : SVGGradientElement(tagName, document)
     , m_x1(LengthModeWidth)
     , m_y1(LengthModeHeight)
     , m_x2(LengthModeWidth, "100%")
@@ -49,8 +49,9 @@ SVGLinearGradientElement::SVGLinearGradientElement(const QualifiedName& tagName,
     // Spec: If the x2 attribute is not specified, the effect is as if a value of "100%" were specified.
 }
 
-SVGLinearGradientElement::~SVGLinearGradientElement()
+PassRefPtr<SVGLinearGradientElement> SVGLinearGradientElement::create(const QualifiedName& tagName, Document* document)
 {
+    return adoptRef(new SVGLinearGradientElement(tagName, document));
 }
 
 void SVGLinearGradientElement::parseMappedAttribute(Attribute* attr)
@@ -74,8 +75,15 @@ void SVGLinearGradientElement::svgAttributeChanged(const QualifiedName& attrName
     if (attrName == SVGNames::x1Attr
         || attrName == SVGNames::y1Attr
         || attrName == SVGNames::x2Attr
-        || attrName == SVGNames::y2Attr)
-        invalidateResourceClients();
+        || attrName == SVGNames::y2Attr) {
+        updateRelativeLengthsInformation();
+
+        RenderObject* object = renderer();
+        if (!object)
+            return;
+
+        object->setNeedsLayout(true);
+    }
 }
 
 void SVGLinearGradientElement::synchronizeProperty(const QualifiedName& attrName)
@@ -153,8 +161,10 @@ LinearGradientAttributes SVGLinearGradientElement::collectGradientProperties()
             current = static_cast<SVGGradientElement*>(refNode);
 
             // Cycle detection
-            if (processedGradients.contains(current))
-                return LinearGradientAttributes();
+            if (processedGradients.contains(current)) {
+                current = 0;
+                break;
+            }
 
             isLinear = current->hasTagName(SVGNames::linearGradientTag);
         } else
@@ -174,6 +184,14 @@ void SVGLinearGradientElement::calculateStartEndPoints(const LinearGradientAttri
         startPoint = FloatPoint(attributes.x1().value(this), attributes.y1().value(this));
         endPoint = FloatPoint(attributes.x2().value(this), attributes.y2().value(this));
     }
+}
+
+bool SVGLinearGradientElement::selfHasRelativeLengths() const
+{
+    return x1().isRelative()
+        || y1().isRelative()
+        || x2().isRelative()
+        || y2().isRelative();
 }
 
 }

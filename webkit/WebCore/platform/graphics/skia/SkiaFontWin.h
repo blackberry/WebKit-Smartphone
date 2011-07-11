@@ -28,18 +28,19 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef SkiaWinOutlineCache_h
-#define SkiaWinOutlineCache_h
+#ifndef SkiaFontWin_h
+#define SkiaFontWin_h
 
 #include <windows.h>
 #include <usp10.h>
 
-class GraphicsContext;
 class SkPath;
 class SkPoint;
-class PlatformContextSkia;
 
 namespace WebCore {
+
+class GraphicsContext;
+class PlatformContextSkia;
 
 // FIXME: Rename file to SkiaWinOutlineCache
 class SkiaWinOutlineCache {
@@ -90,4 +91,4 @@ bool paintSkiaText(GraphicsContext* graphicsContext,
 
 }  // namespace WebCore
 
-#endif  // SkiaWinOutlineCache_h
+#endif  // SkiaFontWin_h

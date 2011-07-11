@@ -152,11 +152,9 @@ void BytecodeGenerator::generate()
 
     if ((m_codeType == FunctionCode && !m_codeBlock->needsFullScopeChain() && !m_codeBlock->usesArguments()) || m_codeType == EvalCode)
         symbolTable().clear();
-        
-    m_codeBlock->setIsNumericCompareFunction(instructions() == m_globalData->numericCompareFunction(m_scopeChain->globalObject()->globalExec()));
 
 #if !ENABLE(OPCODE_SAMPLING)
-    if (!m_regeneratingForExceptionInfo && (m_codeType == FunctionCode || m_codeType == EvalCode))
+    if (!m_regeneratingForExceptionInfo && !m_usesExceptions && (m_codeType == FunctionCode || m_codeType == EvalCode))
         m_codeBlock->clearExceptionInfo();
 #endif
 
@@ -167,7 +165,7 @@ bool BytecodeGenerator::addVar(const Identifier& ident, bool isConstant, Registe
 {
     int index = m_calleeRegisters.size();
     SymbolTableEntry newEntry(index, isConstant ? ReadOnly : 0);
-    pair<SymbolTable::iterator, bool> result = symbolTable().add(ident.ustring().rep(), newEntry);
+    pair<SymbolTable::iterator, bool> result = symbolTable().add(ident.impl(), newEntry);
 
     if (!result.second) {
         r0 = &registerFor(result.first->second.getIndex());
@@ -182,7 +180,7 @@ bool BytecodeGenerator::addGlobalVar(const Identifier& ident, bool isConstant, R
 {
     int index = m_nextGlobalIndex;
     SymbolTableEntry newEntry(index, isConstant ? ReadOnly : 0);
-    pair<SymbolTable::iterator, bool> result = symbolTable().add(ident.ustring().rep(), newEntry);
+    pair<SymbolTable::iterator, bool> result = symbolTable().add(ident.impl(), newEntry);
 
     if (!result.second)
         index = result.first->second.getIndex();
@@ -218,7 +216,11 @@ BytecodeGenerator::BytecodeGenerator(ProgramNode* programNode, const Debugger* d
     , m_globalConstantIndex(0)
     , m_globalData(&scopeChain.globalObject()->globalExec()->globalData())
     , m_lastOpcodeID(op_end)
+#ifndef NDEBUG
+    , m_lastOpcodePosition(0)
+#endif
     , m_emitNodeDepth(0)
+    , m_usesExceptions(false)
     , m_regeneratingForExceptionInfo(false)
     , m_codeBlockBeingRegeneratedFrom(0)
 {
@@ -304,6 +306,7 @@ BytecodeGenerator::BytecodeGenerator(FunctionBodyNode* functionBody, const Debug
     , m_globalData(&scopeChain.globalObject()->globalExec()->globalData())
     , m_lastOpcodeID(op_end)
     , m_emitNodeDepth(0)
+    , m_usesExceptions(false)
     , m_regeneratingForExceptionInfo(false)
     , m_codeBlockBeingRegeneratedFrom(0)
 {
@@ -347,7 +350,7 @@ BytecodeGenerator::BytecodeGenerator(FunctionBodyNode* functionBody, const Debug
     for (size_t i = 0; i < functionStack.size(); ++i) {
         FunctionBodyNode* function = functionStack[i];
         const Identifier& ident = function->ident();
-        m_functions.add(ident.ustring().rep());
+        m_functions.add(ident.impl());
         emitNewFunction(addVar(ident, false), function);
     }
 
@@ -357,16 +360,15 @@ BytecodeGenerator::BytecodeGenerator(FunctionBodyNode* functionBody, const Debug
 
     FunctionParameters& parameters = *functionBody->parameters();
     size_t parameterCount = parameters.size();
-    m_nextParameterIndex = -RegisterFile::CallFrameHeaderSize - parameterCount - 1;
+    int nextParameterIndex = -RegisterFile::CallFrameHeaderSize - parameterCount - 1;
     m_parameters.grow(1 + parameterCount); // reserve space for "this"
 
     // Add "this" as a parameter
-    m_thisRegister.setIndex(m_nextParameterIndex);
-    ++m_nextParameterIndex;
+    m_thisRegister.setIndex(nextParameterIndex);
     ++m_codeBlock->m_numParameters;
     
     for (size_t i = 0; i < parameterCount; ++i)
-        addParameter(parameters[i]);
+        addParameter(parameters[i], ++nextParameterIndex);
 
     preserveLastVar();
 
@@ -406,6 +408,7 @@ BytecodeGenerator::BytecodeGenerator(EvalNode* evalNode, const Debugger* debugge
     , m_globalData(&scopeChain.globalObject()->globalExec()->globalData())
     , m_lastOpcodeID(op_end)
     , m_emitNodeDepth(0)
+    , m_usesExceptions(false)
     , m_regeneratingForExceptionInfo(false)
     , m_codeBlockBeingRegeneratedFrom(0)
 {
@@ -431,23 +434,19 @@ BytecodeGenerator::BytecodeGenerator(EvalNode* evalNode, const Debugger* debugge
     preserveLastVar();
 }
 
-RegisterID* BytecodeGenerator::addParameter(const Identifier& ident)
+void BytecodeGenerator::addParameter(const Identifier& ident, int parameterIndex)
 {
     // Parameters overwrite var declarations, but not function declarations.
-    RegisterID* result = 0;
-    UString::Rep* rep = ident.ustring().rep();
+    StringImpl* rep = ident.impl();
     if (!m_functions.contains(rep)) {
-        symbolTable().set(rep, m_nextParameterIndex);
-        RegisterID& parameter = registerFor(m_nextParameterIndex);
-        parameter.setIndex(m_nextParameterIndex);
-        result = &parameter;
+        symbolTable().set(rep, parameterIndex);
+        RegisterID& parameter = registerFor(parameterIndex);
+        parameter.setIndex(parameterIndex);
     }
 
     // To maintain the calling convention, we have to allocate unique space for
     // each parameter, even if the parameter doesn't make it into the symbol table.
-    ++m_nextParameterIndex;
     ++m_codeBlock->m_numParameters;
-    return result;
 }
 
 RegisterID* BytecodeGenerator::registerFor(const Identifier& ident)
@@ -458,7 +457,7 @@ RegisterID* BytecodeGenerator::registerFor(const Identifier& ident)
     if (!shouldOptimizeLocals())
         return 0;
 
-    SymbolTableEntry entry = symbolTable().get(ident.ustring().rep());
+    SymbolTableEntry entry = symbolTable().get(ident.impl());
     if (entry.isNull())
         return 0;
 
@@ -476,7 +475,7 @@ bool BytecodeGenerator::willResolveToArguments(const Identifier& ident)
     if (!shouldOptimizeLocals())
         return false;
     
-    SymbolTableEntry entry = symbolTable().get(ident.ustring().rep());
+    SymbolTableEntry entry = symbolTable().get(ident.impl());
     if (entry.isNull())
         return false;
     
@@ -490,7 +489,7 @@ RegisterID* BytecodeGenerator::uncheckedRegisterForArguments()
 {
     ASSERT(willResolveToArguments(propertyNames().arguments));
 
-    SymbolTableEntry entry = symbolTable().get(propertyNames().arguments.ustring().rep());
+    SymbolTableEntry entry = symbolTable().get(propertyNames().arguments.impl());
     ASSERT(!entry.isNull());
     return &registerFor(entry.getIndex());
 }
@@ -500,7 +499,7 @@ RegisterID* BytecodeGenerator::constRegisterFor(const Identifier& ident)
     if (m_codeType == EvalCode)
         return 0;
 
-    SymbolTableEntry entry = symbolTable().get(ident.ustring().rep());
+    SymbolTableEntry entry = symbolTable().get(ident.impl());
     if (entry.isNull())
         return 0;
 
@@ -512,12 +511,12 @@ bool BytecodeGenerator::isLocal(const Identifier& ident)
     if (ident == propertyNames().thisIdentifier)
         return true;
     
-    return shouldOptimizeLocals() && symbolTable().contains(ident.ustring().rep());
+    return shouldOptimizeLocals() && symbolTable().contains(ident.impl());
 }
 
 bool BytecodeGenerator::isLocalConstant(const Identifier& ident)
 {
-    return symbolTable().get(ident.ustring().rep()).isReadOnly();
+    return symbolTable().get(ident.impl()).isReadOnly();
 }
 
 RegisterID* BytecodeGenerator::newRegister()
@@ -592,6 +591,11 @@ PassRefPtr<Label> BytecodeGenerator::emitLabel(Label* l0)
 
 void BytecodeGenerator::emitOpcode(OpcodeID opcodeID)
 {
+#ifndef NDEBUG
+    size_t opcodePosition = instructions().size();
+    ASSERT(opcodePosition - m_lastOpcodePosition == opcodeLength(m_lastOpcodeID) || m_lastOpcodeID == op_end);
+    m_lastOpcodePosition = opcodePosition;
+#endif
     instructions().append(globalData()->interpreter->getOpcode(opcodeID));
     m_lastOpcodeID = opcodeID;
 }
@@ -617,12 +621,14 @@ void ALWAYS_INLINE BytecodeGenerator::rewindBinaryOp()
 {
     ASSERT(instructions().size() >= 4);
     instructions().shrink(instructions().size() - 4);
+    m_lastOpcodeID = op_end;
 }
 
 void ALWAYS_INLINE BytecodeGenerator::rewindUnaryOp()
 {
     ASSERT(instructions().size() >= 3);
     instructions().shrink(instructions().size() - 3);
+    m_lastOpcodeID = op_end;
 }
 
 PassRefPtr<Label> BytecodeGenerator::emitJump(Label* target)
@@ -823,7 +829,7 @@ PassRefPtr<Label> BytecodeGenerator::emitJumpIfNotFunctionApply(RegisterID* cond
 
 unsigned BytecodeGenerator::addConstant(const Identifier& ident)
 {
-    UString::Rep* rep = ident.ustring().rep();
+    StringImpl* rep = ident.impl();
     pair<IdentifierMap::iterator, bool> result = m_identifierMap.add(rep, m_codeBlock->numberOfIdentifiers());
     if (result.second) // new entry
         m_codeBlock->addIdentifier(Identifier(m_globalData, rep));
@@ -995,7 +1001,7 @@ RegisterID* BytecodeGenerator::emitLoad(RegisterID* dst, double number)
 
 RegisterID* BytecodeGenerator::emitLoad(RegisterID* dst, const Identifier& identifier)
 {
-    JSString*& stringInMap = m_stringMap.add(identifier.ustring().rep(), 0).first->second;
+    JSString*& stringInMap = m_stringMap.add(identifier.impl(), 0).first->second;
     if (!stringInMap)
         stringInMap = jsOwnedString(globalData(), identifier.ustring());
     return emitLoad(dst, JSValue(stringInMap));
@@ -1033,7 +1039,7 @@ bool BytecodeGenerator::findScopedProperty(const Identifier& property, int& inde
         if (!currentScope->isVariableObject())
             break;
         JSVariableObject* currentVariableObject = static_cast<JSVariableObject*>(currentScope);
-        SymbolTableEntry entry = currentVariableObject->symbolTable().get(property.ustring().rep());
+        SymbolTableEntry entry = currentVariableObject->symbolTable().get(property.impl());
 
         // Found the property
         if (!entry.isNull()) {
@@ -1110,7 +1116,6 @@ RegisterID* BytecodeGenerator::emitResolve(RegisterID* dst, const Identifier& pr
 #endif
         emitOpcode(requiresDynamicChecks ? op_resolve_global_dynamic : op_resolve_global);
         instructions().append(dst->index());
-        instructions().append(globalObject);
         instructions().append(addConstant(property));
         instructions().append(0);
         instructions().append(0);
@@ -1146,7 +1151,6 @@ RegisterID* BytecodeGenerator::emitGetScopedVar(RegisterID* dst, size_t depth, i
     if (globalObject) {
         emitOpcode(op_get_global_var);
         instructions().append(dst->index());
-        instructions().append(asCell(globalObject));
         instructions().append(index);
         return dst;
     }
@@ -1162,7 +1166,6 @@ RegisterID* BytecodeGenerator::emitPutScopedVar(size_t depth, int index, Registe
 {
     if (globalObject) {
         emitOpcode(op_put_global_var);
-        instructions().append(asCell(globalObject));
         instructions().append(index);
         instructions().append(value->index());
         return value;
@@ -1233,7 +1236,6 @@ RegisterID* BytecodeGenerator::emitResolveWithBase(RegisterID* baseDst, Register
 #endif
     emitOpcode(requiresDynamicChecks ? op_resolve_global_dynamic : op_resolve_global);
     instructions().append(propDst->index());
-    instructions().append(globalObject);
     instructions().append(addConstant(property));
     instructions().append(0);
     instructions().append(0);
@@ -1282,6 +1284,27 @@ RegisterID* BytecodeGenerator::emitPutById(RegisterID* base, const Identifier& p
     instructions().append(0);
     instructions().append(0);
     instructions().append(0);
+    instructions().append(0);
+    return value;
+}
+
+RegisterID* BytecodeGenerator::emitDirectPutById(RegisterID* base, const Identifier& property, RegisterID* value)
+{
+#if ENABLE(JIT)
+    m_codeBlock->addStructureStubInfo(StructureStubInfo(access_put_by_id));
+#else
+    m_codeBlock->addPropertyAccessInstruction(instructions().size());
+#endif
+    
+    emitOpcode(op_put_by_id);
+    instructions().append(base->index());
+    instructions().append(addConstant(property));
+    instructions().append(value->index());
+    instructions().append(0);
+    instructions().append(0);
+    instructions().append(0);
+    instructions().append(0);
+    instructions().append(property != m_globalData->propertyNames->underscoreProto);
     return value;
 }
 
@@ -1415,9 +1438,9 @@ RegisterID* BytecodeGenerator::emitNewFunctionExpression(RegisterID* r0, FuncExp
     return r0;
 }
 
-RegisterID* BytecodeGenerator::emitCall(RegisterID* dst, RegisterID* func, RegisterID* thisRegister, ArgumentsNode* argumentsNode, unsigned divot, unsigned startOffset, unsigned endOffset)
+RegisterID* BytecodeGenerator::emitCall(RegisterID* dst, RegisterID* func, CallArguments& callArguments, unsigned divot, unsigned startOffset, unsigned endOffset)
 {
-    return emitCall(op_call, dst, func, thisRegister, argumentsNode, divot, startOffset, endOffset);
+    return emitCall(op_call, dst, func, callArguments, divot, startOffset, endOffset);
 }
 
 void BytecodeGenerator::createArgumentsIfNecessary()
@@ -1430,40 +1453,23 @@ void BytecodeGenerator::createArgumentsIfNecessary()
     instructions().append(m_codeBlock->argumentsRegister());
 }
 
-RegisterID* BytecodeGenerator::emitCallEval(RegisterID* dst, RegisterID* func, RegisterID* thisRegister, ArgumentsNode* argumentsNode, unsigned divot, unsigned startOffset, unsigned endOffset)
+RegisterID* BytecodeGenerator::emitCallEval(RegisterID* dst, RegisterID* func, CallArguments& callArguments, unsigned divot, unsigned startOffset, unsigned endOffset)
 {
-    return emitCall(op_call_eval, dst, func, thisRegister, argumentsNode, divot, startOffset, endOffset);
+    return emitCall(op_call_eval, dst, func, callArguments, divot, startOffset, endOffset);
 }
 
-RegisterID* BytecodeGenerator::emitCall(OpcodeID opcodeID, RegisterID* dst, RegisterID* func, RegisterID* thisRegister, ArgumentsNode* argumentsNode, unsigned divot, unsigned startOffset, unsigned endOffset)
+RegisterID* BytecodeGenerator::emitCall(OpcodeID opcodeID, RegisterID* dst, RegisterID* func, CallArguments& callArguments, unsigned divot, unsigned startOffset, unsigned endOffset)
 {
     ASSERT(opcodeID == op_call || opcodeID == op_call_eval);
     ASSERT(func->refCount());
-    ASSERT(thisRegister->refCount());
 
-    RegisterID* originalFunc = func;
-    if (m_shouldEmitProfileHooks) {
-        // If codegen decided to recycle func as this call's destination register,
-        // we need to undo that optimization here so that func will still be around
-        // for the sake of op_profile_did_call.
-        if (dst == func) {
-            RefPtr<RegisterID> movedThisRegister = emitMove(newTemporary(), thisRegister);
-            RefPtr<RegisterID> movedFunc = emitMove(thisRegister, func);
-            
-            thisRegister = movedThisRegister.release().releaseRef();
-            func = movedFunc.release().releaseRef();
-        }
-    }
+    if (m_shouldEmitProfileHooks)
+        emitMove(callArguments.profileHookRegister(), func);
 
     // Generate code for arguments.
-    Vector<RefPtr<RegisterID>, 16> argv;
-    argv.append(thisRegister);
-    for (ArgumentListNode* n = argumentsNode->m_listNode; n; n = n->m_next) {
-        argv.append(newTemporary());
-        // op_call requires the arguments to be a sequential range of registers
-        ASSERT(argv[argv.size() - 1]->index() == argv[argv.size() - 2]->index() + 1);
-        emitNode(argv.last().get(), n);
-    }
+    unsigned argumentIndex = 0;
+    for (ArgumentListNode* n = callArguments.argumentsNode()->m_listNode; n; n = n->m_next)
+        emitNode(callArguments.argumentRegister(argumentIndex++), n);
 
     // Reserve space for call frame.
     Vector<RefPtr<RegisterID>, RegisterFile::CallFrameHeaderSize> callFrame;
@@ -1472,10 +1478,10 @@ RegisterID* BytecodeGenerator::emitCall(OpcodeID opcodeID, RegisterID* dst, Regi
 
     if (m_shouldEmitProfileHooks) {
         emitOpcode(op_profile_will_call);
-        instructions().append(func->index());
+        instructions().append(callArguments.profileHookRegister()->index());
 
 #if ENABLE(JIT)
-        m_codeBlock->addFunctionRegisterInfo(instructions().size(), func->index());
+        m_codeBlock->addFunctionRegisterInfo(instructions().size(), callArguments.profileHookRegister()->index());
 #endif
     }
 
@@ -1488,8 +1494,8 @@ RegisterID* BytecodeGenerator::emitCall(OpcodeID opcodeID, RegisterID* dst, Regi
     // Emit call.
     emitOpcode(opcodeID);
     instructions().append(func->index()); // func
-    instructions().append(argv.size()); // argCount
-    instructions().append(argv[0]->index() + argv.size() + RegisterFile::CallFrameHeaderSize); // registerOffset
+    instructions().append(callArguments.count()); // argCount
+    instructions().append(callArguments.callFrame()); // registerOffset
     if (dst != ignoredResult()) {
         emitOpcode(op_call_put_result);
         instructions().append(dst->index()); // dst
@@ -1497,12 +1503,7 @@ RegisterID* BytecodeGenerator::emitCall(OpcodeID opcodeID, RegisterID* dst, Regi
 
     if (m_shouldEmitProfileHooks) {
         emitOpcode(op_profile_did_call);
-        instructions().append(func->index());
-
-        if (dst == originalFunc) {
-            thisRegister->deref();
-            func->deref();
-        }
+        instructions().append(callArguments.profileHookRegister()->index());
     }
 
     return dst;
@@ -1579,34 +1580,23 @@ RegisterID* BytecodeGenerator::emitUnaryNoDstOp(OpcodeID opcodeID, RegisterID* s
     return src;
 }
 
-RegisterID* BytecodeGenerator::emitConstruct(RegisterID* dst, RegisterID* func, ArgumentsNode* argumentsNode, unsigned divot, unsigned startOffset, unsigned endOffset)
+RegisterID* BytecodeGenerator::emitConstruct(RegisterID* dst, RegisterID* func, CallArguments& callArguments, unsigned divot, unsigned startOffset, unsigned endOffset)
 {
     ASSERT(func->refCount());
 
-    RegisterID* originalFunc = func;
-    if (m_shouldEmitProfileHooks) {
-        // If codegen decided to recycle func as this call's destination register,
-        // we need to undo that optimization here so that func will still be around
-        // for the sake of op_profile_did_call.
-        if (dst == func) {
-            RefPtr<RegisterID> movedFunc = emitMove(newTemporary(), func);
-            func = movedFunc.release().releaseRef();
-        }
-    }
+    if (m_shouldEmitProfileHooks)
+        emitMove(callArguments.profileHookRegister(), func);
 
     // Generate code for arguments.
-    Vector<RefPtr<RegisterID>, 16> argv;
-    argv.append(newTemporary()); // reserve space for "this"
-    for (ArgumentListNode* n = argumentsNode ? argumentsNode->m_listNode : 0; n; n = n->m_next) {
-        argv.append(newTemporary());
-        // op_construct requires the arguments to be a sequential range of registers
-        ASSERT(argv[argv.size() - 1]->index() == argv[argv.size() - 2]->index() + 1);
-        emitNode(argv.last().get(), n);
+    unsigned argumentIndex = 0;
+    if (ArgumentsNode* argumentsNode = callArguments.argumentsNode()) {
+        for (ArgumentListNode* n = argumentsNode->m_listNode; n; n = n->m_next)
+            emitNode(callArguments.argumentRegister(argumentIndex++), n);
     }
 
     if (m_shouldEmitProfileHooks) {
         emitOpcode(op_profile_will_call);
-        instructions().append(func->index());
+        instructions().append(callArguments.profileHookRegister()->index());
     }
 
     // Reserve space for call frame.
@@ -1622,8 +1612,8 @@ RegisterID* BytecodeGenerator::emitConstruct(RegisterID* dst, RegisterID* func, 
 
     emitOpcode(op_construct);
     instructions().append(func->index()); // func
-    instructions().append(argv.size()); // argCount
-    instructions().append(argv[0]->index() + argv.size() + RegisterFile::CallFrameHeaderSize); // registerOffset
+    instructions().append(callArguments.count()); // argCount
+    instructions().append(callArguments.callFrame()); // registerOffset
     if (dst != ignoredResult()) {
         emitOpcode(op_call_put_result);
         instructions().append(dst->index()); // dst
@@ -1631,10 +1621,7 @@ RegisterID* BytecodeGenerator::emitConstruct(RegisterID* dst, RegisterID* func, 
 
     if (m_shouldEmitProfileHooks) {
         emitOpcode(op_profile_did_call);
-        instructions().append(func->index());
-        
-        if (dst == originalFunc)
-            func->deref();
+        instructions().append(callArguments.profileHookRegister()->index());
     }
 
     return dst;
@@ -1883,6 +1870,7 @@ RegisterID* BytecodeGenerator::emitNextPropertyName(RegisterID* dst, RegisterID*
 
 RegisterID* BytecodeGenerator::emitCatch(RegisterID* targetRegister, Label* start, Label* end)
 {
+    m_usesExceptions = true;
 #if ENABLE(JIT)
     HandlerInfo info = { start->bind(0, 0), end->bind(0, 0), instructions().size(), m_dynamicScopeDepth + m_baseScopeDepth, CodeLocationLabel() };
 #else
@@ -1895,11 +1883,11 @@ RegisterID* BytecodeGenerator::emitCatch(RegisterID* targetRegister, Label* star
     return targetRegister;
 }
 
-RegisterID* BytecodeGenerator::emitNewError(RegisterID* dst, ErrorType type, JSValue message)
+RegisterID* BytecodeGenerator::emitNewError(RegisterID* dst, bool isReferenceError, JSValue message)
 {
     emitOpcode(op_new_error);
     instructions().append(dst->index());
-    instructions().append(static_cast<int>(type));
+    instructions().append(isReferenceError);
     instructions().append(addConstantValue(message)->index());
     return dst;
 }
@@ -1986,7 +1974,7 @@ static int32_t keyForCharacterSwitch(ExpressionNode* node, int32_t min, int32_t 
 {
     UNUSED_PARAM(max);
     ASSERT(node->isString());
-    UString::Rep* clause = static_cast<StringNode*>(node)->value().ustring().rep();
+    StringImpl* clause = static_cast<StringNode*>(node)->value().impl();
     ASSERT(clause->length() == 1);
     
     int32_t key = clause->characters()[0];
@@ -2016,7 +2004,7 @@ static void prepareJumpTableForStringSwitch(StringJumpTable& jumpTable, int32_t 
         ASSERT(!labels[i]->isForward());
         
         ASSERT(nodes[i]->isString());
-        UString::Rep* clause = static_cast<StringNode*>(nodes[i])->value().ustring().rep();
+        StringImpl* clause = static_cast<StringNode*>(nodes[i])->value().impl();
         OffsetLocation location;
         location.branchOffset = labels[i]->bind(switchAddress, switchAddress + 3);
         jumpTable.offsetTable.add(clause, location);
@@ -2056,9 +2044,24 @@ RegisterID* BytecodeGenerator::emitThrowExpressionTooDeepException()
     // that from an arbitrary node. However, calling emitExpressionInfo without any useful data
     // is still good enough to get us an accurate line number.
     emitExpressionInfo(0, 0, 0);
-    RegisterID* exception = emitNewError(newTemporary(), SyntaxError, jsString(globalData(), "Expression too deep"));
+    RegisterID* exception = emitNewError(newTemporary(), false, jsString(globalData(), "Expression too deep"));
     emitThrow(exception);
     return exception;
+}
+
+void BytecodeGenerator::setIsNumericCompareFunction(bool isNumericCompareFunction)
+{
+    m_codeBlock->setIsNumericCompareFunction(isNumericCompareFunction);
+}
+
+int BytecodeGenerator::argumentNumberFor(const Identifier& ident)
+{
+    int parameterCount = m_parameters.size(); // includes 'this'
+    RegisterID* registerID = registerFor(ident);
+    if (!registerID)
+        return 0;
+    int index = registerID->index() + RegisterFile::CallFrameHeaderSize + parameterCount;
+    return (index > 0 && index < parameterCount) ? index : 0;
 }
 
 } // namespace JSC

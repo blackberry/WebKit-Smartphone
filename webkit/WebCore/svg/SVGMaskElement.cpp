@@ -1,25 +1,25 @@
 /*
-    Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-                  2005 Alexander Kellett <lypanov@kde.org>
-                  2009 Dirk Schulze <krit@webkit.org>
-    Copyright (C) Research In Motion Limited 2009-2010. All rights reserved.
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ * Copyright (C) 2005 Alexander Kellett <lypanov@kde.org>
+ * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
+ * Copyright (C) Research In Motion Limited 2009-2010. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -38,12 +38,8 @@ using namespace std;
 
 namespace WebCore {
 
-SVGMaskElement::SVGMaskElement(const QualifiedName& tagName, Document* doc)
-    : SVGStyledLocatableElement(tagName, doc)
-    , SVGURIReference()
-    , SVGTests()
-    , SVGLangSpace()
-    , SVGExternalResourcesRequired()
+inline SVGMaskElement::SVGMaskElement(const QualifiedName& tagName, Document* document)
+    : SVGStyledLocatableElement(tagName, document)
     , m_maskUnits(SVGUnitTypes::SVG_UNIT_TYPE_OBJECTBOUNDINGBOX)
     , m_maskContentUnits(SVGUnitTypes::SVG_UNIT_TYPE_USERSPACEONUSE)
     , m_x(LengthModeWidth, "-10%")
@@ -55,8 +51,9 @@ SVGMaskElement::SVGMaskElement(const QualifiedName& tagName, Document* doc)
     // Spec: If the width/height attribute is not specified, the effect is as if a value of "120%" were specified.
 }
 
-SVGMaskElement::~SVGMaskElement()
+PassRefPtr<SVGMaskElement> SVGMaskElement::create(const QualifiedName& tagName, Document* document)
 {
+    return adoptRef(new SVGMaskElement(tagName, document));
 }
 
 void SVGMaskElement::parseMappedAttribute(Attribute* attr)
@@ -80,8 +77,6 @@ void SVGMaskElement::parseMappedAttribute(Attribute* attr)
     else if (attr->name() == SVGNames::heightAttr)
         setHeightBaseValue(SVGLength(LengthModeHeight, attr->value()));
     else {
-        if (SVGURIReference::parseMappedAttribute(attr))
-            return;
         if (SVGTests::parseMappedAttribute(attr))
             return;
         if (SVGLangSpace::parseMappedAttribute(attr))
@@ -96,15 +91,27 @@ void SVGMaskElement::svgAttributeChanged(const QualifiedName& attrName)
 {
     SVGStyledElement::svgAttributeChanged(attrName);
 
-    if (attrName == SVGNames::maskUnitsAttr || attrName == SVGNames::maskContentUnitsAttr ||
-        attrName == SVGNames::xAttr || attrName == SVGNames::yAttr ||
-        attrName == SVGNames::widthAttr || attrName == SVGNames::heightAttr ||
-        SVGURIReference::isKnownAttribute(attrName) ||
-        SVGTests::isKnownAttribute(attrName) ||
-        SVGLangSpace::isKnownAttribute(attrName) ||
-        SVGExternalResourcesRequired::isKnownAttribute(attrName) ||
-        SVGStyledElement::isKnownAttribute(attrName))
-        invalidateResourceClients();
+    bool invalidateClients = false;
+    if (attrName == SVGNames::xAttr
+        || attrName == SVGNames::yAttr
+        || attrName == SVGNames::widthAttr
+        || attrName == SVGNames::heightAttr) {
+        invalidateClients = true;
+        updateRelativeLengthsInformation();
+    }
+
+    RenderObject* object = renderer();
+    if (!object)
+        return;
+
+    if (invalidateClients
+        || attrName == SVGNames::maskUnitsAttr
+        || attrName == SVGNames::maskContentUnitsAttr
+        || SVGTests::isKnownAttribute(attrName)
+        || SVGLangSpace::isKnownAttribute(attrName)
+        || SVGExternalResourcesRequired::isKnownAttribute(attrName)
+        || SVGStyledElement::isKnownAttribute(attrName))
+        object->setNeedsLayout(true);
 }
 
 void SVGMaskElement::synchronizeProperty(const QualifiedName& attrName)
@@ -117,7 +124,6 @@ void SVGMaskElement::synchronizeProperty(const QualifiedName& attrName)
         synchronizeX();
         synchronizeY();
         synchronizeExternalResourcesRequired();
-        synchronizeHref();
         return;
     }
 
@@ -131,16 +137,17 @@ void SVGMaskElement::synchronizeProperty(const QualifiedName& attrName)
         synchronizeY();
     else if (SVGExternalResourcesRequired::isKnownAttribute(attrName))
         synchronizeExternalResourcesRequired();
-    else if (SVGURIReference::isKnownAttribute(attrName))
-        synchronizeHref();
 }
 
 void SVGMaskElement::childrenChanged(bool changedByParser, Node* beforeChange, Node* afterChange, int childCountDelta)
 {
     SVGStyledElement::childrenChanged(changedByParser, beforeChange, afterChange, childCountDelta);
 
-    if (!changedByParser)
-        invalidateResourceClients();
+    if (changedByParser)
+        return;
+
+    if (RenderObject* object = renderer())
+        object->setNeedsLayout(true);
 }
 
 FloatRect SVGMaskElement::maskBoundingBox(const FloatRect& objectBoundingBox) const
@@ -163,6 +170,14 @@ FloatRect SVGMaskElement::maskBoundingBox(const FloatRect& objectBoundingBox) co
 RenderObject* SVGMaskElement::createRenderer(RenderArena* arena, RenderStyle*)
 {
     return new (arena) RenderSVGResourceMasker(this);
+}
+
+bool SVGMaskElement::selfHasRelativeLengths() const
+{
+    return x().isRelative()
+        || y().isRelative()
+        || width().isRelative()
+        || height().isRelative();
 }
 
 }

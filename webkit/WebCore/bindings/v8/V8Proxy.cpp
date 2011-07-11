@@ -32,10 +32,13 @@
 #include "V8Proxy.h"
 
 #include "CSSMutableStyleDeclaration.h"
+#include "CachedMetadata.h"
 #include "DateExtension.h"
 #include "DocumentLoader.h"
 #include "Frame.h"
 #include "FrameLoaderClient.h"
+#include "IDBFactoryBackendInterface.h"
+#include "IDBPendingTransactionMonitor.h"
 #include "InspectorTimelineAgent.h"
 #include "Page.h"
 #include "PageGroup.h"
@@ -55,6 +58,7 @@
 #include "V8HiddenPropertyName.h"
 #include "V8IsolatedContext.h"
 #include "V8RangeException.h"
+#include "V8SQLException.h"
 #include "V8XMLHttpRequestException.h"
 #include "V8XPathException.h"
 #include "WorkerContext.h"
@@ -67,12 +71,13 @@
 #include <algorithm>
 #include <stdio.h>
 #include <utility>
-#include <v8.h>
 #include <wtf/Assertions.h>
 #include <wtf/OwnArrayPtr.h>
+#include <wtf/OwnPtr.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/StringExtras.h>
 #include <wtf/UnusedParam.h>
+#include <wtf/text/CString.h>
 
 namespace WebCore {
 
@@ -233,13 +238,13 @@ V8Proxy::~V8Proxy()
     windowShell()->destroyGlobal();
 }
 
-v8::Handle<v8::Script> V8Proxy::compileScript(v8::Handle<v8::String> code, const String& fileName, int baseLine)
+v8::Handle<v8::Script> V8Proxy::compileScript(v8::Handle<v8::String> code, const String& fileName, int baseLine, v8::ScriptData* scriptData)
 {
     const uint16_t* fileNameString = fromWebCoreString(fileName);
     v8::Handle<v8::String> name = v8::String::New(fileNameString, fileName.length());
     v8::Handle<v8::Integer> line = v8::Integer::New(baseLine);
     v8::ScriptOrigin origin(name, line);
-    v8::Handle<v8::Script> script = v8::Script::Compile(code, &origin);
+    v8::Handle<v8::Script> script = v8::Script::Compile(code, &origin, scriptData);
     return script;
 }
 
@@ -338,6 +343,33 @@ bool V8Proxy::setInjectedScriptContextDebugId(v8::Handle<v8::Context> targetCont
     return true;
 }
 
+PassOwnPtr<v8::ScriptData> V8Proxy::precompileScript(v8::Handle<v8::String> code, CachedScript* cachedScript)
+{
+    // A pseudo-randomly chosen ID used to store and retrieve V8 ScriptData from
+    // the CachedScript. If the format changes, this ID should be changed too.
+    static const unsigned dataTypeID = 0xECC13BD7;
+
+    // Very small scripts are not worth the effort to preparse.
+    static const int minPreparseLength = 1024;
+
+    if (!cachedScript || code->Length() < minPreparseLength)
+        return 0;
+
+    CachedMetadata* cachedMetadata = cachedScript->cachedMetadata(dataTypeID);
+    if (cachedMetadata)
+        return v8::ScriptData::New(cachedMetadata->data(), cachedMetadata->size());
+
+    OwnPtr<v8::ScriptData> scriptData(v8::ScriptData::PreCompile(code));
+    cachedScript->setCachedMetadata(dataTypeID, scriptData->Data(), scriptData->Length());
+
+    return scriptData.release();
+}
+
+bool V8Proxy::executingScript() const
+{
+    return m_recursion;
+}
+
 v8::Local<v8::Value> V8Proxy::evaluate(const ScriptSourceCode& source, Node* node)
 {
     ASSERT(v8::Context::InContext());
@@ -363,10 +395,11 @@ v8::Local<v8::Value> V8Proxy::evaluate(const ScriptSourceCode& source, Node* nod
 #if PLATFORM(CHROMIUM)
         PlatformBridge::traceEventBegin("v8.compile", node, "");
 #endif
+        OwnPtr<v8::ScriptData> scriptData = precompileScript(code, source.cachedScript());
 
         // NOTE: For compatibility with WebCore, ScriptSourceCode's line starts at
         // 1, whereas v8 starts at 0.
-        v8::Handle<v8::Script> script = compileScript(code, source.url(), source.startLine() - 1);
+        v8::Handle<v8::Script> script = compileScript(code, source.url(), source.startLine() - 1, scriptData.get());
 #if PLATFORM(CHROMIUM)
         PlatformBridge::traceEventEnd("v8.compile", node, "");
 
@@ -429,7 +462,7 @@ v8::Local<v8::Value> V8Proxy::runScript(v8::Handle<v8::Script> script, bool isIn
     }
 
     // Release the storage mutex if applicable.
-    releaseStorageMutex();
+    didLeaveScriptContext();
 
     if (handleOutOfMemory())
         ASSERT(result.IsEmpty());
@@ -502,7 +535,7 @@ v8::Local<v8::Value> V8Proxy::callFunction(v8::Handle<v8::Function> function, v8
     }
 
     // Release the storage mutex if applicable.
-    releaseStorageMutex();
+    didLeaveScriptContext();
 
     if (v8::V8::IsDead())
         handleFatalErrorInV8();
@@ -611,15 +644,25 @@ void V8Proxy::disconnectFrame()
 {
 }
 
-void V8Proxy::releaseStorageMutex()
+void V8Proxy::didLeaveScriptContext()
 {
+    Page* page = m_frame->page();
+    if (!page)
+        return;
+#if ENABLE(INDEXED_DATABASE)
+    // If we've just left a script context and indexed database has been
+    // instantiated, we must let its transaction coordinator know so it can terminate
+    // any not-yet-started transactions.
+    if (IDBPendingTransactionMonitor::hasPendingTransactions()) {
+        ASSERT(page->group().hasIDBFactory());
+        page->group().idbFactory()->abortPendingTransactions(IDBPendingTransactionMonitor::pendingTransactions());
+        IDBPendingTransactionMonitor::clearPendingTransactions();
+    }
+#endif // ENABLE(INDEXED_DATABASE)
     // If we've just left a top level script context and local storage has been
     // instantiated, we must ensure that any storage locks have been freed.
     // Per http://dev.w3.org/html5/spec/Overview.html#storage-mutex
     if (m_recursion != 0)
-        return;
-    Page* page = m_frame->page();
-    if (!page)
         return;
     if (page->group().hasLocalStorage())
         page->group().localStorage()->unlock();
@@ -678,6 +721,11 @@ void V8Proxy::setDOMException(int exceptionCode)
         exception = toV8(XPathException::create(description));
         break;
 #endif
+#if ENABLE(DATABASE)
+    case SQLExceptionType:
+        exception = toV8(SQLException::create(description));
+        break;
+#endif
     default:
         ASSERT_NOT_REACHED();
     }
@@ -703,6 +751,16 @@ v8::Handle<v8::Value> V8Proxy::throwError(ErrorType type, const char* message)
         ASSERT_NOT_REACHED();
         return notHandledByInterceptor();
     }
+}
+
+v8::Handle<v8::Value> V8Proxy::throwTypeError()
+{
+    return throwError(TypeError, "Type error");
+}
+
+v8::Handle<v8::Value> V8Proxy::throwSyntaxError()
+{
+    return throwError(SyntaxError, "Syntax error");
 }
 
 v8::Local<v8::Context> V8Proxy::context(Frame* frame)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006, 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -21,8 +21,8 @@
 #ifndef RefCounted_h
 #define RefCounted_h
 
-#include <wtf/Assertions.h>
-#include <wtf/Noncopyable.h>
+#include "Assertions.h"
+#include "Noncopyable.h"
 
 namespace WTF {
 
@@ -34,6 +34,7 @@ public:
     void ref()
     {
         ASSERT(!m_deletionHasBegun);
+        ASSERT(!m_adoptionIsRequired);
         ++m_refCount;
     }
 
@@ -48,23 +49,37 @@ public:
         return m_refCount;
     }
 
+    void relaxAdoptionRequirement()
+    {
+#ifndef NDEBUG
+        ASSERT(!m_deletionHasBegun);
+        ASSERT(m_adoptionIsRequired);
+        m_adoptionIsRequired = false;
+#endif
+    }
+
 protected:
     RefCountedBase()
         : m_refCount(1)
 #ifndef NDEBUG
         , m_deletionHasBegun(false)
+        , m_adoptionIsRequired(true)
 #endif
     {
     }
 
     ~RefCountedBase()
     {
+        ASSERT(m_deletionHasBegun);
+        ASSERT(!m_adoptionIsRequired);
     }
 
     // Returns whether the pointer should be freed or not.
     bool derefBase()
     {
         ASSERT(!m_deletionHasBegun);
+        ASSERT(!m_adoptionIsRequired);
+
         ASSERT(m_refCount > 0);
         if (m_refCount == 1) {
 #ifndef NDEBUG
@@ -91,17 +106,32 @@ protected:
 #endif
 
 private:
-    template<class T>
-    friend class CrossThreadRefCounted;
+    template<typename T> friend class CrossThreadRefCounted;
+
+#ifndef NDEBUG
+    friend void adopted(RefCountedBase*);
+#endif
 
     int m_refCount;
 #ifndef NDEBUG
     bool m_deletionHasBegun;
+    bool m_adoptionIsRequired;
 #endif
 };
 
+#ifndef NDEBUG
 
-template<class T> class RefCounted : public RefCountedBase, public Noncopyable {
+inline void adopted(RefCountedBase* object)
+{
+    if (!object)
+        return;
+    ASSERT(!object->m_deletionHasBegun);
+    object->m_adoptionIsRequired = false;
+}
+
+#endif
+
+template<typename T> class RefCounted : public RefCountedBase, public Noncopyable {
 public:
     void deref()
     {
@@ -115,7 +145,7 @@ protected:
     }
 };
 
-template<class T> class RefCountedCustomAllocated : public RefCountedBase, public NoncopyableCustomAllocated {
+template<typename T> class RefCountedCustomAllocated : public RefCountedBase, public NoncopyableCustomAllocated {
 public:
     void deref()
     {

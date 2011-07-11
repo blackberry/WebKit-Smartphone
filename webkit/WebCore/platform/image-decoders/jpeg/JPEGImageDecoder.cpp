@@ -167,10 +167,8 @@ public:
         m_bufferLength = data.size();
         
         // We need to do the setjmp here. Otherwise bad things will happen
-        if (setjmp(m_err.setjmp_buffer)) {
-            close();
+        if (setjmp(m_err.setjmp_buffer))
             return m_decoder->setFailed();
-        }
 
         switch (m_state) {
         case JPEG_HEADER:
@@ -227,7 +225,11 @@ public:
             // Set parameters for decompression.
             // FIXME -- Should reset dct_method and dither mode for final pass
             // of progressive JPEG.
-            m_info.dct_method =  JDCT_ISLOW;
+#if PLATFORM(OLYMPIA)
+            m_info.dct_method = JDCT_IFAST;
+#else
+            m_info.dct_method = JDCT_ISLOW;
+#endif
             m_info.dither_mode = JDITHER_FS;
             m_info.do_fancy_upsampling = true;
             m_info.enable_2pass_quant = false;
@@ -304,7 +306,7 @@ public:
         case JPEG_DONE:
             // Finish decompression.
             return jpeg_finish_decompress(&m_info);
-        
+
         case JPEG_ERROR:
             // We can get here if the constructor failed.
             return m_decoder->setFailed();
@@ -363,7 +365,8 @@ void term_source(j_decompress_ptr jd)
     src->decoder->decoder()->jpegComplete();
 }
 
-JPEGImageDecoder::JPEGImageDecoder()
+JPEGImageDecoder::JPEGImageDecoder(bool premultiplyAlpha)
+    : ImageDecoder(premultiplyAlpha)
 {
 }
 
@@ -393,13 +396,21 @@ RGBA32Buffer* JPEGImageDecoder::frameBufferAtIndex(size_t index)
     if (index)
         return 0;
 
-    if (m_frameBufferCache.isEmpty())
+    if (m_frameBufferCache.isEmpty()) {
         m_frameBufferCache.resize(1);
+        m_frameBufferCache[0].setPremultiplyAlpha(m_premultiplyAlpha);
+    }
 
     RGBA32Buffer& frame = m_frameBufferCache[0];
     if (frame.status() != RGBA32Buffer::FrameComplete)
         decode(false);
     return &frame;
+}
+
+bool JPEGImageDecoder::setFailed()
+{
+    m_reader.clear();
+    return ImageDecoder::setFailed();
 }
 
 bool JPEGImageDecoder::outputScanlines()
@@ -482,8 +493,9 @@ void JPEGImageDecoder::decode(bool onlySize)
     // has failed.
     if (!m_reader->decode(m_data->buffer(), onlySize) && isAllDataReceived())
         setFailed();
-
-    if (failed() || (!m_frameBufferCache.isEmpty() && m_frameBufferCache[0].status() == RGBA32Buffer::FrameComplete))
+    // If we're done decoding the image, we don't need the JPEGImageReader
+    // anymore.  (If we failed, |m_reader| has already been cleared.)
+    else if (!m_frameBufferCache.isEmpty() && (m_frameBufferCache[0].status() == RGBA32Buffer::FrameComplete))
         m_reader.clear();
 }
 

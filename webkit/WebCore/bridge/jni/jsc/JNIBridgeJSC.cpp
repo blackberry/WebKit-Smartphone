@@ -49,7 +49,7 @@ JavaField::JavaField(JNIEnv* env, jobject aField)
         fieldTypeName = env->NewStringUTF("<Unknown>");
     m_type = JavaString(env, fieldTypeName);
 
-    m_JNIType = JNITypeFromClassName(m_type.UTF8String());
+    m_JNIType = JNITypeFromClassName(m_type.utf8());
 
     // Get field name
     jstring fieldName = static_cast<jstring>(callJNIMethod<jobject>(aField, "getName", "()Ljava/lang/String;"));
@@ -88,7 +88,7 @@ jvalue JavaField::dispatchValueFromInstance(ExecState* exec, const JavaInstance*
                 args[0].l = jinstance;
                 dispatchJNICall(exec, rootObject->nativeHandle(), fieldJInstance, false, returnType, mid, args, result, 0, exceptionDescription);
                 if (exceptionDescription)
-                    throwError(exec, GeneralError, exceptionDescription.toString(exec));
+                    throwError(exec, createError(exec, exceptionDescription.toString(exec)));
             }
         }
     }
@@ -150,7 +150,7 @@ JSValue JavaField::valueFromInstance(ExecState* exec, const Instance* i) const
         break;
     }
 
-    LOG(LiveConnect, "JavaField::valueFromInstance getting %s = %s", UString(name()).UTF8String().data(), jsresult.toString(exec).ascii());
+    LOG(LiveConnect, "JavaField::valueFromInstance getting %s = %s", UString(name()).utf8().data(), jsresult.toString(exec).ascii().data());
 
     return jsresult;
 }
@@ -175,7 +175,7 @@ void JavaField::dispatchSetValueToInstance(ExecState* exec, const JavaInstance* 
                 args[1] = javaValue;
                 dispatchJNICall(exec, rootObject->nativeHandle(), fieldJInstance, false, void_type, mid, args, result, 0, exceptionDescription);
                 if (exceptionDescription)
-                    throwError(exec, GeneralError, exceptionDescription.toString(exec));
+                    throwError(exec, createError(exec, exceptionDescription.toString(exec)));
             }
         }
     }
@@ -186,7 +186,7 @@ void JavaField::setValueToInstance(ExecState* exec, const Instance* i, JSValue a
     const JavaInstance* instance = static_cast<const JavaInstance*>(i);
     jvalue javaValue = convertValueToJValue(exec, i->rootObject(), aValue, m_JNIType, type());
 
-    LOG(LiveConnect, "JavaField::setValueToInstance setting value %s to %s", UString(name()).UTF8String().data(), aValue.toString(exec).ascii());
+    LOG(LiveConnect, "JavaField::setValueToInstance setting value %s to %s", UString(name()).utf8().data(), aValue.toString(exec).ascii().data());
 
     switch (m_JNIType) {
     case array_type:

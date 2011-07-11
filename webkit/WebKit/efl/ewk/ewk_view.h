@@ -21,9 +21,12 @@
 #ifndef ewk_view_h
 #define ewk_view_h
 
+#include "ewk_frame.h"
+#include "ewk_history.h"
+#include "ewk_window_features.h"
+
 #include <Evas.h>
 #include <cairo.h>
-#include <ewk_history.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -83,6 +86,9 @@ extern "C" {
  *  - "download,request", Ewk_Download: reports a download is being requested
  *    and as arguments gives its details.
  *  - "icon,received", void: main frame received an icon.
+ *  - "viewport,changed", void: Report that viewport has changed.
+ *  - "inputmethods,changed" with a boolean indicating whether it's enabled or not.
+ *  - "view,resized", void: view object's size has changed.
  */
 
 typedef struct _Ewk_View_Smart_Data Ewk_View_Smart_Data;
@@ -95,7 +101,8 @@ struct _Ewk_View_Smart_Class {
     Evas_Smart_Class sc; /**< all but 'data' is free to be changed. */
     unsigned long version;
 
-    Evas_Object *(*window_create)(Ewk_View_Smart_Data *sd); /**< creates a new window, requested by webkit */
+    Evas_Object *(*window_create)(Ewk_View_Smart_Data *sd, Eina_Bool javascript, const Ewk_Window_Features *window_features); /**< creates a new window, requested by webkit */
+    void (*window_close)(Ewk_View_Smart_Data *sd); /**< creates a new window, requested by webkit */
     // hooks to allow different backing stores
     Evas_Object *(*backing_store_add)(Ewk_View_Smart_Data *sd); /**< must be defined */
     Eina_Bool (*scrolls_process)(Ewk_View_Smart_Data *sd); /**< must be defined */
@@ -125,9 +132,11 @@ struct _Ewk_View_Smart_Class {
     Eina_Bool (*run_javascript_confirm)(Ewk_View_Smart_Data *sd, Evas_Object *frame, const char *message);
     Eina_Bool (*run_javascript_prompt)(Ewk_View_Smart_Data *sd, Evas_Object *frame, const char *message, const char *defaultValue, char **value);
     Eina_Bool (*should_interrupt_javascript)(Ewk_View_Smart_Data *sd);
-    void (*exceeded_database_quota)(Ewk_View_Smart_Data *sd, Evas_Object *frame, const char *databaseName);
+    uint64_t (*exceeded_database_quota)(Ewk_View_Smart_Data *sd, Evas_Object *frame, const char *databaseName, uint64_t current_size, uint64_t expected_size);
 
     Eina_Bool (*run_open_panel)(Ewk_View_Smart_Data *sd, Evas_Object *frame, Eina_Bool allows_multiple_files, const Eina_List *suggested_filenames, Eina_List **selected_filenames);
+
+    Eina_Bool (*navigation_policy_decision)(Ewk_View_Smart_Data *sd, Ewk_Frame_Resource_Request *request);
 };
 
 #define EWK_VIEW_SMART_CLASS_VERSION 1UL /** the version you have to put into the version field in the Ewk_View_Smart_Class structure */
@@ -142,7 +151,7 @@ struct _Ewk_View_Smart_Class {
  * @see EWK_VIEW_SMART_CLASS_INIT_VERSION
  * @see EWK_VIEW_SMART_CLASS_INIT_NAME_VERSION
  */
-#define EWK_VIEW_SMART_CLASS_INIT(smart_class_init) {smart_class_init, EWK_VIEW_SMART_CLASS_VERSION, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+#define EWK_VIEW_SMART_CLASS_INIT(smart_class_init) {smart_class_init, EWK_VIEW_SMART_CLASS_VERSION, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
 /**
  * Initializer to zero a whole Ewk_View_Smart_Class structure.
@@ -182,6 +191,15 @@ struct _Ewk_View_Smart_Class {
  * @see EWK_VIEW_SMART_CLASS_INIT
  */
 #define EWK_VIEW_SMART_CLASS_INIT_NAME_VERSION(name) EWK_VIEW_SMART_CLASS_INIT(EVAS_SMART_CLASS_INIT_NAME_VERSION(name))
+
+enum _Ewk_Imh {
+    EWK_IMH_TELEPHONE = (1 << 0),
+    EWK_IMH_NUMBER = (1 << 1),
+    EWK_IMH_EMAIL = (1 << 2),
+    EWK_IMH_URL = (1 << 3),
+    EWK_IMH_PASSWORD = (1 << 4)
+};
+typedef enum _Ewk_Imh Ewk_Imh;
 
 /**
  * @internal
@@ -305,6 +323,8 @@ EAPI Eina_Bool    ewk_view_select_sentence(Evas_Object *o);
 EAPI Eina_Bool    ewk_view_select_line(Evas_Object *o);
 EAPI Eina_Bool    ewk_view_select_word(Evas_Object *o);
 
+EAPI Eina_Bool    ewk_view_context_menu_forward_event(Evas_Object *o, const Evas_Event_Mouse_Down *ev);
+
 EAPI void         ewk_view_popup_selected_set(Evas_Object *o, int index);
 EAPI Eina_Bool    ewk_view_popup_destroy(Evas_Object *o);
 
@@ -352,6 +372,8 @@ EAPI Eina_Bool    ewk_view_zoom_text_only_set(Evas_Object *o, Eina_Bool setting)
 EAPI Eina_Bool    ewk_view_pre_render_region(Evas_Object *o, Evas_Coord x, Evas_Coord y, Evas_Coord w, Evas_Coord h, float zoom);
 EAPI void         ewk_view_pre_render_cancel(Evas_Object *o);
 
+EAPI unsigned int ewk_view_imh_get(Evas_Object *o);
+
 /* settings */
 EAPI const char  *ewk_view_setting_user_agent_get(const Evas_Object *o);
 EAPI Eina_Bool    ewk_view_setting_user_agent_set(Evas_Object *o, const char *user_agent);
@@ -368,6 +390,9 @@ EAPI Eina_Bool    ewk_view_setting_enable_scripts_set(Evas_Object *o, Eina_Bool 
 EAPI Eina_Bool    ewk_view_setting_enable_plugins_get(const Evas_Object *o);
 EAPI Eina_Bool    ewk_view_setting_enable_plugins_set(Evas_Object *o, Eina_Bool enable);
 
+EAPI Eina_Bool    ewk_view_setting_enable_frame_flattening_get(const Evas_Object* o);
+EAPI Eina_Bool    ewk_view_setting_enable_frame_flattening_set(Evas_Object* o, Eina_Bool enable);
+
 EAPI Eina_Bool    ewk_view_setting_scripts_window_open_get(const Evas_Object *o);
 EAPI Eina_Bool    ewk_view_setting_scripts_window_open_set(Evas_Object *o, Eina_Bool allow);
 
@@ -379,6 +404,8 @@ EAPI Eina_Bool    ewk_view_setting_user_stylesheet_set(Evas_Object *o, const cha
 
 EAPI Eina_Bool    ewk_view_setting_private_browsing_get(const Evas_Object *o);
 EAPI Eina_Bool    ewk_view_setting_private_browsing_set(Evas_Object *o, Eina_Bool enable);
+EAPI Eina_Bool    ewk_view_setting_offline_app_cache_get(const Evas_Object *o);
+EAPI Eina_Bool    ewk_view_setting_offline_app_cache_set(Evas_Object *o, Eina_Bool enable);
 
 EAPI Eina_Bool    ewk_view_setting_caret_browsing_get(const Evas_Object *o);
 EAPI Eina_Bool    ewk_view_setting_caret_browsing_set(Evas_Object *o, Eina_Bool enable);
@@ -387,6 +414,8 @@ EAPI const char  *ewk_view_setting_encoding_custom_get(const Evas_Object *o);
 EAPI Eina_Bool    ewk_view_setting_encoding_custom_set(Evas_Object *o, const char *encoding);
 EAPI const char  *ewk_view_setting_encoding_default_get(const Evas_Object *o);
 EAPI Eina_Bool    ewk_view_setting_encoding_default_set(Evas_Object *o, const char *encoding);
+EAPI const char  *ewk_view_setting_cache_directory_get(const Evas_Object *o);
+EAPI Eina_Bool    ewk_view_setting_cache_directory_set(Evas_Object *o, const char *path);
 
 EAPI int          ewk_view_setting_font_minimum_size_get(const Evas_Object *o);
 EAPI Eina_Bool    ewk_view_setting_font_minimum_size_set(Evas_Object *o, int size);
@@ -414,6 +443,15 @@ EAPI Eina_Bool    ewk_view_setting_font_serif_set(Evas_Object *o, const char *fa
 
 EAPI const char  *ewk_view_setting_font_sans_serif_get(const Evas_Object *o);
 EAPI Eina_Bool    ewk_view_setting_font_sans_serif_set(Evas_Object *o, const char *family);
+
+EAPI Eina_Bool    ewk_view_setting_spatial_navigation_get(Evas_Object* o);
+EAPI Eina_Bool    ewk_view_setting_spatial_navigation_set(Evas_Object* o, Eina_Bool enable);
+
+EAPI Eina_Bool    ewk_view_setting_local_storage_get(Evas_Object* o);
+EAPI Eina_Bool    ewk_view_setting_local_storage_set(Evas_Object* o, Eina_Bool enable);
+
+EAPI Eina_Bool    ewk_view_setting_page_cache_get(Evas_Object* o);
+EAPI Eina_Bool    ewk_view_setting_page_cache_set(Evas_Object* o, Eina_Bool enable);
 
 /* to be used by subclass implementations */
 EAPI Ewk_View_Smart_Data *ewk_view_smart_data_get(const Evas_Object *o);
@@ -448,6 +486,13 @@ EAPI void ewk_view_paint_context_translate(Ewk_View_Paint_Context *ctxt, float x
 
 EAPI Eina_Bool ewk_view_paint(Ewk_View_Private_Data *priv, cairo_t *cr, const Eina_Rectangle *area);
 EAPI Eina_Bool ewk_view_paint_contents(Ewk_View_Private_Data *priv, cairo_t *cr, const Eina_Rectangle *area);
+
+EAPI void ewk_view_viewport_get(Evas_Object *o, float* w, float* h, float* init_scale, float* max_scale, float* min_scale, float* user_scalable);
+EAPI Eina_Bool ewk_view_zoom_range_set(Evas_Object* o, float min_scale, float max_scale);
+EAPI float ewk_view_zoom_range_min_get(Evas_Object* o);
+EAPI float ewk_view_zoom_range_max_get(Evas_Object* o);
+EAPI void ewk_view_user_scalable_set(Evas_Object* o, Eina_Bool user_scalable);
+EAPI Eina_Bool ewk_view_user_scalable_get(Evas_Object* o);
 
 #ifdef __cplusplus
 }

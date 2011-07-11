@@ -51,7 +51,6 @@ class Frame;
 #endif
 
 #if PLATFORM(QT)
-class QWebFrame;
 class QWebNetworkJob;
 namespace WebCore {
 class QNetworkReplyHandler;
@@ -83,7 +82,7 @@ namespace WebCore {
     public:
         ResourceHandleInternal(ResourceHandle* loader, const ResourceRequest& request, ResourceHandleClient* c, bool defersLoading, bool shouldContentSniff)
             : m_client(c)
-            , m_request(request)
+            , m_firstRequest(request)
             , m_lastHTTPMethod(request.httpMethod())
             , status(0)
             , m_defersLoading(defersLoading)
@@ -92,7 +91,6 @@ namespace WebCore {
             , m_connection(0)
 #endif
 #if USE(WININET)
-            , m_fileHandle(INVALID_HANDLE_VALUE)
             , m_fileLoadTimer(loader, &ResourceHandle::fileLoadTimer)
             , m_resourceHandle(0)
             , m_secondaryHandle(0)
@@ -122,23 +120,22 @@ namespace WebCore {
             , m_bufferSize(0)
             , m_total(0)
             , m_idleHandler(0)
-            , m_frame(0)
 #endif
 #if PLATFORM(QT)
             , m_job(0)
-            , m_frame(0)
 #endif
 #if PLATFORM(MAC)
             , m_startWhenScheduled(false)
             , m_needsSiteSpecificQuirks(false)
             , m_currentMacChallenge(nil)
 #endif
+            , m_scheduledFailureType(ResourceHandle::NoFailure)
             , m_failureTimer(loader, &ResourceHandle::fireFailure)
         {
-            const KURL& url = m_request.url();
+            const KURL& url = m_firstRequest.url();
             m_user = url.user();
             m_pass = url.pass();
-            m_request.removeCredentials();
+            m_firstRequest.removeCredentials();
         }
         
         ~ResourceHandleInternal();
@@ -146,7 +143,7 @@ namespace WebCore {
         ResourceHandleClient* client() { return m_client; }
         ResourceHandleClient* m_client;
         
-        ResourceRequest m_request;
+        ResourceRequest m_firstRequest;
         String m_lastHTTPMethod;
 
         // Suggested credentials for the current redirection step.
@@ -169,7 +166,6 @@ namespace WebCore {
         bool m_needsSiteSpecificQuirks;
 #endif
 #if USE(WININET)
-        HANDLE m_fileHandle;
         Timer<ResourceHandle> m_fileLoadTimer;
         HINTERNET m_resourceHandle;
         HINTERNET m_secondaryHandle;
@@ -203,11 +199,11 @@ namespace WebCore {
         char* m_buffer;
         gsize m_bufferSize, m_total;
         guint m_idleHandler;
-        Frame* m_frame;
+        RefPtr<NetworkingContext> m_context;
 #endif
 #if PLATFORM(QT)
         QNetworkReplyHandler* m_job;
-        QWebFrame* m_frame;
+        RefPtr<NetworkingContext> m_context;
 #endif
 
 #if PLATFORM(MAC)
@@ -220,7 +216,7 @@ namespace WebCore {
 #endif
         AuthenticationChallenge m_currentWebChallenge;
 
-        ResourceHandle::FailureType m_failureType;
+        ResourceHandle::FailureType m_scheduledFailureType;
         Timer<ResourceHandle> m_failureTimer;
     };
 

@@ -57,7 +57,7 @@
 
 #if PLATFORM(OLYMPIA)
 #include "Chrome.h"
-#include "PageClientOlympia.h"
+#include "PageClientBlackBerry.h"
 #endif
 
 using namespace JSC;
@@ -75,6 +75,7 @@ ScriptDebugServer::ScriptDebugServer()
     , m_pauseOnExceptionsState(DontPauseOnExceptions)
     , m_pauseOnNextStatement(false)
     , m_paused(false)
+    , m_pausedPage(0)
     , m_doneProcessingDebuggerEvents(true)
     , m_breakpointsActivated(true)
     , m_pauseOnCallFrame(0)
@@ -119,8 +120,6 @@ void ScriptDebugServer::removeListener(ScriptDebugListener* listener, Page* page
     }
 
     didRemoveListener(page);
-    if (!hasListeners())
-        didRemoveLastListener();
 }
 
 void ScriptDebugServer::pageCreated(Page* page)
@@ -132,25 +131,29 @@ void ScriptDebugServer::pageCreated(Page* page)
     page->setDebugger(this);
 }
 
+bool ScriptDebugServer::isDebuggerAlwaysEnabled()
+{
+    return false;
+}
+
 bool ScriptDebugServer::hasListenersInterestedInPage(Page* page)
 {
     ASSERT_ARG(page, page);
 
-    if (hasGlobalListeners())
-        return true;
-
     return m_pageListenersMap.contains(page);
 }
 
-void ScriptDebugServer::setBreakpoint(const String& sourceID, unsigned lineNumber, ScriptBreakpoint breakpoint)
+bool ScriptDebugServer::setBreakpoint(const String& sourceID, ScriptBreakpoint breakpoint, unsigned lineNumber, unsigned* actualLineNumber)
 {
     intptr_t sourceIDValue = sourceID.toIntPtr();
     if (!sourceIDValue)
-        return;
+        return false;
     BreakpointsMap::iterator it = m_breakpoints.find(sourceIDValue);
     if (it == m_breakpoints.end())
         it = m_breakpoints.set(sourceIDValue, SourceBreakpoints()).first;
     it->second.set(lineNumber, breakpoint);
+    *actualLineNumber = lineNumber;
+    return true;
 }
 
 void ScriptDebugServer::removeBreakpoint(const String& sourceID, unsigned lineNumber)
@@ -203,9 +206,14 @@ void ScriptDebugServer::setPauseOnExceptionsState(PauseOnExceptionsState pause)
     m_pauseOnExceptionsState = pause;
 }
 
-void ScriptDebugServer::pauseProgram()
+void ScriptDebugServer::pause()
 {
     m_pauseOnNextStatement = true;
+}
+
+void ScriptDebugServer::breakProgram()
+{
+    // FIXME(WK43332): implement this.
 }
 
 void ScriptDebugServer::continueProgram()
@@ -244,6 +252,12 @@ void ScriptDebugServer::stepOutOfFunction()
     m_doneProcessingDebuggerEvents = true;
 }
 
+bool ScriptDebugServer::editScriptSource(const String&, const String&, String&)
+{
+    // FIXME(40300): implement this.
+    return false;
+}
+
 JavaScriptCallFrame* ScriptDebugServer::currentCallFrame()
 {
     if (!m_paused)
@@ -254,7 +268,7 @@ JavaScriptCallFrame* ScriptDebugServer::currentCallFrame()
 void ScriptDebugServer::dispatchDidPause(ScriptDebugListener* listener)
 {
     ASSERT(m_paused);
-    ScriptState* state = m_currentCallFrame->scopeChain()->globalObject->globalExec();        
+    ScriptState* state = m_currentCallFrame->scopeChain()->globalObject->globalExec();
     listener->didPause(state);
 }
 
@@ -263,9 +277,9 @@ void ScriptDebugServer::dispatchDidContinue(ScriptDebugListener* listener)
     listener->didContinue();
 }
 
-void ScriptDebugServer::dispatchDidParseSource(const ListenerSet& listeners, const JSC::SourceCode& source)
+void ScriptDebugServer::dispatchDidParseSource(const ListenerSet& listeners, const JSC::SourceCode& source, ScriptWorldType worldType)
 {
-    String sourceID = ustringToString(JSC::UString::from(source.provider()->asID()));
+    String sourceID = ustringToString(JSC::UString::number(source.provider()->asID()));
     String url = ustringToString(source.provider()->url());
     String data = ustringToString(JSC::UString(source.data(), source.length()));
     int firstLine = source.firstLine();
@@ -273,7 +287,7 @@ void ScriptDebugServer::dispatchDidParseSource(const ListenerSet& listeners, con
     Vector<ScriptDebugListener*> copy;
     copyToVector(listeners, copy);
     for (size_t i = 0; i < copy.size(); ++i)
-        copy[i]->didParseSource(sourceID, url, data, firstLine);
+        copy[i]->didParseSource(sourceID, url, data, firstLine, worldType);
 }
 
 void ScriptDebugServer::dispatchFailedToParseSource(const ListenerSet& listeners, const SourceCode& source, int errorLine, const String& errorMessage)
@@ -297,6 +311,13 @@ static Page* toPage(JSGlobalObject* globalObject)
     return frame ? frame->page() : 0;
 }
 
+static ScriptWorldType currentWorldType(ExecState* exec)
+{
+    if (currentWorld(exec) == mainThreadNormalWorld())
+        return MAIN_WORLD;
+    return EXTENSIONS_WORLD;
+}
+
 void ScriptDebugServer::detach(JSGlobalObject* globalObject)
 {
     // If we're detaching from the currently executing global object, manually tear down our
@@ -315,27 +336,22 @@ void ScriptDebugServer::sourceParsed(ExecState* exec, const SourceCode& source, 
     if (m_callingListeners)
         return;
 
-    Page* page = toPage(exec->dynamicGlobalObject());
+    Page* page = toPage(exec->lexicalGlobalObject());
     if (!page)
         return;
+
+    ScriptWorldType worldType = currentWorldType(exec);
 
     m_callingListeners = true;
 
     bool isError = errorLine != -1;
-
-    if (hasGlobalListeners()) {
-        if (isError)
-            dispatchFailedToParseSource(m_listeners, source, errorLine, ustringToString(errorMessage));
-        else
-            dispatchDidParseSource(m_listeners, source);
-    }
 
     if (ListenerSet* pageListeners = m_pageListenersMap.get(page)) {
         ASSERT(!pageListeners->isEmpty());
         if (isError)
             dispatchFailedToParseSource(*pageListeners, source, errorLine, ustringToString(errorMessage));
         else
-            dispatchDidParseSource(*pageListeners, source);
+            dispatchDidParseSource(*pageListeners, source, worldType);
     }
 
     m_callingListeners = false;
@@ -355,10 +371,6 @@ void ScriptDebugServer::dispatchFunctionToListeners(JavaScriptExecutionCallback 
         return;
 
     m_callingListeners = true;
-
-    ASSERT(hasListeners());
-
-    dispatchFunctionToListeners(m_listeners, callback);
 
     if (ListenerSet* pageListeners = m_pageListenersMap.get(page)) {
         ASSERT(!pageListeners->isEmpty());
@@ -400,7 +412,7 @@ void ScriptDebugServer::setJavaScriptPaused(Frame* frame, bool paused)
 
     Document* document = frame->document();
     if (paused)
-        document->suspendActiveDOMObjects();
+        document->suspendActiveDOMObjects(ActiveDOMObject::JavaScriptDebuggerPaused);
     else
         document->resumeActiveDOMObjects();
 
@@ -441,6 +453,7 @@ void ScriptDebugServer::pauseIfNeeded(Page* page)
     m_pauseOnCallFrame = 0;
     m_pauseOnNextStatement = false;
     m_paused = true;
+    m_pausedPage = page;
 
     dispatchFunctionToListeners(&ScriptDebugServer::dispatchDidPause, page);
 
@@ -461,6 +474,7 @@ void ScriptDebugServer::pauseIfNeeded(Page* page)
     setJavaScriptPaused(page->group(), false);
 
     m_paused = false;
+    m_pausedPage = 0;
 
     dispatchFunctionToListeners(&ScriptDebugServer::dispatchDidContinue, page);
 }
@@ -498,6 +512,10 @@ void ScriptDebugServer::returnEvent(const DebuggerCallFrame& debuggerCallFrame, 
 
     m_currentCallFrame->update(debuggerCallFrame, sourceID, lineNumber);
     pauseIfNeeded(toPage(debuggerCallFrame.dynamicGlobalObject()));
+
+    // detach may have been called during pauseIfNeeded
+    if (!m_currentCallFrame)
+        return;
 
     // Treat stepping over a return statement like stepping out.
     if (m_currentCallFrame == m_pauseOnCallFrame)
@@ -570,35 +588,29 @@ void ScriptDebugServer::recompileAllJSFunctionsSoon()
 void ScriptDebugServer::recompileAllJSFunctions(Timer<ScriptDebugServer>*)
 {
     JSLock lock(SilenceAssertionsOnly);
-    Debugger::recompileAllJSFunctions(JSDOMWindow::commonJSGlobalData());
+    // If JavaScript stack is not empty postpone recompilation.
+    if (JSDOMWindow::commonJSGlobalData()->dynamicGlobalObject)
+        recompileAllJSFunctionsSoon();
+    else
+        Debugger::recompileAllJSFunctions(JSDOMWindow::commonJSGlobalData());
 }
 
 void ScriptDebugServer::didAddListener(Page* page)
 {
     recompileAllJSFunctionsSoon();
-
-    if (page)
-        page->setDebugger(this);
-    else
-        Page::setDebuggerForAllPages(this);
+    page->setDebugger(this);
 }
 
 void ScriptDebugServer::didRemoveListener(Page* page)
 {
-    if (hasGlobalListeners() || (page && hasListenersInterestedInPage(page)))
+    if (hasListenersInterestedInPage(page))
         return;
 
+    if (m_pausedPage == page)
+        m_doneProcessingDebuggerEvents = true;
+
     recompileAllJSFunctionsSoon();
-
-    if (page)
-        page->setDebugger(0);
-    else
-        Page::setDebuggerForAllPages(0);
-}
-
-void ScriptDebugServer::didRemoveLastListener()
-{
-    m_doneProcessingDebuggerEvents = true;
+    page->setDebugger(0);
 }
 
 } // namespace WebCore

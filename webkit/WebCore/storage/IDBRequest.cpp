@@ -35,8 +35,11 @@
 #include "EventException.h"
 #include "EventListener.h"
 #include "EventNames.h"
-#include "IDBDatabaseRequest.h"
+#include "IDBCursor.h"
+#include "IDBDatabase.h"
+#include "IDBIndex.h"
 #include "IDBErrorEvent.h"
+#include "IDBObjectStore.h"
 #include "IDBSuccessEvent.h"
 #include "ScriptExecutionContext.h"
 
@@ -45,42 +48,72 @@ namespace WebCore {
 IDBRequest::IDBRequest(ScriptExecutionContext* context, PassRefPtr<IDBAny> source)
     : ActiveDOMObject(context, this)
     , m_source(source)
-    , m_result(IDBAny::create())
     , m_timer(this, &IDBRequest::timerFired)
-    , m_stopped(false)
     , m_aborted(false)
-    , m_readyState(INITIAL)
+    , m_readyState(LOADING)
 {
 }
 
 IDBRequest::~IDBRequest()
 {
-    if (m_readyState != DONE)
-        abort();
+    abort();
+}
+
+bool IDBRequest::resetReadyState()
+{
+    if (m_aborted)
+        return false;
+    ASSERT(m_readyState == DONE);
+    m_readyState = LOADING;
+    return true;
 }
 
 void IDBRequest::onError(PassRefPtr<IDBDatabaseError> error)
 {
-    onEventCommon();
-    m_error = error;
+    scheduleEvent(0, error);
 }
 
-void IDBRequest::onSuccess(PassRefPtr<IDBDatabase> idbDatabase)
+void IDBRequest::onSuccess()
 {
-    onEventCommon();
-    m_result->set(IDBDatabaseRequest::create(idbDatabase));
+    scheduleEvent(IDBAny::createNull(), 0);
+}
+
+void IDBRequest::onSuccess(PassRefPtr<IDBCursorBackendInterface> backend)
+{
+    scheduleEvent(IDBAny::create(IDBCursor::create(backend, this)), 0);
+}
+
+void IDBRequest::onSuccess(PassRefPtr<IDBDatabaseBackendInterface> backend)
+{
+    scheduleEvent(IDBAny::create(IDBDatabase::create(backend)), 0);
+}
+
+void IDBRequest::onSuccess(PassRefPtr<IDBIndexBackendInterface> backend)
+{
+    scheduleEvent(IDBAny::create(IDBIndex::create(backend)), 0);
+}
+
+void IDBRequest::onSuccess(PassRefPtr<IDBKey> idbKey)
+{
+    scheduleEvent(IDBAny::create(idbKey), 0);
+}
+
+void IDBRequest::onSuccess(PassRefPtr<IDBObjectStoreBackendInterface> backend)
+{
+    scheduleEvent(IDBAny::create(IDBObjectStore::create(backend)), 0);
 }
 
 void IDBRequest::onSuccess(PassRefPtr<SerializedScriptValue> serializedScriptValue)
 {
-    onEventCommon();
-    m_result->set(serializedScriptValue);
+    scheduleEvent(IDBAny::create(serializedScriptValue), 0);
 }
 
 void IDBRequest::abort()
 {
     m_timer.stop();
     m_aborted = true;
+    m_pendingEvents.clear();
+
     // FIXME: This should cancel any pending work being done in the backend.
 }
 
@@ -89,24 +122,11 @@ ScriptExecutionContext* IDBRequest::scriptExecutionContext() const
     return ActiveDOMObject::scriptExecutionContext();
 }
 
-void IDBRequest::stop()
+bool IDBRequest::canSuspend() const
 {
-    abort();
-    m_selfRef = 0; // Could trigger a delete.
-}
-
-void IDBRequest::suspend()
-{
-    m_timer.stop();
-    m_stopped = true;
-}
-
-void IDBRequest::resume()
-{
-    m_stopped = false;
-    // We only hold our self ref when we're waiting to dispatch an event.
-    if (m_selfRef && !m_aborted)
-        m_timer.startOneShot(0);
+    // IDBTransactions cannot be suspended at the moment. We therefore
+    // disallow the back/forward cache for pages that use IndexedDatabase.
+    return false;
 }
 
 EventTargetData* IDBRequest::eventTargetData()
@@ -121,40 +141,47 @@ EventTargetData* IDBRequest::ensureEventTargetData()
 
 void IDBRequest::timerFired(Timer<IDBRequest>*)
 {
-    ASSERT(m_readyState == DONE);
     ASSERT(m_selfRef);
-    ASSERT(!m_stopped);
     ASSERT(!m_aborted);
+    ASSERT(m_pendingEvents.size());
 
     // We need to keep self-referencing ourself, otherwise it's possible we'll be deleted.
     // But in some cases, suspend() could be called while we're dispatching an event, so we
     // need to make sure that resume() doesn't re-start the timer based on m_selfRef being set.
     RefPtr<IDBRequest> selfRef = m_selfRef.release();
 
-    if (m_error) {
-        ASSERT(m_result->type() == IDBAny::UndefinedType);
-        dispatchEvent(IDBErrorEvent::create(m_source, *m_error));
-    } else {
-        ASSERT(m_result->type() != IDBAny::UndefinedType);
-        dispatchEvent(IDBSuccessEvent::create(m_source, m_result));        
+    Vector<PendingEvent> pendingEvents;
+    pendingEvents.swap(m_pendingEvents);
+    for (size_t i = 0; i < pendingEvents.size(); ++i) {
+        PendingEvent pendingEvent = pendingEvents[i];
+        if (pendingEvent.m_error) {
+            ASSERT(!pendingEvent.m_result);
+            dispatchEvent(IDBErrorEvent::create(m_source, *pendingEvent.m_error));
+        } else {
+            ASSERT(pendingEvent.m_result->type() != IDBAny::UndefinedType);
+            dispatchEvent(IDBSuccessEvent::create(m_source, pendingEvent.m_result));
+        }
     }
 }
 
-void IDBRequest::onEventCommon()
+void IDBRequest::scheduleEvent(PassRefPtr<IDBAny> result, PassRefPtr<IDBDatabaseError> error)
 {
     ASSERT(m_readyState < DONE);
-    ASSERT(m_result->type() == IDBAny::UndefinedType);
-    ASSERT(!m_error);
-    ASSERT(!m_selfRef);
-    ASSERT(!m_timer.isActive());
+    ASSERT(!!m_selfRef == m_timer.isActive());
 
     if (m_aborted)
         return;
 
+    PendingEvent pendingEvent;
+    pendingEvent.m_result = result;
+    pendingEvent.m_error = error;
+    m_pendingEvents.append(pendingEvent);
+
     m_readyState = DONE;
-    m_selfRef = this;
-    if (!m_stopped)
+    if (!m_timer.isActive()) {
+        m_selfRef = this;
         m_timer.startOneShot(0);
+    }
 }
 
 } // namespace WebCore

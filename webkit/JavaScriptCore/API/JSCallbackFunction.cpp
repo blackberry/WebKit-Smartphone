@@ -29,6 +29,7 @@
 #include "APIShims.h"
 #include "APICast.h"
 #include "CodeBlock.h"
+#include "ExceptionHelpers.h"
 #include "JSFunction.h"
 #include "FunctionPrototype.h"
 #include <runtime/JSGlobalObject.h>
@@ -47,27 +48,27 @@ JSCallbackFunction::JSCallbackFunction(ExecState* exec, JSGlobalObject* globalOb
 {
 }
 
-JSValue JSCallbackFunction::call(ExecState* exec, JSObject* functionObject, JSValue thisValue, const ArgList& args)
+EncodedJSValue JSCallbackFunction::call(ExecState* exec)
 {
     JSContextRef execRef = toRef(exec);
-    JSObjectRef functionRef = toRef(functionObject);
-    JSObjectRef thisObjRef = toRef(thisValue.toThisObject(exec));
+    JSObjectRef functionRef = toRef(exec->callee());
+    JSObjectRef thisObjRef = toRef(exec->hostThisValue().toThisObject(exec));
 
-    int argumentCount = static_cast<int>(args.size());
+    int argumentCount = static_cast<int>(exec->argumentCount());
     Vector<JSValueRef, 16> arguments(argumentCount);
     for (int i = 0; i < argumentCount; i++)
-        arguments[i] = toRef(exec, args.at(i));
+        arguments[i] = toRef(exec, exec->argument(i));
 
     JSValueRef exception = 0;
     JSValueRef result;
     {
         APICallbackShim callbackShim(exec);
-        result = static_cast<JSCallbackFunction*>(functionObject)->m_callback(execRef, functionRef, thisObjRef, argumentCount, arguments.data(), &exception);
+        result = static_cast<JSCallbackFunction*>(toJS(functionRef))->m_callback(execRef, functionRef, thisObjRef, argumentCount, arguments.data(), &exception);
     }
     if (exception)
-        exec->setException(toJS(exec, exception));
+        throwError(exec, toJS(exec, exception));
 
-    return toJS(exec, result);
+    return JSValue::encode(toJS(exec, result));
 }
 
 CallType JSCallbackFunction::getCallData(CallData& callData)

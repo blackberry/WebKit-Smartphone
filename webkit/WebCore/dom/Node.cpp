@@ -40,6 +40,7 @@
 #include "ContextMenuController.h"
 #include "DOMImplementation.h"
 #include "Document.h"
+#include "DocumentType.h"
 #include "DynamicNodeList.h"
 #include "Element.h"
 #include "Event.h"
@@ -66,9 +67,10 @@
 #include "ProcessingInstruction.h"
 #include "ProgressEvent.h"
 #include "RegisteredEventListener.h"
-#include "RenderObject.h"
+#include "RenderBox.h"
 #include "ScriptController.h"
 #include "SelectorNodeList.h"
+#include "StaticNodeList.h"
 #include "StringBuilder.h"
 #include "TagNodeList.h"
 #include "Text.h"
@@ -639,9 +641,8 @@ const AtomicString& Node::virtualNamespaceURI() const
     return nullAtom;
 }
 
-ContainerNode* Node::addChild(PassRefPtr<Node>)
+void Node::deprecatedParserAddChild(PassRefPtr<Node>)
 {
-    return 0;
 }
 
 bool Node::isContentEditable() const
@@ -671,10 +672,24 @@ RenderBoxModelObject* Node::renderBoxModelObject() const
 
 IntRect Node::getRect() const
 {
-    // FIXME: broken with transforms
     if (renderer())
-        return renderer()->absoluteBoundingBoxRect();
+        return renderer()->absoluteBoundingBoxRect(true);
     return IntRect();
+}
+    
+IntRect Node::renderRect(bool* isReplaced)
+{    
+    RenderObject* hitRenderer = this->renderer();
+    ASSERT(hitRenderer);
+    RenderObject* renderer = hitRenderer;
+    while (renderer && !renderer->isBody() && !renderer->isRoot()) {
+        if (renderer->isRenderBlock() || renderer->isInlineBlockOrInlineTable() || renderer->isReplaced()) {
+            *isReplaced = renderer->isReplaced();
+            return renderer->absoluteBoundingBoxRect(true);
+        }
+        renderer = renderer->parent();
+    }
+    return IntRect();    
 }
 
 bool Node::hasNonEmptyBoundingBox() const
@@ -703,63 +718,41 @@ inline void Node::setStyleChange(StyleChangeType changeType)
     m_nodeFlags = (m_nodeFlags & ~StyleChangeMask) | changeType;
 }
 
+inline void Node::markAncestorsWithChildNeedsStyleRecalc()
+{
+    for (Node* p = parentNode(); p && !p->childNeedsStyleRecalc(); p = p->parentNode())
+        p->setChildNeedsStyleRecalc();
+    
+    if (document()->childNeedsStyleRecalc())
+        document()->scheduleStyleRecalc();
+}
+
 void Node::setNeedsStyleRecalc(StyleChangeType changeType)
 {
-    if ((changeType != NoStyleChange) && !attached()) // changed compared to what?
+    ASSERT(changeType != NoStyleChange);
+    if (!attached()) // changed compared to what?
         return;
 
-    if (!(changeType == InlineStyleChange && (styleChangeType() == FullStyleChange || styleChangeType() == SyntheticStyleChange)))
+    StyleChangeType existingChangeType = styleChangeType();
+    if (changeType > existingChangeType)
         setStyleChange(changeType);
 
-    if (styleChangeType() != NoStyleChange) {
-        for (Node* p = parentNode(); p && !p->childNeedsStyleRecalc(); p = p->parentNode())
-            p->setChildNeedsStyleRecalc();
-        if (document()->childNeedsStyleRecalc())
-            document()->scheduleStyleRecalc();
-    }
+    if (existingChangeType == NoStyleChange)
+        markAncestorsWithChildNeedsStyleRecalc();
 }
 
-static Node* outermostLazyAttachedAncestor(Node* start)
+void Node::lazyAttach(ShouldSetAttached shouldSetAttached)
 {
-    Node* p = start;
-    for (Node* next = p->parentNode(); !next->renderer(); p = next, next = next->parentNode()) {}
-    return p;
-}
-
-void Node::lazyAttach()
-{
-    bool mustDoFullAttach = false;
-
     for (Node* n = this; n; n = n->traverseNextNode(this)) {
-        if (!n->canLazyAttach()) {
-            mustDoFullAttach = true;
-            break;
-        }
-
         if (n->firstChild())
             n->setChildNeedsStyleRecalc();
         n->setStyleChange(FullStyleChange);
-        n->setAttached();
+        if (shouldSetAttached == SetAttached)
+            n->setAttached();
     }
-
-    if (mustDoFullAttach) {
-        Node* lazyAttachedAncestor = outermostLazyAttachedAncestor(this);
-        if (lazyAttachedAncestor->attached())
-            lazyAttachedAncestor->detach();
-        lazyAttachedAncestor->attach();
-    } else {
-        for (Node* p = parentNode(); p && !p->childNeedsStyleRecalc(); p = p->parentNode())
-            p->setChildNeedsStyleRecalc();
-        if (document()->childNeedsStyleRecalc())
-            document()->scheduleStyleRecalc();
-    }
+    markAncestorsWithChildNeedsStyleRecalc();
 }
 
-bool Node::canLazyAttach()
-{
-    return shadowAncestorNode() == this;
-}
-    
 void Node::setFocus(bool b)
 { 
     if (b || hasRareData())
@@ -1058,21 +1051,27 @@ void Node::checkSetPrefix(const AtomicString& prefix, ExceptionCode& ec)
     // Attribute-specific checks are in Attr::setPrefix().
 }
 
-bool Node::canReplaceChild(Node* newChild, Node*)
+static bool isChildTypeAllowed(Node* newParent, Node* child)
 {
-    if (newChild->nodeType() != DOCUMENT_FRAGMENT_NODE) {
-        if (!childTypeAllowed(newChild->nodeType()))
+    if (child->nodeType() != Node::DOCUMENT_FRAGMENT_NODE) {
+        if (!newParent->childTypeAllowed(child->nodeType()))
             return false;
-    } else {
-        for (Node *n = newChild->firstChild(); n; n = n->nextSibling()) {
-            if (!childTypeAllowed(n->nodeType())) 
-                return false;
-        }
     }
+    
+    for (Node *n = child->firstChild(); n; n = n->nextSibling()) {
+        if (!newParent->childTypeAllowed(n->nodeType()))
+            return false;
+    }
+
     return true;
 }
 
-void Node::checkReplaceChild(Node* newChild, Node* oldChild, ExceptionCode& ec)
+bool Node::canReplaceChild(Node* newChild, Node*)
+{
+    return isChildTypeAllowed(this, newChild);
+}
+
+static void checkAcceptChild(Node* newParent, Node* newChild, ExceptionCode& ec)
 {
     // Perform error checking as required by spec for adding a new child. Used by replaceChild().
     
@@ -1083,113 +1082,69 @@ void Node::checkReplaceChild(Node* newChild, Node* oldChild, ExceptionCode& ec)
     }
     
     // NO_MODIFICATION_ALLOWED_ERR: Raised if this node is readonly
-    if (isReadOnlyNode()) {
+    if (newParent->isReadOnlyNode()) {
         ec = NO_MODIFICATION_ALLOWED_ERR;
         return;
     }
-    
-    bool shouldAdoptChild = false;
     
     // WRONG_DOCUMENT_ERR: Raised if newChild was created from a different document than the one that
     // created this node.
     // We assume that if newChild is a DocumentFragment, all children are created from the same document
     // as the fragment itself (otherwise they could not have been added as children)
-    if (newChild->document() != document()) {
+    if (newChild->document() != newParent->document() && newChild->inDocument()) {
         // but if the child is not in a document yet then loosen the
         // restriction, so that e.g. creating an element with the Option()
         // constructor and then adding it to a different document works,
         // as it does in Mozilla and Mac IE.
-        if (!newChild->inDocument()) {
-            shouldAdoptChild = true;
-        } else {
-            ec = WRONG_DOCUMENT_ERR;
-            return;
-        }
+        ec = WRONG_DOCUMENT_ERR;
+        return;
     }
     
     // HIERARCHY_REQUEST_ERR: Raised if this node is of a type that does not allow children of the type of the
     // newChild node, or if the node to append is one of this node's ancestors.
-    
+
     // check for ancestor/same node
-    if (newChild == this || isDescendantOf(newChild)) {
+    if (newChild == newParent || newParent->isDescendantOf(newChild)) {
         ec = HIERARCHY_REQUEST_ERR;
         return;
     }
-    
+}
+
+static void transferOwnerDocument(Document* newDocument, Node* root)
+{
+    // FIXME: To match Gecko, we should do this for nodes that are already in the document as well.
+    if (root->document() != newDocument && !root->inDocument()) {
+        for (Node* node = root; node; node = node->traverseNextNode(root))
+            node->setDocument(newDocument);
+    }
+}
+
+void Node::checkReplaceChild(Node* newChild, Node* oldChild, ExceptionCode& ec)
+{
+    checkAcceptChild(this, newChild, ec);
+    if (ec)
+        return;
+
     if (!canReplaceChild(newChild, oldChild)) {
         ec = HIERARCHY_REQUEST_ERR;
         return;
     }
-       
-    // change the document pointer of newChild and all of its children to be the new document
-    if (shouldAdoptChild)
-        for (Node* node = newChild; node; node = node->traverseNextNode(newChild))
-            node->setDocument(document());
+
+    transferOwnerDocument(document(), newChild);
 }
 
 void Node::checkAddChild(Node *newChild, ExceptionCode& ec)
 {
-    // Perform error checking as required by spec for adding a new child. Used by appendChild() and insertBefore().
-
-    // Not mentioned in spec: throw NOT_FOUND_ERR if newChild is null
-    if (!newChild) {
-        ec = NOT_FOUND_ERR;
+    checkAcceptChild(this, newChild, ec);
+    if (ec)
         return;
-    }
-
-    // NO_MODIFICATION_ALLOWED_ERR: Raised if this node is readonly
-    if (isReadOnlyNode()) {
-        ec = NO_MODIFICATION_ALLOWED_ERR;
-        return;
-    }
-
-    bool shouldAdoptChild = false;
-
-    // WRONG_DOCUMENT_ERR: Raised if newChild was created from a different document than the one that
-    // created this node.
-    // We assume that if newChild is a DocumentFragment, all children are created from the same document
-    // as the fragment itself (otherwise they could not have been added as children)
-    if (newChild->document() != document()) {
-        // but if the child is not in a document yet then loosen the
-        // restriction, so that e.g. creating an element with the Option()
-        // constructor and then adding it to a different document works,
-        // as it does in Mozilla and Mac IE.
-        if (!newChild->inDocument()) {
-            shouldAdoptChild = true;
-        } else {
-            ec = WRONG_DOCUMENT_ERR;
-            return;
-        }
-    }
-
-    // HIERARCHY_REQUEST_ERR: Raised if this node is of a type that does not allow children of the type of the
-    // newChild node, or if the node to append is one of this node's ancestors.
-
-    // check for ancestor/same node
-    if (newChild == this || isDescendantOf(newChild)) {
+    
+    if (!isChildTypeAllowed(this, newChild)) {
         ec = HIERARCHY_REQUEST_ERR;
         return;
     }
-    
-    if (newChild->nodeType() != DOCUMENT_FRAGMENT_NODE) {
-        if (!childTypeAllowed(newChild->nodeType())) {
-            ec = HIERARCHY_REQUEST_ERR;
-            return;
-        }
-    }
-    else {
-        for (Node *n = newChild->firstChild(); n; n = n->nextSibling()) {
-            if (!childTypeAllowed(n->nodeType())) {
-                ec = HIERARCHY_REQUEST_ERR;
-                return;
-            }
-        }
-    }
-    
-    // change the document pointer of newChild and all of its children to be the new document
-    if (shouldAdoptChild)
-        for (Node* node = newChild; node; node = node->traverseNextNode(newChild))
-            node->setDocument(document());
+
+    transferOwnerDocument(document(), newChild);
 }
 
 bool Node::isDescendantOf(const Node *other) const
@@ -1211,11 +1166,6 @@ bool Node::contains(const Node* node) const
     return this == node || node->isDescendantOf(this);
 }
 
-bool Node::childAllowed(Node* newChild)
-{
-    return childTypeAllowed(newChild->nodeType());
-}
-
 void Node::attach()
 {
     ASSERT(!attached());
@@ -1235,6 +1185,7 @@ void Node::attach()
     }
 
     setAttached();
+    clearNeedsStyleRecalc();
 }
 
 void Node::willRemove()
@@ -1447,9 +1398,13 @@ bool Node::canStartSelection() const
 
     if (renderer()) {
         RenderStyle* style = renderer()->style();
+#if ENABLE(DRAG_SUPPORT)
         // We allow selections to begin within an element that has -webkit-user-select: none set,
         // but if the element is draggable then dragging should take priority over selection.
         if (style->userDrag() == DRAG_ELEMENT && style->userSelect() == SELECT_NONE)
+#else
+        if (style->userSelect() == SELECT_NONE)
+#endif
             return false;
     }
     return parent() ? parent()->canStartSelection() : true;
@@ -1561,12 +1516,12 @@ bool Node::inSameContainingBlockFlowElement(Node *n)
 
 // FIXME: End of obviously misplaced HTML editing functions.  Try to move these out of Node.
 
-PassRefPtr<NodeList> Node::getElementsByTagName(const String& name)
+PassRefPtr<NodeList> Node::getElementsByTagName(const AtomicString& name)
 {
     return getElementsByTagNameNS(starAtom, name);
 }
  
-PassRefPtr<NodeList> Node::getElementsByTagNameNS(const AtomicString& namespaceURI, const String& localName)
+PassRefPtr<NodeList> Node::getElementsByTagNameNS(const AtomicString& namespaceURI, const AtomicString& localName)
 {
     if (localName.isNull())
         return 0;
@@ -1632,7 +1587,7 @@ PassRefPtr<Element> Node::querySelector(const String& selectors, ExceptionCode& 
         ec = SYNTAX_ERR;
         return 0;
     }
-    bool strictParsing = !document()->inCompatMode();
+    bool strictParsing = !document()->inQuirksMode();
     CSSParser p(strictParsing);
 
     CSSSelectorList querySelectorList;
@@ -1679,7 +1634,7 @@ PassRefPtr<NodeList> Node::querySelectorAll(const String& selectors, ExceptionCo
         ec = SYNTAX_ERR;
         return 0;
     }
-    bool strictParsing = !document()->inCompatMode();
+    bool strictParsing = !document()->inQuirksMode();
     CSSParser p(strictParsing);
 
     CSSSelectorList querySelectorList;
@@ -1710,12 +1665,13 @@ KURL Node::baseURI() const
     return parentNode() ? parentNode()->baseURI() : KURL();
 }
 
-bool Node::isEqualNode(Node *other) const
+bool Node::isEqualNode(Node* other) const
 {
     if (!other)
         return false;
     
-    if (nodeType() != other->nodeType())
+    NodeType nodeType = this->nodeType();
+    if (nodeType != other->nodeType())
         return false;
     
     if (nodeName() != other->nodeName())
@@ -1733,17 +1689,17 @@ bool Node::isEqualNode(Node *other) const
     if (nodeValue() != other->nodeValue())
         return false;
     
-    NamedNodeMap *attrs = attributes();
-    NamedNodeMap *otherAttrs = other->attributes();
+    NamedNodeMap* attributes = this->attributes();
+    NamedNodeMap* otherAttributes = other->attributes();
     
-    if (!attrs && otherAttrs)
+    if (!attributes && otherAttributes)
         return false;
     
-    if (attrs && !attrs->mapsEquivalent(otherAttrs))
+    if (attributes && !attributes->mapsEquivalent(otherAttributes))
         return false;
     
-    Node *child = firstChild();
-    Node *otherChild = other->firstChild();
+    Node* child = firstChild();
+    Node* otherChild = other->firstChild();
     
     while (child) {
         if (!child->isEqualNode(otherChild))
@@ -1756,8 +1712,33 @@ bool Node::isEqualNode(Node *other) const
     if (otherChild)
         return false;
     
-    // FIXME: For DocumentType nodes we should check equality on
-    // the entities and notations NamedNodeMaps as well.
+    if (nodeType == DOCUMENT_TYPE_NODE) {
+        const DocumentType* documentTypeThis = static_cast<const DocumentType*>(this);
+        const DocumentType* documentTypeOther = static_cast<const DocumentType*>(other);
+        
+        if (documentTypeThis->publicId() != documentTypeOther->publicId())
+            return false;
+
+        if (documentTypeThis->systemId() != documentTypeOther->systemId())
+            return false;
+
+        if (documentTypeThis->internalSubset() != documentTypeOther->internalSubset())
+            return false;
+
+        NamedNodeMap* entities = documentTypeThis->entities();
+        NamedNodeMap* otherEntities = documentTypeOther->entities();
+        if (!entities && otherEntities)
+            return false;
+        if (entities && !entities->mapsEquivalent(otherEntities))
+            return false;
+
+        NamedNodeMap* notations = documentTypeThis->notations();
+        NamedNodeMap* otherNotations = documentTypeOther->notations();
+        if (!notations && otherNotations)
+            return false;
+        if (notations && !notations->mapsEquivalent(otherNotations))
+            return false;
+    }
     
     return true;
 }
@@ -2290,9 +2271,7 @@ void Node::getSubresourceURLs(ListHashSet<KURL>& urls) const
 
 ContainerNode* Node::eventParentNode()
 {
-    Node* parent = parentNode();
-    ASSERT(!parent || parent->isContainerNode());
-    return static_cast<ContainerNode*>(parent);
+    return parentNode();
 }
 
 Node* Node::enclosingLinkEventParentOrSelf()
@@ -2548,7 +2527,7 @@ static inline SVGElementInstance* eventTargetAsSVGElementInstance(Node* referenc
         if (!n->isShadowNode() || !n->isSVGElement())
             continue;
 
-        Node* shadowTreeParentElement = n->shadowParentNode();
+        ContainerNode* shadowTreeParentElement = n->shadowParentNode();
         ASSERT(shadowTreeParentElement->hasTagName(SVGNames::useTag));
 
         if (SVGElementInstance* instance = static_cast<SVGUseElement*>(shadowTreeParentElement)->instanceForShadowTreeElement(referenceNode))
@@ -3025,6 +3004,8 @@ void Node::defaultEventHandler(Event* event)
         if (startNode && startNode->renderer())
             if (Frame* frame = document()->frame())
                 frame->eventHandler()->defaultWheelEventHandler(startNode, wheelEvent);
+    } else if (event->type() == eventNames().webkitEditableContentChangedEvent) {
+        dispatchEvent(Event::create(eventNames().inputEvent, true, false));
     }
 }
 

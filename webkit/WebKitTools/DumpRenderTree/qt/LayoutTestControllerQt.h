@@ -62,6 +62,7 @@ public:
     bool shouldDumpAsText() const { return m_textDump; }
     bool shouldDumpBackForwardList() const { return m_dumpBackForwardList; }
     bool shouldDumpChildrenAsText() const { return m_dumpChildrenAsText; }
+    bool shouldDumpChildFrameScrollPositions() const { return m_dumpChildFrameScrollPositions; }
     bool shouldDumpDatabaseCallbacks() const { return m_dumpDatabaseCallbacks; }
     bool shouldDumpStatusCallbacks() const { return m_dumpStatusCallbacks; }
     bool shouldWaitUntilDone() const { return m_waitForDone; }
@@ -69,6 +70,7 @@ public:
     bool canOpenWindows() const { return m_canOpenWindows; }
     bool shouldDumpTitleChanges() const { return m_dumpTitleChanges; }
     bool waitForPolicy() const { return m_waitForPolicy; }
+    bool ignoreReqestForPermission() const { return m_ignoreDesktopNotification; }
 
     void reset();
 
@@ -83,11 +85,13 @@ signals:
 
     void showPage();
     void hidePage();
+    void geolocationPermissionSet();
 
 public slots:
     void maybeDump(bool ok);
     void dumpAsText() { m_textDump = true; }
     void dumpChildFramesAsText() { m_dumpChildrenAsText = true; }
+    void dumpChildFrameScrollPositions() { m_dumpChildFrameScrollPositions = true; }
     void dumpDatabaseCallbacks() { m_dumpDatabaseCallbacks = true; }
     void dumpStatusCallbacks() { m_dumpStatusCallbacks = true; }
     void setCanOpenWindows() { m_canOpenWindows = true; }
@@ -103,12 +107,15 @@ public slots:
     void dumpEditingCallbacks();
     void dumpFrameLoadCallbacks();
     void dumpResourceLoadCallbacks();
+    void dumpResourceResponseMIMETypes();
+    void dumpConfigurationForViewport(int availableWidth, int availableHeight);
     void setWillSendRequestReturnsNullOnRedirect(bool enabled);
     void setWillSendRequestReturnsNull(bool enabled);
     void setWillSendRequestClearHeader(const QStringList& headers);
     void queueBackNavigation(int howFarBackward);
     void queueForwardNavigation(int howFarForward);
     void queueLoad(const QString& url, const QString& target = QString());
+    void queueLoadHTMLString(const QString& content, const QString& baseURL = QString());
     void queueReload();
     void queueLoadingScript(const QString& script);
     void queueNonLoadingScript(const QString& script);
@@ -116,7 +123,9 @@ public slots:
     void setCloseRemainingWindowsWhenComplete(bool = false) {}
     int windowCount();
     void grantDesktopNotificationPermission(const QString& origin);
+    void ignoreDesktopNotificationPermissionRequests();
     bool checkDesktopNotificationPermission(const QString& origin);
+    void simulateDesktopNotificationClick(const QString& title);
     void display();
     void clearBackForwardList();
     QString pathToLocalResource(const QString& url);
@@ -145,6 +154,7 @@ public slots:
     void resetLoadFinished() { m_loadFinished = false; }
     void setWindowIsKey(bool isKey);
     void setMainFrameIsFirstResponder(bool isFirst);
+    void setDeferMainResourceDataLoad(bool);
     void setJavaScriptCanAccessClipboard(bool enable);
     void setXSSAuditorEnabled(bool enable);
     void setCaretBrowsingEnabled(bool enable);
@@ -160,6 +170,8 @@ public slots:
     bool elementDoesAutoCompleteForElementWithId(const QString& elementId);
 
     unsigned numberOfActiveAnimations() const;
+    void suspendAnimations() const;
+    void resumeAnimations() const;
 
     void addOriginAccessWhitelistEntry(const QString& sourceOrigin, const QString& destinationProtocol, const QString& destinationHost, bool allowDestinationSubdomains);
     void removeOriginAccessWhitelistEntry(const QString& sourceOrigin, const QString& destinationProtocol, const QString& destinationHost, bool allowDestinationSubdomains);
@@ -167,11 +179,16 @@ public slots:
     void dispatchPendingLoadRequests();
     void disableImageLoading();
 
+    void clearAllApplicationCaches();
+    void setApplicationCacheOriginQuota(unsigned long long quota);
+
     void setDatabaseQuota(int size);
     void clearAllDatabases();
     void setIconDatabaseEnabled(bool enable);
 
+    void setCustomPolicyDelegate(bool enabled, bool permissive = true);
     void waitForPolicyDelegate();
+
     void overridePreference(const QString& name, const QVariant& value);
     void setUserStyleSheetLocation(const QString& url);
     void setUserStyleSheetEnabled(bool enabled);
@@ -180,6 +197,26 @@ public slots:
     int pageNumberForElementById(const QString& id, float width = 0, float height = 0);
     int numberOfPages(float width = maxViewWidth, float height = maxViewHeight);
     bool callShouldCloseOnWebView();
+    // For now, this is a no-op. This may change depending on outcome of
+    // https://bugs.webkit.org/show_bug.cgi?id=33333
+    void setCallCloseOnWebViews() {}
+    // This is a no-op - it allows us to pass
+    // plugins/get-url-that-the-resource-load-delegate-will-disallow.html
+    // which is a Mac-specific test.
+    void addDisallowedURL(const QString&) {}
+
+    void setMockDeviceOrientation(bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma);
+
+    void setMockGeolocationError(int code, const QString& message);
+    void setMockGeolocationPosition(double latitude, double longitude, double accuracy);
+    void setGeolocationPermission(bool allow);
+    bool isGeolocationPermissionSet() const { return m_isGeolocationPermissionSet; }
+    bool geolocationPermission() const { return m_geolocationPermission; }
+
+    void setMockSpeechInputResult(const QString& result);
+
+    // Empty stub method to keep parity with object model exposed by global LayoutTestController.
+    void abortModal() {}
 
     /*
         Policy values: 'on', 'auto' or 'off'.
@@ -195,14 +232,24 @@ public slots:
 
     void setEditingBehavior(const QString& editingBehavior);
 
+    void evaluateScriptInIsolatedWorld(int worldID, const QString& script);
+    bool isPageBoxVisible(int pageIndex);
+    QString pageSizeAndMarginsInPixels(int pageIndex, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft);
+    QString pageProperty(const QString& propertyName, int pageNumber);
+    void addUserStyleSheet(const QString& sourceCode);
+
 private slots:
     void processWork();
+
+private:
+    void setGeolocationPermissionCommon(bool allow);
 
 private:
     bool m_hasDumped;
     bool m_textDump;
     bool m_dumpBackForwardList;
     bool m_dumpChildrenAsText;
+    bool m_dumpChildFrameScrollPositions;
     bool m_canOpenWindows;
     bool m_waitForDone;
     bool m_dumpTitleChanges;
@@ -212,12 +259,17 @@ private:
     bool m_handleErrorPages;
     bool m_loadFinished;
     bool m_globalFlag;
+    bool m_userStyleSheetEnabled;
+    bool m_isGeolocationPermissionSet;
+    bool m_geolocationPermission;
 
     QUrl m_userStyleSheetLocation;
     QBasicTimer m_timeoutTimer;
     QWebFrame* m_topLoadingFrame;
     WebCore::DumpRenderTree* m_drt;
     QWebHistory* m_webHistory;
+    QStringList m_desktopNotificationAllowedOrigins;
+    bool m_ignoreDesktopNotification;
 };
 
 #endif // LayoutTestControllerQt_h

@@ -104,7 +104,7 @@ JSValue ObjcField::valueFromInstance(ExecState* exec, const Instance* instance) 
             result = convertObjcValueToValue(exec, &objcValue, ObjcObjectType, instance->rootObject());
     } @catch(NSException* localException) {
         JSLock::lock(SilenceAssertionsOnly);
-        throwError(exec, GeneralError, [localException reason]);
+        throwError(exec, [localException reason]);
         JSLock::unlock(SilenceAssertionsOnly);
     }
 
@@ -132,7 +132,7 @@ void ObjcField::setValueToInstance(ExecState* exec, const Instance* instance, JS
         [targetObject setValue:value forKey:(NSString *)_name.get()];
     } @catch(NSException* localException) {
         JSLock::lock(SilenceAssertionsOnly);
-        throwError(exec, GeneralError, [localException reason]);
+        throwError(exec, [localException reason]);
         JSLock::unlock(SilenceAssertionsOnly);
     }
 }
@@ -148,12 +148,12 @@ ObjcArray::ObjcArray(ObjectStructPtr a, PassRefPtr<RootObject> rootObject)
 void ObjcArray::setValueAt(ExecState* exec, unsigned int index, JSValue aValue) const
 {
     if (![_array.get() respondsToSelector:@selector(insertObject:atIndex:)]) {
-        throwError(exec, TypeError, "Array is not mutable.");
+        throwError(exec, createTypeError(exec, "Array is not mutable."));
         return;
     }
 
     if (index > [_array.get() count]) {
-        throwError(exec, RangeError, "Index exceeds array size.");
+        throwError(exec, createRangeError(exec, "Index exceeds array size."));
         return;
     }
     
@@ -164,20 +164,20 @@ void ObjcArray::setValueAt(ExecState* exec, unsigned int index, JSValue aValue) 
     @try {
         [_array.get() insertObject:oValue.objectValue atIndex:index];
     } @catch(NSException* localException) {
-        throwError(exec, GeneralError, "Objective-C exception.");
+        throwError(exec, createError(exec, "Objective-C exception."));
     }
 }
 
 JSValue ObjcArray::valueAt(ExecState* exec, unsigned int index) const
 {
     if (index > [_array.get() count])
-        return throwError(exec, RangeError, "Index exceeds array size.");
+        return throwError(exec, createRangeError(exec, "Index exceeds array size."));
     @try {
         id obj = [_array.get() objectAtIndex:index];
         if (obj)
             return convertObjcValueToValue (exec, &obj, ObjcObjectType, m_rootObject.get());
     } @catch(NSException* localException) {
-        return throwError(exec, GeneralError, "Objective-C exception.");
+        return throwError(exec, createError(exec, "Objective-C exception."));
     }
     return jsUndefined();
 }
@@ -215,10 +215,11 @@ void ObjcFallbackObjectImp::put(ExecState*, const Identifier&, JSValue, PutPrope
 {
 }
 
-static JSValue JSC_HOST_CALL callObjCFallbackObject(ExecState* exec, JSObject* function, JSValue thisValue, const ArgList& args)
+static EncodedJSValue JSC_HOST_CALL callObjCFallbackObject(ExecState* exec)
 {
+    JSValue thisValue = exec->hostThisValue();
     if (!thisValue.inherits(&ObjCRuntimeObject::s_info))
-        return throwError(exec, TypeError);
+        return throwVMTypeError(exec);
 
     JSValue result = jsUndefined();
 
@@ -226,7 +227,7 @@ static JSValue JSC_HOST_CALL callObjCFallbackObject(ExecState* exec, JSObject* f
     ObjcInstance* objcInstance = runtimeObject->getInternalObjCInstance();
 
     if (!objcInstance)
-        return RuntimeObject::throwInvalidAccessError(exec);
+        return JSValue::encode(RuntimeObject::throwInvalidAccessError(exec));
     
     objcInstance->begin();
 
@@ -235,15 +236,15 @@ static JSValue JSC_HOST_CALL callObjCFallbackObject(ExecState* exec, JSObject* f
     if ([targetObject respondsToSelector:@selector(invokeUndefinedMethodFromWebScript:withArguments:)]){
         ObjcClass* objcClass = static_cast<ObjcClass*>(objcInstance->getClass());
         OwnPtr<ObjcMethod> fallbackMethod(new ObjcMethod(objcClass->isa(), @selector(invokeUndefinedMethodFromWebScript:withArguments:)));
-        const Identifier& nameIdentifier = static_cast<ObjcFallbackObjectImp*>(function)->propertyName();
-        RetainPtr<CFStringRef> name(AdoptCF, CFStringCreateWithCharacters(0, nameIdentifier.data(), nameIdentifier.size()));
+        const Identifier& nameIdentifier = static_cast<ObjcFallbackObjectImp*>(exec->callee())->propertyName();
+        RetainPtr<CFStringRef> name(AdoptCF, CFStringCreateWithCharacters(0, nameIdentifier.characters(), nameIdentifier.length()));
         fallbackMethod->setJavaScriptName(name.get());
-        result = objcInstance->invokeObjcMethod(exec, fallbackMethod.get(), args);
+        result = objcInstance->invokeObjcMethod(exec, fallbackMethod.get());
     }
             
     objcInstance->end();
 
-    return result;
+    return JSValue::encode(result);
 }
 
 CallType ObjcFallbackObjectImp::getCallData(CallData& callData)

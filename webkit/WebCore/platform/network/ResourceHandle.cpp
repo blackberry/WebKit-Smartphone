@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004, 2006, 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,6 +27,7 @@
 #include "ResourceHandle.h"
 #include "ResourceHandleInternal.h"
 
+#include "BlobRegistry.h"
 #include "DNS.h"
 #include "Logging.h"
 #include "ResourceHandleClient.h"
@@ -37,31 +38,36 @@ namespace WebCore {
 
 static bool shouldForceContentSniffing;
 
-ResourceHandle::ResourceHandle(const ResourceRequest& request, ResourceHandleClient* client, bool defersLoading,
-         bool shouldContentSniff)
-    : d(new ResourceHandleInternal(this, request, client, defersLoading, shouldContentSniff))
+ResourceHandle::ResourceHandle(const ResourceRequest& request, ResourceHandleClient* client, bool defersLoading, bool shouldContentSniff)
+    : d(new ResourceHandleInternal(this, request, client, defersLoading, shouldContentSniff && shouldContentSniffURL(request.url())))
 {
-}
-
-PassRefPtr<ResourceHandle> ResourceHandle::create(const ResourceRequest& request, ResourceHandleClient* client,
-    Frame* frame, bool defersLoading, bool shouldContentSniff)
-{
-    if (shouldContentSniff)
-        shouldContentSniff = shouldContentSniffURL(request.url());
-
-    RefPtr<ResourceHandle> newHandle(adoptRef(new ResourceHandle(request, client, defersLoading, shouldContentSniff)));
-
     if (!request.url().isValid()) {
-        newHandle->scheduleFailure(InvalidURLFailure);
-        return newHandle.release();
+        scheduleFailure(InvalidURLFailure);
+        return;
     }
 
     if (!portAllowed(request.url())) {
-        newHandle->scheduleFailure(BlockedFailure);
-        return newHandle.release();
+        scheduleFailure(BlockedFailure);
+        return;
     }
-        
-    if (newHandle->start(frame))
+}
+
+PassRefPtr<ResourceHandle> ResourceHandle::create(NetworkingContext* context, const ResourceRequest& request, ResourceHandleClient* client, bool defersLoading, bool shouldContentSniff)
+{
+#if ENABLE(BLOB)
+    if (request.url().protocolIs("blob")) {
+        PassRefPtr<ResourceHandle> handle = blobRegistry().createResourceHandle(request, client);
+        if (handle)
+            return handle;
+    }
+#endif
+
+    RefPtr<ResourceHandle> newHandle(adoptRef(new ResourceHandle(request, client, defersLoading, shouldContentSniff)));
+
+    if (newHandle->d->m_scheduledFailureType != NoFailure)
+        return newHandle.release();
+
+    if (newHandle->start(context))
         return newHandle.release();
 
     return 0;
@@ -69,7 +75,7 @@ PassRefPtr<ResourceHandle> ResourceHandle::create(const ResourceRequest& request
 
 void ResourceHandle::scheduleFailure(FailureType type)
 {
-    d->m_failureType = type;
+    d->m_scheduledFailureType = type;
     d->m_failureTimer.startOneShot(0);
 }
 
@@ -78,11 +84,16 @@ void ResourceHandle::fireFailure(Timer<ResourceHandle>*)
     if (!client())
         return;
 
-    switch (d->m_failureType) {
+    switch (d->m_scheduledFailureType) {
+        case NoFailure:
+            ASSERT_NOT_REACHED();
+            return;
         case BlockedFailure:
+            d->m_scheduledFailureType = NoFailure;
             client()->wasBlocked(this);
             return;
         case InvalidURLFailure:
+            d->m_scheduledFailureType = NoFailure;
             client()->cannotShowURL(this);
             return;
     }
@@ -100,14 +111,19 @@ void ResourceHandle::setClient(ResourceHandleClient* client)
     d->m_client = client;
 }
 
-const ResourceRequest& ResourceHandle::request() const
+ResourceRequest& ResourceHandle::firstRequest()
 {
-    return d->m_request;
+    return d->m_firstRequest;
 }
 
 const String& ResourceHandle::lastHTTPMethod() const
 {
     return d->m_lastHTTPMethod;
+}
+
+bool ResourceHandle::hasAuthenticationChallenge() const
+{
+    return !d->m_currentWebChallenge.isNull();
 }
 
 void ResourceHandle::clearAuthentication()
@@ -136,6 +152,25 @@ bool ResourceHandle::shouldContentSniffURL(const KURL& url)
 void ResourceHandle::forceContentSniffing()
 {
     shouldForceContentSniffing = true;
+}
+
+void ResourceHandle::setDefersLoading(bool defers)
+{
+    LOG(Network, "Handle %p setDefersLoading(%s)", this, defers ? "true" : "false");
+
+    ASSERT(d->m_defersLoading != defers); // Deferring is not counted, so calling setDefersLoading() repeatedly is likely to be in error.
+    d->m_defersLoading = defers;
+
+    if (defers) {
+        ASSERT(d->m_failureTimer.isActive() == (d->m_scheduledFailureType != NoFailure));
+        if (d->m_failureTimer.isActive())
+            d->m_failureTimer.stop();
+    } else if (d->m_scheduledFailureType != NoFailure) {
+        ASSERT(!d->m_failureTimer.isActive());
+        d->m_failureTimer.startOneShot(0);
+    }
+
+    platformSetDefersLoading(defers);
 }
 
 #if !USE(SOUP)

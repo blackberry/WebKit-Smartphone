@@ -31,20 +31,18 @@
 #include "config.h"
 #include "V8Binding.h"
 
-#include "AtomicString.h"
 #include "Element.h"
 #include "MathExtras.h"
 #include "PlatformString.h"
 #include "QualifiedName.h"
 #include "StdLibExtras.h"
-#include "StringBuffer.h"
-#include "StringHash.h"
 #include "Threading.h"
 #include "V8Element.h"
 #include "V8Proxy.h"
+#include <wtf/text/AtomicString.h>
 #include <wtf/text/CString.h>
-
-#include <v8.h>
+#include <wtf/text/StringBuffer.h>
+#include <wtf/text/StringHash.h>
 
 namespace WebCore {
 
@@ -63,7 +61,7 @@ public:
     }
 
     explicit WebCoreStringResource(const AtomicString& string)
-        : m_plainString(string)
+        : m_plainString(string.string())
         , m_atomicString(string)
     {
 #ifndef NDEBUG
@@ -370,27 +368,33 @@ StringType v8StringToWebCoreString(v8::Handle<v8::String> v8String, ExternalMode
 template String v8StringToWebCoreString<String>(v8::Handle<v8::String>, ExternalMode);
 template AtomicString v8StringToWebCoreString<AtomicString>(v8::Handle<v8::String>, ExternalMode);
 
+String int32ToWebCoreString(int value)
+{
+    // Caching of small strings below is not thread safe: newly constructed AtomicString
+    // are not safely published.
+    ASSERT(WTF::isMainThread());
+
+    // Most numbers used are <= 100. Even if they aren't used there's very little cost in using the space.
+    const int kLowNumbers = 100;
+    DEFINE_STATIC_LOCAL(Vector<AtomicString>, lowNumbers, (kLowNumbers + 1));
+    String webCoreString;
+    if (0 <= value && value <= kLowNumbers) {
+        webCoreString = lowNumbers[value];
+        if (!webCoreString) {
+            AtomicString valueString = AtomicString(String::number(value));
+            lowNumbers[value] = valueString;
+            webCoreString = valueString;
+        }
+    } else
+        webCoreString = String::number(value);
+    return webCoreString;
+}
 
 String v8NonStringValueToWebCoreString(v8::Handle<v8::Value> object)
 {
     ASSERT(!object->IsString());
-    if (object->IsInt32()) {
-        int value = object->Int32Value();
-        // Most numbers used are <= 100. Even if they aren't used there's very little in using the space.
-        const int kLowNumbers = 100;
-        static AtomicString lowNumbers[kLowNumbers + 1];
-        String webCoreString;
-        if (0 <= value && value <= kLowNumbers) {
-            webCoreString = lowNumbers[value];
-            if (!webCoreString) {
-                AtomicString valueString = AtomicString(String::number(value));
-                lowNumbers[value] = valueString;
-                webCoreString = valueString;
-            }
-        } else
-            webCoreString = String::number(value);
-        return webCoreString;
-    }
+    if (object->IsInt32())
+        return int32ToWebCoreString(object->Int32Value());
 
     v8::TryCatch block;
     v8::Handle<v8::String> v8String = object->ToString();
@@ -444,25 +448,29 @@ static void cachedStringCallback(v8::Persistent<v8::Value> wrapper, void* parame
     stringImpl->deref();
 }
 
-v8::Local<v8::String> v8ExternalString(const String& string)
+RefPtr<StringImpl> lastStringImpl = 0;
+v8::Persistent<v8::String> lastV8String;
+
+v8::Local<v8::String> v8ExternalStringSlow(StringImpl* stringImpl)
 {
-    StringImpl* stringImpl = string.impl();
-    if (!stringImpl || !stringImpl->length())
+    if (!stringImpl->length())
         return v8::String::Empty();
 
     if (!stringImplCacheEnabled)
-        return makeExternalString(string);
+        return makeExternalString(String(stringImpl));
 
     StringCache& stringCache = getStringCache();
     v8::String* cachedV8String = stringCache.get(stringImpl);
-    if (cachedV8String)
-    {
+    if (cachedV8String) {
         v8::Persistent<v8::String> handle(cachedV8String);
-        if (!handle.IsNearDeath() && !handle.IsEmpty())
+        if (!handle.IsNearDeath() && !handle.IsEmpty()) {
+            lastStringImpl = stringImpl;
+            lastV8String = handle;
             return v8::Local<v8::String>::New(handle);
+        }
     }
 
-    v8::Local<v8::String> newString = makeExternalString(string);
+    v8::Local<v8::String> newString = makeExternalString(String(stringImpl));
     if (newString.IsEmpty())
         return newString;
 
@@ -473,6 +481,9 @@ v8::Local<v8::String> v8ExternalString(const String& string)
     stringImpl->ref();
     wrapper.MakeWeak(stringImpl, cachedStringCallback);
     stringCache.set(stringImpl, *wrapper);
+
+    lastStringImpl = stringImpl;
+    lastV8String = wrapper;
 
     return newString;
 }

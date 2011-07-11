@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,18 +26,25 @@
 
 #include "WebChromeClient.h"
 
-#include "DrawingArea.h"
+#define DISABLE_NOT_IMPLEMENTED_WARNINGS 1
 #include "NotImplemented.h"
-#include "WebCoreTypeArgumentMarshalling.h"
+
+#include "DrawingArea.h"
+#include "WebCoreArgumentCoders.h"
 #include "WebFrame.h"
 #include "WebFrameLoaderClient.h"
 #include "WebPage.h"
 #include "WebPageProxyMessageKinds.h"
+#include "WebPopupMenu.h"
 #include "WebPreferencesStore.h"
 #include "WebProcess.h"
+#include "WebProcessProxyMessageKinds.h"
+#include "WebSearchPopupMenu.h"
 #include <WebCore/FileChooser.h>
 #include <WebCore/Frame.h>
 #include <WebCore/FrameLoader.h>
+#include <WebCore/Page.h>
+#include <WebCore/SecurityOrigin.h>
 
 using namespace WebCore;
 
@@ -102,10 +110,10 @@ Page* WebChromeClient::createWindow(Frame*, const FrameLoadRequest&, const Windo
     uint64_t newPageID = 0;
     IntSize viewSize;
     WebPreferencesStore store;
-    uint32_t drawingAreaType;
+    DrawingAreaBase::DrawingAreaInfo drawingAreaInfo;
     if (!WebProcess::shared().connection()->sendSync(WebPageProxyMessage::CreateNewPage,
                                                      m_page->pageID(), CoreIPC::In(),
-                                                     CoreIPC::Out(newPageID, viewSize, store, drawingAreaType),
+                                                     CoreIPC::Out(newPageID, viewSize, store, drawingAreaInfo),
                                                      CoreIPC::Connection::NoTimeout)) {
         return 0;
     }
@@ -113,7 +121,7 @@ Page* WebChromeClient::createWindow(Frame*, const FrameLoadRequest&, const Windo
     if (!newPageID)
         return 0;
 
-    WebPage* newWebPage = WebProcess::shared().createWebPage(newPageID, viewSize, store, static_cast<DrawingArea::Type>(drawingAreaType));
+    WebPage* newWebPage = WebProcess::shared().createWebPage(newPageID, viewSize, store, drawingAreaInfo);
     return newWebPage->corePage();
 }
 
@@ -184,6 +192,9 @@ void WebChromeClient::setResizable(bool)
 
 void WebChromeClient::addMessageToConsole(MessageSource, MessageType, MessageLevel, const String& message, unsigned int lineNumber, const String& sourceID)
 {
+    // Notify the bundle client.
+    m_page->injectedBundleUIClient().willAddMessageToConsole(m_page, message, lineNumber);
+
     notImplemented();
 }
 
@@ -201,33 +212,77 @@ bool WebChromeClient::runBeforeUnloadConfirmPanel(const String& message, Frame* 
 
 void WebChromeClient::closeWindowSoon()
 {
-    notImplemented();
+    // FIXME: This code assumes that the client will respond to a close page
+    // message by actually closing the page. Safari does this, but there is
+    // no guarantee that other applications will, which will leave this page
+    // half detached. This approach is an inherent limitation making parts of
+    // a close execute synchronously as part of window.close, but other parts
+    // later on.
+
+    m_page->corePage()->setGroupName(String());
+
+    if (WebFrame* frame = m_page->mainFrame()) {
+        if (Frame* coreFrame = frame->coreFrame())
+            coreFrame->loader()->stopForUserCancel();
+    }
+
+    m_page->sendClose();
 }
 
 void WebChromeClient::runJavaScriptAlert(Frame* frame, const String& alertText)
 {
     WebFrame* webFrame =  static_cast<WebFrameLoaderClient*>(frame->loader()->client())->webFrame();
+
+    // Notify the bundle client.
+    m_page->injectedBundleUIClient().willRunJavaScriptAlert(m_page, alertText, webFrame);
+
     WebProcess::shared().connection()->sendSync(WebPageProxyMessage::RunJavaScriptAlert, m_page->pageID(),
                                                 CoreIPC::In(webFrame->frameID(), alertText),
                                                 CoreIPC::Out(),
                                                 CoreIPC::Connection::NoTimeout);
 }
 
-bool WebChromeClient::runJavaScriptConfirm(Frame*, const String&)
+bool WebChromeClient::runJavaScriptConfirm(Frame* frame, const String& message)
 {
-    notImplemented();
-    return false;
+    WebFrame* webFrame =  static_cast<WebFrameLoaderClient*>(frame->loader()->client())->webFrame();
+
+    // Notify the bundle client.
+    m_page->injectedBundleUIClient().willRunJavaScriptConfirm(m_page, message, webFrame);
+
+    bool result = false;
+    if (!WebProcess::shared().connection()->sendSync(WebPageProxyMessage::RunJavaScriptConfirm, m_page->pageID(),
+                                                     CoreIPC::In(webFrame->frameID(), message),
+                                                     CoreIPC::Out(result),
+                                                     CoreIPC::Connection::NoTimeout)) {
+        return false;
+    }
+
+    return result;
 }
 
-bool WebChromeClient::runJavaScriptPrompt(Frame*, const String& message, const String& defaultValue, String& result)
+bool WebChromeClient::runJavaScriptPrompt(Frame* frame, const String& message, const String& defaultValue, String& result)
 {
-    notImplemented();
-    return false;
+    WebFrame* webFrame =  static_cast<WebFrameLoaderClient*>(frame->loader()->client())->webFrame();
+
+    // Notify the bundle client.
+    m_page->injectedBundleUIClient().willRunJavaScriptPrompt(m_page, message, defaultValue, webFrame);
+
+    if (!WebProcess::shared().connection()->sendSync(WebPageProxyMessage::RunJavaScriptPrompt, m_page->pageID(),
+                                                     CoreIPC::In(webFrame->frameID(), message, defaultValue),
+                                                     CoreIPC::Out(result),
+                                                     CoreIPC::Connection::NoTimeout)) {
+        return false;
+    }
+
+    return !result.isNull();
 }
 
-void WebChromeClient::setStatusbarText(const String&)
+void WebChromeClient::setStatusbarText(const String& statusbarText)
 {
-    notImplemented();
+    // Notify the bundle client.
+    m_page->injectedBundleUIClient().willSetStatusbarText(m_page, statusbarText);
+
+    WebProcess::shared().connection()->send(WebPageProxyMessage::SetStatusText, m_page->pageID(), statusbarText);
 }
 
 bool WebChromeClient::shouldInterruptJavaScript()
@@ -290,9 +345,11 @@ PlatformPageClient WebChromeClient::platformPageClient() const
     return 0;
 }
 
-void WebChromeClient::contentsSizeChanged(Frame*, const IntSize&) const
+void WebChromeClient::contentsSizeChanged(Frame* frame, const IntSize& size) const
 {
-    notImplemented();
+    WebFrame* webFrame =  static_cast<WebFrameLoaderClient*>(frame->loader()->client())->webFrame();
+    WebProcess::shared().connection()->send(WebPageProxyMessage::ContentsSizeChanged, m_page->pageID(),
+                                            CoreIPC::In(webFrame->frameID(), size));
 }
 
 void WebChromeClient::scrollRectIntoView(const IntRect&, const ScrollView*) const
@@ -339,6 +396,11 @@ void WebChromeClient::reachedMaxAppCacheSize(int64_t)
 {
     notImplemented();
 }
+
+void WebChromeClient::reachedApplicationCacheOriginQuota(SecurityOrigin*)
+{
+    notImplemented();
+}
 #endif
 
 #if ENABLE(DASHBOARD_SUPPORT)
@@ -350,7 +412,6 @@ void WebChromeClient::dashboardRegionsChanged()
 
 void WebChromeClient::populateVisitedLinks()
 {
-    notImplemented();
 }
 
 FloatRect WebChromeClient::customHighlightRect(Node*, const AtomicString& type, const FloatRect& lineRect)
@@ -411,10 +472,11 @@ void WebChromeClient::chooseIconForFiles(const Vector<String>&, FileChooser*)
     notImplemented();
 }
 
-bool WebChromeClient::setCursor(PlatformCursorHandle)
+void WebChromeClient::setCursor(const Cursor& cursor)
 {
-    notImplemented();
-    return false;
+#if USE(LAZY_NATIVE_CURSOR)
+    WebProcess::shared().connection()->send(WebPageProxyMessage::SetCursor, m_page->pageID(), CoreIPC::In(cursor));
+#endif
 }
 
 void WebChromeClient::formStateDidChange(const Node*)
@@ -432,6 +494,21 @@ void WebChromeClient::formDidBlur(const Node*)
     notImplemented();
 }
 
+bool WebChromeClient::selectItemWritingDirectionIsNatural()
+{
+    return true;
+}
+
+PassRefPtr<WebCore::PopupMenu> WebChromeClient::createPopupMenu(WebCore::PopupMenuClient* client) const
+{
+    return WebPopupMenu::create(client);
+}
+
+PassRefPtr<WebCore::SearchPopupMenu> WebChromeClient::createSearchPopupMenu(WebCore::PopupMenuClient* client) const
+{
+    return WebSearchPopupMenu::create(client);
+}
+
 PassOwnPtr<HTMLParserQuirks> WebChromeClient::createHTMLParserQuirks()
 {
     notImplemented();
@@ -439,9 +516,12 @@ PassOwnPtr<HTMLParserQuirks> WebChromeClient::createHTMLParserQuirks()
 }
 
 #if USE(ACCELERATED_COMPOSITING)
-void WebChromeClient::attachRootGraphicsLayer(Frame*, GraphicsLayer*)
+void WebChromeClient::attachRootGraphicsLayer(Frame*, GraphicsLayer* layer)
 {
-    notImplemented();
+    if (layer)
+        m_page->enterAcceleratedCompositingMode(layer);
+    else
+        m_page->exitAcceleratedCompositingMode();
 }
 
 void WebChromeClient::setNeedsOneShotDrawingSynchronization()
@@ -451,9 +531,29 @@ void WebChromeClient::setNeedsOneShotDrawingSynchronization()
 
 void WebChromeClient::scheduleCompositingLayerSync()
 {
-    notImplemented();
+    m_page->drawingArea()->scheduleCompositingLayerSync();
 }
 
 #endif
+
+#if ENABLE(NOTIFICATIONS)
+WebCore::NotificationPresenter* WebChromeClient::notificationPresenter() const
+{
+    return 0;
+}
+#endif
+
+#if ENABLE(TOUCH_EVENTS)
+void WebChromeClient::needTouchEvents(bool)
+{
+}
+#endif
+
+#if PLATFORM(WIN)
+void WebChromeClient::setLastSetCursorToCurrentCursor()
+{
+}
+#endif
+
 
 } // namespace WebKit

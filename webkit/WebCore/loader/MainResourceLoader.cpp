@@ -31,6 +31,7 @@
 #include "MainResourceLoader.h"
 
 #include "ApplicationCacheHost.h"
+#include "DocumentLoadTiming.h"
 #include "DocumentLoader.h"
 #include "FormState.h"
 #include "Frame.h"
@@ -43,7 +44,9 @@
 #endif
 #include "ResourceError.h"
 #include "ResourceHandle.h"
+#include "SchemeRegistry.h"
 #include "Settings.h"
+#include <wtf/CurrentTime.h>
 
 // FIXME: More that is in common with SubresourceLoader should move up into ResourceLoader.
 
@@ -143,7 +146,7 @@ bool MainResourceLoader::isPostOrRedirectAfterPost(const ResourceRequest& newReq
 void MainResourceLoader::addData(const char* data, int length, bool allAtOnce)
 {
     ResourceLoader::addData(data, length, allAtOnce);
-    frameLoader()->receivedData(data, length);
+    documentLoader()->receivedData(data, length);
 }
 
 void MainResourceLoader::willSendRequest(ResourceRequest& newRequest, const ResourceResponse& redirectResponse)
@@ -157,7 +160,17 @@ void MainResourceLoader::willSendRequest(ResourceRequest& newRequest, const Reso
     // The additional processing can do anything including possibly removing the last
     // reference to this object; one example of this is 3266216.
     RefPtr<MainResourceLoader> protect(this);
-    
+
+    ASSERT(documentLoader()->timing()->fetchStart);
+    if (!redirectResponse.isNull()) {
+        DocumentLoadTiming* documentLoadTiming = documentLoader()->timing();
+        documentLoadTiming->redirectCount++;
+        if (!documentLoadTiming->redirectStart)
+            documentLoadTiming->redirectStart = documentLoadTiming->fetchStart;
+        documentLoadTiming->redirectEnd = currentTime();
+        documentLoadTiming->fetchStart = documentLoadTiming->redirectEnd;
+    }
+
     // Update cookie policy base URL as URL changes, except for subframes, which use the
     // URL of the main frame which doesn't change when we redirect.
     if (frameLoader()->isLoadingMainFrame())
@@ -194,7 +207,7 @@ static bool shouldLoadAsEmptyDocument(const KURL& url)
 #if PLATFORM(TORCHMOBILE) || PLATFORM(OLYMPIA)
     return url.isEmpty() || (url.protocolIs("about") && equalIgnoringFragmentIdentifier(url, blankURL()));
 #else 
-    return url.isEmpty() || url.protocolIs("about");
+    return url.isEmpty() || SchemeRegistry::shouldLoadURLSchemeAsEmptyDocument(url.protocol());
 #endif
 }
 
@@ -223,7 +236,7 @@ void MainResourceLoader::continueAfterContentPolicy(PolicyAction contentPolicy, 
             receivedError(cannotShowURLError());
             return;
         }
-        frameLoader()->client()->download(m_handle.get(), request(), m_handle.get()->request(), r);
+        frameLoader()->client()->download(m_handle.get(), request(), m_handle.get()->firstRequest(), r);
         // It might have gone missing
         if (frameLoader())
             receivedError(interruptionForPolicyChangeError());
@@ -285,15 +298,15 @@ void MainResourceLoader::continueAfterContentPolicy(PolicyAction policy)
 #if PLATFORM(QT)
 void MainResourceLoader::substituteMIMETypeFromPluginDatabase(const ResourceResponse& r)
 {
-    if (!m_frame->loader()->allowPlugins(NotAboutToInstantiatePlugin))
+    if (!m_frame->loader()->subframeLoader()->allowPlugins(NotAboutToInstantiatePlugin))
         return;
 
     String filename = r.url().lastPathComponent();
     if (filename.endsWith("/"))
         return;
 
-    int extensionPos = filename.reverseFind('.');
-    if (extensionPos == -1)
+    size_t extensionPos = filename.reverseFind('.');
+    if (extensionPos == notFound)
         return;
 
     String extension = filename.substring(extensionPos + 1);
@@ -402,6 +415,8 @@ void MainResourceLoader::didReceiveData(const char* data, int length, long long 
     // reference to this object; one example of this is 3266216.
     RefPtr<MainResourceLoader> protect(this);
 
+    m_timeOfLastDataReceived = currentTime();
+
     ResourceLoader::didReceiveData(data, length, lengthReceived, allAtOnce);
 }
 
@@ -421,6 +436,8 @@ void MainResourceLoader::didFinishLoading()
     RefPtr<DocumentLoader> dl = documentLoader();
 #endif
 
+    ASSERT(!documentLoader()->timing()->responseEnd);
+    documentLoader()->timing()->responseEnd = m_timeOfLastDataReceived;
     frameLoader()->finishedLoading();
     ResourceLoader::didFinishLoading();
     
@@ -464,6 +481,10 @@ void MainResourceLoader::handleDataLoadNow(MainResourceLoaderTimer*)
     KURL url = m_substituteData.responseURL();
     if (url.isEmpty())
         url = m_initialRequest.url();
+
+    // Clear the initial request here so that subsequent entries into the
+    // loader will not think there's still a deferred load left to do.
+    m_initialRequest = ResourceRequest();
         
     ResourceResponse response(url, m_substituteData.mimeType(), m_substituteData.content()->size(), m_substituteData.textEncoding(), "");
     didReceiveResponse(response);
@@ -520,7 +541,7 @@ bool MainResourceLoader::loadNow(ResourceRequest& r)
         // FIXME: This is only because we're hardcoding the resourcehandle response
         // and should be removed as soon as we have a real network subsystem!
         RefPtr<MainResourceLoader> protect(this);
-        m_handle = ResourceHandle::create(r, this, m_frame.get(), false, true);
+        m_handle = ResourceHandle::create(m_frame->loader()->networkingContext(), r, this, false, true);
     }
     return false;
 }
@@ -531,6 +552,9 @@ bool MainResourceLoader::load(const ResourceRequest& r, const SubstituteData& su
 
     m_substituteData = substituteData;
 
+    ASSERT(documentLoader()->timing()->navigationStart);
+    ASSERT(!documentLoader()->timing()->fetchStart);
+    documentLoader()->timing()->fetchStart = currentTime();
     ResourceRequest request(r);
 
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)

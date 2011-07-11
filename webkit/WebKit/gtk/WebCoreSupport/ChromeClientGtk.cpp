@@ -4,6 +4,7 @@
  * Copyright (C) 2008 Nuanti Ltd.
  * Copyright (C) 2008 Alp Toker <alp@atoker.com>
  * Copyright (C) 2008 Gustavo Noronha Silva <gns@gnome.org>
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -29,11 +30,16 @@
 #include "FloatRect.h"
 #include "FrameLoadRequest.h"
 #include "GtkVersioning.h"
+#include "HTMLNames.h"
 #include "IntRect.h"
-#include "PlatformString.h"
 #include "HitTestResult.h"
 #include "Icon.h"
 #include "KURL.h"
+#include "PlatformString.h"
+#include "PopupMenuClient.h"
+#include "PopupMenuGtk.h"
+#include "SearchPopupMenuGtk.h"
+#include "SecurityOrigin.h"
 #include "webkitgeolocationpolicydecision.h"
 #include "webkitwebview.h"
 #include "webkitnetworkrequest.h"
@@ -104,7 +110,12 @@ void ChromeClient::setWindowRect(const FloatRect& rect)
 
 FloatRect ChromeClient::pageRect()
 {
-    GtkAllocation allocation = GTK_WIDGET(m_webView)->allocation;
+    GtkAllocation allocation;
+#if GTK_CHECK_VERSION(2, 18, 0)
+    gtk_widget_get_allocation(GTK_WIDGET(m_webView), &allocation);
+#else
+    allocation = GTK_WIDGET(m_webView)->allocation;
+#endif
     return IntRect(allocation.x, allocation.y, allocation.width, allocation.height);
 }
 
@@ -267,12 +278,12 @@ bool ChromeClient::canRunBeforeUnloadConfirmPanel()
     return true;
 }
 
-bool ChromeClient::runBeforeUnloadConfirmPanel(const WebCore::String& message, WebCore::Frame* frame)
+bool ChromeClient::runBeforeUnloadConfirmPanel(const WTF::String& message, WebCore::Frame* frame)
 {
     return runJavaScriptConfirm(frame, message);
 }
 
-void ChromeClient::addMessageToConsole(WebCore::MessageSource source, WebCore::MessageType type, WebCore::MessageLevel level, const WebCore::String& message, unsigned int lineNumber, const WebCore::String& sourceId)
+void ChromeClient::addMessageToConsole(WebCore::MessageSource source, WebCore::MessageType type, WebCore::MessageLevel level, const WTF::String& message, unsigned int lineNumber, const WTF::String& sourceId)
 {
     gboolean retval;
     g_signal_emit_by_name(m_webView, "console-message", message.utf8().data(), lineNumber, sourceId.utf8().data(), &retval);
@@ -336,7 +347,7 @@ void ChromeClient::invalidateWindow(const IntRect&, bool)
 void ChromeClient::invalidateContentsAndWindow(const IntRect& updateRect, bool immediate)
 {
     GdkRectangle rect = updateRect;
-    GdkWindow* window = GTK_WIDGET(m_webView)->window;
+    GdkWindow* window = gtk_widget_get_window(GTK_WIDGET(m_webView));
 
     if (window) {
         gdk_window_invalidate_rect(window, &rect, FALSE);
@@ -353,7 +364,7 @@ void ChromeClient::invalidateContentsForSlowScroll(const IntRect& updateRect, bo
 
 void ChromeClient::scroll(const IntSize& delta, const IntRect& rectToScroll, const IntRect& clipRect)
 {
-    GdkWindow* window = GTK_WIDGET(m_webView)->window;
+    GdkWindow* window = gtk_widget_get_window(GTK_WIDGET(m_webView));
     if (!window)
         return;
 
@@ -367,6 +378,7 @@ void ChromeClient::scroll(const IntSize& delta, const IntRect& rectToScroll, con
     sourceRect.x -= delta.width();
     sourceRect.y -= delta.height();
 
+#ifdef GTK_API_VERSION_2
     GdkRegion* invalidRegion = gdk_region_rectangle(&area);
 
     if (gdk_rectangle_intersect(&area, &sourceRect, &moveRect)) {
@@ -379,6 +391,21 @@ void ChromeClient::scroll(const IntSize& delta, const IntRect& rectToScroll, con
 
     gdk_window_invalidate_region(window, invalidRegion, FALSE);
     gdk_region_destroy(invalidRegion);
+#else
+    cairo_region_t* invalidRegion = cairo_region_create_rectangle(&area);
+
+    if (gdk_rectangle_intersect(&area, &sourceRect, &moveRect)) {
+        cairo_region_t* moveRegion = cairo_region_create_rectangle(&moveRect);
+        gdk_window_move_region(window, moveRegion, delta.width(), delta.height());
+        cairo_region_translate(moveRegion, delta.width(), delta.height());
+        cairo_region_subtract(invalidRegion, moveRegion);
+        cairo_region_destroy(moveRegion);
+    }
+
+    gdk_window_invalidate_region(window, invalidRegion, FALSE);
+    cairo_region_destroy(invalidRegion);
+#endif
+
 }
 
 // FIXME: this does not take into account the WM decorations
@@ -391,7 +418,7 @@ static IntPoint widgetScreenPosition(GtkWidget* widget)
 
     IntPoint result(widgetX, widgetY);
     int originX, originY;
-    gdk_window_get_origin(window->window, &originX, &originY);
+    gdk_window_get_origin(gtk_widget_get_window(window), &originX, &originY);
     result.move(originX, originY);
 
     return result;
@@ -425,9 +452,15 @@ void ChromeClient::contentsSizeChanged(Frame* frame, const IntSize& size) const
     // We need to queue a resize request only if the size changed,
     // otherwise we get into an infinite loop!
     GtkWidget* widget = GTK_WIDGET(m_webView);
+    GtkRequisition requisition;
+#if GTK_CHECK_VERSION(2, 20, 0)
+    gtk_widget_get_requisition(widget, &requisition);
+#else
+    requisition = widget->requisition;
+#endif
     if (gtk_widget_get_realized(widget)
-        && (widget->requisition.height != size.height())
-        || (widget->requisition.width != size.width()))
+        && (requisition.height != size.height())
+        || (requisition.width != size.width()))
         gtk_widget_queue_resize_no_redraw(widget);
 }
 
@@ -522,6 +555,11 @@ void ChromeClient::reachedMaxAppCacheSize(int64_t spaceNeeded)
     // FIXME: Free some space.
     notImplemented();
 }
+
+void ChromeClient::reachedApplicationCacheOriginQuota(SecurityOrigin*)
+{
+    notImplemented();
+}
 #endif
 
 void ChromeClient::runOpenPanel(Frame*, PassRefPtr<FileChooser> prpFileChooser)
@@ -559,15 +597,14 @@ void ChromeClient::runOpenPanel(Frame*, PassRefPtr<FileChooser> prpFileChooser)
     gtk_widget_destroy(dialog);
 }
 
-void ChromeClient::chooseIconForFiles(const Vector<WebCore::String>& filenames, WebCore::FileChooser* chooser)
+void ChromeClient::chooseIconForFiles(const Vector<WTF::String>& filenames, WebCore::FileChooser* chooser)
 {
     chooser->iconLoaded(Icon::createIconForFiles(filenames));
 }
 
-bool ChromeClient::setCursor(PlatformCursorHandle)
+void ChromeClient::setCursor(const Cursor&)
 {
     notImplemented();
-    return false;
 }
 
 void ChromeClient::requestGeolocationPermissionForFrame(Frame* frame, Geolocation* geolocation)
@@ -575,12 +612,12 @@ void ChromeClient::requestGeolocationPermissionForFrame(Frame* frame, Geolocatio
     WebKitWebFrame* webFrame = kit(frame);
     WebKitWebView* webView = getViewFromFrame(webFrame);
 
-    WebKitGeolocationPolicyDecision* policyDecision = webkit_geolocation_policy_decision_new(webFrame, geolocation);
+    PlatformRefPtr<WebKitGeolocationPolicyDecision> policyDecision(adoptPlatformRef(webkit_geolocation_policy_decision_new(webFrame, geolocation)));
 
     gboolean isHandled = FALSE;
-    g_signal_emit_by_name(webView, "geolocation-policy-decision-requested", webFrame, policyDecision, &isHandled);
+    g_signal_emit_by_name(webView, "geolocation-policy-decision-requested", webFrame, policyDecision.get(), &isHandled);
     if (!isHandled)
-        webkit_geolocation_policy_deny(policyDecision);
+        webkit_geolocation_policy_deny(policyDecision.get());
 }
 
 void ChromeClient::cancelGeolocationPermissionRequestForFrame(WebCore::Frame* frame, WebCore::Geolocation*)
@@ -589,5 +626,44 @@ void ChromeClient::cancelGeolocationPermissionRequestForFrame(WebCore::Frame* fr
     WebKitWebView* webView = getViewFromFrame(webFrame);
     g_signal_emit_by_name(webView, "geolocation-policy-decision-cancelled", webFrame);
 }
+
+bool ChromeClient::selectItemWritingDirectionIsNatural()
+{
+    return true;
+}
+
+PassRefPtr<WebCore::PopupMenu> ChromeClient::createPopupMenu(WebCore::PopupMenuClient* client) const
+{
+    return adoptRef(new PopupMenuGtk(client));
+}
+
+PassRefPtr<WebCore::SearchPopupMenu> ChromeClient::createSearchPopupMenu(WebCore::PopupMenuClient* client) const
+{
+    return adoptRef(new SearchPopupMenuGtk(client));
+}
+
+#if ENABLE(VIDEO)
+
+bool ChromeClient::supportsFullscreenForNode(const Node* node)
+{
+    return node->hasTagName(HTMLNames::videoTag);
+}
+
+void ChromeClient::enterFullscreenForNode(Node* node)
+{
+    WebCore::Frame* frame = node->document()->frame();
+    WebKitWebFrame* webFrame = kit(frame);
+    WebKitWebView* webView = getViewFromFrame(webFrame);
+    webkitWebViewEnterFullscreen(webView, node);
+}
+
+void ChromeClient::exitFullscreenForNode(Node* node)
+{
+    WebCore::Frame* frame = node->document()->frame();
+    WebKitWebFrame* webFrame = kit(frame);
+    WebKitWebView* webView = getViewFromFrame(webFrame);
+    webkitWebViewExitFullscreen(webView);
+}
+#endif
 
 }

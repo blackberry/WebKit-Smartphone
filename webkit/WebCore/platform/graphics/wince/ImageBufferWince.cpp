@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2009 Torch Mobile, Inc. All rights reserved.
+ * Copyright (C) 2010 Torch Mobile (Beijing) Co. Ltd. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Library General Public
@@ -24,9 +25,9 @@
 #include "GraphicsContext.h"
 #include "Image.h"
 #include "ImageData.h"
-#include "JPEGEncoder.h"
-#include "PNGEncoder.h"
+#include "NotImplemented.h"
 #include "SharedBitmap.h"
+#include "UnusedParam.h"
 #include <wtf/UnusedParam.h>
 
 namespace WebCore {
@@ -42,24 +43,24 @@ public:
     virtual IntSize size() const { return IntSize(m_data->m_bitmap->width(), m_data->m_bitmap->height()); }
     virtual void destroyDecodedData(bool destroyAll = true) {}
     virtual unsigned decodedSize() const { return 0; }
-    virtual void draw(GraphicsContext*, const FloatRect& dstRect, const FloatRect& srcRect, CompositeOperator);
+    virtual void draw(GraphicsContext*, const FloatRect& dstRect, const FloatRect& srcRect, ColorSpace styleColorSpace, CompositeOperator);
     virtual void drawPattern(GraphicsContext*, const FloatRect& srcRect, const AffineTransform& patternTransform,
-                             const FloatPoint& phase, CompositeOperator, const FloatRect& destRect);
+                             const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator, const FloatRect& destRect);
 
     const ImageBufferData* m_data;
 };
 
-void BufferedImage::draw(GraphicsContext* ctxt, const FloatRect& dstRect, const FloatRect& srcRect, CompositeOperator compositeOp)
+void BufferedImage::draw(GraphicsContext* ctxt, const FloatRect& dstRect, const FloatRect& srcRect, ColorSpace styleColorSpace, CompositeOperator compositeOp)
 {
     IntRect intDstRect = enclosingIntRect(dstRect);
     IntRect intSrcRect(srcRect);
-    m_data->m_bitmap->draw(ctxt, intDstRect, intSrcRect, compositeOp);
+    m_data->m_bitmap->draw(ctxt, intDstRect, intSrcRect, styleColorSpace, compositeOp);
 }
 
 void BufferedImage::drawPattern(GraphicsContext* ctxt, const FloatRect& tileRectIn, const AffineTransform& patternTransform,
-                             const FloatPoint& phase, CompositeOperator op, const FloatRect& destRect)
+                             const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator op, const FloatRect& destRect)
 {
-    m_data->m_bitmap->drawPattern(ctxt, tileRectIn, patternTransform, phase, op, destRect, size());
+    m_data->m_bitmap->drawPattern(ctxt, tileRectIn, patternTransform, phase, styleColorSpace, op, destRect, size());
 }
 
 ImageBufferData::ImageBufferData(const IntSize& size)
@@ -92,12 +93,33 @@ GraphicsContext* ImageBuffer::context() const
     return m_context.get();
 }
 
-Image* ImageBuffer::image() const
+bool ImageBuffer::drawsUsingCopy() const
 {
-    if (!m_image)
-        m_image = adoptRef(new BufferedImage(&m_data));
+    return true;
+}
 
-    return m_image.get();
+PassRefPtr<Image> ImageBuffer::copyImage() const
+{
+    return adoptRef(new BufferedImage(&m_data));
+}
+
+void ImageBuffer::clip(GraphicsContext*, const FloatRect&) const
+{
+    notImplemented();
+}
+
+void ImageBuffer::draw(GraphicsContext* context, ColorSpace styleColorSpace, const FloatRect& destRect, const FloatRect& srcRect,
+                       CompositeOperator op , bool useLowQualityScale)
+{
+    RefPtr<Image> imageCopy = copyImage();
+    context->drawImage(imageCopy.get(), styleColorSpace, destRect, srcRect, op, useLowQualityScale);
+}
+
+void ImageBuffer::drawPattern(GraphicsContext* context, const FloatRect& srcRect, const AffineTransform& patternTransform,
+                              const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator op, const FloatRect& destRect)
+{
+    RefPtr<Image> imageCopy = copyImage();
+    imageCopy->drawPattern(context, srcRect, patternTransform, phase, styleColorSpace, op, destRect);
 }
 
 template <bool premultiplied> PassRefPtr<ImageData>
@@ -215,33 +237,19 @@ void ImageBuffer::putPremultipliedImageData(ImageData* source, const IntRect& so
     putImageData<true>(source, sourceRect, destPoint, m_data.m_bitmap.get());
 }
 
-String ImageBuffer::toDataURL(const String& mimeType) const
+void ImageBuffer::platformTransformColorSpace(const Vector<int>& lookUpTable)
+{
+    UNUSED_PARAM(lookUpTable);
+    notImplemented();
+}
+
+String ImageBuffer::toDataURL(const String& mimeType, const double*) const
 {
     if (!m_data.m_bitmap->bytes())
         return "data:,";
 
-    Vector<char> output;
-    const char* header;
-    if (mimeType.lower() == "image/png") {
-        if (!compressBitmapToPng(m_data.m_bitmap.get(), output))
-            return "data:,";
-        header = "data:image/png;base64,";
-    } else {
-        if (!compressBitmapToJpeg(m_data.m_bitmap.get(), output))
-            return "data:,";
-        header = "data:image/jpeg;base64,";
-    }
-
-    Vector<char> base64;
-    base64Encode(output, base64);
-
-    output.clear();
-
-    Vector<char> url;
-    url.append(header, strlen(header));
-    url.append(base64);
-
-    return String(url.data(), url.size());
+    notImplemented();
+    return String();
 }
 
 }

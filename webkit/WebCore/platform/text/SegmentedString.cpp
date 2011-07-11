@@ -22,9 +22,13 @@
 
 namespace WebCore {
 
-SegmentedString::SegmentedString(const SegmentedString &other) :
-    m_pushedChar1(other.m_pushedChar1), m_pushedChar2(other.m_pushedChar2), m_currentString(other.m_currentString),
-    m_substrings(other.m_substrings), m_composite(other.m_composite)
+SegmentedString::SegmentedString(const SegmentedString &other)
+    : m_pushedChar1(other.m_pushedChar1)
+    , m_pushedChar2(other.m_pushedChar2)
+    , m_currentString(other.m_currentString)
+    , m_substrings(other.m_substrings)
+    , m_composite(other.m_composite)
+    , m_closed(other.m_closed)
 {
     if (other.m_currentChar == &other.m_pushedChar1)
         m_currentChar = &m_pushedChar1;
@@ -47,6 +51,8 @@ const SegmentedString& SegmentedString::operator=(const SegmentedString &other)
         m_currentChar = &m_pushedChar2;
     else
         m_currentChar = other.m_currentChar;
+    m_closed = other.m_closed;
+    m_numberOfCharactersConsumedPriorToCurrentString = other.m_numberOfCharactersConsumedPriorToCurrentString;
     return *this;
 }
 
@@ -86,12 +92,15 @@ void SegmentedString::clear()
     m_currentString.clear();
     m_substrings.clear();
     m_composite = false;
+    m_closed = false;
 }
 
 void SegmentedString::append(const SegmentedSubstring &s)
 {
+    ASSERT(!m_closed);
     if (s.m_length) {
         if (!m_currentString.m_length) {
+            m_numberOfCharactersConsumedPriorToCurrentString += m_currentString.numberOfCharactersConsumed();
             m_currentString = s;
         } else {
             m_substrings.append(s);
@@ -103,7 +112,15 @@ void SegmentedString::append(const SegmentedSubstring &s)
 void SegmentedString::prepend(const SegmentedSubstring &s)
 {
     ASSERT(!escaped());
+    ASSERT(!s.numberOfCharactersConsumed());
     if (s.m_length) {
+        // FIXME: We're assuming that the prepend were originally consumed by
+        //        this SegmentedString.  We're also ASSERTing that s is a fresh
+        //        SegmentedSubstring.  These assumptions are sufficient for our
+        //        current use, but we might need to handle the more elaborate
+        //        cases in the future.
+        m_numberOfCharactersConsumedPriorToCurrentString += m_currentString.numberOfCharactersConsumed();
+        m_numberOfCharactersConsumedPriorToCurrentString -= s.m_length;
         if (!m_currentString.m_length)
             m_currentString = s;
         else {
@@ -115,8 +132,16 @@ void SegmentedString::prepend(const SegmentedSubstring &s)
     }
 }
 
+void SegmentedString::close()
+{
+    // Closing a stream twice is likely a coding mistake.
+    ASSERT(!m_closed);
+    m_closed = true;
+}
+
 void SegmentedString::append(const SegmentedString &s)
 {
+    ASSERT(!m_closed);
     ASSERT(!s.escaped());
     append(s.m_currentString);
     if (s.m_composite) {
@@ -145,8 +170,12 @@ void SegmentedString::prepend(const SegmentedString &s)
 void SegmentedString::advanceSubstring()
 {
     if (m_composite) {
-        m_currentString = m_substrings.first();
-        m_substrings.removeFirst();
+        m_numberOfCharactersConsumedPriorToCurrentString += m_currentString.numberOfCharactersConsumed();
+        m_currentString = m_substrings.takeFirst();
+        // If we've previously consumed some characters of the non-current
+        // string, we now account for those characters as part of the current
+        // string, not as part of "prior to current string."
+        m_numberOfCharactersConsumedPriorToCurrentString -= m_currentString.numberOfCharactersConsumed();
         if (m_substrings.isEmpty())
             m_composite = false;
     } else {
@@ -170,6 +199,15 @@ String SegmentedString::toString() const
             it->appendTo(result);
     }
     return result;
+}
+
+void SegmentedString::advance(unsigned count, UChar* consumedCharacters)
+{
+    ASSERT(count <= length());
+    for (unsigned i = 0; i < count; ++i) {
+        consumedCharacters[i] = *current();
+        advance();
+    }
 }
 
 void SegmentedString::advanceSlowCase()

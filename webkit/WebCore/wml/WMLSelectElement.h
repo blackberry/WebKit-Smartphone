@@ -29,6 +29,8 @@ namespace WebCore {
 
 class WMLSelectElement : public WMLFormControlElement, public SelectElement {
 public:
+    static PassRefPtr<WMLSelectElement> create(const QualifiedName&, Document*);
+
     WMLSelectElement(const QualifiedName&, Document*);
     virtual ~WMLSelectElement();
 
@@ -49,7 +51,7 @@ public:
 
     virtual int selectedIndex() const;
     virtual void setSelectedIndex(int index, bool deselect = true);
-    virtual void setSelectedIndexByUser(int index, bool deselect = true, bool fireOnChangeNow = false);
+    virtual void setSelectedIndexByUser(int index, bool deselect = true, bool fireOnChangeNow = false, bool allowMultipleSelection = false);
 
     virtual int size() const { return m_data.size(); }
     virtual bool multiple() const { return m_data.multiple(); }

@@ -1,0 +1,18 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderTable {TABLE} at (0,0) size 157x72 [border: (3px solid #008000)]
+        RenderTableSection {TBODY} at (3,3) size 151x66
+          RenderTableRow {TR} at (0,2) size 151x62
+            RenderTableCell {TD} at (2,2) size 147x62 [r=0 c=0 rs=1 cs=1]
+              RenderTable {TABLE} at (1,1) size 145x60 [border: (3px solid #008000)]
+                RenderBlock {CAPTION} at (0,0) size 75x27 [border: (3px solid #FFA500)]
+                  RenderText {#text} at (26,4) size 22x19
+                    text run at (26,4) width 22: "cap"
+                RenderTableSection {TBODY} at (3,30) size 139x27
+                  RenderTableRow {TR} at (0,2) size 139x23
+                    RenderTableCell {TD} at (2,2) size 135x23 [r=0 c=0 rs=1 cs=1]
+                      RenderText {#text} at (1,2) size 133x19
+                        text run at (1,2) width 133: "table cell foo and bar"

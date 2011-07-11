@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Google Inc. All rights reserved.
+ * Copyright (C) 2009, 2010 Google Inc. All rights reserved.
  * Copyright (C) 2009 Joseph Pecoraro
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,10 +33,6 @@ WebInspector.DOMNode = function(doc, payload) {
     this.ownerDocument = doc;
 
     this.id = payload.id;
-    // injectedScriptId is a node is for DOM nodes which should be converted
-    // to corresponding InjectedScript by the inspector backend. We indicate
-    // this by making injectedScriptId negative.
-    this.injectedScriptId = -payload.id;
     this.nodeType = payload.nodeType;
     this.nodeName = payload.nodeName;
     this.localName = payload.localName;
@@ -76,8 +72,12 @@ WebInspector.DOMNode = function(doc, payload) {
         this.publicId = payload.publicId;
         this.systemId = payload.systemId;
         this.internalSubset = payload.internalSubset;
-    } else if (this.nodeType === Node.DOCUMENT_NODE)
+    } else if (this.nodeType === Node.DOCUMENT_NODE) {
         this.documentURL = payload.documentURL;
+    } else if (this.nodeType === Node.ATTRIBUTE_NODE) {
+        this.name = payload.name;
+        this.value = payload.value;
+    }
 }
 
 WebInspector.DOMNode.prototype = {
@@ -86,7 +86,8 @@ WebInspector.DOMNode.prototype = {
         return this.attributes.length > 0;
     },
 
-    hasChildNodes: function()  {
+    hasChildNodes: function()
+    {
         return this._childNodeCount > 0;
     },
 
@@ -140,6 +141,40 @@ WebInspector.DOMNode.prototype = {
             }
         };
         this.ownerDocument._domAgent.removeAttributeAsync(this, name, callback);
+    },
+
+    path: function()
+    {
+        var path = [];
+        var node = this;
+        while (node && "index" in node && node.nodeName.length) {
+            path.push([node.index, node.nodeName]);
+            node = node.parentNode;
+        }
+        path.reverse();
+        return path.join(",");
+    },
+
+    setBreakpoint: function(type)
+    {
+        return WebInspector.domBreakpointManager.setBreakpoint(this.id, type, true, this.path());
+    },
+
+    hasBreakpoint: function(type)
+    {
+        return !!WebInspector.domBreakpointManager.findBreakpoint(this.id, type);
+    },
+
+    removeBreakpoint: function(type)
+    {
+        var breakpoint = WebInspector.domBreakpointManager.findBreakpoint(this.id, type);
+        if (breakpoint)
+            breakpoint.remove();
+    },
+
+    removeBreakpoints: function()
+    {
+        WebInspector.domBreakpointManager.removeBreakpointsForNode(this.id);
     },
 
     _setAttributesPayload: function(attrs)
@@ -309,26 +344,25 @@ WebInspector.DOMAgent.prototype = {
         function mycallback() {
             callback(parent.children);
         }
-        var callId = WebInspector.Callback.wrap(mycallback);
-        InspectorBackend.getChildNodes(callId, parent.id);
+        InspectorBackend.getChildNodes(parent.id, mycallback);
     },
 
     setAttributeAsync: function(node, name, value, callback)
     {
         var mycallback = this._didApplyDomChange.bind(this, node, callback);
-        InspectorBackend.setAttribute(WebInspector.Callback.wrap(mycallback), node.id, name, value);
+        InspectorBackend.setAttribute(node.id, name, value, mycallback);
     },
 
     removeAttributeAsync: function(node, name, callback)
     {
         var mycallback = this._didApplyDomChange.bind(this, node, callback);
-        InspectorBackend.removeAttribute(WebInspector.Callback.wrap(mycallback), node.id, name);
+        InspectorBackend.removeAttribute(node.id, name, mycallback);
     },
 
     setTextNodeValueAsync: function(node, text, callback)
     {
         var mycallback = this._didApplyDomChange.bind(this, node, callback);
-        InspectorBackend.setTextNodeValue(WebInspector.Callback.wrap(mycallback), node.id, text);
+        InspectorBackend.setTextNodeValue(node.id, text, mycallback);
     },
 
     _didApplyDomChange: function(node, callback, success)
@@ -350,7 +384,8 @@ WebInspector.DOMAgent.prototype = {
         this.document._fireDomEvent("DOMAttrModified", event);
     },
 
-    nodeForId: function(nodeId) {
+    nodeForId: function(nodeId)
+    {
         return this._idToDOMNode[nodeId];
     },
 
@@ -361,6 +396,7 @@ WebInspector.DOMAgent.prototype = {
             this.document = new WebInspector.DOMDocument(this, this._window, payload);
             this._idToDOMNode[payload.id] = this.document;
             this._bindNodes(this.document.children);
+            WebInspector.domBreakpointManager.restoreBreakpoints();
         } else
             this.document = null;
         WebInspector.panels.elements.setDocument(this.document);
@@ -417,21 +453,46 @@ WebInspector.DOMAgent.prototype = {
         var event = { target : node, relatedNode : parent };
         this.document._fireDomEvent("DOMNodeRemoved", event);
         delete this._idToDOMNode[nodeId];
+        this._removeBreakpoints(node);
+    },
+
+    _removeBreakpoints: function(node)
+    {
+        node.removeBreakpoints();
+        if (!node.children)
+            return;
+        for (var i = 0; i < node.children.length; ++i)
+            this._removeBreakpoints(node.children[i]);
+     }
+}
+
+WebInspector.ApplicationCache = {}
+
+WebInspector.ApplicationCache.getApplicationCachesAsync = function(callback)
+{
+    function mycallback(applicationCaches)
+    {
+        // FIXME: Currently, this list only returns a single application cache.
+        if (applicationCaches)
+            callback(applicationCaches);
     }
+
+    InspectorBackend.getApplicationCaches(mycallback);
 }
 
 WebInspector.Cookies = {}
 
 WebInspector.Cookies.getCookiesAsync = function(callback)
 {
-    function mycallback(cookies, cookiesString) {
+    function mycallback(cookies, cookiesString)
+    {
         if (cookiesString)
             callback(WebInspector.Cookies.buildCookiesFromString(cookiesString), false);
         else
             callback(cookies, true);
     }
-    var callId = WebInspector.Callback.wrap(mycallback);
-    InspectorBackend.getCookies(callId);
+
+    InspectorBackend.getCookies(mycallback);
 }
 
 WebInspector.Cookies.buildCookiesFromString = function(rawCookieString)
@@ -481,18 +542,15 @@ WebInspector.EventListeners.getEventListenersForNodeAsync = function(node, callb
 {
     if (!node)
         return;
-
-    var callId = WebInspector.Callback.wrap(callback);
-    InspectorBackend.getEventListenersForNode(callId, node.id);
+    InspectorBackend.getEventListenersForNode(node.id, callback);
 }
 
 WebInspector.CSSStyleDeclaration = function(payload)
 {
     this.id = payload.id;
+    this.parentStyleSheetId = payload.parentStyleSheetId;
     this.width = payload.width;
     this.height = payload.height;
-    this.bodyStartOffset = payload.bodyStartOffset;
-    this.bodyEndOffset = payload.bodyEndOffset;
     this.__disabledProperties = {};
     this.__disabledPropertyValues = {};
     this.__disabledPropertyPriorities = {};
@@ -544,6 +602,7 @@ WebInspector.CSSStyleDeclaration.parseRule = function(payload)
     rule.isUser = payload.isUser;
     rule.isViaInspector = payload.isViaInspector;
     rule.sourceLine = payload.sourceLine;
+    rule.documentURL = payload.documentURL;
     if (payload.parentStyleSheet)
         rule.parentStyleSheet = { href: payload.parentStyleSheet.href };
 
@@ -662,23 +721,158 @@ WebInspector.childNodeRemoved = function()
     this.domAgent._childNodeRemoved.apply(this.domAgent, arguments);
 }
 
-WebInspector.didGetCookies = WebInspector.Callback.processCallback;
-WebInspector.didGetChildNodes = WebInspector.Callback.processCallback;
-WebInspector.didPerformSearch = WebInspector.Callback.processCallback;
-WebInspector.didApplyDomChange = WebInspector.Callback.processCallback;
-WebInspector.didRemoveAttribute = WebInspector.Callback.processCallback;
-WebInspector.didSetTextNodeValue = WebInspector.Callback.processCallback;
-WebInspector.didRemoveNode = WebInspector.Callback.processCallback;
-WebInspector.didChangeTagName = WebInspector.Callback.processCallback;
-WebInspector.didGetEventListenersForNode = WebInspector.Callback.processCallback;
+WebInspector.DOMBreakpointManager = function()
+{
+    this._breakpoints = {};
+    this._pathCache = {};
+}
 
-WebInspector.didGetStyles = WebInspector.Callback.processCallback;
-WebInspector.didGetAllStyles = WebInspector.Callback.processCallback;
-WebInspector.didGetInlineStyle = WebInspector.Callback.processCallback;
-WebInspector.didGetComputedStyle = WebInspector.Callback.processCallback;
-WebInspector.didApplyStyleText = WebInspector.Callback.processCallback;
-WebInspector.didSetStyleText = WebInspector.Callback.processCallback;
-WebInspector.didSetStyleProperty = WebInspector.Callback.processCallback;
-WebInspector.didToggleStyleEnabled = WebInspector.Callback.processCallback;
-WebInspector.didSetRuleSelector = WebInspector.Callback.processCallback;
-WebInspector.didAddRule = WebInspector.Callback.processCallback;
+WebInspector.DOMBreakpointManager.prototype = {
+    setBreakpoint: function(nodeId, type, enabled, path)
+    {
+        if (!(nodeId in this._breakpoints))
+            this._breakpoints[nodeId] = {};
+        else if (type in this._breakpoints[nodeId])
+            return;
+
+        var breakpoint = new WebInspector.DOMBreakpoint(nodeId, type, enabled);
+        this._breakpoints[nodeId][type] = breakpoint;
+        breakpoint.addEventListener("removed", this._breakpointRemoved, this);
+
+        if (!(nodeId in this._pathCache))
+            this._pathCache[nodeId] = path;
+
+        this.dispatchEventToListeners("dom-breakpoint-added", breakpoint);
+    },
+
+    findBreakpoint: function(nodeId, type)
+    {
+        var nodeBreakpoints = this._breakpoints[nodeId];
+        if (nodeBreakpoints && type in nodeBreakpoints)
+            return nodeBreakpoints[type];
+    },
+
+    removeBreakpointsForNode: function(nodeId)
+    {
+        var nodeBreakpoints = this._breakpoints[nodeId];
+        for (var type in nodeBreakpoints)
+            nodeBreakpoints[type].remove();
+    },
+
+    _breakpointRemoved: function(event)
+    {
+        var breakpoint = event.target;
+
+        var nodeBreakpoints = this._breakpoints[breakpoint.nodeId];
+        delete nodeBreakpoints[breakpoint.type];
+        for (var type in nodeBreakpoints)
+            return;
+
+        delete this._breakpoints[breakpoint.nodeId];
+        delete this._pathCache[breakpoint.nodeId];
+    },
+
+    restoreBreakpoints: function()
+    {
+        var breakpoints = this._breakpoints;
+        this._breakpoints = {};
+        var pathCache = this._pathCache;
+        this._pathCache = {};
+
+        for (var oldNodeId in breakpoints) {
+            var path = pathCache[oldNodeId];
+            InspectorBackend.pushNodeByPathToFrontend(path, restoreBreakpointsForNode.bind(this, breakpoints[oldNodeId], path));
+        }
+
+        function restoreBreakpointsForNode(nodeBreakpoints, path, nodeId)
+        {
+            if (!nodeId)
+                return;
+            for (var type in nodeBreakpoints) {
+                var breakpoint = nodeBreakpoints[type];
+                this.setBreakpoint(nodeId, breakpoint.type, breakpoint.enabled, path);
+            }
+        }
+    }
+}
+
+WebInspector.DOMBreakpointManager.prototype.__proto__ = WebInspector.Object.prototype;
+
+WebInspector.DOMBreakpoint = function(nodeId, type, enabled)
+{
+    this._nodeId = nodeId;
+    this._type = type;
+    this._enabled = enabled;
+
+    if (this.enabled)
+        InspectorBackend.setDOMBreakpoint(this.nodeId, this.type);
+}
+
+WebInspector.DOMBreakpoint.Types = {
+    SubtreeModified: 0,
+    AttributeModified: 1,
+    NodeRemoved: 2
+};
+
+WebInspector.DOMBreakpoint.labelForType = function(type)
+{
+    if (!WebInspector.DOMBreakpoint._labels) {
+        WebInspector.DOMBreakpoint._labels = {};
+        WebInspector.DOMBreakpoint._labels[WebInspector.DOMBreakpoint.Types.SubtreeModified] = WebInspector.UIString("Subtree Modified");
+        WebInspector.DOMBreakpoint._labels[WebInspector.DOMBreakpoint.Types.AttributeModified] = WebInspector.UIString("Attribute Modified");
+        WebInspector.DOMBreakpoint._labels[WebInspector.DOMBreakpoint.Types.NodeRemoved] = WebInspector.UIString("Node Removed");
+    }
+    return WebInspector.DOMBreakpoint._labels[type];
+}
+
+WebInspector.DOMBreakpoint.contextMenuLabelForType = function(type)
+{
+    if (!WebInspector.DOMBreakpoint._contextMenuLabels) {
+        WebInspector.DOMBreakpoint._contextMenuLabels = {};
+        WebInspector.DOMBreakpoint._contextMenuLabels[WebInspector.DOMBreakpoint.Types.SubtreeModified] = WebInspector.UIString("Break on Subtree Modifications");
+        WebInspector.DOMBreakpoint._contextMenuLabels[WebInspector.DOMBreakpoint.Types.AttributeModified] = WebInspector.UIString("Break on Attributes Modifications");
+        WebInspector.DOMBreakpoint._contextMenuLabels[WebInspector.DOMBreakpoint.Types.NodeRemoved] = WebInspector.UIString("Break on Node Removal");
+    }
+    return WebInspector.DOMBreakpoint._contextMenuLabels[type];
+}
+
+WebInspector.DOMBreakpoint.prototype = {
+    get nodeId()
+    {
+        return this._nodeId;
+    },
+
+    get type()
+    {
+        return this._type;
+    },
+
+    get enabled()
+    {
+        return this._enabled;
+    },
+
+    set enabled(enabled)
+    {
+        if (this._enabled === enabled)
+            return;
+
+        this._enabled = enabled;
+        if (this.enabled)
+            InspectorBackend.setDOMBreakpoint(this.nodeId, this.type);
+        else
+            InspectorBackend.removeDOMBreakpoint(this.nodeId, this.type);
+
+        this.dispatchEventToListeners("enable-changed");
+    },
+
+    remove: function()
+    {
+        if (this.enabled)
+            InspectorBackend.removeDOMBreakpoint(this.nodeId, this.type);
+        this.dispatchEventToListeners("removed");
+    }
+}
+
+WebInspector.DOMBreakpoint.prototype.__proto__ = WebInspector.Object.prototype;
+

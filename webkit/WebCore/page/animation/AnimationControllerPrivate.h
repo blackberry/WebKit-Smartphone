@@ -29,7 +29,6 @@
 #ifndef AnimationControllerPrivate_h
 #define AnimationControllerPrivate_h
 
-#include "AtomicString.h"
 #include "CSSPropertyNames.h"
 #include "PlatformString.h"
 #include "Timer.h"
@@ -37,6 +36,7 @@
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Vector.h>
+#include <wtf/text/AtomicString.h>
 
 namespace WebCore {
 
@@ -70,7 +70,8 @@ public:
     void suspendAnimations(Document*);
     void resumeAnimations(Document*);
 
-    bool isAnimatingPropertyOnRenderer(RenderObject*, CSSPropertyID, bool isRunningNow) const;
+    bool isRunningAnimationOnRenderer(RenderObject*, CSSPropertyID, bool isRunningNow) const;
+    bool isRunningAcceleratedAnimationOnRenderer(RenderObject*, CSSPropertyID, bool isRunningNow) const;
 
     bool pauseAnimationAtTime(RenderObject*, const String& name, double t);
     bool pauseTransitionAtTime(RenderObject*, const String& property, double t);

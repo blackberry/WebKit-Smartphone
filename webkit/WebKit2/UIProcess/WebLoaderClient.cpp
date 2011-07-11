@@ -26,6 +26,7 @@
 #include "WebLoaderClient.h"
 
 #include "WKAPICast.h"
+#include <string.h>
 
 namespace WebKit {
 
@@ -34,7 +35,7 @@ WebLoaderClient::WebLoaderClient()
     initialize(0);
 }
 
-void WebLoaderClient::initialize(WKPageLoaderClient* client)
+void WebLoaderClient::initialize(const WKPageLoaderClient* client)
 {
     if (client && !client->version)
         m_pageLoaderClient = *client;
@@ -66,6 +67,12 @@ void WebLoaderClient::didCommitLoadForFrame(WebPageProxy* page, WebFrameProxy* f
         m_pageLoaderClient.didCommitLoadForFrame(toRef(page), toRef(frame), m_pageLoaderClient.clientInfo);
 }
 
+void WebLoaderClient::didFinishDocumentLoadForFrame(WebPageProxy* page, WebFrameProxy* frame)
+{
+    if (m_pageLoaderClient.didFinishDocumentLoadForFrame)
+        m_pageLoaderClient.didFinishDocumentLoadForFrame(toRef(page), toRef(frame), m_pageLoaderClient.clientInfo);
+}
+
 void WebLoaderClient::didFinishLoadForFrame(WebPageProxy* page, WebFrameProxy* frame)
 {
     if (m_pageLoaderClient.didFinishLoadForFrame)
@@ -78,7 +85,7 @@ void WebLoaderClient::didFailLoadWithErrorForFrame(WebPageProxy* page, WebFrameP
         m_pageLoaderClient.didFailLoadWithErrorForFrame(toRef(page), toRef(frame), m_pageLoaderClient.clientInfo);
 }
 
-void WebLoaderClient::didReceiveTitleForFrame(WebPageProxy* page, WebCore::StringImpl* title, WebFrameProxy* frame)
+void WebLoaderClient::didReceiveTitleForFrame(WebPageProxy* page, WTF::StringImpl* title, WebFrameProxy* frame)
 {
     if (m_pageLoaderClient.didReceiveTitleForFrame)
         m_pageLoaderClient.didReceiveTitleForFrame(toRef(page), toRef(title), toRef(frame), m_pageLoaderClient.clientInfo);
@@ -102,10 +109,10 @@ void WebLoaderClient::didStartProgress(WebPageProxy* page)
         m_pageLoaderClient.didStartProgress(toRef(page), m_pageLoaderClient.clientInfo);
 }
 
-void WebLoaderClient::didChangeProgress(WebPageProxy* page, double value)
+void WebLoaderClient::didChangeProgress(WebPageProxy* page)
 {
     if (m_pageLoaderClient.didChangeProgress)
-        m_pageLoaderClient.didChangeProgress(toRef(page), value, m_pageLoaderClient.clientInfo);
+        m_pageLoaderClient.didChangeProgress(toRef(page), m_pageLoaderClient.clientInfo);
 }
 
 void WebLoaderClient::didFinishProgress(WebPageProxy* page)
@@ -124,6 +131,18 @@ void WebLoaderClient::didBecomeResponsive(WebPageProxy* page)
 {
     if (m_pageLoaderClient.didBecomeResponsive)
         m_pageLoaderClient.didBecomeResponsive(toRef(page), m_pageLoaderClient.clientInfo);
+}
+
+void WebLoaderClient::processDidExit(WebPageProxy* page)
+{
+    if (m_pageLoaderClient.processDidExit)
+        m_pageLoaderClient.processDidExit(toRef(page), m_pageLoaderClient.clientInfo);
+}
+
+void WebLoaderClient::didChangeBackForwardList(WebPageProxy* page)
+{
+    if (m_pageLoaderClient.didChangeBackForwardList)
+        m_pageLoaderClient.didChangeBackForwardList(toRef(page), m_pageLoaderClient.clientInfo);
 }
 
 } // namespace WebKit

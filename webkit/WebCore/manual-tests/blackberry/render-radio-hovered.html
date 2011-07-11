@@ -1,0 +1,26 @@
+<html>
+<head>
+<script>
+function runTest()
+{
+    if (!window.eventSender)
+        return;
+
+    var radio = document.getElementById("radio");
+    var x = radio.offsetLeft + radio.offsetWidth / 2;
+    var y = radio.offsetTop + radio.offsetHeight / 2;
+    eventSender.mouseMoveTo(x, y);
+}
+window.onload = runTest;
+</script>
+</head>
+<body>
+<p>This tests that a radio button is tinted when hovered.</p>
+<ol>
+    <li>Hover the mouse cursor over the radio button below.</li>
+    <li>This test PASSED if the radio button looks like: <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABMAAAASCAYAAAC5DOVpAAAAAXNSR0IArs4c6QAAAd1JREFUOMudlL9rU1EUxz+vPPAEArmvWngPMnihDk+HanGwQwczWhy0uOjYxVX6byiOOomDdauCg2OWgD+gmhbBdFBuoMILpTQ3EMmNJDyHp8ZGEpN84MLlDF++93vuOV6apilD9FOoHcPeIey2gB7gw8V5WDoNF+bB8/gHb1jsyzE83nPEC0KUh0BAAAc022DaYJqOu8vCYmGM2LNPXfZbKaWiEAgjaTooG8dS6HErPvWnPvf78qbeZf8oZW1RyEnmZNTJCaydE95/S/mQcFKs6eBJtUNJS5bPJAcoaeHRO8v3H3+JPd+xXIqEnM9UBALxgvD0oxuIVQ8ckRJmQSuoJZmY3+1DYjsoGdifBiWCaSSAwjdHDiU5ADqzWPNBfKhbmDtbEBq2M5MryF5j244wD74IKD8rqPz0uTWsIxRB/F8N0GcGIU6LSRw6zA26ubEaUd5JcI7J/1kPbBvKuwkbK2ogFheFm5cDXlTMxI4csF0x3L4SoEMZms0erD+sEeSFaysaGROfc47tioEebN2LR2yNPjx4ZdiqNFhf1ehInWiKbTs+H1hevzXcuRqyeV2PX0EA1brj/ktDzdhsbJSQWIf4sKwVmzc0cVH+v8+GOWzB18RyPlIUCuNz/AmQstf26iXP7AAAAABJRU5ErkJggg=="/>.</li>
+</ol>
+<hr/>
+<label>Hover your cursor over the radio button: <input type="radio" name="radio" id="radio" /></label>
+</body>
+</html>

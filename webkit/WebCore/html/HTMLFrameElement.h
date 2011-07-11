@@ -35,14 +35,10 @@ public:
     bool hasFrameBorder() const { return m_frameBorder; }
 
     bool noResize() const { return m_noResize; }
-    void setNoResize(bool);
 
 private:
     HTMLFrameElement(const QualifiedName&, Document*);
 
-    virtual HTMLTagStatus endTagRequirement() const { return TagStatusForbidden; }
-    virtual int tagPriority() const { return 0; }
-  
     virtual void attach();
 
     virtual bool rendererIsNeeded(RenderStyle*);

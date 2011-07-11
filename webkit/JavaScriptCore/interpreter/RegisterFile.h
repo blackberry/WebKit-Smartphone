@@ -35,16 +35,8 @@
 #include "WeakGCPtr.h"
 #include <stdio.h>
 #include <wtf/Noncopyable.h>
+#include <wtf/PageReservation.h>
 #include <wtf/VMTags.h>
-
-#if HAVE(MMAP)
-#include <errno.h>
-#include <sys/mman.h>
-#endif
-
-#if PLATFORM(OLYMPIA)
-#include "OlympiaPlatformMemory.h"
-#endif
 
 namespace JSC {
 
@@ -113,7 +105,11 @@ namespace JSC {
 
         enum { ProgramCodeThisRegister = -CallFrameHeaderSize - 1 };
 
+#if OS(OLYMPIA)
+        static const size_t defaultCapacity = 524288 / 2;
+#else
         static const size_t defaultCapacity = 524288;
+#endif
         static const size_t defaultMaxGlobals = 8192;
         static const size_t commitSize = 1 << 14;
         // Allow 8k of excess registers before we start trying to reap the registerfile
@@ -142,25 +138,24 @@ namespace JSC {
         void markGlobals(MarkStack& markStack, Heap* heap) { heap->markConservatively(markStack, lastGlobal(), m_start); }
         void markCallFrames(MarkStack& markStack, Heap* heap) { heap->markConservatively(markStack, m_start, m_end); }
 
+        static size_t committedByteCount();
+        static void initializeThreading();
+
     private:
+        void checkAllocatedOkay(bool okay);
         void releaseExcessCapacity();
+        void addToCommittedByteCount(long);
         size_t m_numGlobals;
         const size_t m_maxGlobals;
         Register* m_start;
         Register* m_end;
         Register* m_max;
-        Register* m_buffer;
         Register* m_maxUsed;
-
-#if HAVE(VIRTUALALLOC) || PLATFORM(OLYMPIA)
         Register* m_commitEnd;
-#endif
+        PageReservation m_reservation;
 
         WeakGCPtr<JSGlobalObject> m_globalObject; // The global object whose vars are currently stored in the register file.
     };
-
-    // FIXME: Add a generic getpagesize() to WTF, then move this function to WTF as well.
-    inline bool isPageAligned(size_t size) { return size != 0 && size % (8 * 1024) == 0; }
 
     inline RegisterFile::RegisterFile(size_t capacity, size_t maxGlobals)
         : m_numGlobals(0)
@@ -168,66 +163,19 @@ namespace JSC {
         , m_start(0)
         , m_end(0)
         , m_max(0)
-        , m_buffer(0)
     {
-        // Verify that our values will play nice with mmap and VirtualAlloc.
-        ASSERT(isPageAligned(maxGlobals));
-        ASSERT(isPageAligned(capacity));
+        ASSERT(maxGlobals && PageAllocation::isPageAligned(maxGlobals));
+        ASSERT(capacity && PageAllocation::isPageAligned(capacity));
 
         size_t bufferLength = (capacity + maxGlobals) * sizeof(Register);
-    #if HAVE(MMAP)
-        m_buffer = static_cast<Register*>(mmap(0, bufferLength, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, VM_TAG_FOR_REGISTERFILE_MEMORY, 0));
-        if (m_buffer == MAP_FAILED) {
-#if OS(WINCE)
-            fprintf(stderr, "Could not allocate register file: %d\n", GetLastError());
-#else
-            fprintf(stderr, "Could not allocate register file: %d\n", errno);
-#endif
-            CRASH();
-        }
-    #elif HAVE(VIRTUALALLOC)
-        m_buffer = static_cast<Register*>(VirtualAlloc(0, roundUpAllocationSize(bufferLength, commitSize), MEM_RESERVE, PAGE_READWRITE));
-        if (!m_buffer) {
-#if OS(WINCE)
-            fprintf(stderr, "Could not allocate register file: %d\n", GetLastError());
-#else
-            fprintf(stderr, "Could not allocate register file: %d\n", errno);
-#endif
-            CRASH();
-        }
+        m_reservation = PageReservation::reserve(roundUpAllocationSize(bufferLength, commitSize), PageAllocation::JSVMStackPages);
+        void* base = m_reservation.base();
+        checkAllocatedOkay(base);
         size_t committedSize = roundUpAllocationSize(maxGlobals * sizeof(Register), commitSize);
-        void* commitCheck = VirtualAlloc(m_buffer, committedSize, MEM_COMMIT, PAGE_READWRITE);
-        if (commitCheck != m_buffer) {
-#if OS(WINCE)
-            fprintf(stderr, "Could not allocate register file: %d\n", GetLastError());
-#else
-            fprintf(stderr, "Could not allocate register file: %d\n", errno);
-#endif
-            CRASH();
-        }
-        m_commitEnd = reinterpret_cast<Register*>(reinterpret_cast<char*>(m_buffer) + committedSize);
-    #elif PLATFORM(OLYMPIA)
-        bufferLength = roundUpAllocationSize(bufferLength, commitSize);
-        m_buffer = static_cast<Register*>(Olympia::Platform::reserveVirtualMemory(bufferLength));
-        if (!m_buffer)
-            CRASH();
-        size_t committedSize = roundUpAllocationSize(maxGlobals * sizeof(Register), commitSize);
-        void* commitCheck = Olympia::Platform::commitVirtualMemory(m_buffer, committedSize);
-        if (commitCheck != m_buffer)
-            CRASH();
-        m_commitEnd = reinterpret_cast<Register*>(reinterpret_cast<char*>(m_buffer) + committedSize);
-    #else 
-        /* 
-         * If neither MMAP nor VIRTUALALLOC are available - use fastMalloc instead.
-         *
-         * Please note that this is the fallback case, which is non-optimal.
-         * If any possible, the platform should provide for a better memory
-         * allocation mechanism that allows for "lazy commit" or dynamic
-         * pre-allocation, similar to mmap or VirtualAlloc, to avoid waste of memory.
-         */
-        m_buffer = static_cast<Register*>(fastMalloc(bufferLength));
-    #endif
-        m_start = m_buffer + maxGlobals;
+        checkAllocatedOkay(m_reservation.commit(base, committedSize));
+        addToCommittedByteCount(static_cast<long>(committedSize));
+        m_commitEnd = reinterpret_cast_ptr<Register*>(reinterpret_cast<char*>(base) + committedSize);
+        m_start = static_cast<Register*>(base) + maxGlobals;
         m_end = m_start;
         m_maxUsed = m_end;
         m_max = m_start + capacity;
@@ -250,29 +198,27 @@ namespace JSC {
         if (newEnd > m_max)
             return false;
 
-#if !HAVE(MMAP) && (HAVE(VIRTUALALLOC) || PLATFORM(OLYMPIA))
         if (newEnd > m_commitEnd) {
             size_t size = roundUpAllocationSize(reinterpret_cast<char*>(newEnd) - reinterpret_cast<char*>(m_commitEnd), commitSize);
-#if PLATFORM(OLYMPIA)
-            if (!Olympia::Platform::commitVirtualMemory(m_commitEnd, size)) {
-#else
-            if (!VirtualAlloc(m_commitEnd, size, MEM_COMMIT, PAGE_READWRITE)) {
-#if OS(WINCE)
-                fprintf(stderr, "Could not allocate register file: %d\n", GetLastError());
-#elif !PLATFORM(OLYMPIA)
-                fprintf(stderr, "Could not allocate register file: %d\n", errno);
-#endif
-#endif
-                CRASH();
-            }
-            m_commitEnd = reinterpret_cast<Register*>(reinterpret_cast<char*>(m_commitEnd) + size);
+            checkAllocatedOkay(m_reservation.commit(m_commitEnd, size));
+            m_commitEnd = reinterpret_cast_ptr<Register*>(reinterpret_cast<char*>(m_commitEnd) + size);
         }
-#endif
+
         if (newEnd > m_maxUsed)
             m_maxUsed = newEnd;
 
         m_end = newEnd;
         return true;
+    }
+
+    inline void RegisterFile::checkAllocatedOkay(bool okay)
+    {
+        if (!okay) {
+#ifndef NDEBUG
+            fprintf(stderr, "Could not allocate register file: %d\n", PageReservation::lastError());
+#endif
+            CRASH();
+        }
     }
 
 } // namespace JSC

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2008, 2009, 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2008 Cameron Zwarich <cwzwarich@uwaterloo.ca>
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,6 +39,7 @@
 #include "RegExp.h"
 #include "UString.h"
 #include <wtf/FastAllocBase.h>
+#include <wtf/PassOwnPtr.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Vector.h>
 
@@ -46,8 +47,8 @@
 #include "StructureStubInfo.h"
 #endif
 
-// Register numbers used in bytecode operations have different meaning accoring to their ranges:
-//      0x80000000-0xFFFFFFFF  Negative indicies from the CallFrame pointer are entries in the call frame, see RegisterFile.h.
+// Register numbers used in bytecode operations have different meaning according to their ranges:
+//      0x80000000-0xFFFFFFFF  Negative indices from the CallFrame pointer are entries in the call frame, see RegisterFile.h.
 //      0x00000000-0x3FFFFFFF  Forwards indices from the CallFrame pointer are local vars and temporaries with the function's callframe.
 //      0x40000000-0x7FFFFFFF  Positive indices from 0x40000000 specify entries in the constant pool on the CodeBlock.
 static const int FirstConstantRegisterIndex = 0x40000000;
@@ -274,7 +275,10 @@ namespace JSC {
     class CodeBlock : public FastAllocBase {
         friend class JIT;
     protected:
-        CodeBlock(ScriptExecutable* ownerExecutable, CodeType, PassRefPtr<SourceProvider>, unsigned sourceOffset, SymbolTable* symbolTable, bool isConstructor);
+        CodeBlock(ScriptExecutable* ownerExecutable, CodeType, JSGlobalObject*, PassRefPtr<SourceProvider>, unsigned sourceOffset, SymbolTable* symbolTable, bool isConstructor);
+
+        JSGlobalObject* m_globalObject;
+
     public:
         virtual ~CodeBlock();
 
@@ -351,12 +355,14 @@ namespace JSC {
 
         unsigned bytecodeOffset(CallFrame* callFrame, ReturnAddressPtr returnAddress)
         {
-            reparseForExceptionInfoIfNecessary(callFrame);
+            if (!reparseForExceptionInfoIfNecessary(callFrame))
+                return 1;
             return binaryChop<CallReturnOffsetToBytecodeOffset, unsigned, getCallReturnOffset>(callReturnIndexVector().begin(), callReturnIndexVector().size(), getJITCode().offsetOf(returnAddress.value()))->bytecodeOffset;
         }
         
         bool functionRegisterForBytecodeOffset(unsigned bytecodeOffset, int& functionRegisterIndex);
-#else
+#endif
+#if ENABLE(INTERPRETER)
         unsigned bytecodeOffset(CallFrame*, Instruction* returnAddress)
         {
             return static_cast<Instruction*>(returnAddress) - instructions().begin();
@@ -414,11 +420,12 @@ namespace JSC {
         unsigned jumpTarget(int index) const { return m_jumpTargets[index]; }
         unsigned lastJumpTarget() const { return m_jumpTargets.last(); }
 
-#if !ENABLE(JIT)
+#if ENABLE(INTERPRETER)
         void addPropertyAccessInstruction(unsigned propertyAccessInstruction) { m_propertyAccessInstructions.append(propertyAccessInstruction); }
         void addGlobalResolveInstruction(unsigned globalResolveInstruction) { m_globalResolveInstructions.append(globalResolveInstruction); }
         bool hasGlobalResolveInstructionAtBytecodeOffset(unsigned bytecodeOffset);
-#else
+#endif
+#if ENABLE(JIT)
         size_t numberOfStructureStubInfos() const { return m_structureStubInfos.size(); }
         void addStructureStubInfo(const StructureStubInfo& stubInfo) { m_structureStubInfos.append(stubInfo); }
         StructureStubInfo& structureStubInfo(int index) { return m_structureStubInfos[index]; }
@@ -445,7 +452,7 @@ namespace JSC {
 
         bool hasExceptionInfo() const { return m_exceptionInfo; }
         void clearExceptionInfo() { m_exceptionInfo.clear(); }
-        ExceptionInfo* extractExceptionInfo() { ASSERT(m_exceptionInfo); return m_exceptionInfo.release(); }
+        PassOwnPtr<ExceptionInfo> extractExceptionInfo();
 
         void addExpressionInfo(const ExpressionRangeInfo& expressionInfo) { ASSERT(m_exceptionInfo); m_exceptionInfo->m_expressionInfo.append(expressionInfo); }
         void addGetByIdExceptionInfo(const GetByIdExceptionInfo& info) { ASSERT(m_exceptionInfo); m_exceptionInfo->m_getByIdExceptionInfo.append(info); }
@@ -479,6 +486,7 @@ namespace JSC {
         unsigned addRegExp(RegExp* r) { createRareDataIfNecessary(); unsigned size = m_rareData->m_regexps.size(); m_rareData->m_regexps.append(r); return size; }
         RegExp* regexp(int index) const { ASSERT(m_rareData); return m_rareData->m_regexps[index].get(); }
 
+        JSGlobalObject* globalObject() { return m_globalObject; }
 
         // Jump Tables
 
@@ -521,12 +529,12 @@ namespace JSC {
         void printPutByIdOp(ExecState*, int location, Vector<Instruction>::const_iterator&, const char* op) const;
 #endif
 
-        void reparseForExceptionInfoIfNecessary(CallFrame*);
+        bool reparseForExceptionInfoIfNecessary(CallFrame*) WARN_UNUSED_RETURN;
 
         void createRareDataIfNecessary()
         {
             if (!m_rareData)
-                m_rareData.set(new RareData);
+                m_rareData = adoptPtr(new RareData);
         }
 
         ScriptExecutable* m_ownerExecutable;
@@ -549,10 +557,11 @@ namespace JSC {
         RefPtr<SourceProvider> m_source;
         unsigned m_sourceOffset;
 
-#if !ENABLE(JIT)
+#if ENABLE(INTERPRETER)
         Vector<unsigned> m_propertyAccessInstructions;
         Vector<unsigned> m_globalResolveInstructions;
-#else
+#endif
+#if ENABLE(JIT)
         Vector<StructureStubInfo> m_structureStubInfos;
         Vector<GlobalResolveInfo> m_globalResolveInfos;
         Vector<CallLinkInfo> m_callLinkInfos;
@@ -597,9 +606,8 @@ namespace JSC {
 
     class GlobalCodeBlock : public CodeBlock {
     public:
-        GlobalCodeBlock(ScriptExecutable* ownerExecutable, CodeType codeType, PassRefPtr<SourceProvider> sourceProvider, unsigned sourceOffset, JSGlobalObject* globalObject)
-            : CodeBlock(ownerExecutable, codeType, sourceProvider, sourceOffset, &m_unsharedSymbolTable, false)
-            , m_globalObject(globalObject)
+        GlobalCodeBlock(ScriptExecutable* ownerExecutable, CodeType codeType, JSGlobalObject* globalObject, PassRefPtr<SourceProvider> sourceProvider, unsigned sourceOffset)
+            : CodeBlock(ownerExecutable, codeType, globalObject, sourceProvider, sourceOffset, &m_unsharedSymbolTable, false)
         {
             m_globalObject->codeBlocks().add(this);
         }
@@ -613,14 +621,13 @@ namespace JSC {
         void clearGlobalObject() { m_globalObject = 0; }
 
     private:
-        JSGlobalObject* m_globalObject; // For program and eval nodes, the global object that marks the constant pool.
         SymbolTable m_unsharedSymbolTable;
     };
 
     class ProgramCodeBlock : public GlobalCodeBlock {
     public:
         ProgramCodeBlock(ProgramExecutable* ownerExecutable, CodeType codeType, JSGlobalObject* globalObject, PassRefPtr<SourceProvider> sourceProvider)
-            : GlobalCodeBlock(ownerExecutable, codeType, sourceProvider, 0, globalObject)
+            : GlobalCodeBlock(ownerExecutable, codeType, globalObject, sourceProvider, 0)
         {
         }
     };
@@ -628,7 +635,7 @@ namespace JSC {
     class EvalCodeBlock : public GlobalCodeBlock {
     public:
         EvalCodeBlock(EvalExecutable* ownerExecutable, JSGlobalObject* globalObject, PassRefPtr<SourceProvider> sourceProvider, int baseScopeDepth)
-            : GlobalCodeBlock(ownerExecutable, EvalCode, sourceProvider, 0, globalObject)
+            : GlobalCodeBlock(ownerExecutable, EvalCode, globalObject, sourceProvider, 0)
             , m_baseScopeDepth(baseScopeDepth)
         {
         }
@@ -654,8 +661,8 @@ namespace JSC {
         // as we need to initialise the CodeBlock before we could initialise any RefPtr to hold the shared
         // symbol table, so we just pass as a raw pointer with a ref count of 1.  We then manually deref
         // in the destructor.
-        FunctionCodeBlock(FunctionExecutable* ownerExecutable, CodeType codeType, PassRefPtr<SourceProvider> sourceProvider, unsigned sourceOffset, bool isConstructor)
-            : CodeBlock(ownerExecutable, codeType, sourceProvider, sourceOffset, new SharedSymbolTable, isConstructor)
+        FunctionCodeBlock(FunctionExecutable* ownerExecutable, CodeType codeType, JSGlobalObject* globalObject, PassRefPtr<SourceProvider> sourceProvider, unsigned sourceOffset, bool isConstructor)
+            : CodeBlock(ownerExecutable, codeType, globalObject, sourceProvider, sourceOffset, SharedSymbolTable::create().releaseRef(), isConstructor)
         {
         }
         ~FunctionCodeBlock()
@@ -663,6 +670,12 @@ namespace JSC {
             sharedSymbolTable()->deref();
         }
     };
+
+    inline PassOwnPtr<ExceptionInfo> CodeBlock::extractExceptionInfo()
+    {
+        ASSERT(m_exceptionInfo);
+        return m_exceptionInfo.release();
+    }
 
     inline Register& ExecState::r(int index)
     {

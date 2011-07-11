@@ -24,12 +24,17 @@
 #include "Editor.h"
 #include "FileList.h"
 #include "NotImplemented.h"
-#include "StringHash.h"
+#include <wtf/text/StringHash.h>
 
 namespace WebCore {
-PassRefPtr<Clipboard> Editor::newGeneralClipboard(ClipboardAccessPolicy policy)
+PassRefPtr<Clipboard> Editor::newGeneralClipboard(ClipboardAccessPolicy policy, Frame*)
 {
-    return new ClipboardEfl(policy, false);
+    return ClipboardEfl::create(policy, false);
+}
+
+PassRefPtr<Clipboard> Clipboard::create(ClipboardAccessPolicy, DragData*, Frame*)
+{
+    return 0;
 }
 
 ClipboardEfl::ClipboardEfl(ClipboardAccessPolicy policy, bool forDragging)
@@ -48,7 +53,7 @@ void ClipboardEfl::clearData(const String&)
     notImplemented();
 }
 
-void ClipboardEfl::writePlainText(const WebCore::String&)
+void ClipboardEfl::writePlainText(const WTF::String&)
 {
     notImplemented();
 }

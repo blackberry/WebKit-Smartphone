@@ -39,12 +39,12 @@ public:
     {
     }
 
-private:    
+private:
     virtual void pageDestroyed();
-    
+
     virtual bool shouldDeleteRange(WebCore::Range*);
     virtual bool shouldShowDeleteInterface(WebCore::HTMLElement*);
-    virtual bool smartInsertDeleteEnabled(); 
+    virtual bool smartInsertDeleteEnabled();
     virtual bool isSelectTrailingWhitespaceEnabled();
     virtual bool isContinuousSpellCheckingEnabled();
     virtual void toggleContinuousSpellChecking();
@@ -57,7 +57,7 @@ private:
     virtual bool shouldBeginEditing(WebCore::Range*);
     virtual bool shouldEndEditing(WebCore::Range*);
     virtual bool shouldInsertNode(WebCore::Node*, WebCore::Range*, WebCore::EditorInsertAction);
-    virtual bool shouldInsertText(const WebCore::String&, WebCore::Range*, WebCore::EditorInsertAction);
+    virtual bool shouldInsertText(const WTF::String&, WebCore::Range*, WebCore::EditorInsertAction);
     virtual bool shouldChangeSelectedRange(WebCore::Range* fromRange, WebCore::Range* toRange, WebCore::EAffinity, bool stillSelecting);
     
     virtual bool shouldApplyStyle(WebCore::CSSStyleDeclaration*, WebCore::Range*);
@@ -92,6 +92,8 @@ private:
 
 #if PLATFORM(MAC)
     virtual NSString* userVisibleString(NSURL*);
+    virtual WebCore::DocumentFragment* documentFragmentFromAttributedString(NSAttributedString*, Vector<WebCore::ArchiveResource*>&);
+    virtual void setInsertionPasteboard(NSPasteboard*);
 #ifdef BUILDING_ON_TIGER
     virtual NSArray* pasteboardTypesForSelection(WebCore::Frame*);
 #endif
@@ -116,21 +118,25 @@ private:
     virtual void toggleAutomaticSpellingCorrection();
 #endif
 
-    virtual void ignoreWordInSpellDocument(const WebCore::String&);
-    virtual void learnWord(const WebCore::String&);
+    virtual void ignoreWordInSpellDocument(const WTF::String&);
+    virtual void learnWord(const WTF::String&);
     virtual void checkSpellingOfString(const UChar*, int length, int* misspellingLocation, int* misspellingLength);
-    virtual WebCore::String getAutoCorrectSuggestionForMisspelledWord(const WebCore::String& misspelledWord);
+    virtual WTF::String getAutoCorrectSuggestionForMisspelledWord(const WTF::String& misspelledWord);
     virtual void checkGrammarOfString(const UChar*, int length, Vector<WebCore::GrammarDetail>&, int* badGrammarLocation, int* badGrammarLength);
 #if PLATFORM(MAC) && !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
     virtual void checkTextOfParagraph(const UChar* text, int length, uint64_t checkingTypes, Vector<WebCore::TextCheckingResult>& results);
 #endif
-    virtual void updateSpellingUIWithGrammarString(const WebCore::String&, const WebCore::GrammarDetail& detail);
-    virtual void updateSpellingUIWithMisspelledWord(const WebCore::String&);
+    virtual void updateSpellingUIWithGrammarString(const WTF::String&, const WebCore::GrammarDetail& detail);
+    virtual void updateSpellingUIWithMisspelledWord(const WTF::String&);
     virtual void showSpellingUI(bool show);
     virtual bool spellingUIIsShowing();
-    virtual void getGuessesForWord(const WebCore::String&, Vector<WebCore::String>& guesses);
+    virtual void getGuessesForWord(const WTF::String&, Vector<WTF::String>& guesses);
+    virtual void willSetInputMethodState();
     virtual void setInputMethodState(bool enabled);
-
+#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+    virtual void showCorrectionPanel(const WebCore::FloatRect& boundingBoxOfReplacedString, const WTF::String& replacedString, const WTF::String& replacementString, WebCore::Editor*);
+    virtual void dismissCorrectionPanel(bool correctionAccepted);
+#endif
     WebPage* m_page;
 };
 

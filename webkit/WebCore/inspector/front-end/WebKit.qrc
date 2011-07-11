@@ -2,13 +2,15 @@
 <qresource prefix="/webkit/inspector">
     <file>inspector.html</file>
     <file>AbstractTimelinePanel.js</file>
+    <file>ApplicationCacheItemsView.js</file>
     <file>AuditCategories.js</file>
+    <file>AuditFormatters.js</file>
     <file>AuditLauncherView.js</file>
     <file>AuditResultView.js</file>
     <file>AuditRules.js</file>
     <file>AuditsPanel.js</file>
     <file>BottomUpProfileDataGridTree.js</file>
-    <file>Breakpoint.js</file>
+    <file>BreakpointManager.js</file>
     <file>BreakpointsSidebarPane.js</file>
     <file>Callback.js</file>
     <file>CallStackSidebarPane.js</file>
@@ -19,6 +21,8 @@
     <file>ConsoleView.js</file>
     <file>ContextMenu.js</file>
     <file>CookieItemsView.js</file>
+    <file>CSSCompletions.js</file>
+    <file>CSSStyleModel.js</file>
     <file>Database.js</file>
     <file>DatabaseQueryView.js</file>
     <file>DatabaseTableView.js</file>
@@ -31,20 +35,26 @@
     <file>ElementsPanel.js</file>
     <file>ElementsTreeOutline.js</file>
     <file>EventListenersSidebarPane.js</file>
+    <file>ExtensionAPI.js</file>
+    <file>ExtensionAuditCategory.js</file>
+    <file>ExtensionCommon.js</file>
+    <file>ExtensionPanel.js</file>
+    <file>ExtensionRegistryStub.js</file>
+    <file>ExtensionServer.js</file>
     <file>FontView.js</file>
+    <file>HAREntry.js</file>
+    <file>HeapSnapshotView.js</file>
     <file>HelpScreen.js</file>
     <file>ImageView.js</file>
     <file>InjectedFakeWorker.js</file>
     <file>InjectedScript.js</file>
     <file>InjectedScriptAccess.js</file>
     <file>inspector.js</file>
-    <file>InspectorBackendStub.js</file>
     <file>InspectorFrontendHostStub.js</file>
     <file>KeyboardShortcut.js</file>
     <file>MetricsSidebarPane.js</file>
     <file>Object.js</file>
     <file>ObjectPropertiesSection.js</file>
-    <file>ObjectProxy.js</file>
     <file>Panel.js</file>
     <file>PanelEnablerView.js</file>
     <file>Placard.js</file>
@@ -54,6 +64,7 @@
     <file>ProfileView.js</file>
     <file>PropertiesSection.js</file>
     <file>PropertiesSidebarPane.js</file>
+    <file>RemoteObject.js</file>
     <file>Resource.js</file>
     <file>ResourceCategory.js</file>
     <file>ResourcesPanel.js</file>
@@ -77,6 +88,7 @@
     <file>StoragePanel.js</file>
     <file>StylesSidebarPane.js</file>
     <file>SummaryBar.js</file>
+    <file>TabbedPane.js</file>
     <file>TestController.js</file>
     <file>TextEditorHighlighter.js</file>
     <file>TextEditorModel.js</file>
@@ -94,11 +106,13 @@
     <file>WelcomeView.js</file>
     <file>WorkersSidebarPane.js</file>
     <file>audits.css</file>
+    <file>heapProfiler.css</file>
     <file>helpScreen.css</file>
     <file>inspector.css</file>
     <file>inspectorSyntaxHighlight.css</file>
     <file>popover.css</file>
     <file>textViewer.css</file>
+    <file>Images/applicationCache.png</file>
     <file>Images/auditsIcon.png</file>
     <file>Images/back.png</file>
     <file>Images/breakpointBorder.png</file>

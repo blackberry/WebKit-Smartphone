@@ -326,6 +326,16 @@ void EGLDisplayOpenVG::removeSurface(const EGLSurface& surface, bool destroySurf
 {
     ASSERT(surface != EGL_NO_SURFACE);
 
+#if PLATFORM(OLYMPIA)
+    if (destroySurface) {
+        // Work around a bug in our EGL implementation where the VGImage
+        // referenced by eglCreatePbufferFromClientBuffer is not released
+        // when destroying the context, RIM Bug #1591.
+        // The context that created the VGImage needs to be current for
+        // it to be released.
+        sharedPlatformSurface()->makeResourceCreationContextCurrent();
+    } else
+#endif
     if (eglGetCurrentSurface(EGL_DRAW) == surface) {
         eglMakeCurrent(m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         ASSERT_EGL_NO_ERROR();

@@ -26,15 +26,15 @@
 #include "WKString.h"
 
 #include "WKAPICast.h"
-#include <WebCore/StringImpl.h>
 
-WKStringRef WKStringRetain(WKStringRef stringRef)
+using namespace WebKit;
+
+WKTypeID WKStringGetTypeID()
 {
-    toWK(stringRef)->ref();
-    return stringRef;
+    return toRef(WebString::APIType);
 }
 
-void WKStringRelease(WKStringRef stringRef)
+bool WKStringIsEmpty(WKStringRef stringRef)
 {
-    toWK(stringRef)->deref();
+    return toWK(stringRef)->isEmpty();
 }

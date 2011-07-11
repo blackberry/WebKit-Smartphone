@@ -30,6 +30,7 @@
 #include "AXObjectCache.h"
 #include "Chrome.h"
 #include "CSSStyleSelector.h"
+#include "DashArray.h"
 #include "FloatQuad.h"
 #include "Frame.h"
 #include "FrameView.h"
@@ -40,8 +41,10 @@
 #include "RenderArena.h"
 #include "RenderCounter.h"
 #include "RenderFlexibleBox.h"
-#include "RenderImageGeneratedContent.h"
+#include "RenderImage.h"
+#include "RenderImageResourceStyleImage.h"
 #include "RenderInline.h"
+#include "RenderLayer.h"
 #include "RenderListItem.h"
 #include "RenderRuby.h"
 #include "RenderRubyText.h"
@@ -105,10 +108,12 @@ RenderObject* RenderObject::createObject(Node* node, RenderStyle* style)
     // Otherwise acts as if we didn't support this feature.
     const ContentData* contentData = style->contentData();
     if (contentData && !contentData->next() && contentData->isImage() && doc != node) {
-        RenderImageGeneratedContent* image = new (arena) RenderImageGeneratedContent(node);
+        RenderImage* image = new (arena) RenderImage(node);
         image->setStyle(style);
         if (StyleImage* styleImage = contentData->image())
-            image->setStyleImage(styleImage);
+            image->setImageResource(RenderImageResourceStyleImage::create(styleImage));
+        else
+            image->setImageResource(RenderImageResource::create());
         return image;
     }
 
@@ -219,7 +224,7 @@ RenderObject::RenderObject(Node* node)
 
 RenderObject::~RenderObject()
 {
-    ASSERT(!node() || documentBeingDestroyed() || !document()->frame()->view() || document()->frame()->view()->layoutRoot() != this);
+    ASSERT(!node() || documentBeingDestroyed() || !frame()->view() || frame()->view()->layoutRoot() != this);
 #ifndef NDEBUG
     ASSERT(!m_hasAXObject);
     renderObjectCounter.decrement();
@@ -889,10 +894,186 @@ void RenderObject::drawLineForBoxSide(GraphicsContext* graphicsContext, int x1, 
     }
 }
 
+IntRect RenderObject::borderInnerRect(const IntRect& borderRect, unsigned short topWidth, unsigned short bottomWidth, unsigned short leftWidth, unsigned short rightWidth) const
+{
+    return IntRect(
+            borderRect.x() + leftWidth, 
+            borderRect.y() + topWidth, 
+            borderRect.width() - leftWidth - rightWidth, 
+            borderRect.height() - topWidth - bottomWidth);
+}
+
+#if HAVE(PATH_BASED_BORDER_RADIUS_DRAWING)
+void RenderObject::drawBoxSideFromPath(GraphicsContext* graphicsContext, IntRect borderRect, Path borderPath, 
+                                    float thickness, float drawThickness, BoxSide s, const RenderStyle* style, 
+                                    Color c, EBorderStyle borderStyle)
+{
+    if (thickness <= 0)
+        return;
+
+    if (borderStyle == DOUBLE && thickness < 3)
+        borderStyle = SOLID;
+
+    switch (borderStyle) {
+    case BNONE:
+    case BHIDDEN:
+        return;
+    case DOTTED:
+    case DASHED: {
+        graphicsContext->setStrokeColor(c, style->colorSpace());
+
+        // The stroke is doubled here because the provided path is the 
+        // outside edge of the border so half the stroke is clipped off. 
+        // The extra multiplier is so that the clipping mask can antialias
+        // the edges to prevent jaggies.
+        graphicsContext->setStrokeThickness(drawThickness * 2 * 1.1f);
+        graphicsContext->setStrokeStyle(borderStyle == DASHED ? DashedStroke : DottedStroke);
+
+        // If the number of dashes that fit in the path is odd and non-integral then we
+        // will have an awkwardly-sized dash at the end of the path. To try to avoid that
+        // here, we simply make the whitespace dashes ever so slightly bigger.
+        // FIXME: This could be even better if we tried to manipulate the dash offset
+        // and possibly the whiteSpaceWidth to get the corners dash-symmetrical.
+        float patWidth = thickness * ((borderStyle == DASHED) ? 3.0f : 1.0f);
+        float whiteSpaceWidth = patWidth;
+        float numberOfDashes = borderPath.length() / patWidth;
+        bool evenNumberOfFullDashes = !((int)numberOfDashes % 2);
+        bool integralNumberOfDashes = !(numberOfDashes - (int)numberOfDashes);
+        if (!evenNumberOfFullDashes && !integralNumberOfDashes) {
+            float numberOfWhitespaceDashes = numberOfDashes / 2;
+            whiteSpaceWidth += (patWidth  / numberOfWhitespaceDashes);
+        }
+
+        DashArray lineDash;
+        lineDash.append(patWidth);
+        lineDash.append(whiteSpaceWidth);
+        graphicsContext->setLineDash(lineDash, patWidth);
+        graphicsContext->addPath(borderPath);
+        graphicsContext->strokePath();
+        return;
+    }
+    case DOUBLE: {
+        int outerBorderTopWidth = style->borderTopWidth() / 3;
+        int outerBorderRightWidth = style->borderRightWidth() / 3;
+        int outerBorderBottomWidth = style->borderBottomWidth() / 3;
+        int outerBorderLeftWidth = style->borderLeftWidth() / 3;
+
+        int innerBorderTopWidth = style->borderTopWidth() * 2 / 3;
+        int innerBorderRightWidth = style->borderRightWidth() * 2 / 3;
+        int innerBorderBottomWidth = style->borderBottomWidth() * 2 / 3;
+        int innerBorderLeftWidth = style->borderLeftWidth() * 2 / 3;
+
+        // We need certain integer rounding results
+        if (style->borderTopWidth() % 3 == 2)
+            outerBorderTopWidth += 1;
+        if (style->borderRightWidth() % 3 == 2)
+            outerBorderRightWidth += 1;
+        if (style->borderBottomWidth() % 3 == 2)
+            outerBorderBottomWidth += 1;
+        if (style->borderLeftWidth() % 3 == 2)
+            outerBorderLeftWidth += 1;
+
+        if (style->borderTopWidth() % 3 == 1)
+            innerBorderTopWidth += 1;
+        if (style->borderRightWidth() % 3 == 1)
+            innerBorderRightWidth += 1;
+        if (style->borderBottomWidth() % 3 == 1)
+            innerBorderBottomWidth += 1;
+        if (style->borderLeftWidth() % 3 == 1)
+            innerBorderLeftWidth += 1;
+
+        // Get the inner border rects for both the outer border line and the inner border line
+        IntRect outerBorderInnerRect = borderInnerRect(borderRect, outerBorderTopWidth, outerBorderBottomWidth, 
+            outerBorderLeftWidth, outerBorderRightWidth);
+        IntRect innerBorderInnerRect = borderInnerRect(borderRect, innerBorderTopWidth, innerBorderBottomWidth, 
+            innerBorderLeftWidth, innerBorderRightWidth);
+
+        // Get the inner radii for the outer border line
+        IntSize outerBorderTopLeftInnerRadius, outerBorderTopRightInnerRadius, outerBorderBottomLeftInnerRadius, 
+            outerBorderBottomRightInnerRadius;
+        style->getInnerBorderRadiiForRectWithBorderWidths(outerBorderInnerRect, outerBorderTopWidth, outerBorderBottomWidth, 
+            outerBorderLeftWidth, outerBorderRightWidth, outerBorderTopLeftInnerRadius, outerBorderTopRightInnerRadius, 
+            outerBorderBottomLeftInnerRadius, outerBorderBottomRightInnerRadius);
+
+        // Get the inner radii for the inner border line
+        IntSize innerBorderTopLeftInnerRadius, innerBorderTopRightInnerRadius, innerBorderBottomLeftInnerRadius, 
+            innerBorderBottomRightInnerRadius;
+        style->getInnerBorderRadiiForRectWithBorderWidths(innerBorderInnerRect, innerBorderTopWidth, innerBorderBottomWidth, 
+            innerBorderLeftWidth, innerBorderRightWidth, innerBorderTopLeftInnerRadius, innerBorderTopRightInnerRadius, 
+            innerBorderBottomLeftInnerRadius, innerBorderBottomRightInnerRadius);
+
+        // Draw inner border line
+        graphicsContext->save();
+        graphicsContext->addRoundedRectClip(innerBorderInnerRect, innerBorderTopLeftInnerRadius, 
+            innerBorderTopRightInnerRadius, innerBorderBottomLeftInnerRadius, innerBorderBottomRightInnerRadius);
+        drawBoxSideFromPath(graphicsContext, borderRect, borderPath, thickness, drawThickness, s, style, c, SOLID);
+        graphicsContext->restore();
+
+        // Draw outer border line
+        graphicsContext->save();
+        graphicsContext->clipOutRoundedRect(outerBorderInnerRect, outerBorderTopLeftInnerRadius, 
+            outerBorderTopRightInnerRadius, outerBorderBottomLeftInnerRadius, outerBorderBottomRightInnerRadius);
+        drawBoxSideFromPath(graphicsContext, borderRect, borderPath, thickness, drawThickness, s, style, c, SOLID);
+        graphicsContext->restore();
+
+        return;
+    }
+    case RIDGE:
+    case GROOVE:
+    {
+        EBorderStyle s1;
+        EBorderStyle s2;
+        if (borderStyle == GROOVE) {
+            s1 = INSET;
+            s2 = OUTSET;
+        } else {
+            s1 = OUTSET;
+            s2 = INSET;
+        }
+
+        IntRect halfBorderRect = borderInnerRect(borderRect, style->borderLeftWidth() / 2, style->borderBottomWidth() / 2, 
+            style->borderLeftWidth() / 2, style->borderRightWidth() / 2);
+
+        IntSize topLeftHalfRadius, topRightHalfRadius, bottomLeftHalfRadius, bottomRightHalfRadius;
+        style->getInnerBorderRadiiForRectWithBorderWidths(halfBorderRect, style->borderLeftWidth() / 2, 
+            style->borderBottomWidth() / 2, style->borderLeftWidth() / 2, style->borderRightWidth() / 2, 
+            topLeftHalfRadius, topRightHalfRadius, bottomLeftHalfRadius, bottomRightHalfRadius);
+
+        // Paint full border
+        drawBoxSideFromPath(graphicsContext, borderRect, borderPath, thickness, drawThickness, s, style, c, s1);
+
+        // Paint inner only
+        graphicsContext->save();
+        graphicsContext->addRoundedRectClip(halfBorderRect, topLeftHalfRadius, topRightHalfRadius,
+            bottomLeftHalfRadius, bottomRightHalfRadius);
+        drawBoxSideFromPath(graphicsContext, borderRect, borderPath, thickness, drawThickness, s, style, c, s2);
+        graphicsContext->restore();
+
+        return;
+    }
+    case INSET:
+        if (s == BSTop || s == BSLeft)
+            c = c.dark();
+        break;
+    case OUTSET:
+        if (s == BSBottom || s == BSRight)
+            c = c.dark();
+        break;
+    default:
+        break;
+    }
+
+    graphicsContext->setStrokeStyle(NoStroke);
+    graphicsContext->setFillColor(c, style->colorSpace());
+    graphicsContext->drawRect(borderRect);
+}
+#else
 void RenderObject::drawArcForBoxSide(GraphicsContext* graphicsContext, int x, int y, float thickness, IntSize radius,
                                      int angleStart, int angleSpan, BoxSide s, Color c,
                                      EBorderStyle style, bool firstCorner)
 {
+    // FIXME: This function should be removed when all ports implement GraphicsContext::clipConvexPolygon()!!
+    // At that time, everyone can use RenderObject::drawBoxSideFromPath() instead. This should happen soon.
     if ((style == DOUBLE && thickness / 2 < 3) || ((style == RIDGE || style == GROOVE) && thickness / 2 < 2))
         style = SOLID;
 
@@ -969,6 +1150,17 @@ void RenderObject::drawArcForBoxSide(GraphicsContext* graphicsContext, int x, in
             break;
     }
 }
+#endif
+    
+void RenderObject::paintFocusRing(GraphicsContext* context, int tx, int ty, RenderStyle* style)
+{
+    Vector<IntRect> focusRingRects;
+    addFocusRingRects(focusRingRects, tx, ty);
+    if (style->outlineStyleIsAuto())
+        context->drawFocusRing(focusRingRects, style->outlineWidth(), style->outlineOffset(), style->visitedDependentColor(CSSPropertyOutlineColor));
+    else
+        addPDFURLRect(context, unionRect(focusRingRects));
+}        
 
 void RenderObject::addPDFURLRect(GraphicsContext* context, const IntRect& rect)
 {
@@ -999,12 +1191,7 @@ void RenderObject::paintOutline(GraphicsContext* graphicsContext, int tx, int ty
     if (styleToUse->outlineStyleIsAuto() || hasOutlineAnnotation()) {
         if (!theme()->supportsFocusRing(styleToUse)) {
             // Only paint the focus ring by hand if the theme isn't able to draw the focus ring.
-            Vector<IntRect> focusRingRects;
-            addFocusRingRects(focusRingRects, tx, ty);
-            if (styleToUse->outlineStyleIsAuto())
-                graphicsContext->drawFocusRing(focusRingRects, ow, offset, oc);
-            else
-                addPDFURLRect(graphicsContext, unionRect(focusRingRects));
+            paintFocusRing(graphicsContext, tx, ty, styleToUse);
         }
     }
 
@@ -1175,7 +1362,8 @@ bool RenderObject::repaintAfterLayoutIfNeeded(RenderBoxModelObject* repaintConta
     if (v->printing())
         return false; // Don't repaint if we're printing.
 
-    ASSERT(!newBoundsPtr || *newBoundsPtr == clippedOverflowRectForRepaint(repaintContainer));
+    // This ASSERT fails due to animations.  See https://bugs.webkit.org/show_bug.cgi?id=37048
+    // ASSERT(!newBoundsPtr || *newBoundsPtr == clippedOverflowRectForRepaint(repaintContainer));
     IntRect newBounds = newBoundsPtr ? *newBoundsPtr : clippedOverflowRectForRepaint(repaintContainer);
     IntRect newOutlineBox;
 
@@ -1184,7 +1372,8 @@ bool RenderObject::repaintAfterLayoutIfNeeded(RenderBoxModelObject* repaintConta
     if (!fullRepaint && style()->borderFit() == BorderFitLines)
         fullRepaint = true;
     if (!fullRepaint) {
-        ASSERT(!newOutlineBoxRectPtr || *newOutlineBoxRectPtr == outlineBoundsForRepaint(repaintContainer));
+        // This ASSERT fails due to animations.  See https://bugs.webkit.org/show_bug.cgi?id=37048
+        // ASSERT(!newOutlineBoxRectPtr || *newOutlineBoxRectPtr == outlineBoundsForRepaint(repaintContainer));
         newOutlineBox = newOutlineBoxRectPtr ? *newOutlineBoxRectPtr : outlineBoundsForRepaint(repaintContainer);
         if (newOutlineBox.location() != oldOutlineBox.location() || (mustRepaintBackgroundOrBorder() && (newBounds != oldBounds || newOutlineBox != oldOutlineBox)))
             fullRepaint = true;
@@ -1241,7 +1430,8 @@ bool RenderObject::repaintAfterLayoutIfNeeded(RenderBoxModelObject* repaintConta
         style()->getBoxShadowHorizontalExtent(shadowLeft, shadowRight);
 
         int borderRight = isBox() ? toRenderBox(this)->borderRight() : 0;
-        int borderWidth = max(-outlineStyle->outlineOffset(), max(borderRight, max(style()->borderTopRightRadius().width(), style()->borderBottomRightRadius().width()))) + max(ow, shadowRight);
+        int boxWidth = isBox() ? toRenderBox(this)->width() : 0;
+        int borderWidth = max(-outlineStyle->outlineOffset(), max(borderRight, max(style()->borderTopRightRadius().width().calcValue(boxWidth), style()->borderBottomRightRadius().width().calcValue(boxWidth)))) + max(ow, shadowRight);
         IntRect rightRect(newOutlineBox.x() + min(newOutlineBox.width(), oldOutlineBox.width()) - borderWidth,
             newOutlineBox.y(),
             width + borderWidth,
@@ -1259,7 +1449,8 @@ bool RenderObject::repaintAfterLayoutIfNeeded(RenderBoxModelObject* repaintConta
         style()->getBoxShadowVerticalExtent(shadowTop, shadowBottom);
 
         int borderBottom = isBox() ? toRenderBox(this)->borderBottom() : 0;
-        int borderHeight = max(-outlineStyle->outlineOffset(), max(borderBottom, max(style()->borderBottomLeftRadius().height(), style()->borderBottomRightRadius().height()))) + max(ow, shadowBottom);
+        int boxHeight = isBox() ? toRenderBox(this)->height() : 0;
+        int borderHeight = max(-outlineStyle->outlineOffset(), max(borderBottom, max(style()->borderBottomLeftRadius().height().calcValue(boxHeight), style()->borderBottomRightRadius().height().calcValue(boxHeight)))) + max(ow, shadowBottom);
         IntRect bottomRect(newOutlineBox.x(),
             min(newOutlineBox.bottom(), oldOutlineBox.bottom()) - borderHeight,
             max(newOutlineBox.width(), oldOutlineBox.width()),
@@ -1399,7 +1590,7 @@ Color RenderObject::selectionBackgroundColor() const
         if (pseudoStyle && pseudoStyle->visitedDependentColor(CSSPropertyBackgroundColor).isValid())
             color = pseudoStyle->visitedDependentColor(CSSPropertyBackgroundColor).blendWithWhite();
         else
-            color = document()->frame()->selection()->isFocusedAndActive() ?
+            color = frame()->selection()->isFocusedAndActive() ?
                     theme()->activeSelectionBackgroundColor() :
                     theme()->inactiveSelectionBackgroundColor();
     }
@@ -1410,7 +1601,10 @@ Color RenderObject::selectionBackgroundColor() const
 Color RenderObject::selectionForegroundColor() const
 {
     Color color;
-    if (style()->userSelect() == SELECT_NONE)
+    // If the element is unselectable, or we are only painting the selection,
+    // don't override the foreground color with the selection foreground color.
+    if (style()->userSelect() == SELECT_NONE
+        || (frame()->view()->paintBehavior() & PaintBehaviorSelectionOnly))
         return color;
 
     if (RefPtr<RenderStyle> pseudoStyle = getUncachedPseudoStyle(SELECTION)) {
@@ -1418,7 +1612,7 @@ Color RenderObject::selectionForegroundColor() const
         if (!color.isValid())
             color = pseudoStyle->visitedDependentColor(CSSPropertyColor);
     } else
-        color = document()->frame()->selection()->isFocusedAndActive() ?
+        color = frame()->selection()->isFocusedAndActive() ?
                 theme()->activeSelectionForegroundColor() :
                 theme()->inactiveSelectionForegroundColor();
 
@@ -1515,6 +1709,14 @@ StyleDifference RenderObject::adjustStyleDifference(StyleDifference diff, unsign
             diff = StyleDifferenceRepaintLayer;
         else if (diff < StyleDifferenceRecompositeLayer)
             diff = StyleDifferenceRecompositeLayer;
+    }
+    
+    // The answer to requiresLayer() for plugins and iframes can change outside of the style system,
+    // since it depends on whether we decide to composite these elements. When the layer status of
+    // one of these elements changes, we need to force a layout.
+    if (diff == StyleDifferenceEqual && style() && isBoxModelObject()) {
+        if (hasLayer() != toRenderBoxModelObject(this)->requiresLayer())
+            diff = StyleDifferenceLayout;
     }
 #else
     UNUSED_PARAM(contextSensitiveProperties);
@@ -1642,9 +1844,6 @@ void RenderObject::styleWillChange(StyleDifference diff, const RenderStyle* newS
         s_affectsParentBlock = false;
 
     if (view()->frameView()) {
-        // FIXME: A better solution would be to only invalidate the fixed regions when scrolling.  It's overkill to
-        // prevent the entire view from blitting on a scroll.
-
         bool shouldBlitOnFixedBackgroundImage = false;
 #if ENABLE(FAST_MOBILE_SCROLLING)
         // On low-powered/mobile devices, preventing blitting on a scroll can cause noticeable delays
@@ -1654,11 +1853,8 @@ void RenderObject::styleWillChange(StyleDifference diff, const RenderStyle* newS
         shouldBlitOnFixedBackgroundImage = true;
 #endif
 
-        bool newStyleSlowScroll = newStyle && (newStyle->position() == FixedPosition
-                                                || (!shouldBlitOnFixedBackgroundImage && newStyle->hasFixedBackgroundImage()));
-        bool oldStyleSlowScroll = m_style && (m_style->position() == FixedPosition
-                                                || (!shouldBlitOnFixedBackgroundImage && m_style->hasFixedBackgroundImage()));
-
+        bool newStyleSlowScroll = newStyle && !shouldBlitOnFixedBackgroundImage && newStyle->hasFixedBackgroundImage();
+        bool oldStyleSlowScroll = m_style && !shouldBlitOnFixedBackgroundImage && m_style->hasFixedBackgroundImage();
         if (oldStyleSlowScroll != newStyleSlowScroll) {
             if (oldStyleSlowScroll)
                 view()->frameView()->removeSlowRepaintObject();
@@ -1958,9 +2154,9 @@ void RenderObject::destroy()
     // FIXME: RenderObject::destroy should not get called with a renderer whose document
     // has a null frame, so we assert this. However, we don't want release builds to crash which is why we
     // check that the frame is not null.
-    ASSERT(document()->frame());
-    if (document()->frame() && document()->frame()->eventHandler()->autoscrollRenderer() == this)
-        document()->frame()->eventHandler()->stopAutoscrollTimer(true);
+    ASSERT(frame());
+    if (frame() && frame()->eventHandler()->autoscrollRenderer() == this)
+        frame()->eventHandler()->stopAutoscrollTimer(true);
 
     if (m_hasCounterNodeMap)
         RenderCounter::destroyCounterNodes(this);
@@ -2286,8 +2482,8 @@ void RenderObject::addDashboardRegions(Vector<DashboardRegionValue>& regions)
         region.bounds.setX(absPos.x() + styleRegion.offset.left().value());
         region.bounds.setY(absPos.y() + styleRegion.offset.top().value());
 
-        if (document()->frame()) {
-            float pageScaleFactor = document()->frame()->page()->chrome()->scaleFactor();
+        if (frame()) {
+            float pageScaleFactor = frame()->page()->chrome()->scaleFactor();
             if (pageScaleFactor != 1.0f) {
                 region.bounds.scale(pageScaleFactor);
                 region.clip.scale(pageScaleFactor);
@@ -2367,32 +2563,16 @@ void RenderObject::adjustRectForOutlineAndShadow(IntRect& rect) const
 {
     int outlineSize = outlineStyleForRepaint()->outlineSize();
     if (const ShadowData* boxShadow = style()->boxShadow()) {
-        int shadowLeft = 0;
-        int shadowRight = 0;
-        int shadowTop = 0;
-        int shadowBottom = 0;
+        boxShadow->adjustRectForShadow(rect, outlineSize);
+        return;
+    }
 
-        do {
-            if (boxShadow->style() == Normal) {
-                shadowLeft = min(boxShadow->x() - boxShadow->blur() - boxShadow->spread() - outlineSize, shadowLeft);
-                shadowRight = max(boxShadow->x() + boxShadow->blur() + boxShadow->spread() + outlineSize, shadowRight);
-                shadowTop = min(boxShadow->y() - boxShadow->blur() - boxShadow->spread() - outlineSize, shadowTop);
-                shadowBottom = max(boxShadow->y() + boxShadow->blur() + boxShadow->spread() + outlineSize, shadowBottom);
-            }
-
-            boxShadow = boxShadow->next();
-        } while (boxShadow);
-
-        rect.move(shadowLeft, shadowTop);
-        rect.setWidth(rect.width() - shadowLeft + shadowRight);
-        rect.setHeight(rect.height() - shadowTop + shadowBottom);
-    } else
-        rect.inflate(outlineSize);
+    rect.inflate(outlineSize);
 }
 
 AnimationController* RenderObject::animation() const
 {
-    return document()->frame()->animation();
+    return frame()->animation();
 }
 
 void RenderObject::imageChanged(CachedImage* image, const IntRect* rect)
@@ -2517,6 +2697,12 @@ RenderSVGResourceContainer* RenderObject::toRenderSVGResourceContainer()
 {
     ASSERT_NOT_REACHED();
     return 0;
+}
+
+void RenderObject::setNeedsBoundariesUpdate()
+{
+    if (RenderObject* renderer = parent())
+        renderer->setNeedsBoundariesUpdate();
 }
 
 FloatRect RenderObject::objectBoundingBox() const

@@ -1,0 +1,75 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584 [bgcolor=#FFFFFF]
+      RenderBlock {H4} at (0,0) size 784x21
+        RenderText {#text} at (0,1) size 153x19
+          text run at (0,1) width 153: "Testcase distilled from "
+        RenderInline {A} at (0,0) size 501x19 [color=#0000EE]
+          RenderText {#text} at (153,1) size 501x19
+            text run at (153,1) width 501: "http://www.download.com/pc/list/0,339,0-b-0-0-a-1,00.html?st.dl.fd.ag.new"
+      RenderBlock {H4} at (0,42) size 784x21
+        RenderText {#text} at (0,1) size 514x19
+          text run at (0,1) width 514: "Resize the width of the window and watch the Buy and Pick columns below."
+      RenderTable {TABLE} at (0,84) size 784x73
+        RenderTableSection {TBODY} at (0,0) size 784x73
+          RenderTableRow {TR} at (0,2) size 784x23 [bgcolor=#CCCCCC]
+            RenderTableCell {TD} at (2,2) size 705x23 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,2) size 100x19
+                text run at (1,2) width 100: "Re-sort by Title"
+            RenderTableCell {TD} at (709,2) size 33x23 [r=0 c=1 rs=1 cs=1]
+              RenderInline {SPAN} at (0,0) size 27x19
+                RenderText {#text} at (1,2) size 27x19
+                  text run at (1,2) width 27: "Buy"
+              RenderText {#text} at (28,2) size 4x19
+                text run at (28,2) width 4: " "
+            RenderTableCell {TD} at (744,2) size 38x23 [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (1,2) size 4x19
+                text run at (1,2) width 4: " "
+              RenderInline {SPAN} at (0,0) size 28x19
+                RenderText {#text} at (5,2) size 28x19
+                  text run at (5,2) width 28: "Pick"
+              RenderText {#text} at (33,2) size 4x19
+                text run at (33,2) width 4: " "
+          RenderTableRow {TR} at (0,27) size 784x44
+            RenderTableCell {TD} at (2,27) size 705x44 [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,2) size 675x40
+                text run at (1,2) width 443: "Norton AntiVirus Definitions Update 10/21/99 Update your NAV for "
+                text run at (444,2) width 232: "Windows 95/98/NT, Lotus Notes, or"
+                text run at (1,23) width 263: "Exchange with the latest virus definitions."
+            RenderTableCell {TD} at (709,37) size 33x23 [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (1,2) size 4x19
+                text run at (1,2) width 4: " "
+            RenderTableCell {TD} at (744,37) size 38x23 [r=1 c=2 rs=1 cs=1]
+              RenderText {#text} at (1,2) size 4x19
+                text run at (1,2) width 4: " "
+      RenderBlock (anonymous) at (0,157) size 784x21
+        RenderBR {BR} at (0,1) size 0x19
+      RenderBlock {H4} at (0,199) size 784x21
+        RenderText {#text} at (0,1) size 480x19
+          text run at (0,1) width 480: "This is the same table as above but with all <SPAN> elements removed."
+      RenderTable {TABLE} at (0,241) size 784x73
+        RenderTableSection {TBODY} at (0,0) size 784x73
+          RenderTableRow {TR} at (0,2) size 784x23 [bgcolor=#CCCCCC]
+            RenderTableCell {TD} at (2,2) size 705x23 [r=0 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,2) size 100x19
+                text run at (1,2) width 100: "Re-sort by Title"
+            RenderTableCell {TD} at (709,2) size 33x23 [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (1,2) size 31x19
+                text run at (1,2) width 31: "Buy "
+            RenderTableCell {TD} at (744,2) size 38x23 [r=0 c=2 rs=1 cs=1]
+              RenderText {#text} at (1,2) size 36x19
+                text run at (1,2) width 36: " Pick "
+          RenderTableRow {TR} at (0,27) size 784x44
+            RenderTableCell {TD} at (2,27) size 705x44 [r=1 c=0 rs=1 cs=1]
+              RenderText {#text} at (1,2) size 675x40
+                text run at (1,2) width 443: "Norton AntiVirus Definitions Update 10/21/99 Update your NAV for "
+                text run at (444,2) width 232: "Windows 95/98/NT, Lotus Notes, or"
+                text run at (1,23) width 263: "Exchange with the latest virus definitions."
+            RenderTableCell {TD} at (709,37) size 33x23 [r=1 c=1 rs=1 cs=1]
+              RenderText {#text} at (1,2) size 4x19
+                text run at (1,2) width 4: " "
+            RenderTableCell {TD} at (744,37) size 38x23 [r=1 c=2 rs=1 cs=1]
+              RenderText {#text} at (1,2) size 4x19
+                text run at (1,2) width 4: " "

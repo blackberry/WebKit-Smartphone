@@ -38,8 +38,8 @@
 #include "HashMap.h"
 #include "HashSet.h"
 #include "SimpleFontData.h"
-#include "StringHash.h"
 #include <unicode/uniset.h>
+#include <wtf/text/StringHash.h>
 
 #include <windows.h>
 #include <objidl.h>
@@ -58,7 +58,7 @@ void FontCache::platformInit()
 // FIXME: consider adding to WebKit String class
 static bool charactersAreAllASCII(const String& s)
 {
-    return charactersAreAllASCII(s.characters(), s.length());
+    return WTF::charactersAreAllASCII(s.characters(), s.length());
 }
 
 // When asked for a CJK font with a native name under a non-CJK locale or

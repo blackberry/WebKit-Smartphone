@@ -40,9 +40,14 @@ using namespace WebCore;
 
 namespace WebCore {
 
-void EditorClientEfl::setInputMethodState(bool active)
+void EditorClientEfl::willSetInputMethodState()
 {
     notImplemented();
+}
+
+void EditorClientEfl::setInputMethodState(bool active)
+{
+    ewk_view_input_method_state_set(m_view, active);
 }
 
 bool EditorClientEfl::shouldDeleteRange(Range*)
@@ -339,26 +344,26 @@ bool EditorClientEfl::handleEditingKeyboardEvent(KeyboardEvent* event)
     if (caretBrowsing) {
         switch (keyEvent->windowsVirtualKeyCode()) {
         case VK_LEFT:
-            frame->selection()->modify(keyEvent->shiftKey() ? SelectionController::EXTEND : SelectionController::MOVE,
-                    SelectionController::LEFT,
+            frame->selection()->modify(keyEvent->shiftKey() ? SelectionController::AlterationExtend : SelectionController::AlterationMove,
+                    SelectionController::DirectionLeft,
                     keyEvent->ctrlKey() ? WordGranularity : CharacterGranularity,
                     true);
             return true;
         case VK_RIGHT:
-            frame->selection()->modify(keyEvent->shiftKey() ? SelectionController::EXTEND : SelectionController::MOVE,
-                    SelectionController::RIGHT,
+            frame->selection()->modify(keyEvent->shiftKey() ? SelectionController::AlterationExtend : SelectionController::AlterationMove,
+                    SelectionController::DirectionRight,
                     keyEvent->ctrlKey() ? WordGranularity : CharacterGranularity,
                     true);
             return true;
         case VK_UP:
-            frame->selection()->modify(keyEvent->shiftKey() ? SelectionController::EXTEND : SelectionController::MOVE,
-                    SelectionController::BACKWARD,
+            frame->selection()->modify(keyEvent->shiftKey() ? SelectionController::AlterationExtend : SelectionController::AlterationMove,
+                    SelectionController::DirectionBackward,
                     keyEvent->ctrlKey() ? ParagraphGranularity : LineGranularity,
                     true);
             return true;
         case VK_DOWN:
-            frame->selection()->modify(keyEvent->shiftKey() ? SelectionController::EXTEND : SelectionController::MOVE,
-                    SelectionController::FORWARD,
+            frame->selection()->modify(keyEvent->shiftKey() ? SelectionController::AlterationExtend : SelectionController::AlterationMove,
+                    SelectionController::DirectionForward,
                     keyEvent->ctrlKey() ? ParagraphGranularity : LineGranularity,
                     true);
             return true;

@@ -34,6 +34,7 @@ from __future__ import with_statement
 import codecs
 import logging
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -45,12 +46,11 @@ import base
 import http_server
 
 from webkitpy.common.system.executive import Executive
+from webkitpy.layout_tests.layout_package import test_files
+from webkitpy.layout_tests.layout_package import test_expectations
 
-# FIXME: To use the DRT-based version of this file, we need to be able to
-# run the webkit code, which uses server_process, which requires UNIX-style
-# non-blocking I/O with selects(), which requires fcntl() which doesn't exist
-# on Windows.
-if sys.platform not in ('win32', 'cygwin'):
+# Chromium DRT on OSX uses WebKitDriver.
+if sys.platform == 'darwin':
     import webkit
 
 import websocket_server
@@ -92,13 +92,6 @@ class ChromiumPort(base.Port):
     def check_build(self, needs_http):
         result = True
 
-        # FIXME: see comment above re: import webkit
-        if (sys.platform in ('win32', 'cygwin') and self._options and
-            hasattr(self._options, 'use_drt') and self._options.use_drt):
-            _log.error('--use-drt is not supported on Windows yet')
-            _log.error('')
-            result = False
-
         dump_render_tree_binary_path = self._path_to_driver()
         result = check_file_exists(dump_render_tree_binary_path,
                                     'test driver') and result
@@ -133,6 +126,26 @@ class ChromiumPort(base.Port):
         return check_file_exists(image_diff_path, 'image diff exe',
                                  override_step, logging)
 
+    def diff_image(self, expected_filename, actual_filename,
+                   diff_filename=None, tolerance=0):
+        executable = self._path_to_image_diff()
+        if diff_filename:
+            cmd = [executable, '--diff', expected_filename, actual_filename,
+                   diff_filename]
+        else:
+            cmd = [executable, expected_filename, actual_filename]
+
+        result = True
+        try:
+            if self._executive.run_command(cmd, return_exit_code=True) == 0:
+                return False
+        except OSError, e:
+            if e.errno == errno.ENOENT or e.errno == errno.EACCES:
+                _compare_available = False
+            else:
+                raise e
+        return result
+
     def driver_name(self):
         return "test_shell"
 
@@ -143,10 +156,11 @@ class ChromiumPort(base.Port):
             abspath = os.path.abspath(__file__)
             offset = abspath.find('third_party')
             if offset == -1:
-                # FIXME: This seems like the wrong error to throw.
-                raise AssertionError('could not find Chromium base dir from ' +
-                                     abspath)
-            self._chromium_base_dir = abspath[0:offset]
+                self._chromium_base_dir = os.path.join(
+                    abspath[0:abspath.find('WebKitTools')],
+                    'WebKit', 'chromium')
+            else:
+                self._chromium_base_dir = abspath[0:offset]
         return os.path.join(self._chromium_base_dir, *comps)
 
     def path_to_test_expectations_file(self):
@@ -170,7 +184,7 @@ class ChromiumPort(base.Port):
             shutil.rmtree(cachedir)
 
     def show_results_html_file(self, results_filename):
-        uri = self.filename_to_uri(results_filename)
+        uri = self.get_absolute_path(results_filename)
         if self._options.use_drt:
             # FIXME: This should use User.open_url
             webbrowser.open(uri, new=1)
@@ -180,8 +194,12 @@ class ChromiumPort(base.Port):
 
     def create_driver(self, image_path, options):
         """Starts a new Driver and returns a handle to it."""
-        if self._options.use_drt:
+        if self._options.use_drt and sys.platform == 'darwin':
             return webkit.WebKitDriver(self, image_path, options, executive=self._executive)
+        if self._options.use_drt:
+            options += ['--test-shell']
+        else:
+            options += ['--layout-tests']
         return ChromiumDriver(self, image_path, options, executive=self._executive)
 
     def start_helper(self):
@@ -217,6 +235,16 @@ class ChromiumPort(base.Port):
             return file.read()
 
     def test_expectations_overrides(self):
+        # FIXME: This drt_overrides handling should be removed when we switch
+        # from tes_shell to DRT.
+        drt_overrides = ''
+        if self._options.use_drt:
+            drt_overrides_path = self.path_from_webkit_base('LayoutTests',
+                'platform', 'chromium', 'drt_expectations.txt')
+            if os.path.exists(drt_overrides_path):
+                with codecs.open(drt_overrides_path, "r", "utf-8") as file:
+                    drt_overrides = file.read()
+
         try:
             overrides_path = self.path_from_chromium_base('webkit', 'tools',
                 'layout_tests', 'test_expectations.txt')
@@ -225,7 +253,25 @@ class ChromiumPort(base.Port):
         if not os.path.exists(overrides_path):
             return None
         with codecs.open(overrides_path, "r", "utf-8") as file:
-            return file.read()
+            return file.read() + drt_overrides
+
+    def skipped_layout_tests(self, extra_test_files=None):
+        expectations_str = self.test_expectations()
+        overrides_str = self.test_expectations_overrides()
+        test_platform_name = self.test_platform_name()
+        is_debug_mode = False
+
+        all_test_files = test_files.gather_test_files(self, '*')
+        if extra_test_files:
+            all_test_files.update(extra_test_files)
+
+        expectations = test_expectations.TestExpectations(
+            self, all_test_files, expectations_str, test_platform_name,
+            is_debug_mode, is_lint_mode=True,
+            tests_are_present=False, overrides=overrides_str)
+        tests_dir = self.layout_tests_dir()
+        return [self.relative_test_filename(test)
+                for test in expectations.get_tests_with_result_type(test_expectations.SKIP)]
 
     def test_platform_names(self):
         return self.test_base_platform_names() + ('win-xp',
@@ -236,6 +282,13 @@ class ChromiumPort(base.Port):
             return 'chromium-' + test_platform_name
         raise ValueError('Unsupported test_platform_name: %s' %
                          test_platform_name)
+
+    def test_repository_paths(self):
+        # Note: for JSON file's backward-compatibility we use 'chrome' rather
+        # than 'chromium' here.
+        repos = super(ChromiumPort, self).test_repository_paths()
+        repos.append(('chrome', self.path_from_chromium_base()))
+        return repos
 
     #
     # PROTECTED METHODS
@@ -297,7 +350,7 @@ class ChromiumDriver(base.Driver):
         cmd = []
         # FIXME: We should not be grabbing at self._port._options.wrapper directly.
         cmd += self._command_wrapper(self._port._options.wrapper)
-        cmd += [self._port._path_to_driver(), '--layout-tests']
+        cmd += [self._port._path_to_driver()]
         if self._options:
             cmd += self._options
 
@@ -316,9 +369,6 @@ class ChromiumDriver(base.Driver):
         # poll() is not threadsafe and can throw OSError due to:
         # http://bugs.python.org/issue1731717
         return self._proc.poll()
-
-    def returncode(self):
-        return self._proc.returncode
 
     def _write_command_and_read_line(self, input=None):
         """Returns a tuple: (line, did_crash)"""
@@ -380,9 +430,12 @@ class ChromiumDriver(base.Driver):
             if line.startswith("#URL:"):
                 actual_uri = line.rstrip()[5:]
                 if uri != actual_uri:
-                    _log.fatal("Test got out of sync:\n|%s|\n|%s|" %
-                               (uri, actual_uri))
-                    raise AssertionError("test out of sync")
+                    # GURL capitalizes the drive letter of a file URL.
+                    if (not re.search("^file:///[a-z]:", uri) or
+                        uri.lower() != actual_uri.lower()):
+                        _log.fatal("Test got out of sync:\n|%s|\n|%s|" %
+                                   (uri, actual_uri))
+                        raise AssertionError("test out of sync")
             elif line.startswith("#MD5:"):
                 actual_checksum = line.rstrip()[5:]
             elif line.startswith("#TEST_TIMED_OUT"):

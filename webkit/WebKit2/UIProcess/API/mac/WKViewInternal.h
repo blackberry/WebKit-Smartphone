@@ -30,4 +30,12 @@
 - (void)_processDidRevive;
 - (void)_takeFocus:(BOOL)direction;
 - (void)_toolTipChangedFrom:(NSString *)oldToolTip to:(NSString *)newToolTip;
+- (void)_setCursor:(NSCursor *)cursor;
+
+#if USE(ACCELERATED_COMPOSITING)
+- (void)_startAcceleratedCompositing:(CALayer *)rootLayer;
+- (void)_stopAcceleratedCompositing;
+- (void)_pageDidEnterAcceleratedCompositing;
+- (void)_pageDidLeaveAcceleratedCompositing;
+#endif
 @end

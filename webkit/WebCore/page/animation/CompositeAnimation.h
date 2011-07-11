@@ -29,12 +29,11 @@
 #ifndef CompositeAnimation_h
 #define CompositeAnimation_h
 
-#include "AtomicString.h"
-
 #include "ImplicitAnimation.h"
 #include "KeyframeAnimation.h"
 #include <wtf/HashMap.h>
 #include <wtf/Noncopyable.h>
+#include <wtf/text/AtomicString.h>
 
 namespace WebCore {
 
@@ -70,8 +69,8 @@ public:
     bool hasAnimations() const  { return !m_transitions.isEmpty() || !m_keyframeAnimations.isEmpty(); }
 
     void setAnimating(bool);
-    bool isAnimatingProperty(int property, bool isRunningNow) const;
-    
+    bool isAnimatingProperty(int property, bool acceleratedOnly, bool isRunningNow) const;
+
     PassRefPtr<KeyframeAnimation> getAnimationForProperty(int property) const;
 
     void overrideImplicitAnimations(int property);

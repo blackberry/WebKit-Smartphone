@@ -55,7 +55,8 @@ class AbstractEarlyWarningSystem(AbstractReviewQueue):
                 "--quiet"])
             return True
         except ScriptError, e:
-            self._update_status("Unable to perform a build")
+            failure_log = self._log_from_script_error_for_upload(e)
+            self._update_status("Unable to perform a build", results_file=failure_log)
             return False
 
     def _build(self, patch, first_run=False):
@@ -108,6 +109,16 @@ class GtkEWS(AbstractEarlyWarningSystem):
     ]
 
 
+class EflEWS(AbstractEarlyWarningSystem):
+    name = "efl-ews"
+    port_name = "efl"
+    watchers = AbstractEarlyWarningSystem.watchers + [
+        "leandro@profusion.mobi",
+        "antognolli@profusion.mobi",
+        "lucas.demarchi@profusion.mobi",
+    ]
+
+
 class QtEWS(AbstractEarlyWarningSystem):
     name = "qt-ews"
     port_name = "qt"
@@ -152,8 +163,8 @@ class AbstractCommitterOnlyEWS(AbstractEarlyWarningSystem):
     def process_work_item(self, patch):
         if not self._committers.committer_by_email(patch.attacher_email()):
             self._did_error(patch, "%s cannot process patches from non-committers :(" % self.name)
-            return
-        AbstractEarlyWarningSystem.process_work_item(self, patch)
+            return False
+        return AbstractEarlyWarningSystem.process_work_item(self, patch)
 
 
 class MacEWS(AbstractCommitterOnlyEWS):

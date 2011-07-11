@@ -98,35 +98,24 @@ Node* InjectedScriptHost::nodeForId(long nodeId)
 
 long InjectedScriptHost::pushNodePathToFrontend(Node* node, bool withChildren, bool selectInUI)
 {
-    InspectorFrontend* frontend = inspectorFrontend();
     InspectorDOMAgent* domAgent = inspectorDOMAgent();
-    if (!domAgent || !frontend)
+    if (!domAgent || !frontend())
         return 0;
     long id = domAgent->pushNodePathToFrontend(node);
     if (withChildren)
         domAgent->pushChildNodesToFrontend(id);
     if (selectInUI)
-        frontend->updateFocusedNode(id);
+        frontend()->updateFocusedNode(id);
     return id;
 }
 
-void InjectedScriptHost::addNodesToSearchResult(const String& nodeIds)
-{
-    if (InspectorFrontend* frontend = inspectorFrontend())
-        frontend->addNodesToSearchResult(nodeIds);
-}
-
-long InjectedScriptHost::pushNodeByPathToFrontend(const String& path)
+long InjectedScriptHost::inspectedNode(unsigned long num)
 {
     InspectorDOMAgent* domAgent = inspectorDOMAgent();
     if (!domAgent)
         return 0;
 
-    Node* node = domAgent->nodeForPath(path);
-    if (!node)
-        return 0;
-
-    return domAgent->pushNodePathToFrontend(node);
+    return domAgent->inspectedNode(num);
 }
 
 #if ENABLE(DATABASE)
@@ -152,12 +141,6 @@ void InjectedScriptHost::selectDOMStorage(Storage* storage)
 }
 #endif
 
-void InjectedScriptHost::reportDidDispatchOnInjectedScript(long callId, SerializedScriptValue* result, bool isException)
-{
-    if (InspectorFrontend* frontend = inspectorFrontend())
-        frontend->didDispatchOnInjectedScript(callId, result, isException);
-}
-
 InjectedScript InjectedScriptHost::injectedScriptForId(long id)
 {
     return m_idToInjectedScript.get(id);
@@ -165,6 +148,9 @@ InjectedScript InjectedScriptHost::injectedScriptForId(long id)
 
 void InjectedScriptHost::discardInjectedScripts()
 {
+    IdToInjectedScriptMap::iterator end = m_idToInjectedScript.end();
+    for (IdToInjectedScriptMap::iterator it = m_idToInjectedScript.begin(); it != end; ++it)
+        discardInjectedScript(it->second.scriptState());
     m_idToInjectedScript.clear();
 }
 
@@ -188,7 +174,7 @@ InspectorDOMAgent* InjectedScriptHost::inspectorDOMAgent()
     return m_inspectorController->domAgent();
 }
 
-InspectorFrontend* InjectedScriptHost::inspectorFrontend()
+InspectorFrontend* InjectedScriptHost::frontend()
 {
     if (!m_inspectorController)
         return 0;

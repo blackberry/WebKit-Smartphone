@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2009, 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,10 +38,15 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-HTMLDataGridColElement::HTMLDataGridColElement(const QualifiedName& name, Document* doc)
-    : HTMLElement(name, doc)
+inline HTMLDataGridColElement::HTMLDataGridColElement(const QualifiedName& name, Document* document)
+    : HTMLElement(name, document)
     , m_dataGrid(0)
 {
+}
+
+PassRefPtr<HTMLDataGridColElement> HTMLDataGridColElement::create(const QualifiedName& name, Document* document)
+{
+    return adoptRef(new HTMLDataGridColElement(name, document));
 }
 
 HTMLDataGridElement* HTMLDataGridColElement::findDataGridAncestor() const
@@ -55,7 +60,7 @@ void HTMLDataGridColElement::ensureColumn()
 {
     if (m_column)
         return;
-    m_column = DataGridColumn::create(getAttribute(idAttributeName()), label(), type(), primary(), sortable());
+    m_column = DataGridColumn::create(getIdAttribute(), label(), type(), primary(), sortable());
 }
 
 void HTMLDataGridColElement::insertedIntoTree(bool deep)
@@ -162,8 +167,8 @@ void HTMLDataGridColElement::parseMappedAttribute(Attribute* attr)
         column()->setSortable(sortable());
     else if (attr->name() == sortdirectionAttr)
         column()->setSortDirection(sortDirection());
-    else if (attr->name() == idAttributeName())
-        column()->setId(getAttribute(idAttributeName()));
+    else if (isIdAttributeName(attr->name()))
+        column()->setId(getIdAttribute());
 }
 
 } // namespace WebCore

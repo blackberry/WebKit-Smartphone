@@ -53,30 +53,30 @@ namespace WebCore {
         void run(WorkerContext*);
 
         // Waits for a single task and returns.
-        MessageQueueWaitResult runInMode(WorkerContext*, const String& mode);
+        MessageQueueWaitResult runInMode(WorkerContext*, const WTF::String& mode);
 
         void terminate();
         bool terminated() { return m_messageQueue.killed(); }
 
         void postTask(PassOwnPtr<ScriptExecutionContext::Task>);
-        void postTaskForMode(PassOwnPtr<ScriptExecutionContext::Task>, const String& mode);
+        void postTaskForMode(PassOwnPtr<ScriptExecutionContext::Task>, const WTF::String& mode);
 
         unsigned long createUniqueId() { return ++m_uniqueId; }
 
-        static String defaultMode();
+        static WTF::String defaultMode();
 
         class Task : public Noncopyable {
         public:
-            static PassOwnPtr<Task> create(PassOwnPtr<ScriptExecutionContext::Task> task, const String& mode);
+            static PassOwnPtr<Task> create(PassOwnPtr<ScriptExecutionContext::Task> task, const WTF::String& mode);
             ~Task() { }
-            const String& mode() const { return m_mode; }
+            const WTF::String& mode() const { return m_mode; }
             void performTask(ScriptExecutionContext* context);
 
         private:
-            Task(PassOwnPtr<ScriptExecutionContext::Task> task, const String& mode);
+            Task(PassOwnPtr<ScriptExecutionContext::Task> task, const WTF::String& mode);
         
             OwnPtr<ScriptExecutionContext::Task> m_task;
-            String m_mode;
+            WTF::String m_mode;
         };
 
     private:

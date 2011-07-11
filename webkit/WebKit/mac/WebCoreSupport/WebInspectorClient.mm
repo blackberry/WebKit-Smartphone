@@ -33,6 +33,8 @@
 #import "WebFrameInternal.h"
 #import "WebFrameView.h"
 #import "WebInspector.h"
+#import "WebInspectorPrivate.h"
+#import "WebInspectorFrontend.h"
 #import "WebLocalizableStrings.h"
 #import "WebNodeHighlight.h"
 #import "WebUIDelegate.h"
@@ -50,6 +52,7 @@ using namespace WebCore;
     WebView *_inspectedWebView;
     WebView *_webView;
     WebInspectorFrontendClient* _frontendClient;
+    WebInspectorClient* _inspectorClient;
     BOOL _attachedToInspectedWebView;
     BOOL _shouldAttach;
     BOOL _visible;
@@ -61,8 +64,9 @@ using namespace WebCore;
 - (void)detach;
 - (BOOL)attached;
 - (void)setFrontendClient:(WebInspectorFrontendClient*)frontendClient;
+- (void)setInspectorClient:(WebInspectorClient*)inspectorClient;
 - (void)setAttachedWindowHeight:(unsigned)height;
-- (void)destroyInspectorView;
+- (void)destroyInspectorView:(bool)notifyInspectorController;
 @end
 
 #pragma mark -
@@ -83,6 +87,7 @@ using namespace WebCore;
 WebInspectorClient::WebInspectorClient(WebView *webView)
 : m_webView(webView)
 , m_highlighter(AdoptNS, [[WebNodeHighlighter alloc] initWithInspectedWebView:webView])
+, m_frontendPage(0)
 {
 }
 
@@ -94,9 +99,13 @@ void WebInspectorClient::inspectorDestroyed()
 void WebInspectorClient::openInspectorFrontend(InspectorController* inspectorController)
 {
     RetainPtr<WebInspectorWindowController> windowController(AdoptNS, [[WebInspectorWindowController alloc] initWithInspectedWebView:m_webView]);
-    Page* frontendPage = core([windowController.get() webView]);
+    [windowController.get() setInspectorClient:this];
 
-    frontendPage->inspectorController()->setInspectorFrontendClient(new WebInspectorFrontendClient(m_webView, windowController.get(), inspectorController, frontendPage));
+    m_frontendPage = core([windowController.get() webView]);
+    WebInspectorFrontendClient* frontendClient = new WebInspectorFrontendClient(m_webView, windowController.get(), inspectorController, m_frontendPage);
+    m_frontendPage->inspectorController()->setInspectorFrontendClient(frontendClient);
+
+    [[m_webView inspector] setFrontend:[[WebInspectorFrontend alloc] initWithFrontendClient:frontendClient]];
 }
 
 void WebInspectorClient::highlight(Node* node)
@@ -160,7 +169,12 @@ void WebInspectorFrontendClient::bringToFront()
 
 void WebInspectorFrontendClient::closeWindow()
 {
-    [m_windowController.get() destroyInspectorView];
+    [m_windowController.get() destroyInspectorView:true];
+}
+
+void WebInspectorFrontendClient::disconnectFromBackend()
+{
+    [m_windowController.get() destroyInspectorView:false];
 }
 
 void WebInspectorFrontendClient::attachWindow()
@@ -299,7 +313,7 @@ void WebInspectorFrontendClient::updateWindowTitle() const
 
 - (BOOL)windowShouldClose:(id)sender
 {
-    [self destroyInspectorView];
+    [self destroyInspectorView:true];
 
     return YES;
 }
@@ -407,6 +421,11 @@ void WebInspectorFrontendClient::updateWindowTitle() const
     _frontendClient = frontendClient;
 }
 
+- (void)setInspectorClient:(WebInspectorClient*)inspectorClient
+{
+    _inspectorClient = inspectorClient;
+}
+
 - (void)setAttachedWindowHeight:(unsigned)height
 {
     if (!_attachedToInspectedWebView)
@@ -425,7 +444,7 @@ void WebInspectorFrontendClient::updateWindowTitle() const
     [frameView setFrame:frameViewRect];
 }
 
-- (void)destroyInspectorView
+- (void)destroyInspectorView:(bool)notifyInspectorController
 {
     if (_destroyingInspectorView)
         return;
@@ -436,8 +455,12 @@ void WebInspectorFrontendClient::updateWindowTitle() const
 
     _visible = NO;
 
-    if (Page* inspectedPage = [_inspectedWebView page])
-        inspectedPage->inspectorController()->disconnectFrontend();
+    if (notifyInspectorController) {
+        if (Page* inspectedPage = [_inspectedWebView page])
+            inspectedPage->inspectorController()->disconnectFrontend();
+
+        _inspectorClient->releaseFrontendPage();
+    }
 
     [_webView close];
 }

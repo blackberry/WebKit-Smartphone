@@ -36,12 +36,12 @@
 #include "JavaScriptCallFrame.h"
 #include "PlatformString.h"
 #include "ScriptBreakpoint.h"
-#include "StringHash.h"
 #include "Timer.h"
 #include <v8-debug.h>
 #include <wtf/HashMap.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/PassOwnPtr.h>
+#include <wtf/text/StringHash.h>
 
 namespace WebCore {
 
@@ -55,10 +55,12 @@ public:
     void addListener(ScriptDebugListener*, Page*);
     void removeListener(ScriptDebugListener*, Page*);
 
-    void setBreakpoint(const String& sourceID, unsigned lineNumber, ScriptBreakpoint breakpoint);
+    bool setBreakpoint(const String& sourceID, ScriptBreakpoint breakpoint, unsigned lineNumber, unsigned* actualLineNumber);
     void removeBreakpoint(const String& sourceID, unsigned lineNumber);
     void clearBreakpoints();
     void setBreakpointsActivated(bool activated);
+    void activateBreakpoints() { setBreakpointsActivated(true); }
+    void deactivateBreakpoints() { setBreakpointsActivated(false); }
 
     enum PauseOnExceptionsState {
         DontPauseOnExceptions,
@@ -68,11 +70,14 @@ public:
     PauseOnExceptionsState pauseOnExceptionsState();
     void setPauseOnExceptionsState(PauseOnExceptionsState pauseOnExceptionsState);
 
-    void pauseProgram() { }
+    void pause();
+    void breakProgram();
     void continueProgram();
     void stepIntoStatement();
     void stepOverStatement();
     void stepOutOfFunction();
+
+    bool editScriptSource(const String& sourceID, const String& newContent, String& newSourceOrErrorMessage);
 
     void recompileAllJSFunctionsSoon() { }
     void recompileAllJSFunctions(Timer<ScriptDebugServer>* = 0) { }
@@ -92,14 +97,26 @@ public:
 
     PassRefPtr<JavaScriptCallFrame> currentCallFrame();
 
+    void setEnabled(bool);
+    bool isDebuggerAlwaysEnabled();
+
+    class Task {
+    public:
+        virtual ~Task() { }
+        virtual void run() = 0;
+    };
+    static void interruptAndRun(PassOwnPtr<Task>);
+    void runPendingTasks();
+
 private:
     ScriptDebugServer();
     ~ScriptDebugServer() { }
 
-#if ENABLE(V8_SCRIPT_DEBUG_SERVER)
+    static v8::Handle<v8::Value> breakProgramCallback(const v8::Arguments& args);
+    void breakProgram(v8::Handle<v8::Object> executionState);
+
     static void v8DebugEventCallback(const v8::Debug::EventDetails& eventDetails);
     void handleV8DebugEvent(const v8::Debug::EventDetails& eventDetails);
-#endif
 
     void dispatchDidParseSource(ScriptDebugListener* listener, v8::Handle<v8::Object> sourceObject);
 
@@ -115,6 +132,10 @@ private:
     OwnHandle<v8::Object> m_executionState;
     OwnPtr<ClientMessageLoop> m_clientMessageLoop;
     Page* m_pausedPage;
+    v8::Local<v8::Context> m_pausedPageContext;
+    bool m_enabled;
+
+    bool m_breakpointsActivated;
 };
 
 } // namespace WebCore

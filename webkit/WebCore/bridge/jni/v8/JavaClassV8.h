@@ -28,17 +28,17 @@
 
 #include "JNIBridgeV8.h"
 #include "PlatformString.h"
-#include "StringHash.h"
 #include <wtf/HashMap.h>
 #include <wtf/Vector.h>
+#include <wtf/text/StringHash.h>
 
 namespace JSC {
 
 namespace Bindings {
 
 typedef Vector<JavaMethod*> MethodList;
-typedef HashMap<WebCore::String, MethodList*> MethodListMap;
-typedef HashMap<WebCore::String, JavaField*> FieldMap;
+typedef HashMap<WTF::String, MethodList*> MethodListMap;
+typedef HashMap<WTF::String, JavaField*> FieldMap;
 
 class JavaClass {
 public:

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006, 2007, 2009, 2010 Apple Inc. All rights reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +29,7 @@
 
 #include "DragActions.h"
 #include "FocusDirection.h"
+#include "HitTestRequest.h"
 #include "PlatformMouseEvent.h"
 #include "ScrollTypes.h"
 #include "Timer.h"
@@ -42,9 +44,14 @@ class NSView;
 #include <wtf/HashMap.h>
 #endif
 
+namespace WTF {
+
+class String;
+
+} // namespace WTF
+
 namespace WebCore {
 
-class AtomicString;
 class Clipboard;
 class Cursor;
 class Event;
@@ -65,7 +72,6 @@ class RenderLayer;
 class RenderObject;
 class RenderWidget;
 class Scrollbar;
-class String;
 class SVGElementInstance;
 class TextEvent;
 class TouchEvent;
@@ -105,7 +111,10 @@ public:
 
     void dispatchFakeMouseMoveEventSoonInQuad(const FloatQuad&);
 
-    HitTestResult hitTestResultAtPoint(const IntPoint&, bool allowShadowContent, bool ignoreClipping = false, HitTestScrollbars scrollbars = DontHitTestScrollbars);
+    HitTestResult hitTestResultAtPoint(const IntPoint&, bool allowShadowContent, bool ignoreClipping = false,
+                                       HitTestScrollbars scrollbars = DontHitTestScrollbars,
+                                       HitTestRequest::HitTestRequestType hitType = HitTestRequest::ReadOnly | HitTestRequest::Active,
+                                       const IntSize& padding = IntSize());
 
     bool mousePressed() const { return m_mousePressed; }
     void setMousePressed(bool pressed) { m_mousePressed = pressed; }
@@ -157,6 +166,7 @@ public:
 
 #if ENABLE(CONTEXT_MENUS)
     bool sendContextMenuEvent(const PlatformMouseEvent&);
+    bool sendContextMenuEventForKey();
 #endif
 
     void setMouseDownMayStartAutoscroll() { m_mouseDownMayStartAutoscroll = true; }
@@ -430,6 +440,7 @@ private:
 #if ENABLE(TOUCH_EVENTS)
     typedef HashMap<int, RefPtr<EventTarget> > TouchTargetMap;
     TouchTargetMap m_originatingTouchPointTargets;
+    bool m_touchPressed;
 #endif
 };
 

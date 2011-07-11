@@ -50,20 +50,19 @@ SET(JavaScriptCore_SOURCES
     interpreter/RegisterFile.cpp
 
     jit/ExecutableAllocator.cpp
-    jit/ExecutableAllocatorFixedVMPool.cpp
-    jit/ExecutableAllocatorPosix.cpp
-    jit/ExecutableAllocatorSymbian.cpp
-    jit/ExecutableAllocatorWin.cpp
-    jit/JITStubs.cpp
-    jit/JITOpcodes.cpp
-    jit/JITOpcodes32_64.cpp
-    jit/JITPropertyAccess.cpp
-    jit/JITPropertyAccess32_64.cpp
+    jit/JITArithmetic32_64.cpp
     jit/JITArithmetic.cpp
-    jit/JITCall.cpp
     jit/JITCall32_64.cpp
+    jit/JITCall.cpp
     jit/JIT.cpp
+    jit/JITOpcodes32_64.cpp
+    jit/JITOpcodes.cpp
+    jit/JITPropertyAccess32_64.cpp
+    jit/JITPropertyAccess.cpp
+    jit/JITStubs.cpp
+    jit/ThunkGenerators.cpp
 
+    parser/JSParser.cpp
     parser/Lexer.cpp
     parser/Nodes.cpp
     parser/Parser.cpp
@@ -104,6 +103,8 @@ SET(JavaScriptCore_SOURCES
     runtime/Executable.cpp
     runtime/FunctionConstructor.cpp
     runtime/FunctionPrototype.cpp
+    runtime/GCActivityCallback.cpp
+    runtime/GCHandle.cpp
     runtime/GetterSetter.cpp
     runtime/GlobalEvalFunction.cpp
     runtime/Identifier.cpp
@@ -149,6 +150,7 @@ SET(JavaScriptCore_SOURCES
     runtime/PropertySlot.cpp
     runtime/PrototypeFunction.cpp
     runtime/RegExp.cpp
+    runtime/RegExpCache.cpp
     runtime/RegExpConstructor.cpp
     runtime/RegExpObject.cpp
     runtime/RegExpPrototype.cpp
@@ -168,6 +170,7 @@ SET(JavaScriptCore_SOURCES
     yarr/RegexJIT.cpp
 
     wtf/DateMath.cpp
+    wtf/PageAllocation.cpp
 )
 SET(JavaScriptCore_HEADERS )
 
@@ -199,25 +202,11 @@ ENDFOREACH ()
 GENERATE_HASH_LUT(${JAVASCRIPTCORE_DIR}/parser/Keywords.table ${DERIVED_SOURCES_DIR}/Lexer.lut.h MAIN_DEPENDENCY)
 LIST(APPEND JavaScriptCore_HEADERS ${DERIVED_SOURCES_DIR}/Lexer.lut.h)
 
-# GENERATOR 2: bison grammar
-ADD_CUSTOM_COMMAND(
-    OUTPUT ${DERIVED_SOURCES_DIR}/Grammar.cpp ${DERIVED_SOURCES_DIR}/Grammar.h
-    MAIN_DEPENDENCY ${JAVASCRIPTCORE_DIR}/parser/Grammar.y
-    COMMAND ${BISON_EXECUTABLE} -d -p jscyy ${JAVASCRIPTCORE_DIR}/parser/Grammar.y -o ${DERIVED_SOURCES_DIR}/Grammar.cpp --defines=${DERIVED_SOURCES_DIR}/Grammar.h
-    COMMENT "[BISON][JSCYY] Building parser with bison"
-    VERBATIM)
-LIST(APPEND JavaScriptCore_HEADERS ${DERIVED_SOURCES_DIR}/Grammar.h)
-LIST(APPEND JavaScriptCore_SOURCES ${DERIVED_SOURCES_DIR}/Grammar.cpp)
-
-
 # GENERATOR: "chartables.c": compile and execute the chartables generator (and add it to sources)
-IF (MSVC)
-    SET(JSC_DFTABLES_PREPROCESSOR --preprocessor=cl.exe)
-ENDIF ()
 ADD_CUSTOM_COMMAND(
     OUTPUT ${DERIVED_SOURCES_DIR}/chartables.c
     MAIN_DEPENDENCY ${JAVASCRIPTCORE_DIR}/pcre/dftables
-    COMMAND ${PERL_EXECUTABLE} ${JAVASCRIPTCORE_DIR}/pcre/dftables ${JSC_DFTABLES_PREPROCESSOR} ${DERIVED_SOURCES_DIR}/chartables.c
+    COMMAND ${PERL_EXECUTABLE} ${JAVASCRIPTCORE_DIR}/pcre/dftables --preprocessor "${CODE_GENERATOR_PREPROCESSOR}" ${DERIVED_SOURCES_DIR}/chartables.c
     VERBATIM)
 ADD_SOURCE_DEPENDENCIES(${JAVASCRIPTCORE_DIR}/pcre/pcre_tables.cpp ${DERIVED_SOURCES_DIR}/chartables.c)
 
@@ -272,7 +261,12 @@ INCLUDE_DIRECTORIES(${JavaScriptCore_INCLUDE_DIRECTORIES})
 ADD_DEFINITIONS(-DBUILDING_JavaScriptCore)
 ADD_LIBRARY(${JavaScriptCore_LIBRARY_NAME} ${JavaScriptCore_LIBRARY_TYPE} ${JavaScriptCore_HEADERS} ${JavaScriptCore_SOURCES})
 TARGET_LINK_LIBRARIES(${JavaScriptCore_LIBRARY_NAME} ${JavaScriptCore_LIBRARIES})
-ADD_TARGET_PROPERTIES(${JavaScriptCore_LIBRARY_NAME} LINK_FLAGS ${JavaScriptCore_LINK_FLAGS})
 
-INSTALL(TARGETS ${JavaScriptCore_LIBRARY_NAME} DESTINATION lib)
+IF (JavaScriptCore_LINK_FLAGS)
+    ADD_TARGET_PROPERTIES(${JavaScriptCore_LIBRARY_NAME} LINK_FLAGS "${JavaScriptCore_LINK_FLAGS}")
+ENDIF ()
 
+IF (SHARED_CORE)
+    SET_TARGET_PROPERTIES(${JavaScriptCore_LIBRARY_NAME} PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
+    INSTALL(TARGETS ${JavaScriptCore_LIBRARY_NAME} DESTINATION lib)
+ENDIF ()

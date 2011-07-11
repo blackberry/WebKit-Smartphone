@@ -38,6 +38,11 @@ using namespace WebCore;
 
 namespace WebKit {
 
+WebDOMStringList::WebDOMStringList()
+{
+    m_private = WebCore::DOMStringList::create();
+}
+
 void WebDOMStringList::reset()
 {
     m_private.reset();
@@ -55,6 +60,8 @@ void WebDOMStringList::append(const WebString& string)
 
 unsigned WebDOMStringList::length() const
 {
+    if (m_private.isNull())
+        return 0;
     return m_private->length();
 }
 

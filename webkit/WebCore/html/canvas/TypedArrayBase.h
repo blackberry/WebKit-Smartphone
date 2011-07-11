@@ -27,8 +27,8 @@
 #ifndef TypedArrayBase_h
 #define TypedArrayBase_h
 
-#include "ArrayBufferView.h"
 #include "ArrayBuffer.h"
+#include "ArrayBufferView.h"
 
 namespace WebCore {
 
@@ -40,6 +40,16 @@ class TypedArrayBase : public ArrayBufferView {
     void set(TypedArrayBase<T>* array, unsigned offset, ExceptionCode& ec)
     {
         setImpl(array, offset * sizeof(T), ec);
+    }
+
+    void setRange(const T* data, size_t dataLength, unsigned offset, ExceptionCode& ec)
+    {
+        setRangeImpl(reinterpret_cast<const char*>(data), dataLength * sizeof(T), offset * sizeof(T), ec);
+    }
+
+    void zeroRange(unsigned offset, size_t length, ExceptionCode& ec)
+    {
+        zeroRangeImpl(offset * sizeof(T), length * sizeof(T), ec);
     }
 
     // Overridden from ArrayBufferView. This must be public because of
@@ -61,15 +71,18 @@ class TypedArrayBase : public ArrayBufferView {
     static PassRefPtr<Subclass> create(unsigned length)
     {
         RefPtr<ArrayBuffer> buffer = ArrayBuffer::create(length, sizeof(T));
+        if (!buffer.get())
+            return 0;
         return create<Subclass>(buffer, 0, length);
     }
 
     template <class Subclass>
-    static PassRefPtr<Subclass> create(T* array, unsigned length)
+    static PassRefPtr<Subclass> create(const T* array, unsigned length)
     {
         RefPtr<Subclass> a = create<Subclass>(length);
-        for (unsigned i = 0; i < length; ++i)
-            a->set(i, array[i]);
+        if (a)
+            for (unsigned i = 0; i < length; ++i)
+                a->set(i, array[i]);
         return a;
     }
 

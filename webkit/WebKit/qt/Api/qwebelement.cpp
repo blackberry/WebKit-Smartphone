@@ -31,22 +31,32 @@
 #include "FrameView.h"
 #include "GraphicsContext.h"
 #include "HTMLElement.h"
+#if USE(JSC)
 #include "JSGlobalObject.h"
 #include "JSHTMLElement.h"
 #include "JSObject.h"
-#include "NodeList.h"
 #include "PropertyNameArray.h"
+#include <parser/SourceCode.h>
+#include "qt_runtime.h"
+#elif USE(V8)
+#include "V8DOMWindow.h"
+#include "V8Binding.h"
+#include "NotImplemented.h"
+#endif
+#include "NodeList.h"
 #include "RenderImage.h"
 #include "StaticNodeList.h"
-#include "qt_runtime.h"
 #include "qwebframe.h"
 #include "qwebframe_p.h"
 #include "runtime_root.h"
-#include <parser/SourceCode.h>
 #include <wtf/Vector.h>
 #include <wtf/text/CString.h>
 
 #include <QPainter>
+
+#if USE(V8)
+using namespace V8::Bindings;
+#endif
 
 using namespace WebCore;
 
@@ -694,6 +704,7 @@ QWebFrame *QWebElement::webFrame() const
     return QWebFramePrivate::kit(frame);
 }
 
+#if USE(JSC)
 static bool setupScriptContext(WebCore::Element* element, JSC::JSValue& thisValue, ScriptState*& state, ScriptController*& scriptController)
 {
     if (!element)
@@ -721,6 +732,26 @@ static bool setupScriptContext(WebCore::Element* element, JSC::JSValue& thisValu
 
     return true;
 }
+#elif USE(V8)
+static bool setupScriptContext(WebCore::Element* element, v8::Handle<v8::Value>& thisValue, ScriptState*& state, ScriptController*& scriptController)
+{
+    if (!element)
+        return false;
+
+    Document* document = element->document();
+    if (!document)
+        return false;
+
+    Frame* frame = document->frame();
+    if (!frame)
+        return false;
+
+    state = mainWorldScriptState(frame);
+    // Get V8 wrapper for DOM element
+    thisValue = toV8(frame->domWindow());
+    return true;
+}
+#endif
 
 
 /*!
@@ -732,14 +763,18 @@ QVariant QWebElement::evaluateJavaScript(const QString& scriptSource)
         return QVariant();
 
     ScriptState* state = 0;
+#if USE(JSC)
     JSC::JSValue thisValue;
+#elif USE(V8)
+    v8::Handle<v8::Value> thisValue;
+#endif
     ScriptController* scriptController = 0;
 
     if (!setupScriptContext(m_element, thisValue, state, scriptController))
         return QVariant();
-
+#if USE(JSC)
     JSC::ScopeChain& scopeChain = state->dynamicGlobalObject()->globalScopeChain();
-    JSC::UString script((const UChar*)scriptSource.data(), scriptSource.length());
+    JSC::UString script(reinterpret_cast_ptr<const UChar*>(scriptSource.data()), scriptSource.length());
     JSC::Completion completion = JSC::evaluate(state, scopeChain, JSC::makeSource(script), thisValue);
     if ((completion.complType() != JSC::ReturnValue) && (completion.complType() != JSC::Normal))
         return QVariant();
@@ -750,6 +785,10 @@ QVariant QWebElement::evaluateJavaScript(const QString& scriptSource)
 
     int distance = 0;
     return JSC::Bindings::convertValueToQVariant(state, result, QMetaType::Void, &distance);
+#elif USE(V8)
+    notImplemented();
+    return QVariant();
+#endif
 }
 
 /*!
@@ -970,7 +1009,7 @@ void QWebElement::appendInside(const QString &markup)
         return;
 
     HTMLElement* htmlElement = static_cast<HTMLElement*>(m_element);
-    RefPtr<DocumentFragment> fragment = htmlElement->createContextualFragment(markup);
+    RefPtr<DocumentFragment> fragment = htmlElement->deprecatedCreateContextualFragment(markup);
 
     ExceptionCode exception = 0;
     m_element->appendChild(fragment, exception);
@@ -1016,7 +1055,7 @@ void QWebElement::prependInside(const QString &markup)
         return;
 
     HTMLElement* htmlElement = static_cast<HTMLElement*>(m_element);
-    RefPtr<DocumentFragment> fragment = htmlElement->createContextualFragment(markup);
+    RefPtr<DocumentFragment> fragment = htmlElement->deprecatedCreateContextualFragment(markup);
 
     ExceptionCode exception = 0;
 
@@ -1068,7 +1107,7 @@ void QWebElement::prependOutside(const QString &markup)
         return;
 
     HTMLElement* htmlElement = static_cast<HTMLElement*>(m_element);
-    RefPtr<DocumentFragment> fragment = htmlElement->createContextualFragment(markup);
+    RefPtr<DocumentFragment> fragment = htmlElement->deprecatedCreateContextualFragment(markup);
 
     ExceptionCode exception = 0;
     m_element->parent()->insertBefore(fragment, m_element, exception);
@@ -1118,7 +1157,7 @@ void QWebElement::appendOutside(const QString &markup)
         return;
 
     HTMLElement* htmlElement = static_cast<HTMLElement*>(m_element);
-    RefPtr<DocumentFragment> fragment = htmlElement->createContextualFragment(markup);
+    RefPtr<DocumentFragment> fragment = htmlElement->deprecatedCreateContextualFragment(markup);
 
     ExceptionCode exception = 0;
     if (!m_element->nextSibling())
@@ -1190,6 +1229,8 @@ void QWebElement::removeAllChildren()
     m_element->removeAllChildren();
 }
 
+// FIXME: This code, and all callers are wrong, and have no place in a
+// WebKit implementation.  These should be replaced with WebCore implementations.
 static RefPtr<Node> findInsertionPoint(PassRefPtr<Node> root)
 {
     RefPtr<Node> node = root;
@@ -1205,7 +1246,7 @@ static RefPtr<Node> findInsertionPoint(PassRefPtr<Node> root)
         // The insert point could be a non-enclosable tag and it can thus
         // never have children, so go one up. Get the parent element, and not
         // note as a root note will always exist.
-        if (element->endTagRequirement() == TagStatusForbidden)
+        if (element->ieForbidsInsertHTML())
             node = node->parentElement();
     }
 
@@ -1263,7 +1304,7 @@ void QWebElement::encloseContentsWith(const QString &markup)
         return;
 
     HTMLElement* htmlElement = static_cast<HTMLElement*>(m_element);
-    RefPtr<DocumentFragment> fragment = htmlElement->createContextualFragment(markup);
+    RefPtr<DocumentFragment> fragment = htmlElement->deprecatedCreateContextualFragment(markup);
 
     if (!fragment || !fragment->firstChild())
         return;
@@ -1338,7 +1379,7 @@ void QWebElement::encloseWith(const QString &markup)
         return;
 
     HTMLElement* htmlElement = static_cast<HTMLElement*>(m_element);
-    RefPtr<DocumentFragment> fragment = htmlElement->createContextualFragment(markup);
+    RefPtr<DocumentFragment> fragment = htmlElement->deprecatedCreateContextualFragment(markup);
 
     if (!fragment || !fragment->firstChild())
         return;
@@ -1444,7 +1485,7 @@ void QWebElement::render(QPainter* painter)
 
     FrameView* view = frame->view();
 
-    view->layoutIfNeededRecursive();
+    view->updateLayoutAndStyleIfNeededRecursive();
 
     IntRect rect = e->getRect();
 

@@ -1,26 +1,26 @@
 /*
-    Copyright (C) 2004, 2005 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-    Copyright (C) 2007 Eric Seidel <eric@webkit.org>
-    Copyright (C) 2008 Apple Inc. All rights reserved.
-    Copyright (C) 2009 Cameron McCormack <cam@mcc.id.au>
-    Copyright (C) Research In Motion Limited 2010. All rights reserved.
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ * Copyright (C) 2007 Eric Seidel <eric@webkit.org>
+ * Copyright (C) 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2009 Cameron McCormack <cam@mcc.id.au>
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -52,15 +52,9 @@ using namespace std;
 
 namespace WebCore {
     
-SVGAnimationElement::SVGAnimationElement(const QualifiedName& tagName, Document* doc)
-    : SVGSMILElement(tagName, doc)
-    , SVGTests()
-    , SVGExternalResourcesRequired() 
+SVGAnimationElement::SVGAnimationElement(const QualifiedName& tagName, Document* document)
+    : SVGSMILElement(tagName, document)
     , m_animationValid(false)
-{
-}
-
-SVGAnimationElement::~SVGAnimationElement()
 {
 }
 
@@ -388,7 +382,18 @@ void SVGAnimationElement::calculateKeyTimesForCalcModePaced()
 }
 
 static inline double solveEpsilon(double duration) { return 1. / (200. * duration); }
-    
+
+unsigned SVGAnimationElement::calculateKeyTimesIndex(float percent) const
+{
+    unsigned index;
+    unsigned keyTimesCount = m_keyTimes.size();
+    for (index = 1; index < keyTimesCount; ++index) {
+        if (m_keyTimes[index] >= percent)
+            break;
+    }
+    return --index;
+}
+
 float SVGAnimationElement::calculatePercentForSpline(float percent, unsigned splineIndex) const
 {
     ASSERT(calcMode() == CalcModeSpline);
@@ -408,13 +413,7 @@ float SVGAnimationElement::calculatePercentFromKeyPoints(float percent) const
     ASSERT(keyTimesCount > 1);
     ASSERT(m_keyPoints.size() == keyTimesCount);
 
-    unsigned index;
-    for (index = 1; index < keyTimesCount; ++index) {
-        if (m_keyTimes[index] >= percent)
-            break;
-    }
-    --index;
-
+    unsigned index = calculateKeyTimesIndex(percent);
     float fromPercent = m_keyTimes[index];
     float toPercent = m_keyTimes[index + 1];
     float fromKeyPoint = m_keyPoints[index];
@@ -457,13 +456,7 @@ void SVGAnimationElement::currentValuesForValuesAnimation(float percent, float& 
     ASSERT(!keyTimesCount || valuesCount == keyTimesCount);
     ASSERT(!keyTimesCount || (keyTimesCount > 1 && m_keyTimes[0] == 0));
 
-    unsigned index;
-    for (index = 1; index < keyTimesCount; ++index) {
-        if (m_keyTimes[index] >= percent)
-            break;
-    }
-    --index;
-    
+    unsigned index = calculateKeyTimesIndex(percent);
     if (calcMode == CalcModeDiscrete) {
         if (!keyTimesCount) 
             index = percent == 1.0f ? valuesCount - 1 : static_cast<unsigned>(percent * valuesCount);
@@ -516,10 +509,12 @@ void SVGAnimationElement::startedActiveInterval()
     if (hasAttribute(SVGNames::keyPointsAttr) && m_keyPoints.size() != m_keyTimes.size())
         return;
 
+    AnimationMode animationMode = this->animationMode();
     CalcMode calcMode = this->calcMode();
     if (calcMode == CalcModeSpline) {
-        unsigned num = m_keySplines.size() + 1;
-        if ((hasAttribute(SVGNames::keyPointsAttr) && m_keyPoints.size() != num) || m_values.size() != num)
+        unsigned splinesCount = m_keySplines.size() + 1;
+        if ((hasAttribute(SVGNames::keyPointsAttr) && m_keyPoints.size() != splinesCount)
+            || animationMode == ValuesAnimation && m_values.size() != splinesCount)
             return;
     }
 
@@ -527,7 +522,6 @@ void SVGAnimationElement::startedActiveInterval()
     String to = toValue();
     String by = byValue();
     SVGElement* target = targetElement();
-    AnimationMode animationMode = this->animationMode();
     if (animationMode == NoAnimation)
         return;
     if (animationMode == FromToAnimation) {
@@ -564,6 +558,7 @@ void SVGAnimationElement::updateAnimation(float percent, unsigned repeat, SVGSMI
         return;
     
     float effectivePercent;
+    CalcMode mode = calcMode();
     if (animationMode() == ValuesAnimation) {
         String from;
         String to;
@@ -575,9 +570,11 @@ void SVGAnimationElement::updateAnimation(float percent, unsigned repeat, SVGSMI
             m_lastValuesAnimationFrom = from;
             m_lastValuesAnimationTo = to;
         }
-    } else if (!m_keyPoints.isEmpty() && calcMode() != CalcModePaced)
+    } else if (!m_keyPoints.isEmpty() && mode != CalcModePaced)
         effectivePercent = calculatePercentFromKeyPoints(percent);
-    else 
+    else if (m_keyPoints.isEmpty() && mode == CalcModeSpline && m_keyTimes.size() > 1)
+        effectivePercent = calculatePercentForSpline(percent, calculateKeyTimesIndex(percent));
+    else
         effectivePercent = percent;
 
     calculateAnimatedValue(effectivePercent, repeat, resultElement);

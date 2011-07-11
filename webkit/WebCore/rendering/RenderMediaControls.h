@@ -34,8 +34,9 @@ namespace WebCore {
 class HTMLMediaElement;
 class RenderMediaControls {
 public:
-    static bool paintMediaControlsPart(MediaControlElementType, RenderObject*, const RenderObject::PaintInfo&, const IntRect&);
+    static bool paintMediaControlsPart(MediaControlElementType, RenderObject*, const PaintInfo&, const IntRect&);
     static void adjustMediaSliderThumbSize(RenderObject*);
+    static IntPoint volumeSliderOffsetFromMuteButton(Node*, const IntSize&);
 };
 
 } // namespace WebCore

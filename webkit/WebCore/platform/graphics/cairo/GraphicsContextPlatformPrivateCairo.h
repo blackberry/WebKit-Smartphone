@@ -27,6 +27,7 @@
 
 #include "GraphicsContext.h"
 
+#include "CairoPath.h"
 #include <cairo.h>
 #include <math.h>
 #include <stdio.h>
@@ -95,6 +96,7 @@ public:
 
     cairo_t* cr;
     Vector<float> layers;
+    CairoPath m_pendingPath;
 
 #if PLATFORM(GTK)
     GdkEventExpose* expose;

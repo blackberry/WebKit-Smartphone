@@ -3,7 +3,6 @@
 <link rel="stylesheet" href="../../js/resources/js-test-style.css"/>
 <script src="../../js/resources/js-test-pre.js"></script>
 <script src="resources/webgl-test.js"></script>
-<script src="resources/utils3d.js"></script>
 <script id="vshader" type="x-shader/x-vertex">
 attribute vec3 pos;
 attribute vec4 colorIn;
@@ -17,6 +16,9 @@ void main()
 </script>
 
 <script id="fshader" type="x-shader/x-fragment">
+#ifdef GL_ES
+precision highp float;
+#endif
 varying vec4 color;
 
 void main()
@@ -36,16 +38,12 @@ var correctColor = null;
 
 function init()
 {
-    if (window.layoutTestController) {
-        layoutTestController.overridePreference("WebKitWebGLEnabled", "1");
-        layoutTestController.dumpAsText();
-        layoutTestController.waitUntilDone();
+    if (window.initNonKhronosFramework) {
+        window.initNonKhronosFramework(true);
     }
 
     description('Verify WebGLContextAttributes are working as specified, including alpha, depth, stencil, antialias, but not premultipliedAlpha');
 
-    debug('Regression test for <a href="https://bugs.webkit.org/show_bug.cgi?id=33416">https://bugs.webkit.org/show_bug.cgi?id=33416</a> : <code>Hook up WebGLContextAttributes to OpenGL context creation code</code>');
-    
     runTest();
 }
 
@@ -58,7 +56,7 @@ function getWebGL(canvasName, contextAttribs, clearColor, clearDepth, clearStenc
         return null;
     }
     var actualContextAttribs = gl.getContextAttributes();
-    
+
     // Add a console
     gl.console = ("console" in window) ? window.console : { log: function() { } };
 
@@ -130,7 +128,9 @@ function drawAndReadPixel(gl, vertices, colors, x, y)
 
     gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 3);
 
-    return gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE);
+    var buf = new Uint8Array(1 * 1 * 4);
+    gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    return buf;
 }
 
 function testAlpha(alpha)
@@ -147,7 +147,8 @@ function testAlpha(alpha)
     shouldBe("contextAttribs.antialias", "false");
     shouldBe("contextAttribs.premultipliedAlpha", "true");
 
-    var buf = webGL.readPixels(0, 0, 1, 1, webGL.RGBA, webGL.UNSIGNED_BYTE);
+    var buf = new Uint8Array(1 * 1 * 4);
+    webGL.readPixels(0, 0, 1, 1, webGL.RGBA, webGL.UNSIGNED_BYTE, buf);
     pixel[0] = buf[0];
     pixel[1] = buf[1];
     pixel[2] = buf[2];
@@ -172,14 +173,14 @@ function testDepth(depth)
 
     webGL.depthFunc(webGL.NEVER);
 
-    var vertices = new WebGLFloatArray([
+    var vertices = new Float32Array([
          1.0,  1.0, 0.0,
         -1.0,  1.0, 0.0,
         -1.0, -1.0, 0.0,
          1.0,  1.0, 0.0,
         -1.0, -1.0, 0.0,
          1.0, -1.0, 0.0]);
-    var colors = new WebGLUnsignedByteArray([
+    var colors = new Uint8Array([
         255, 0, 0, 255,
         255, 0, 0, 255,
         255, 0, 0, 255,
@@ -215,14 +216,14 @@ function testStencil(stencil)
     webGL.stencilFunc(webGL.NEVER, 1, 1);
     webGL.stencilOp(webGL.KEEP, webGL.KEEP, webGL.KEEP);
 
-    var vertices = new WebGLFloatArray([
+    var vertices = new Float32Array([
          1.0, 1.0, 0.0,
         -1.0, 1.0, 0.0,
         -1.0, -1.0, 0.0,
          1.0, 1.0, 0.0,
         -1.0, -1.0, 0.0,
          1.0, -1.0, 0.0]);
-    var colors = new WebGLUnsignedByteArray([
+    var colors = new Uint8Array([
         255, 0, 0, 255,
         255, 0, 0, 255,
         255, 0, 0, 255,
@@ -256,11 +257,11 @@ function testAntialias(antialias)
     shouldBe("contextAttribs.antialias == true || contextAttribs.antialias == false", "true");
     shouldBe("contextAttribs.premultipliedAlpha", "true");
 
-    var vertices = new WebGLFloatArray([
+    var vertices = new Float32Array([
          1.0, 1.0, 0.0,
         -1.0, 1.0, 0.0,
         -1.0, -1.0, 0.0]);
-    var colors = new WebGLUnsignedByteArray([
+    var colors = new Uint8Array([
         255, 0, 0, 255,
         255, 0, 0, 255,
         255, 0, 0, 255]);
@@ -292,8 +293,8 @@ function runTest()
 }
 
 function finish() {
-    if (window.layoutTestController) {
-        layoutTestController.notifyDone();
+    if (window.nonKhronosFrameworkNotifyDone) {
+        window.nonKhronosFrameworkNotifyDone();
     }
 }
 </script>

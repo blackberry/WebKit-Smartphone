@@ -59,10 +59,10 @@ String CharacterData::substringData(unsigned offset, unsigned count, ExceptionCo
     return m_data->substring(offset, count);
 }
 
-void CharacterData::appendData(const String& arg, ExceptionCode&)
+PassRefPtr<StringImpl> CharacterData::appendDataCommon(const String& data)
 {
     String newStr = m_data;
-    newStr.append(arg);
+    newStr.append(data);
 
     RefPtr<StringImpl> oldStr = m_data;
     m_data = newStr.impl();
@@ -72,18 +72,33 @@ void CharacterData::appendData(const String& arg, ExceptionCode&)
         attach();
     } else if (renderer())
         toRenderText(renderer())->setTextWithOffset(m_data, oldStr->length(), 0);
-    
+
+    return oldStr.release();
+}
+
+void CharacterData::parserAppendData(const String& data)
+{
+    appendDataCommon(data);
+    // We don't call dispatchModifiedEvent here because we don't want the
+    // parser to dispatch DOM mutation events.
+    if (parentNode())
+        parentNode()->childrenChanged();
+}
+
+void CharacterData::appendData(const String& data, ExceptionCode&)
+{
+    RefPtr<StringImpl> oldStr = appendDataCommon(data);
     dispatchModifiedEvent(oldStr.get());
 }
 
-void CharacterData::insertData(unsigned offset, const String& arg, ExceptionCode& ec)
+void CharacterData::insertData(unsigned offset, const String& data, ExceptionCode& ec)
 {
     checkCharDataOperation(offset, ec);
     if (ec)
         return;
 
     String newStr = m_data;
-    newStr.insert(arg, offset);
+    newStr.insert(data, offset);
 
     RefPtr<StringImpl> oldStr = m_data;
     m_data = newStr.impl();
@@ -96,7 +111,7 @@ void CharacterData::insertData(unsigned offset, const String& arg, ExceptionCode
 
     dispatchModifiedEvent(oldStr.get());
     
-    document()->textInserted(this, offset, arg.length());
+    document()->textInserted(this, offset, data.length());
 }
 
 void CharacterData::deleteData(unsigned offset, unsigned count, ExceptionCode& ec)
@@ -128,7 +143,7 @@ void CharacterData::deleteData(unsigned offset, unsigned count, ExceptionCode& e
     document()->textRemoved(this, offset, realCount);
 }
 
-void CharacterData::replaceData(unsigned offset, unsigned count, const String& arg, ExceptionCode& ec)
+void CharacterData::replaceData(unsigned offset, unsigned count, const String& data, ExceptionCode& ec)
 {
     checkCharDataOperation(offset, ec);
     if (ec)
@@ -142,7 +157,7 @@ void CharacterData::replaceData(unsigned offset, unsigned count, const String& a
 
     String newStr = m_data;
     newStr.remove(offset, realCount);
-    newStr.insert(arg, offset);
+    newStr.insert(data, offset);
 
     RefPtr<StringImpl> oldStr = m_data;
     m_data = newStr.impl();
@@ -157,7 +172,7 @@ void CharacterData::replaceData(unsigned offset, unsigned count, const String& a
     
     // update the markers for spell checking and grammar checking
     document()->textRemoved(this, offset, realCount);
-    document()->textInserted(this, offset, arg.length());
+    document()->textInserted(this, offset, data.length());
 }
 
 String CharacterData::nodeValue() const

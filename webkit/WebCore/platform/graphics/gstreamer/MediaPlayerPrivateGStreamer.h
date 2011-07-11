@@ -22,9 +22,9 @@
 
 #ifndef MediaPlayerPrivateGStreamer_h
 #define MediaPlayerPrivateGStreamer_h
-
 #if ENABLE(VIDEO)
 
+#include <wtf/Forward.h>
 #include "MediaPlayerPrivate.h"
 #include "Timer.h"
 
@@ -42,7 +42,6 @@ namespace WebCore {
 class GraphicsContext;
 class IntSize;
 class IntRect;
-class String;
 class GStreamerGWorld;
 
 gboolean mediaPlayerPrivateMessageCallback(GstBus* bus, GstMessage* message, gpointer data);
@@ -132,6 +131,7 @@ class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface {
             static MediaPlayer::SupportsType supportsType(const String& type, const String& codecs);
             static bool isAvailable();
 
+            void cacheDuration();
             void updateStates();
             void cancelSeek();
             void endPointTimerFired(Timer<MediaPlayerPrivateGStreamer>*);
@@ -146,7 +146,8 @@ class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface {
         private:
             MediaPlayer* m_player;
             GstElement* m_playBin;
-            GstElement* m_videoSink;
+            GstElement* m_webkitVideoSink;
+            GstElement* m_videoSinkBin;
             GstElement* m_fpsSink;
             GstElement* m_source;
             GstClockTime m_seekTime;
@@ -178,5 +179,5 @@ class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface {
     };
 }
 
-#endif
+#endif // ENABLE(VIDEO)
 #endif

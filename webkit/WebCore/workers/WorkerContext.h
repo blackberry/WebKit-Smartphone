@@ -29,10 +29,6 @@
 
 #if ENABLE(WORKERS)
 
-#include "AtomicStringHash.h"
-#include "Database.h"
-#include "DatabaseSync.h"
-#include "DatabaseCallback.h"
 #include "EventListener.h"
 #include "EventNames.h"
 #include "EventTarget.h"
@@ -43,10 +39,14 @@
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
+#include <wtf/text/AtomicStringHash.h>
 
 namespace WebCore {
 
+    class Blob;
     class Database;
+    class DatabaseCallback;
+    class DatabaseSync;
     class NotificationCenter;
     class ScheduledAction;
     class WorkerLocation;
@@ -90,9 +90,9 @@ namespace WebCore {
         WorkerNavigator* navigator() const;
 
         // Timers
-        int setTimeout(ScheduledAction*, int timeout);
+        int setTimeout(PassOwnPtr<ScheduledAction>, int timeout);
         void clearTimeout(int timeoutId);
-        int setInterval(ScheduledAction*, int timeout);
+        int setInterval(PassOwnPtr<ScheduledAction>, int timeout);
         void clearInterval(int timeoutId);
 
         // ScriptExecutionContext
@@ -116,6 +116,10 @@ namespace WebCore {
         virtual bool isContextThread() const;
         virtual bool isJSExecutionTerminated() const;
 
+#if ENABLE(BLOB)
+        String createBlobURL(Blob*);
+        void revokeBlobURL(const String&);
+#endif
 
         // These methods are used for GC marking. See JSWorkerContext::markChildren(MarkStack&) in
         // JSWorkerContextCustom.cpp.

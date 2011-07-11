@@ -27,7 +27,7 @@
 
 #include "ResourceHandle.h"
 
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "DocumentLoader.h"
 #include "Frame.h"
 #include "FrameLoader.h"
@@ -50,8 +50,8 @@ ResourceHandle::~ResourceHandle()
 
 bool ResourceHandle::start(Frame* frame)
 {
-    DocumentLoader* docLoader = frame->loader()->activeDocumentLoader();
-    MainResourceLoader* mainLoader = docLoader->mainResourceLoader();
+    DocumentLoader* documentLoader = frame->loader()->activeDocumentLoader();
+    MainResourceLoader* mainLoader = documentLoader->mainResourceLoader();
     bool isMainResource = mainLoader && (mainLoader->handle() == this);
 
     PassRefPtr<ResourceLoaderAndroid> loader = ResourceLoaderAndroid::start(this, d->m_request, frame->loader()->client(), isMainResource, false);
@@ -83,7 +83,7 @@ bool ResourceHandle::supportsBufferedData()
     return false;
 }
 
-void ResourceHandle::setDefersLoading(bool defers)
+void ResourceHandle::platformSetDefersLoading(bool)
 {
     notImplemented();
 }
@@ -146,9 +146,9 @@ void ResourceHandle::loadResourceSynchronously(const ResourceRequest& request,
         Frame* frame) 
 {
     SyncLoader s(error, response, data);
-    ResourceHandle h(request, &s, false, false, false);
+    RefPtr<ResourceHandle> h = adoptRef(new ResourceHandle(request, &s, false, false, false));
     // This blocks until the load is finished.
-    ResourceLoaderAndroid::start(&h, request, frame->loader()->client(), false, true);
+    ResourceLoaderAndroid::start(h.get(), request, frame->loader()->client(), false, true);
 }
 
 } // namespace WebCore

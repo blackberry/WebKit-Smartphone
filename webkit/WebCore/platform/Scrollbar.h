@@ -42,6 +42,11 @@ class PlatformMouseEvent;
 
 class Scrollbar : public Widget {
 public:
+    enum ScrollSource {
+        FromScrollAnimator,
+        NotFromScrollAnimator,
+    };
+
     virtual ~Scrollbar();
 
     // Must be implemented by platforms that can't simply use the Scrollbar base class.  Right now the only platform that is not using the base class is GTK.
@@ -75,11 +80,11 @@ public:
     virtual void setPressedPart(ScrollbarPart);
 
     void setSteps(int lineStep, int pageStep, int pixelsPerStep = 1);
-    bool setValue(int);
+    bool setValue(int, ScrollSource source);
     void setProportion(int visibleSize, int totalSize);
     void setPressedPos(int p) { m_pressedPos = p; }
 
-    bool scroll(ScrollDirection, ScrollGranularity, float multiplier = 1.0f);
+    bool scroll(ScrollDirection, ScrollGranularity, float multiplier = 1);
     
     virtual void paint(GraphicsContext*, const IntRect& damageRect);
 
@@ -124,12 +129,10 @@ public:
     virtual IntPoint convertToContainingView(const IntPoint&) const;
     virtual IntPoint convertFromContainingView(const IntPoint&) const;
 
-private:
-    virtual bool isScrollbar() const { return true; }
-
 protected:
     Scrollbar(ScrollbarClient*, ScrollbarOrientation, ScrollbarControlSize, ScrollbarTheme* = 0);
 
+    void updateThumb();
     virtual void updateThumbPosition();
     virtual void updateThumbProportion();
 
@@ -141,7 +144,6 @@ protected:
     ScrollGranularity pressedPartScrollGranularity();
     
     void moveThumb(int pos);
-    bool setCurrentPos(float pos);
 
     ScrollbarClient* m_client;
     ScrollbarOrientation m_orientation;
@@ -166,6 +168,11 @@ protected:
     bool m_overlapsResizer;
     
     bool m_suppressInvalidation;
+
+private:
+    virtual bool isScrollbar() const { return true; }
+
+    bool setCurrentPos(float pos, ScrollSource source);
 };
 
 }

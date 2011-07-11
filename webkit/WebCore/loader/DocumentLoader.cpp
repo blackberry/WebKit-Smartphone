@@ -33,11 +33,13 @@
 #include "ArchiveFactory.h"
 #include "ArchiveResourceCollection.h"
 #include "CachedPage.h"
-#include "DocLoader.h"
+#include "CachedResourceLoader.h"
 #include "Document.h"
+#include "DocumentParser.h"
 #include "Event.h"
 #include "Frame.h"
 #include "FrameLoader.h"
+#include "FrameLoaderClient.h"
 #include "FrameTree.h"
 #include "HistoryItem.h"
 #include "Logging.h"
@@ -46,7 +48,6 @@
 #include "PlatformString.h"
 #include "Settings.h"
 #include "SharedBuffer.h"
-#include "XMLTokenizer.h"
 
 #include <wtf/Assertions.h>
 #include <wtf/unicode/Unicode.h>
@@ -82,11 +83,12 @@ DocumentLoader::DocumentLoader(const ResourceRequest& req, const SubstituteData&
     , m_gotFirstByte(false)
     , m_primaryLoadComplete(false)
     , m_isClientRedirect(false)
+    , m_wasOnloadHandled(false)
     , m_stopRecordingResponses(false)
     , m_substituteResourceDeliveryTimer(this, &DocumentLoader::substituteResourceDeliveryTimerFired)
     , m_didCreateGlobalHistoryEntry(false)
 #if ENABLE(OFFLINE_WEB_APPLICATIONS)
-    , m_applicationCacheHost(new ApplicationCacheHost(this))
+    , m_applicationCacheHost(adoptPtr(new ApplicationCacheHost(this)))
 #endif
 {
 }
@@ -255,7 +257,7 @@ void DocumentLoader::commitIfReady()
 {
     if (m_gotFirstByte && !m_committed) {
         m_committed = true;
-        frameLoader()->commitProvisionalLoad(0);
+        frameLoader()->commitProvisionalLoad();
     }
 }
 
@@ -276,8 +278,27 @@ void DocumentLoader::commitLoad(const char* data, int length)
     RefPtr<DocumentLoader> protect(this);
 
     commitIfReady();
-    if (FrameLoader* frameLoader = DocumentLoader::frameLoader())
-        frameLoader->committedLoad(this, data, length);
+    FrameLoader* frameLoader = DocumentLoader::frameLoader();
+    if (!frameLoader)
+        return;
+    if (ArchiveFactory::isArchiveMimeType(response().mimeType()))
+        return;
+    frameLoader->client()->committedLoad(this, data, length);
+}
+
+void DocumentLoader::commitData(const char* bytes, int length)
+{
+    // Set the text encoding.  This is safe to call multiple times.
+    bool userChosen = true;
+    String encoding = overrideEncoding();
+    if (encoding.isNull()) {
+        userChosen = false;
+        encoding = response().textEncodingName();
+    }
+    // FIXME: DocumentWriter should be owned by DocumentLoader.
+    m_frame->loader()->writer()->setEncoding(encoding, userChosen);
+    ASSERT(m_frame->document()->parsing());
+    m_frame->loader()->writer()->addData(bytes, length);
 }
 
 bool DocumentLoader::doesProgressiveLoad(const String& MIMEType) const
@@ -391,10 +412,10 @@ bool DocumentLoader::isLoadingInAPISense() const
         if (!m_subresourceLoaders.isEmpty())
             return true;
         Document* doc = m_frame->document();
-        if (doc->docLoader()->requestCount())
+        if (doc->cachedResourceLoader()->requestCount())
             return true;
-        if (Tokenizer* tok = doc->tokenizer())
-            if (tok->processingData())
+        if (DocumentParser* parser = doc->parser())
+            if (parser->processingData())
                 return true;
     }
     return frameLoader()->subframeIsLoading();
@@ -403,7 +424,7 @@ bool DocumentLoader::isLoadingInAPISense() const
 void DocumentLoader::addAllArchiveResources(Archive* archive)
 {
     if (!m_archiveResourceCollection)
-        m_archiveResourceCollection.set(new ArchiveResourceCollection);
+        m_archiveResourceCollection = adoptPtr(new ArchiveResourceCollection);
         
     ASSERT(archive);
     if (!archive)
@@ -417,7 +438,7 @@ void DocumentLoader::addAllArchiveResources(Archive* archive)
 void DocumentLoader::addArchiveResource(PassRefPtr<ArchiveResource> resource)
 {
     if (!m_archiveResourceCollection)
-        m_archiveResourceCollection.set(new ArchiveResourceCollection);
+        m_archiveResourceCollection = adoptPtr(new ArchiveResourceCollection);
         
     ASSERT(resource);
     if (!resource)
@@ -472,7 +493,7 @@ PassRefPtr<ArchiveResource> DocumentLoader::subresource(const KURL& url) const
     if (!isCommitted())
         return 0;
     
-    CachedResource* resource = m_frame->document()->docLoader()->cachedResource(url);
+    CachedResource* resource = m_frame->document()->cachedResourceLoader()->cachedResource(url);
     if (!resource || !resource->isLoaded())
         return archiveResourceForURL(url);
 
@@ -495,9 +516,9 @@ void DocumentLoader::getSubresources(Vector<PassRefPtr<ArchiveResource> >& subre
 
     Document* document = m_frame->document();
 
-    const DocLoader::DocumentResourceMap& allResources = document->docLoader()->allCachedResources();
-    DocLoader::DocumentResourceMap::const_iterator end = allResources.end();
-    for (DocLoader::DocumentResourceMap::const_iterator it = allResources.begin(); it != end; ++it) {
+    const CachedResourceLoader::DocumentResourceMap& allResources = document->cachedResourceLoader()->allCachedResources();
+    CachedResourceLoader::DocumentResourceMap::const_iterator end = allResources.end();
+    for (CachedResourceLoader::DocumentResourceMap::const_iterator it = allResources.begin(); it != end; ++it) {
         RefPtr<ArchiveResource> subresource = this->subresource(KURL(ParsedURLString, it->second->url()));
         if (subresource)
             subresources.append(subresource.release());

@@ -56,18 +56,33 @@ static CSSTextCache& cssTextCache()
 // non-refcounted simple type with value semantics. In practice these sharing tricks get similar memory benefits 
 // with less need for refactoring.
 
+inline PassRefPtr<CSSPrimitiveValue> CSSPrimitiveValue::createUncachedIdentifier(int identifier)
+{
+    return adoptRef(new CSSPrimitiveValue(identifier));
+}
+
+inline PassRefPtr<CSSPrimitiveValue> CSSPrimitiveValue::createUncachedColor(unsigned rgbValue)
+{
+    return adoptRef(new CSSPrimitiveValue(rgbValue));
+}
+
+inline PassRefPtr<CSSPrimitiveValue> CSSPrimitiveValue::createUncached(double value, UnitTypes type)
+{
+    return adoptRef(new CSSPrimitiveValue(value, type));
+}
+
 PassRefPtr<CSSPrimitiveValue> CSSPrimitiveValue::createIdentifier(int ident)
 {
     static RefPtr<CSSPrimitiveValue>* identValueCache = new RefPtr<CSSPrimitiveValue>[numCSSValueKeywords];
     if (ident >= 0 && ident < numCSSValueKeywords) {
         RefPtr<CSSPrimitiveValue> primitiveValue = identValueCache[ident];
         if (!primitiveValue) {
-            primitiveValue = adoptRef(new CSSPrimitiveValue(ident));
+            primitiveValue = createUncachedIdentifier(ident);
             identValueCache[ident] = primitiveValue;
         }
         return primitiveValue.release();
     } 
-    return adoptRef(new CSSPrimitiveValue(ident));
+    return createUncachedIdentifier(ident);
 }
 
 PassRefPtr<CSSPrimitiveValue> CSSPrimitiveValue::createColor(unsigned rgbValue)
@@ -76,17 +91,17 @@ PassRefPtr<CSSPrimitiveValue> CSSPrimitiveValue::createColor(unsigned rgbValue)
     static ColorValueCache* colorValueCache = new ColorValueCache;
     // These are the empty and deleted values of the hash table.
     if (rgbValue == Color::transparent) {
-        static CSSPrimitiveValue* colorTransparent = new CSSPrimitiveValue(Color::transparent);
+        static CSSPrimitiveValue* colorTransparent = createUncachedColor(Color::transparent).releaseRef();
         return colorTransparent;
     }
     if (rgbValue == Color::white) {
-        static CSSPrimitiveValue* colorWhite = new CSSPrimitiveValue(Color::white);
+        static CSSPrimitiveValue* colorWhite = createUncachedColor(Color::white).releaseRef();
         return colorWhite;
     }
     RefPtr<CSSPrimitiveValue> primitiveValue = colorValueCache->get(rgbValue);
     if (primitiveValue)
         return primitiveValue.release();
-    primitiveValue = adoptRef(new CSSPrimitiveValue(rgbValue));
+    primitiveValue = createUncachedColor(rgbValue);
     // Just wipe out the cache and start rebuilding when it gets too big.
     const int maxColorCacheSize = 512;
     if (colorValueCache->size() >= maxColorCacheSize)
@@ -109,14 +124,14 @@ PassRefPtr<CSSPrimitiveValue> CSSPrimitiveValue::create(double value, UnitTypes 
         if (value == intValue) {
             RefPtr<CSSPrimitiveValue> primitiveValue = integerValueCache[intValue][type];
             if (!primitiveValue) {
-                primitiveValue = adoptRef(new CSSPrimitiveValue(value, type));
+                primitiveValue = createUncached(value, type);
                 integerValueCache[intValue][type] = primitiveValue;
             }
             return primitiveValue.release();
         }
     }
 
-    return adoptRef(new CSSPrimitiveValue(value, type));
+    return createUncached(value, type);
 }
 
 PassRefPtr<CSSPrimitiveValue> CSSPrimitiveValue::create(const String& value, UnitTypes type)
@@ -290,85 +305,34 @@ void CSSPrimitiveValue::cleanup()
 
 int CSSPrimitiveValue::computeLengthInt(RenderStyle* style, RenderStyle* rootStyle)
 {
-    double result = computeLengthDouble(style, rootStyle);
-
-    // This conversion is imprecise, often resulting in values of, e.g., 44.99998.  We
-    // need to go ahead and round if we're really close to the next integer value.
-    result += result < 0 ? -0.01 : +0.01;
-
-    if (result > INT_MAX || result < INT_MIN)
-        return 0;
-    return static_cast<int>(result);
+    return roundForImpreciseConversion<int, INT_MAX, INT_MIN>(computeLengthDouble(style, rootStyle));
 }
 
 int CSSPrimitiveValue::computeLengthInt(RenderStyle* style, RenderStyle* rootStyle, double multiplier)
 {
-    double result = computeLengthDouble(style, rootStyle, multiplier);
-
-    // This conversion is imprecise, often resulting in values of, e.g., 44.99998.  We
-    // need to go ahead and round if we're really close to the next integer value.
-    result += result < 0 ? -0.01 : +0.01;
-
-    if (result > INT_MAX || result < INT_MIN)
-        return 0;
-    return static_cast<int>(result);
+    return roundForImpreciseConversion<int, INT_MAX, INT_MIN>(computeLengthDouble(style, rootStyle, multiplier));
 }
 
-const int intMaxForLength = 0x7ffffff; // max value for a 28-bit int
-const int intMinForLength = (-0x7ffffff - 1); // min value for a 28-bit int
-
-// Lengths expect an int that is only 28-bits, so we have to check for a different overflow.
+// Lengths expect an int that is only 28-bits, so we have to check for a
+// different overflow.
 int CSSPrimitiveValue::computeLengthIntForLength(RenderStyle* style, RenderStyle* rootStyle)
 {
-    double result = computeLengthDouble(style, rootStyle);
-
-    // This conversion is imprecise, often resulting in values of, e.g., 44.99998.  We
-    // need to go ahead and round if we're really close to the next integer value.
-    result += result < 0 ? -0.01 : +0.01;
-
-    if (result > intMaxForLength || result < intMinForLength)
-        return 0;
-    return static_cast<int>(result);
+    return roundForImpreciseConversion<int, intMaxForLength, intMinForLength>(computeLengthDouble(style, rootStyle));
 }
 
-// Lengths expect an int that is only 28-bits, so we have to check for a different overflow.
 int CSSPrimitiveValue::computeLengthIntForLength(RenderStyle* style, RenderStyle* rootStyle, double multiplier)
 {
-    double result = computeLengthDouble(style, rootStyle, multiplier);
-
-    // This conversion is imprecise, often resulting in values of, e.g., 44.99998.  We
-    // need to go ahead and round if we're really close to the next integer value.
-    result += result < 0 ? -0.01 : +0.01;
-
-    if (result > intMaxForLength || result < intMinForLength)
-        return 0;
-    return static_cast<int>(result);
+    return roundForImpreciseConversion<int, intMaxForLength, intMinForLength>(computeLengthDouble(style, rootStyle, multiplier));
 }
 
 short CSSPrimitiveValue::computeLengthShort(RenderStyle* style, RenderStyle* rootStyle)
 {
-    double result = computeLengthDouble(style, rootStyle);
-
-    // This conversion is imprecise, often resulting in values of, e.g., 44.99998.  We
-    // need to go ahead and round if we're really close to the next integer value.
-    result += result < 0 ? -0.01 : +0.01;
-
-    if (result > SHRT_MAX || result < SHRT_MIN)
-        return 0;
-    return static_cast<short>(result);
+    return roundForImpreciseConversion<short, SHRT_MAX, SHRT_MIN>(computeLengthDouble(style, rootStyle));
 }
 
 short CSSPrimitiveValue::computeLengthShort(RenderStyle* style, RenderStyle* rootStyle, double multiplier)
 {
-    double result = computeLengthDouble(style, rootStyle, multiplier);
-
-    // This conversion is imprecise, often resulting in values of, e.g., 44.99998.  We
-    // need to go ahead and round if we're really close to the next integer value.
-    result += result < 0 ? -0.01 : +0.01;
-
-    if (result > SHRT_MAX || result < SHRT_MIN)
-        return 0;
-    return static_cast<short>(result);
+    return roundForImpreciseConversion<short, SHRT_MAX, SHRT_MIN>(computeLengthDouble(style, rootStyle, multiplier));
 }
 
 float CSSPrimitiveValue::computeLengthFloat(RenderStyle* style, RenderStyle* rootStyle, bool computingFontSize)
@@ -442,19 +406,12 @@ double CSSPrimitiveValue::computeLengthDouble(RenderStyle* style, RenderStyle* r
     return zoomedResult;
 }
 
-void CSSPrimitiveValue::setFloatValue(unsigned short unitType, double floatValue, ExceptionCode& ec)
+void CSSPrimitiveValue::setFloatValue(unsigned short, double, ExceptionCode& ec)
 {
-    ec = 0;
-
-    if (m_type < CSS_NUMBER || m_type > CSS_DIMENSION || unitType < CSS_NUMBER || unitType > CSS_DIMENSION) {
-        ec = INVALID_ACCESS_ERR;
-        return;
-    }
-
-    cleanup();
-
-    m_value.num = floatValue;
-    m_type = unitType;
+    // Keeping values immutable makes optimizations easier and allows sharing of the primitive value objects. 
+    // No other engine supports mutating style through this API. Computed style is always read-only anyway.
+    // Supporting setter would require making primitive value copy-on-write and taking care of style invalidation.
+    ec = NO_MODIFICATION_ALLOWED_ERR;
 }
 
 static double scaleFactorForConversion(unsigned short unitType)
@@ -531,23 +488,12 @@ double CSSPrimitiveValue::getDoubleValue(unsigned short unitType)
 }
 
 
-void CSSPrimitiveValue::setStringValue(unsigned short stringType, const String& stringValue, ExceptionCode& ec)
+void CSSPrimitiveValue::setStringValue(unsigned short, const String&, ExceptionCode& ec)
 {
-    ec = 0;
-
-    if (m_type < CSS_STRING || m_type > CSS_ATTR || stringType < CSS_STRING || stringType > CSS_ATTR) {
-        ec = INVALID_ACCESS_ERR;
-        return;
-    }
-
-    cleanup();
-
-    if (stringType != CSS_IDENT) {
-        m_value.string = stringValue.impl();
-        m_value.string->ref();
-        m_type = stringType;
-    }
-    // FIXME: parse ident
+    // Keeping values immutable makes optimizations easier and allows sharing of the primitive value objects. 
+    // No other engine supports mutating style through this API. Computed style is always read-only anyway.
+    // Supporting setter would require making primitive value copy-on-write and taking care of style invalidation.
+    ec = NO_MODIFICATION_ALLOWED_ERR;
 }
 
 String CSSPrimitiveValue::getStringValue(ExceptionCode& ec) const

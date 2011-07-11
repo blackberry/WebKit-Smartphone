@@ -33,9 +33,7 @@
 #if ENABLE(SVG)
 #include "RenderSVGModelObject.h"
 
-#include "GraphicsContext.h"
-#include "RenderLayer.h"
-#include "RenderView.h"
+#include "RenderSVGResource.h"
 #include "SVGStyledElement.h"
 
 namespace WebCore {
@@ -47,21 +45,21 @@ RenderSVGModelObject::RenderSVGModelObject(SVGStyledElement* node)
 
 IntRect RenderSVGModelObject::clippedOverflowRectForRepaint(RenderBoxModelObject* repaintContainer)
 {
-    return SVGRenderBase::clippedOverflowRectForRepaint(this, repaintContainer);
+    return SVGRenderSupport::clippedOverflowRectForRepaint(this, repaintContainer);
 }
 
 void RenderSVGModelObject::computeRectForRepaint(RenderBoxModelObject* repaintContainer, IntRect& repaintRect, bool fixed)
 {
-    SVGRenderBase::computeRectForRepaint(this, repaintContainer, repaintRect, fixed);
+    SVGRenderSupport::computeRectForRepaint(this, repaintContainer, repaintRect, fixed);
 }
 
 void RenderSVGModelObject::mapLocalToContainer(RenderBoxModelObject* repaintContainer, bool fixed , bool useTransforms, TransformState& transformState) const
 {
-    SVGRenderBase::mapLocalToContainer(this, repaintContainer, fixed, useTransforms, transformState);
+    SVGRenderSupport::mapLocalToContainer(this, repaintContainer, fixed, useTransforms, transformState);
 }
 
 // Copied from RenderBox, this method likely requires further refactoring to work easily for both SVG and CSS Box Model content.
-// FIXME: This may also need to move into SVGRenderBase as the RenderBox version depends
+// FIXME: This may also need to move into SVGRenderSupport as the RenderBox version depends
 // on borderBoundingBox() which SVG RenderBox subclases (like SVGRenderBlock) do not implement.
 IntRect RenderSVGModelObject::outlineBoundsForRepaint(RenderBoxModelObject* repaintContainer, IntPoint*) const
 {
@@ -72,20 +70,40 @@ IntRect RenderSVGModelObject::outlineBoundsForRepaint(RenderBoxModelObject* repa
     return containerRelativeQuad.enclosingBoundingBox();
 }
 
-void RenderSVGModelObject::absoluteRects(Vector<IntRect>& rects, int, int)
+void RenderSVGModelObject::absoluteRects(Vector<IntRect>&, int, int)
 {
-    rects.append(absoluteClippedOverflowRect());
+    // This code path should never be taken for SVG, as we're assuming useTransforms=true everywhere, absoluteQuads should be used.
+    ASSERT_NOT_REACHED();
 }
 
 void RenderSVGModelObject::absoluteQuads(Vector<FloatQuad>& quads)
 {
-    quads.append(absoluteClippedOverflowRect());
+    quads.append(localToAbsoluteQuad(strokeBoundingBox()));
 }
 
 void RenderSVGModelObject::destroy()
 {
-    deregisterFromResources(this);
+    SVGResourcesCache::clientDestroyed(this);
     RenderObject::destroy();
+}
+
+void RenderSVGModelObject::styleWillChange(StyleDifference diff, const RenderStyle* newStyle)
+{
+    if (diff == StyleDifferenceLayout)
+        setNeedsBoundariesUpdate();
+    RenderObject::styleWillChange(diff, newStyle);
+}
+
+void RenderSVGModelObject::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
+{
+    RenderObject::styleDidChange(diff, oldStyle);
+    SVGResourcesCache::clientStyleChanged(this, diff, style());
+}
+
+void RenderSVGModelObject::updateFromElement()
+{
+    RenderObject::updateFromElement();
+    SVGResourcesCache::clientUpdatedFromElement(this, style());
 }
 
 bool RenderSVGModelObject::nodeAtPoint(const HitTestRequest&, HitTestResult&, int, int, int, int, HitTestAction)

@@ -145,8 +145,6 @@ public:
         m_fixed = other.fixed();
         return *this;
     }
-    
-    static IntRect infiniteRect() { return IntRect(INT_MIN/2, INT_MIN/2, INT_MAX, INT_MAX); }
 
 private:
     // The normal operator new is disallowed on all render objects.
@@ -276,7 +274,7 @@ public:
 
     void updateScrollInfoAfterLayout();
 
-    bool scroll(ScrollDirection, ScrollGranularity, float multiplier = 1.0f);
+    bool scroll(ScrollDirection, ScrollGranularity, float multiplier = 1);
     void autoscroll();
 
     void resize(const PlatformMouseEvent&, const IntSize&);
@@ -395,6 +393,7 @@ public:
 
     // Return a cached repaint rect, computed relative to the layer renderer's containerForRepaint.
     IntRect repaintRect() const { return m_repaintRect; }
+    IntRect repaintRectIncludingDescendants() const;
     void computeRepaintRects();
     void updateRepaintRectsAfterScroll(bool fixed = false);
     void setNeedsFullRepaint(bool f = true) { m_needsFullRepaint = f; }
@@ -478,19 +477,19 @@ private:
     typedef unsigned PaintLayerFlags;
 
     void paintLayer(RenderLayer* rootLayer, GraphicsContext*, const IntRect& paintDirtyRect,
-                    PaintBehavior, RenderObject* paintingRoot, RenderObject::OverlapTestRequestMap* = 0,
+                    PaintBehavior, RenderObject* paintingRoot, OverlapTestRequestMap* = 0,
                     PaintLayerFlags = 0);
     void paintList(Vector<RenderLayer*>*, RenderLayer* rootLayer, GraphicsContext* p,
                    const IntRect& paintDirtyRect, PaintBehavior,
-                   RenderObject* paintingRoot, RenderObject::OverlapTestRequestMap*,
+                   RenderObject* paintingRoot, OverlapTestRequestMap*,
                    PaintLayerFlags);
     void paintPaginatedChildLayer(RenderLayer* childLayer, RenderLayer* rootLayer, GraphicsContext*,
                                   const IntRect& paintDirtyRect, PaintBehavior,
-                                  RenderObject* paintingRoot, RenderObject::OverlapTestRequestMap*,
+                                  RenderObject* paintingRoot, OverlapTestRequestMap*,
                                   PaintLayerFlags);
     void paintChildLayerIntoColumns(RenderLayer* childLayer, RenderLayer* rootLayer, GraphicsContext*,
                                     const IntRect& paintDirtyRect, PaintBehavior,
-                                    RenderObject* paintingRoot, RenderObject::OverlapTestRequestMap*,
+                                    RenderObject* paintingRoot, OverlapTestRequestMap*,
                                     PaintLayerFlags, const Vector<RenderLayer*>& columnLayers, size_t columnIndex);
 
     RenderLayer* hitTestLayer(RenderLayer* rootLayer, RenderLayer* containerLayer, const HitTestRequest& request, HitTestResult& result,
@@ -519,6 +518,8 @@ private:
     bool shouldBeNormalFlowOnly() const; 
 
     // ScrollBarClient interface
+    virtual int scrollSize(ScrollbarOrientation orientation) const;
+    virtual void setScrollOffsetFromAnimation(const IntPoint&);
     virtual void valueChanged(Scrollbar*);
     virtual void invalidateScrollbarRect(Scrollbar*, const IntRect&);
     virtual bool isActive() const;

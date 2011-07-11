@@ -48,7 +48,7 @@ CONFIG(QTDIR_build) {
 }
 
 # Pick up 3rdparty libraries from INCLUDE/LIB just like with MSVC
-win32-g++ {
+win32-g++* {
     TMPPATH            = $$quote($$(INCLUDE))
     QMAKE_INCDIR_POST += $$split(TMPPATH,";")
     TMPPATH            = $$quote($$(LIB))
@@ -71,6 +71,7 @@ wince* {
 }
 
 include(pcre/pcre.pri)
+include(wtf/wtf.pri)
 
 SOURCES += \
     API/JSBase.cpp \
@@ -84,6 +85,7 @@ SOURCES += \
     API/JSValueRef.cpp \
     API/OpaqueJSString.cpp \
     assembler/ARMAssembler.cpp \
+    assembler/ARMv7Assembler.cpp \
     assembler/MacroAssemblerARM.cpp \
     bytecode/CodeBlock.cpp \
     bytecode/JumpTable.cpp \
@@ -99,9 +101,7 @@ SOURCES += \
     interpreter/Interpreter.cpp \
     interpreter/RegisterFile.cpp \
     jit/ExecutableAllocatorFixedVMPool.cpp \
-    jit/ExecutableAllocatorPosix.cpp \
-    jit/ExecutableAllocatorSymbian.cpp \
-    jit/ExecutableAllocatorWin.cpp \
+    jit/ExecutableAllocatorBlackBerry.cpp \
     jit/ExecutableAllocator.cpp \
     jit/JITArithmetic.cpp \
     jit/JITArithmetic32_64.cpp \
@@ -114,6 +114,7 @@ SOURCES += \
     jit/JITPropertyAccess32_64.cpp \
     jit/JITStubs.cpp \
     jit/ThunkGenerators.cpp \
+    parser/JSParser.cpp \
     parser/Lexer.cpp \
     parser/Nodes.cpp \
     parser/ParserArena.cpp \
@@ -146,6 +147,8 @@ SOURCES += \
     runtime/Executable.cpp \
     runtime/FunctionConstructor.cpp \
     runtime/FunctionPrototype.cpp \
+    runtime/GCActivityCallback.cpp \
+    runtime/GCHandle.cpp \
     runtime/GetterSetter.cpp \
     runtime/GlobalEvalFunction.cpp \
     runtime/Identifier.cpp \
@@ -177,7 +180,7 @@ SOURCES += \
     runtime/Lookup.cpp \
     runtime/MarkStackPosix.cpp \
     runtime/MarkStackSymbian.cpp \
-    runtime/MarkStackOlympia.cpp \
+    runtime/MarkStackBlackBerry.cpp \
     runtime/MarkStackWin.cpp \
     runtime/MarkStack.cpp \
     runtime/MathObject.cpp \
@@ -197,6 +200,7 @@ SOURCES += \
     runtime/RegExp.cpp \
     runtime/RegExpObject.cpp \
     runtime/RegExpPrototype.cpp \
+    runtime/RegExpCache.cpp \
     runtime/RopeImpl.cpp \
     runtime/ScopeChain.cpp \
     runtime/SmallStrings.cpp \
@@ -207,51 +211,11 @@ SOURCES += \
     runtime/Structure.cpp \
     runtime/TimeoutChecker.cpp \
     runtime/UString.cpp \
-    wtf/Assertions.cpp \
-    wtf/ByteArray.cpp \
-    wtf/CurrentTime.cpp \
-    wtf/DateMath.cpp \
-    wtf/dtoa.cpp \
-    wtf/FastMalloc.cpp \
-    wtf/HashTable.cpp \
-    wtf/MD5.cpp \
-    wtf/MainThread.cpp \
-    wtf/RandomNumber.cpp \
-    wtf/RefCountedLeakCounter.cpp \
-    wtf/symbian/BlockAllocatorSymbian.cpp \
-    wtf/Threading.cpp \
-    wtf/TypeTraits.cpp \
-    wtf/WTFThreadData.cpp \
-    wtf/text/AtomicString.cpp \
-    wtf/text/CString.cpp \
-    wtf/text/StringImpl.cpp \
-    wtf/text/StringStatics.cpp \
-    wtf/text/WTFString.cpp \
-    wtf/unicode/CollatorDefault.cpp \
-    wtf/unicode/icu/CollatorICU.cpp \
-    wtf/unicode/olympia/UnicodeOlympia.cpp \
-    wtf/unicode/olympia/icu.cpp \
-    wtf/unicode/UTF8.cpp \
     yarr/RegexCompiler.cpp \
     yarr/RegexInterpreter.cpp \
     yarr/RegexJIT.cpp
 
-
-isEmpty(OLYMPIA_PTHREAD) {
-    SOURCES += wtf/ThreadingPthreads.cpp \
-               wtf/ThreadIdentifierDataPthreads.cpp
-    HEADERS += wtf/ThreadIdentifierDataPthreads.h
-} else {
-    SOURCES += wtf/ThreadingNone.cpp
-}
-
 # Generated files, simply list them for JavaScriptCore
-SOURCES += \
-    $${JSC_GENERATED_SOURCES_DIR}/Grammar.cpp
-
-!contains(DEFINES, USE_SYSTEM_MALLOC) {
-    SOURCES += wtf/TCSystemAlloc.cpp
-}
 
 win32-*|olympia-* {
     INCLUDEPATH += $$(BBNSLINSTALLPREFIX)/include/webkitplatform

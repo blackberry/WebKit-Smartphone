@@ -488,7 +488,7 @@ bool TextResourceDecoder::checkForCSSCharset(const char* data, size_t len, bool&
                 if (pos == dataEnd)
                     return false;
 
-                int encodingNameLength = pos - dataStart + 1;
+                int encodingNameLength = pos - dataStart;
                 
                 ++pos;
                 if (!skipWhitespace(pos, dataEnd))
@@ -568,7 +568,7 @@ bool TextResourceDecoder::checkForHeadCharset(const char* data, size_t len, bool
         if (xmlDeclarationEnd == pEnd)
             return false;
         // No need for +1, because we have an extra "?" to lose at the end of XML declaration.
-        int len;
+        int len = 0;
         int pos = findXMLEncoding(ptr, xmlDeclarationEnd - ptr, len);
         if (pos != -1)
             setEncoding(findTextEncoding(ptr + pos, len), EncodingFromXMLHeader);
@@ -812,7 +812,7 @@ String TextResourceDecoder::decode(const char* data, size_t len)
     ASSERT(m_encoding.isValid());
 
     if (!m_codec)
-        m_codec.set(newTextCodec(m_encoding).release());
+        m_codec = newTextCodec(m_encoding);
 
     if (m_buffer.isEmpty())
         return m_codec->decode(data + lengthOfBOM, len - lengthOfBOM, false, m_contentType == XML, m_sawError);
@@ -842,7 +842,7 @@ String TextResourceDecoder::flush()
     }
 
     if (!m_codec)
-        m_codec.set(newTextCodec(m_encoding).release());
+        m_codec = newTextCodec(m_encoding);
 
     String result = m_codec->decode(m_buffer.data(), m_buffer.size(), true, m_contentType == XML && !m_useLenientXMLDecoding, m_sawError);
     m_buffer.clear();

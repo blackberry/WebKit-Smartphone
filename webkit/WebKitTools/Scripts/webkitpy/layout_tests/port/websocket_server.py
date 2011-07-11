@@ -60,7 +60,7 @@ _DEFAULT_WSS_PORT = 9323
 
 def url_is_alive(url):
     """Checks to see if we get an http response from |url|.
-    We poll the url 5 times with a 1 second delay.  If we don't
+    We poll the url 20 times with a 0.5 second delay.  If we don't
     get a reply in that time, we give up and assume the httpd
     didn't start properly.
 
@@ -70,7 +70,7 @@ def url_is_alive(url):
       True if the url is alive.
     """
     sleep_time = 0.5
-    wait_time = 5
+    wait_time = 10
     while wait_time > 0:
         try:
             response = urllib.urlopen(url)
@@ -207,12 +207,13 @@ class PyWebSocket(http_server.Lighttpd):
             url = 'http'
         url = url + '://127.0.0.1:%d/' % self._port
         if not url_is_alive(url):
-            fp = codecs.open(output_log, "utf-8")
-            try:
+            if self._process.returncode == None:
+                # FIXME: We should use a non-static Executive for easier
+                # testing.
+                Executive().kill_process(self._process.pid)
+            with codecs.open(output_log, "r", "utf-8") as fp:
                 for line in fp:
                     _log.error(line)
-            finally:
-                fp.close()
             raise PyWebSocketNotStarted(
                 'Failed to start %s server on port %s.' %
                     (self._server_name, self._port))

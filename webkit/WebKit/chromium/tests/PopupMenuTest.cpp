@@ -59,6 +59,8 @@ public:
     {
         m_selectIndex = listIndex;
     }
+    virtual void selectionChanged(unsigned, bool) {}
+    virtual void selectionCleared() {}
 
     virtual String itemText(unsigned listIndex) const
     {
@@ -66,6 +68,8 @@ public:
         str.append(String::number(listIndex));
         return str;
     }
+    virtual String itemLabel(unsigned) const { return String(); }
+    virtual String itemIcon(unsigned) const { return String(); }
     virtual String itemToolTip(unsigned listIndex) const { return itemText(listIndex); }
     virtual String itemAccessibilityText(unsigned listIndex) const { return itemText(listIndex); }
     virtual bool itemIsEnabled(unsigned listIndex) const { return true; }
@@ -105,8 +109,15 @@ public:
 
 class TestWebPopupMenuImpl : public WebPopupMenuImpl {
 public:
-    TestWebPopupMenuImpl(WebWidgetClient* client) : WebPopupMenuImpl(client) { }
+    static PassRefPtr<TestWebPopupMenuImpl> create(WebWidgetClient* client)
+    {
+        return adoptRef(new TestWebPopupMenuImpl(client));
+    }
+
     ~TestWebPopupMenuImpl() { }
+
+private:
+    TestWebPopupMenuImpl(WebWidgetClient* client) : WebPopupMenuImpl(client) { }
 };
 
 class TestWebWidget : public WebWidget {
@@ -117,24 +128,28 @@ public:
     virtual void resize(const WebSize&) { }
     virtual void layout() { }
     virtual void paint(WebCanvas*, const WebRect&) { }
+    virtual void themeChanged() { }
+    virtual void composite(bool finish) { }
     virtual bool handleInputEvent(const WebInputEvent&) { return true; }
     virtual void mouseCaptureLost() { }
     virtual void setFocus(bool) { }
-    virtual bool handleCompositionEvent(WebCompositionCommand command,
-                                        int cursorPosition,
-                                        int targetStart,
-                                        int targetEnd,
-                                        const WebString& text) { return true; }
-    virtual bool queryCompositionStatus(bool* enabled, WebRect* caretBounds) { return true; }
+    virtual bool setComposition(
+        const WebString& text,
+        const WebVector<WebCompositionUnderline>& underlines,
+        int selectionStart,
+        int selectionEnd) { return true; }
+    virtual bool confirmComposition() { return true; }
+    virtual WebTextInputType textInputType() { return WebKit::WebTextInputTypeNone; }
+    virtual WebRect caretOrSelectionBounds() { return WebRect(); }
     virtual void setTextDirection(WebTextDirection) { }
 };
 
 class TestWebViewClient : public WebViewClient {
 public:
-    TestWebViewClient() : m_webPopupMenu(&m_webWidgetClient) { }
+    TestWebViewClient() : m_webPopupMenu(TestWebPopupMenuImpl::create(&m_webWidgetClient)) { }
     ~TestWebViewClient() { }
 
-    virtual WebWidget* createPopupMenu(WebPopupType) { return &m_webPopupMenu; }
+    virtual WebWidget* createPopupMenu(WebPopupType) { return m_webPopupMenu.get(); }
 
     // We need to override this so that the popup menu size is not 0
     // (the layout code checks to see if the popup fits on the screen).
@@ -148,7 +163,7 @@ public:
 
 private:
     TestWebWidgetClient m_webWidgetClient;
-    TestWebPopupMenuImpl m_webPopupMenu;
+    RefPtr<TestWebPopupMenuImpl> m_webPopupMenu;
 };
 
 class TestWebFrameClient : public WebFrameClient {
@@ -165,9 +180,9 @@ public:
 protected:
     virtual void SetUp()
     {
-        m_webView = static_cast<WebViewImpl*>(WebView::create(&m_webviewClient));
+        m_webView = static_cast<WebViewImpl*>(WebView::create(&m_webviewClient, 0));
         m_webView->initializeMainFrame(&m_webFrameClient);
-        m_popupMenu = PopupMenu::create(&m_popupMenuClient);
+        m_popupMenu = adoptRef(new PopupMenuChromium(&m_popupMenuClient));
     }
 
     virtual void TearDown()

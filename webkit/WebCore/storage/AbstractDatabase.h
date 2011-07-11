@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2010 Google Inc. All rights reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,9 +32,105 @@
 
 #if ENABLE(DATABASE)
 
+#include "ExceptionCode.h"
+#include "PlatformString.h"
+#include "SQLiteDatabase.h"
+#include <wtf/Forward.h>
+#include <wtf/ThreadSafeShared.h>
+#ifndef NDEBUG
+#include "SecurityOrigin.h"
+#endif
+
 namespace WebCore {
 
-class AbstractDatabase {
+class DatabaseAuthorizer;
+class ScriptExecutionContext;
+class SecurityOrigin;
+
+class AbstractDatabase : public ThreadSafeShared<AbstractDatabase> {
+public:
+    static bool isAvailable();
+    static void setIsAvailable(bool available);
+
+    virtual ~AbstractDatabase();
+
+    virtual String version() const;
+
+    bool opened() const { return m_opened; }
+    bool isNew() const { return m_new; }
+
+    virtual ScriptExecutionContext* scriptExecutionContext() const;
+    virtual SecurityOrigin* securityOrigin() const;
+    virtual String stringIdentifier() const;
+    virtual String displayName() const;
+    virtual unsigned long estimatedSize() const;
+    virtual String fileName() const;
+    SQLiteDatabase& sqliteDatabase() { return m_sqliteDatabase; }
+
+    unsigned long long maximumSize() const;
+    void incrementalVacuumIfNeeded();
+    void interrupt();
+    bool isInterrupted();
+
+    // FIXME: move all version-related methods to a DatabaseVersionTracker class
+    bool versionMatchesExpected() const;
+    void setExpectedVersion(const String& version);
+    bool getVersionFromDatabase(String& version);
+    bool setVersionInDatabase(const String& version);
+
+    void disableAuthorizer();
+    void enableAuthorizer();
+    void setAuthorizerReadOnly();
+    bool lastActionChangedDatabase();
+    bool lastActionWasInsert();
+    void resetDeletes();
+    bool hadDeletes();
+    void resetAuthorizer();
+
+    virtual void markAsDeletedAndClose() = 0;
+    virtual void closeImmediately() = 0;
+
+#if OS(OLYMPIA)
+    const String& groupName() const { return m_groupName; }
+#endif
+
+protected:
+    AbstractDatabase(ScriptExecutionContext*, const String& name, const String& expectedVersion,
+                     const String& displayName, unsigned long estimatedSize);
+
+    void closeDatabase();
+
+    virtual bool performOpenAndVerify(bool shouldSetVersionInNewDatabase, ExceptionCode& ec);
+
+    static const String& databaseInfoTableName();
+
+    RefPtr<ScriptExecutionContext> m_scriptExecutionContext;
+    RefPtr<SecurityOrigin> m_contextThreadSecurityOrigin;
+
+    String m_name;
+    String m_expectedVersion;
+    String m_displayName;
+    unsigned long m_estimatedSize;
+    String m_filename;
+
+#ifndef NDEBUG
+    String databaseDebugName() const { return m_contextThreadSecurityOrigin->toString() + "::" + m_name; }
+#endif
+
+private:
+    static const String& databaseVersionKey();
+
+    int m_guid;
+    bool m_opened;
+    bool m_new;
+
+    SQLiteDatabase m_sqliteDatabase;
+
+    RefPtr<DatabaseAuthorizer> m_databaseAuthorizer;
+
+#if OS(OLYMPIA)
+    WTF::String m_groupName;
+#endif
 };
 
 } // namespace WebCore

@@ -23,6 +23,7 @@
 #define SelectElement_h
 
 #include "Event.h"
+#include <wtf/Forward.h>
 #include <wtf/Vector.h>
 
 namespace WebCore {
@@ -34,7 +35,6 @@ class FormDataList;
 class HTMLFormElement;
 class KeyboardEvent;
 class SelectElementData;
-class String;
 
 class SelectElement {
 public:
@@ -59,7 +59,7 @@ public:
 
     virtual int selectedIndex() const = 0;
     virtual void setSelectedIndex(int index, bool deselect = true) = 0;
-    virtual void setSelectedIndexByUser(int index, bool deselect = true, bool fireOnChangeNow = false) = 0;
+    virtual void setSelectedIndexByUser(int index, bool deselect = true, bool fireOnChangeNow = false, bool allowMultipleSelection = false) = 0;
 
     virtual void listBoxSelectItem(int listIndex, bool allowMultiplySelections, bool shift, bool fireOnChangeNow = true) = 0;
 
@@ -92,7 +92,7 @@ protected:
     static void parseMultipleAttribute(SelectElementData&, Element*, Attribute*);
     static bool appendFormData(SelectElementData&, Element*, FormDataList&);
     static void reset(SelectElementData&, Element*);
-    static void defaultEventHandler(SelectElementData&, Element*, Event*);
+    static void defaultEventHandler(SelectElementData&, Element*, Event*, HTMLFormElement*);
     static int lastSelectedListIndex(const SelectElementData&, const Element*);
     static void typeAheadFind(SelectElementData&, Element*, KeyboardEvent*);
     static void insertedIntoTree(SelectElementData&, Element*);
@@ -103,8 +103,8 @@ protected:
                                     bool multi, bool shift);
  
 private:
-    static void menuListDefaultEventHandler(SelectElementData&, Element*, Event*);
-    static void listBoxDefaultEventHandler(SelectElementData&, Element*, Event*);
+    static void menuListDefaultEventHandler(SelectElementData&, Element*, Event*, HTMLFormElement*);
+    static void listBoxDefaultEventHandler(SelectElementData&, Element*, Event*, HTMLFormElement*);
     static void setOptionsChangedOnRenderer(SelectElementData&, Element*);
 };
 

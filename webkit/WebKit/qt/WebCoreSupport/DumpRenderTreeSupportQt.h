@@ -29,6 +29,10 @@
 class QWebElement;
 class QWebFrame;
 class QWebPage;
+class QWebHistoryItem;
+class QWebScriptWorld;
+
+extern QMap<int, QWebScriptWorld*> m_worldMap;
 
 class QWEBKIT_EXPORT DumpRenderTreeSupportQt {
 
@@ -57,11 +61,12 @@ public:
     static void setMediaType(QWebFrame* qframe, const QString& type);
     static void setDumpRenderTreeModeEnabled(bool b);
 
-    static void evaluateScriptInIsolatedWorld(QWebFrame* frame, int worldId, const QString& script);
     static void garbageCollectorCollect();
     static void garbageCollectorCollectOnAlternateThread(bool waitUntilDone);
     static void setJavaScriptProfilingEnabled(QWebFrame*, bool enabled);
     static int javaScriptObjectsCount();
+    static void clearScriptWorlds();
+    static void evaluateScriptInIsolatedWorld(QWebFrame* frame, int worldID, const QString& script);
 
     static void setTimelineProfilingEnabled(QWebPage*, bool enabled);
     static void webInspectorExecuteScript(QWebPage* page, long callId, const QString& script);
@@ -74,6 +79,8 @@ public:
     static void clearFrameName(QWebFrame* frame);
     static void overwritePluginDirectories();
     static int numberOfActiveAnimations(QWebFrame*);
+    static void suspendAnimations(QWebFrame*);
+    static void resumeAnimations(QWebFrame*);
     static int numberOfPages(QWebFrame* frame, float width, float height);
     static int pageNumberForElementById(QWebFrame* frame, const QString& id, float width, float height);
     static bool hasDocumentElement(QWebFrame* frame);
@@ -84,6 +91,9 @@ public:
     static void removeWhiteListAccessFromOrigin(const QString& sourceOrigin, const QString& destinationProtocol, const QString& destinationHost, bool allowDestinationSubdomains);
     static void resetOriginAccessWhiteLists();
 
+    static void setMockGeolocationPosition(double latitude, double longitude, double accuracy);
+    static void setMockGeolocationError(int errorCode, const QString& message);
+
     static int workerThreadCount();
 
     static QString markerTextForListItem(const QWebElement& listItem);
@@ -91,16 +101,34 @@ public:
 
     static void dumpFrameLoader(bool b);
     static void dumpResourceLoadCallbacks(bool b);
+    static void dumpResourceResponseMIMETypes(bool b);
     static void dumpResourceLoadCallbacksPath(const QString& path);
     static void setWillSendRequestReturnsNullOnRedirect(bool b);
     static void setWillSendRequestReturnsNull(bool b);
     static void setWillSendRequestClearHeaders(const QStringList& headers);
+
+    static void setDeferMainResourceDataLoad(bool b);
 
     static void dumpEditingCallbacks(bool b);
     static void dumpSetAcceptsEditing(bool b);
 
     static void dumpNotification(bool b);
 
+    static QMap<QString, QWebHistoryItem> getChildHistoryItems(const QWebHistoryItem& historyItem);
+    static bool isTargetItem(const QWebHistoryItem& historyItem);
+    static QString historyItemTarget(const QWebHistoryItem& historyItem);
+
+    static bool shouldClose(QWebFrame* frame);
+
+    static void setCustomPolicyDelegate(bool enabled, bool permissive);
+
+    static bool isPageBoxVisible(QWebFrame* frame, int pageIndex);
+
+    static QString pageSizeAndMarginsInPixels(QWebFrame* frame, int pageIndex, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft);
+    static QString pageProperty(QWebFrame* frame, const QString& propertyName, int pageNumber);
+    static void addUserStyleSheet(QWebPage* page, const QString& sourceCode);
+    static void simulateDesktopNotificationClick(const QString& title);
+    static QString viewportAsText(QWebPage*, const QSize&);
 };
 
 #endif

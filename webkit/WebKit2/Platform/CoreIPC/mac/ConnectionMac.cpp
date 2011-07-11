@@ -27,6 +27,7 @@
 
 #include "CoreIPCMessageKinds.h"
 #include "MachPort.h"
+#include "MachUtilities.h"
 #include "RunLoop.h"
 #include <mach/vm_map.h>
 
@@ -36,6 +37,10 @@ namespace CoreIPC {
 
 static const size_t inlineMessageMaxSize = 4096;
 
+enum {
+    MessageBodyIsOOL = 1 << 31
+};
+    
 void Connection::platformInvalidate()
 {
     if (!m_isConnected)
@@ -78,16 +83,18 @@ bool Connection::open()
         // Create the receive port.
         mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &m_receivePort);
 
+        m_isConnected = true;
+        
         // Send the initialize message, which contains a send right for the server to use.
         send(CoreIPCMessage::InitializeConnection, 0, MachPort(m_receivePort, MACH_MSG_TYPE_MAKE_SEND));
 
-        // We're now connected.
-        m_isConnected = true;
-        
         // Set the dead name handler for our send port.
         initializeDeadNameSource();
     }
     
+    // Change the message queue length for the receive port.
+    setMachPortQueueLength(m_receivePort, MACH_PORT_QLIMIT_LARGE);
+
     // Register the data available handler.
     m_connectionQueue.registerMachPortEventHandler(m_receivePort, WorkQueue::MachPortDataAvailable, 
                                                    WorkItem::create(this, &Connection::receiveSourceEventHandler));
@@ -108,7 +115,12 @@ static inline size_t machMessageSize(size_t bodySize, size_t numberOfPortDescrip
     return round_msg(size);
 }
 
-void Connection::sendOutgoingMessage(MessageID messageID, auto_ptr<ArgumentEncoder> arguments)
+bool Connection::platformCanSendOutgoingMessages() const
+{
+    return true;
+}
+
+bool Connection::sendOutgoingMessage(MessageID messageID, PassOwnPtr<ArgumentEncoder> arguments)
 {
     Vector<Attachment> attachments = arguments->releaseAttachments();
     
@@ -123,7 +135,6 @@ void Connection::sendOutgoingMessage(MessageID messageID, auto_ptr<ArgumentEncod
     }
     
     size_t messageSize = machMessageSize(arguments->bufferSize(), numberOfPortDescriptors, numberOfOOLMemoryDescriptors);
-    
     char buffer[inlineMessageMaxSize];
 
     bool messageBodyIsOOL = false;
@@ -133,8 +144,6 @@ void Connection::sendOutgoingMessage(MessageID messageID, auto_ptr<ArgumentEncod
         attachments.append(Attachment(arguments->buffer(), arguments->bufferSize(), MACH_MSG_VIRTUAL_COPY, false));
         numberOfOOLMemoryDescriptors++;
         messageSize = machMessageSize(0, numberOfPortDescriptors, numberOfOOLMemoryDescriptors);
-
-        messageID = messageID.copyAddingFlags(MessageID::MessageBodyIsOOL);
     }
 
     bool isComplex = (numberOfPortDescriptors + numberOfOOLMemoryDescriptors > 0);
@@ -145,6 +154,8 @@ void Connection::sendOutgoingMessage(MessageID messageID, auto_ptr<ArgumentEncod
     header->msgh_remote_port = m_sendPort;
     header->msgh_local_port = MACH_PORT_NULL;
     header->msgh_id = messageID.toInt();
+    if (messageBodyIsOOL)
+        header->msgh_id |= MessageBodyIsOOL;
 
     uint8_t* messageData;
 
@@ -193,8 +204,9 @@ void Connection::sendOutgoingMessage(MessageID messageID, auto_ptr<ArgumentEncod
     kern_return_t kr = mach_msg(header, MACH_SEND_MSG, messageSize, 0, MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
     if (kr != KERN_SUCCESS) {
         // FIXME: What should we do here?
-        return;
     }
+
+    return true;
 }
 
 void Connection::initializeDeadNameSource()
@@ -202,17 +214,17 @@ void Connection::initializeDeadNameSource()
     m_connectionQueue.registerMachPortEventHandler(m_sendPort, WorkQueue::MachPortDeadNameNotification, WorkItem::create(this, &Connection::connectionDidClose));
 }
 
-static auto_ptr<ArgumentDecoder> createArgumentDecoder(mach_msg_header_t* header)
+static PassOwnPtr<ArgumentDecoder> createArgumentDecoder(mach_msg_header_t* header)
 {
     if (!(header->msgh_bits & MACH_MSGH_BITS_COMPLEX)) {
         // We have a simple message.
         size_t bodySize = header->msgh_size - sizeof(mach_msg_header_t);
         uint8_t* body = reinterpret_cast<uint8_t*>(header + 1);
         
-        return auto_ptr<ArgumentDecoder>(new ArgumentDecoder(body, bodySize));
+        return adoptPtr(new ArgumentDecoder(body, bodySize));
     }
 
-    MessageID messageID = MessageID::fromInt(header->msgh_id);
+    bool messageBodyIsOOL = header->msgh_id & MessageBodyIsOOL;
 
     mach_msg_body_t* body = reinterpret_cast<mach_msg_body_t*>(header + 1);
     mach_msg_size_t numDescriptors = body->msgh_descriptor_count;
@@ -224,7 +236,7 @@ static auto_ptr<ArgumentDecoder> createArgumentDecoder(mach_msg_header_t* header
 
     // If the message body was sent out-of-line, don't treat the last descriptor
     // as an attachment, since it is really the message body.
-    if (messageID.isMessageBodyOOL())
+    if (messageBodyIsOOL)
         --numDescriptors;
 
     for (mach_msg_size_t i = 0; i < numDescriptors; ++i) {
@@ -245,7 +257,7 @@ static auto_ptr<ArgumentDecoder> createArgumentDecoder(mach_msg_header_t* header
         }
     }
 
-    if (messageID.isMessageBodyOOL()) {
+    if (messageBodyIsOOL) {
         mach_msg_descriptor_t* descriptor = reinterpret_cast<mach_msg_descriptor_t*>(descriptorData);
         ASSERT(descriptor->type.type == MACH_MSG_OOL_DESCRIPTOR);
         Attachment messageBodyAttachment(descriptor->out_of_line.address, descriptor->out_of_line.size,
@@ -263,35 +275,46 @@ static auto_ptr<ArgumentDecoder> createArgumentDecoder(mach_msg_header_t* header
 
         vm_deallocate(mach_task_self(), reinterpret_cast<vm_address_t>(messageBodyAttachment.address()), messageBodyAttachment.size());
 
-        return auto_ptr<ArgumentDecoder>(argumentDecoder);
+        return adoptPtr(argumentDecoder);
     }
 
     uint8_t* messageBody = descriptorData;
     size_t messageBodySize = header->msgh_size - (descriptorData - reinterpret_cast<uint8_t*>(header));
 
-    return auto_ptr<ArgumentDecoder>(new ArgumentDecoder(messageBody, messageBodySize, attachments));
+    return adoptPtr(new ArgumentDecoder(messageBody, messageBodySize, attachments));
 }
 
 void Connection::receiveSourceEventHandler()
 {
-    char buffer[inlineMessageMaxSize];
+    // The receive buffer size should always include the maximum trailer size.
+    static const size_t receiveBufferSize = inlineMessageMaxSize + MAX_TRAILER_SIZE;
+
+    Vector<char, receiveBufferSize> buffer(receiveBufferSize);
     
-    mach_msg_header_t* header = reinterpret_cast<mach_msg_header_t*>(&buffer);
+    mach_msg_header_t* header = reinterpret_cast<mach_msg_header_t*>(buffer.data());
     
-    kern_return_t kr = mach_msg(header, MACH_RCV_MSG | MACH_RCV_LARGE | MACH_RCV_TIMEOUT, 0, sizeof(buffer), m_receivePort, 0, MACH_PORT_NULL);
+    kern_return_t kr = mach_msg(header, MACH_RCV_MSG | MACH_RCV_LARGE | MACH_RCV_TIMEOUT, 0, buffer.size(), m_receivePort, 0, MACH_PORT_NULL);
     if (kr == MACH_RCV_TIMED_OUT)
         return;
 
-    if (kr != MACH_MSG_SUCCESS) {
+    if (kr == MACH_RCV_TOO_LARGE) {
+        // The message was too large, resize the buffer and try again.
+        buffer.resize(header->msgh_size + MAX_TRAILER_SIZE);
+        
+        header = reinterpret_cast<mach_msg_header_t*>(buffer.data());
+        
+        kr = mach_msg(header, MACH_RCV_MSG | MACH_RCV_LARGE | MACH_RCV_TIMEOUT, 0, buffer.size(), m_receivePort, 0, MACH_PORT_NULL);
+        ASSERT(kr != MACH_RCV_TOO_LARGE);
+    }
 
+    if (kr != MACH_MSG_SUCCESS) {
         ASSERT_NOT_REACHED();
-        // FIXME: Handle MACH_RCV_MSG_TOO_LARGE.
         return;
     }
-    
+
     MessageID messageID = MessageID::fromInt(header->msgh_id);
-    std::auto_ptr<ArgumentDecoder> arguments = createArgumentDecoder(header);
-    ASSERT(arguments.get());
+    OwnPtr<ArgumentDecoder> arguments = createArgumentDecoder(header);
+    ASSERT(arguments);
 
     if (messageID == MessageID(CoreIPCMessage::InitializeConnection)) {
         ASSERT(m_isServer);
@@ -318,7 +341,7 @@ void Connection::receiveSourceEventHandler()
         return;
     }
     
-    processIncomingMessage(messageID, arguments);
+    processIncomingMessage(messageID, arguments.release());
 }    
 
 } // namespace CoreIPC

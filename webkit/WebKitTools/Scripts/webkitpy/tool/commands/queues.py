@@ -42,7 +42,7 @@ from webkitpy.tool.commands.stepsequence import StepSequenceErrorHandler
 from webkitpy.tool.bot.patchcollection import PersistentPatchCollection, PersistentPatchCollectionDelegate
 from webkitpy.tool.bot.queueengine import QueueEngine, QueueEngineDelegate
 from webkitpy.tool.grammar import pluralize
-from webkitpy.tool.multicommandtool import Command
+from webkitpy.tool.multicommandtool import Command, TryAgain
 
 class AbstractQueue(Command, QueueEngineDelegate):
     watchers = [
@@ -120,15 +120,24 @@ class AbstractQueue(Command, QueueEngineDelegate):
         return engine(self.name, self, self.tool.wakeup_event).run()
 
     @classmethod
-    def _update_status_for_script_error(cls, tool, state, script_error, is_error=False):
-        message = script_error.message
-        if is_error:
-            message = "Error: %s" % message
-        output = script_error.message_with_output(output_limit=1024*1024) # 1MB
+    def _log_from_script_error_for_upload(cls, script_error, output_limit=None):
+        # We have seen request timeouts with app engine due to large
+        # log uploads.  Trying only the last 512k.
+        if not output_limit:
+            output_limit = 512 * 1024  # 512k
+        output = script_error.message_with_output(output_limit=output_limit)
         # We pre-encode the string to a byte array before passing it
         # to status_server, because ClientForm (part of mechanize)
         # wants a file-like object with pre-encoded data.
-        return tool.status_server.update_status(cls.name, message, state["patch"], StringIO(output.encode("utf-8")))
+        return StringIO(output.encode("utf-8"))
+
+    @classmethod
+    def _update_status_for_script_error(cls, tool, state, script_error, is_error=False):
+        message = str(script_error)
+        if is_error:
+            message = "Error: %s" % message
+        failure_log = cls._log_from_script_error_for_upload(script_error)
+        return tool.status_server.update_status(cls.name, message, state["patch"], failure_log)
 
 
 class AbstractPatchQueue(AbstractQueue):
@@ -184,12 +193,7 @@ class CommitQueue(AbstractPatchQueue, StepSequenceErrorHandler):
         patches = self._validate_patches_in_commit_queue()
         patches = sorted(patches, self._patch_cmp)
         self._update_work_items([patch.id() for patch in patches])
-        builders_are_green = self._builders_are_green()
-        if not builders_are_green:
-            patches = filter(lambda patch: patch.is_rollout(), patches)
         if not patches:
-            queue_text = "queue" if builders_are_green else "rollout queue"
-            self._update_status("Empty %s" % queue_text)
             return None
         # Only bother logging if we have patches in the queue.
         self.log_progress([patch.id() for patch in patches])
@@ -207,41 +211,23 @@ class CommitQueue(AbstractPatchQueue, StepSequenceErrorHandler):
                 "--build-style=both",
                 "--quiet"])
         except ScriptError, e:
-            self._update_status("Unable to successfully build and test", None)
-            return False
-        return True
-
-    def _builders_are_green(self):
-        red_builders_names = self.tool.buildbot.red_core_builders_names()
-        if red_builders_names:
-            red_builders_names = map(lambda name: "\"%s\"" % name, red_builders_names) # Add quotes around the names.
-            self._update_status("Builders [%s] are red. See http://build.webkit.org" % ", ".join(red_builders_names), None)
+            failure_log = self._log_from_script_error_for_upload(e)
+            self._update_status("Unable to successfully do a clean build and test", results_file=failure_log)
             return False
         return True
 
     def should_proceed_with_work_item(self, patch):
-        if not patch.is_rollout():
-            if not self._builders_are_green():
-                return False
         patch_text = "rollout patch" if patch.is_rollout() else "patch"
         self._update_status("Landing %s" % patch_text, patch)
         return True
 
     def _land(self, patch, first_run=False):
         try:
-            # We need to check the builders, unless we're trying to land a
-            # rollout (in which case the builders are probably red.)
-            if not patch.is_rollout() and not self._builders_are_green():
-                # We return true here because we want to return to the main
-                # QueueEngine loop as quickly as possible.
-                return True
             args = [
                 "land-attachment",
                 "--force-clean",
                 "--build",
                 "--non-interactive",
-                # The master process is responsible for checking the status
-                # of the builders (see above call to _builders_are_green).
                 "--ignore-builders",
                 "--build-style=both",
                 "--quiet",
@@ -265,6 +251,8 @@ class CommitQueue(AbstractPatchQueue, StepSequenceErrorHandler):
             self._did_pass(patch)
             return True
         except ScriptError, e:
+            failure_log = self._log_from_script_error_for_upload(e)
+            self._update_status("Unable to land patch", patch=patch, results_file=failure_log)
             if first_run:
                 return False
             self._did_fail(patch)
@@ -273,11 +261,13 @@ class CommitQueue(AbstractPatchQueue, StepSequenceErrorHandler):
     def process_work_item(self, patch):
         self._cc_watchers(patch.bug_id())
         if not self._land(patch, first_run=True):
+            self._update_status("Doing a clean build as a sanity check", patch)
             # The patch failed to land, but the bots were green. It's possible
             # that the bots were behind. To check that case, we try to build and
             # test ourselves.
             if not self._can_build_and_test():
                 return False
+            self._update_status("Clean build succeeded, trying patch again", patch)
             # Hum, looks like the patch is actually bad. Of course, we could
             # have been bitten by a flaky test the first time around.  We try
             # to land again.  If it fails a second time, we're pretty sure its
@@ -289,7 +279,6 @@ class CommitQueue(AbstractPatchQueue, StepSequenceErrorHandler):
         self.committer_validator.reject_patch_from_commit_queue(patch.id(), message)
 
     # StepSequenceErrorHandler methods
-
     @staticmethod
     def _error_message_for_bug(tool, status_id, script_error):
         if not script_error.output:
@@ -302,6 +291,64 @@ class CommitQueue(AbstractPatchQueue, StepSequenceErrorHandler):
         status_id = cls._update_status_for_script_error(tool, state, script_error)
         validator = CommitterValidator(tool.bugs)
         validator.reject_patch_from_commit_queue(state["patch"].id(), cls._error_message_for_bug(tool, status_id, script_error))
+
+    @classmethod
+    def handle_checkout_needs_update(cls, tool, state, options, error):
+        message = "Tests passed, but commit failed (checkout out of date).  Updating, then landing without building or re-running tests."
+        tool.status_server.update_status(cls.name, message, state["patch"])
+        # The only time when we find out that out checkout needs update is
+        # when we were ready to actually pull the trigger and land the patch.
+        # Rather than spinning in the master process, we retry without
+        # building or testing, which is much faster.
+        options.build = False
+        options.test = False
+        options.update = True
+        raise TryAgain()
+
+
+class RietveldUploadQueue(AbstractPatchQueue, StepSequenceErrorHandler):
+    name = "rietveld-upload-queue"
+
+    def __init__(self):
+        AbstractPatchQueue.__init__(self)
+
+    # AbstractPatchQueue methods
+
+    def next_work_item(self):
+        patch_id = self.tool.bugs.queries.fetch_first_patch_from_rietveld_queue()
+        if patch_id:
+            return patch_id
+        self._update_status("Empty queue")
+
+    def should_proceed_with_work_item(self, patch):
+        self._update_status("Uploading patch", patch)
+        return True
+
+    def process_work_item(self, patch):
+        try:
+            self.run_webkit_patch(["post-attachment-to-rietveld", "--force-clean", "--non-interactive", "--parent-command=rietveld-upload-queue", patch.id()])
+            self._did_pass(patch)
+            return True
+        except ScriptError, e:
+            if e.exit_code != QueueEngine.handled_error_code:
+                self._did_fail(patch)
+            raise e
+
+    @classmethod
+    def _reject_patch(cls, tool, patch_id):
+        tool.bugs.set_flag_on_attachment(patch_id, "in-rietveld", "-")
+
+    def handle_unexpected_error(self, patch, message):
+        log(message)
+        self._reject_patch(self.tool, patch.id())
+
+    # StepSequenceErrorHandler methods
+
+    @classmethod
+    def handle_script_error(cls, tool, state, script_error):
+        log(script_error.message_with_output())
+        cls._update_status_for_script_error(tool, state, script_error)
+        cls._reject_patch(tool, state["patch"].id())
 
 
 class AbstractReviewQueue(AbstractPatchQueue, PersistentPatchCollectionDelegate, StepSequenceErrorHandler):
@@ -335,7 +382,6 @@ class AbstractReviewQueue(AbstractPatchQueue, PersistentPatchCollectionDelegate,
         patch_id = self._patches.next()
         if patch_id:
             return self.tool.bugs.fetch_attachment(patch_id)
-        self._update_status("Empty queue")
 
     def should_proceed_with_work_item(self, patch):
         raise NotImplementedError, "subclasses must implement"

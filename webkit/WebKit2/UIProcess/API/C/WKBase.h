@@ -26,22 +26,47 @@
 #ifndef WKBase_h
 #define WKBase_h
 
+#include <stdint.h>
+
 #if defined(WIN32) || defined(_WIN32)
 #include <WebKit2/WKBaseWin.h>
 #endif
 
-typedef struct OpaqueWKContext* WKContextRef;
-typedef struct OpaqueWKFrame* WKFrameRef;
-typedef struct OpaqueWKFramePolicyListener* WKFramePolicyListenerRef;
-typedef struct OpaqueWKNavigationDataRef* WKNavigationDataRef;
-typedef struct OpaqueWKPage* WKPageRef;
-typedef struct OpaqueWKPageNamespace* WKPageNamespaceRef;
-typedef struct OpaqueWKPreferencesRef* WKPreferencesRef;
-typedef struct OpaqueWKStringRef* WKStringRef;
-typedef struct OpaqueWKURLRef* WKURLRef;
+typedef uint32_t WKTypeID;
+typedef const void* WKTypeRef;
 
-#if defined(WIN32) || defined(_WIN32)
-#if BUILDING_WEBKIT2
+typedef const struct OpaqueWKArray* WKArrayRef;
+typedef struct OpaqueWKArray* WKMutableArrayRef;
+
+typedef const struct OpaqueWKDictionary* WKDictionaryRef;
+typedef struct OpaqueWKDictionary* WKMutableDictionaryRef;
+
+typedef const struct OpaqueWKBackForwardList* WKBackForwardListRef;
+typedef const struct OpaqueWKBackForwardListItem* WKBackForwardListItemRef;
+typedef const struct OpaqueWKContext* WKContextRef;
+typedef const struct OpaqueWKData* WKDataRef;
+typedef const struct OpaqueWKDouble* WKDoubleRef;
+typedef const struct OpaqueWKError* WKErrorRef;
+typedef const struct OpaqueWKFormSubmissionListener* WKFormSubmissionListenerRef;
+typedef const struct OpaqueWKFrame* WKFrameRef;
+typedef const struct OpaqueWKFramePolicyListener* WKFramePolicyListenerRef;
+typedef const struct OpaqueWKNavigationData* WKNavigationDataRef;
+typedef const struct OpaqueWKPage* WKPageRef;
+typedef const struct OpaqueWKPageNamespace* WKPageNamespaceRef;
+typedef const struct OpaqueWKPreferences* WKPreferencesRef;
+typedef const struct OpaqueWKSerializedScriptValue* WKSerializedScriptValueRef;
+typedef const struct OpaqueWKString* WKStringRef;
+typedef const struct OpaqueWKURL* WKURLRef;
+typedef const struct OpaqueWKURLRequest* WKURLRequestRef;
+typedef const struct OpaqueWKURLResponse* WKURLResponseRef;
+
+#undef WK_EXPORT
+#if defined(WK_NO_EXPORT)
+#define WK_EXPORT
+#elif defined(__GNUC__)
+#define WK_EXPORT __attribute__((visibility("default")))
+#elif defined(WIN32) || defined(_WIN32)
+#if BUILDING_WEBKIT
 #define WK_EXPORT __declspec(dllexport)
 #else
 #define WK_EXPORT __declspec(dllimport)

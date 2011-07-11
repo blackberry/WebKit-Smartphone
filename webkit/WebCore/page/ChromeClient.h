@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006, 2007, 2008, 2009 Apple, Inc. All rights reserved.
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
@@ -27,7 +28,10 @@
 #include "GraphicsContext.h"
 #include "HTMLParserQuirks.h"
 #include "HostWindow.h"
+#include "PopupMenu.h"
+#include "PopupMenuClient.h"
 #include "ScrollTypes.h"
+#include "SearchPopupMenu.h"
 #include <wtf/Forward.h>
 #include <wtf/PassOwnPtr.h>
 #include <wtf/Vector.h>
@@ -43,7 +47,7 @@ class NSResponder;
 
 namespace WebCore {
 
-    class AtomicString;
+    class Element;
     class FileChooser;
     class FloatRect;
     class Frame;
@@ -53,7 +57,9 @@ namespace WebCore {
     class IntRect;
     class Node;
     class Page;
-    class String;
+    class SecurityOrigin;
+    class SharedGraphicsContext3D;
+    class PopupMenuClient;
     class Widget;
 
     struct FrameLoadRequest;
@@ -130,9 +136,6 @@ namespace WebCore {
         virtual bool shouldInterruptJavaScript() = 0;
         virtual bool tabsToLinks() const = 0;
 
-        virtual void registerProtocolHandler(const String&, const String&, const String&, const String&) { }
-        virtual void registerContentHandler(const String&, const String&, const String&, const String&) { }
-
         virtual IntRect windowResizerRect() const = 0;
 
         // Methods used by HostWindow.
@@ -143,16 +146,20 @@ namespace WebCore {
         virtual IntPoint screenToWindow(const IntPoint&) const = 0;
         virtual IntRect windowToScreen(const IntRect&) const = 0;
         virtual PlatformPageClient platformPageClient() const = 0;
-        virtual void contentsSizeChanged(Frame*, const IntSize&) const = 0;
-        virtual void scrollRectIntoView(const IntRect&, const ScrollView*) const = 0; // Currently only Mac has a non empty implementation.
+        virtual void scrollbarsModeDidChange() const = 0;
+        virtual void setCursor(const Cursor&) = 0;
         // End methods used by HostWindow.
 
-        virtual void scrollbarsModeDidChange() const = 0;
+        virtual void contentsSizeChanged(Frame*, const IntSize&) const = 0;
+        virtual void scrollRectIntoView(const IntRect&, const ScrollView*) const = 0; // Currently only Mac has a non empty implementation.
+       
+        virtual bool shouldMissingPluginMessageBeButton() const { return false; }
+        virtual void missingPluginButtonClicked(Element*) const { }
         virtual void mouseDidMoveOverElement(const HitTestResult&, unsigned modifierFlags) = 0;
 
         virtual void setToolTip(const String&, TextDirection) = 0;
 
-        virtual void didReceiveViewportArguments(Frame*, const ViewportArguments&) { }
+        virtual void didReceiveViewportArguments(Frame*, const ViewportArguments&) const { }
 
         virtual void print(Frame*) = 0;
 
@@ -167,6 +174,13 @@ namespace WebCore {
         // The chrome client would need to take some action such as evicting some
         // old caches.
         virtual void reachedMaxAppCacheSize(int64_t spaceNeeded) = 0;
+
+        // Callback invoked when the application cache origin quota is reached. This
+        // means that the resources attempting to be cached via the manifest are
+        // more than allowed on this origin. This callback allows the chrome client
+        // to take action, such as prompting the user to ask to increase the quota
+        // for this origin.
+        virtual void reachedApplicationCacheOriginQuota(SecurityOrigin* origin) = 0;
 #endif
 
 #if ENABLE(DASHBOARD_SUPPORT)
@@ -200,8 +214,6 @@ namespace WebCore {
         // Asynchronous request to load an icon for specified filenames.
         virtual void chooseIconForFiles(const Vector<String>&, FileChooser*) = 0;
 
-        virtual bool setCursor(PlatformCursorHandle) = 0;
-
         // Notification that the given form element has changed. This function
         // will be called frequently, so handling should be very fast.
         virtual void formStateDidChange(const Node*) = 0;
@@ -225,10 +237,18 @@ namespace WebCore {
         virtual bool allowsAcceleratedCompositing() const { return true; }
 #endif
 
+        virtual SharedGraphicsContext3D* getSharedGraphicsContext3D() { return 0; }
+
         virtual bool supportsFullscreenForNode(const Node*) { return false; }
         virtual void enterFullscreenForNode(Node*) { }
         virtual void exitFullscreenForNode(Node*) { }
 
+#if ENABLE(FULLSCREEN_API)
+        virtual bool supportsFullScreenForElement(const Element*) { return false; }
+        virtual void enterFullScreenForElement(Element*) { }
+        virtual void exitFullScreenForElement(Element*) { }
+#endif
+        
 #if ENABLE(TILED_BACKING_STORE)
         virtual IntRect visibleRectForTiledBackingStore() const { return IntRect(); }
 #endif
@@ -242,17 +262,17 @@ namespace WebCore {
         virtual void willPopUpMenu(NSMenu *) { }
 #endif
 
+#if PLATFORM(WIN)
+        virtual void setLastSetCursorToCurrentCursor() = 0;
+#endif
+
 #if ENABLE(TOUCH_EVENTS)
         virtual void needTouchEvents(bool) = 0;
 #endif
 
-#if ENABLE(WIDGETS_10_SUPPORT)
-        virtual bool isWindowed() { return false; }
-        virtual bool isFloating() { return false; }
-        virtual bool isFullscreen() { return false; }
-        virtual bool isMaximized() { return false; }
-        virtual bool isMinimized() { return false; }
-#endif
+        virtual bool selectItemWritingDirectionIsNatural() = 0;
+        virtual PassRefPtr<PopupMenu> createPopupMenu(PopupMenuClient*) const = 0;
+        virtual PassRefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient*) const = 0;
 
 #if PLATFORM(OLYMPIA)
         virtual void layoutFinished(Frame*) const = 0;

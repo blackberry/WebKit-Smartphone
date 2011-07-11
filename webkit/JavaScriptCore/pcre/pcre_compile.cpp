@@ -48,6 +48,8 @@ supporting internal functions that are not used by other modules. */
 #include <string.h>
 #include <wtf/ASCIICType.h>
 #include <wtf/FastMalloc.h>
+#include <wtf/FixedArray.h>
+#include <wtf/StdLibExtras.h>
 
 using namespace WTF;
 
@@ -2037,8 +2039,8 @@ static int calculateCompiledPatternLength(const UChar* pattern, int patternLengt
     int branch_extra = 0;
     int lastitemlength = 0;
     unsigned brastackptr = 0;
-    int brastack[BRASTACK_SIZE];
-    unsigned char bralenstack[BRASTACK_SIZE];
+    FixedArray<int, BRASTACK_SIZE> brastack;
+    FixedArray<unsigned char, BRASTACK_SIZE> bralenstack;
     int bracount = 0;
     
     const UChar* ptr = (const UChar*)(pattern - 1);
@@ -2591,7 +2593,7 @@ JSRegExp* jsRegExpCompile(const UChar* pattern, int patternLength,
     size_t stringOffset = (size + sizeof(UChar) - 1) / sizeof(UChar) * sizeof(UChar);
     size = stringOffset + patternLength * sizeof(UChar);
 #endif
-    JSRegExp* re = reinterpret_cast<JSRegExp*>(new char[size]);
+    JSRegExp* re = reinterpret_cast_ptr<JSRegExp*>(new char[size]);
     
     if (!re)
         return returnError(ERR13, errorPtr);

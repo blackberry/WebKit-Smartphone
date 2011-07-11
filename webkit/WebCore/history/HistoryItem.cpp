@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2005, 2006, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,7 +38,7 @@
 
 namespace WebCore {
 
-static long long generateDocumentSequenceNumber()
+static long long generateSequenceNumber()
 {
     // Initialize to the current time to reduce the likelihood of generating
     // identifiers that overlap with those from past/future browser sessions.
@@ -57,10 +58,8 @@ HistoryItem::HistoryItem()
     , m_lastVisitWasFailure(false)
     , m_isTargetItem(false)
     , m_visitCount(0)
-    , m_documentSequenceNumber(generateDocumentSequenceNumber())
-#if PLATFORM(OLYMPIA)
-    , m_scale(0)
-#endif
+    , m_itemSequenceNumber(generateSequenceNumber())
+    , m_documentSequenceNumber(generateSequenceNumber())
 {
 }
 
@@ -73,10 +72,8 @@ HistoryItem::HistoryItem(const String& urlString, const String& title, double ti
     , m_lastVisitWasFailure(false)
     , m_isTargetItem(false)
     , m_visitCount(0)
-    , m_documentSequenceNumber(generateDocumentSequenceNumber())
-#if PLATFORM(OLYMPIA)
-    , m_scale(0)
-#endif
+    , m_itemSequenceNumber(generateSequenceNumber())
+    , m_documentSequenceNumber(generateSequenceNumber())
 {    
     iconDatabase()->retainIconForPageURL(m_urlString);
 }
@@ -91,10 +88,8 @@ HistoryItem::HistoryItem(const String& urlString, const String& title, const Str
     , m_lastVisitWasFailure(false)
     , m_isTargetItem(false)
     , m_visitCount(0)
-    , m_documentSequenceNumber(generateDocumentSequenceNumber())
-#if PLATFORM(OLYMPIA)
-    , m_scale(0)
-#endif
+    , m_itemSequenceNumber(generateSequenceNumber())
+    , m_documentSequenceNumber(generateSequenceNumber())
 {
     iconDatabase()->retainIconForPageURL(m_urlString);
 }
@@ -110,10 +105,8 @@ HistoryItem::HistoryItem(const KURL& url, const String& target, const String& pa
     , m_lastVisitWasFailure(false)
     , m_isTargetItem(false)
     , m_visitCount(0)
-    , m_documentSequenceNumber(generateDocumentSequenceNumber())
-#if PLATFORM(OLYMPIA)
-    , m_scale(0)
-#endif
+    , m_itemSequenceNumber(generateSequenceNumber())
+    , m_documentSequenceNumber(generateSequenceNumber())
 {    
     iconDatabase()->retainIconForPageURL(m_urlString);
 }
@@ -146,7 +139,8 @@ inline HistoryItem::HistoryItem(const HistoryItem& item)
     , m_visitCount(item.m_visitCount)
     , m_dailyVisitCounts(item.m_dailyVisitCounts)
     , m_weeklyVisitCounts(item.m_weeklyVisitCounts)
-    , m_documentSequenceNumber(generateDocumentSequenceNumber())
+    , m_itemSequenceNumber(item.m_itemSequenceNumber)
+    , m_documentSequenceNumber(item.m_documentSequenceNumber)
     , m_formContentType(item.m_formContentType)
 {
     if (item.m_formData)
@@ -158,7 +152,7 @@ inline HistoryItem::HistoryItem(const HistoryItem& item)
         m_children.uncheckedAppend(item.m_children[i]->copy());
 
     if (item.m_redirectURLs)
-        m_redirectURLs.set(new Vector<String>(*item.m_redirectURLs));
+        m_redirectURLs = adoptPtr(new Vector<String>(*item.m_redirectURLs));
 }
 
 PassRefPtr<HistoryItem> HistoryItem::copy() const
@@ -464,6 +458,16 @@ HistoryItem* HistoryItem::childItemWithTarget(const String& target) const
     return 0;
 }
 
+HistoryItem* HistoryItem::childItemWithDocumentSequenceNumber(long long number) const
+{
+    unsigned size = m_children.size();
+    for (unsigned i = 0; i < size; ++i) {
+        if (m_children[i]->documentSequenceNumber() == number)
+            return m_children[i].get();
+    }
+    return 0;
+}
+
 // <rdar://problem/4895849> HistoryItem::findTargetItem() should be replaced with a non-recursive method.
 HistoryItem* HistoryItem::findTargetItem()
 {
@@ -496,6 +500,44 @@ bool HistoryItem::hasChildren() const
 void HistoryItem::clearChildren()
 {
     m_children.clear();
+}
+
+// Does a recursive check that this item and its descendants have the same
+// document sequence numbers as the other item.
+bool HistoryItem::hasSameDocuments(HistoryItem* otherItem)
+{
+    if (documentSequenceNumber() != otherItem->documentSequenceNumber())
+        return false;
+        
+    if (children().size() != otherItem->children().size())
+        return false;
+
+    for (size_t i = 0; i < children().size(); i++) {
+        HistoryItem* child = children()[i].get();
+        HistoryItem* otherChild = otherItem->childItemWithDocumentSequenceNumber(child->documentSequenceNumber());
+        if (!otherChild || !child->hasSameDocuments(otherChild))
+            return false;
+    }
+
+    return true;
+}
+
+// Does a non-recursive check that this item and its immediate children have the
+// same frames as the other item.
+bool HistoryItem::hasSameFrames(HistoryItem* otherItem)
+{
+    if (target() != otherItem->target())
+        return false;
+        
+    if (children().size() != otherItem->children().size())
+        return false;
+
+    for (size_t i = 0; i < children().size(); i++) {
+        if (!otherItem->childItemWithTarget(children()[i]->target()))
+            return false;
+    }
+
+    return true;
 }
 
 String HistoryItem::formContentType() const
@@ -555,7 +597,7 @@ void HistoryItem::mergeAutoCompleteHints(HistoryItem* otherItem)
 void HistoryItem::addRedirectURL(const String& url)
 {
     if (!m_redirectURLs)
-        m_redirectURLs.set(new Vector<String>);
+        m_redirectURLs = adoptPtr(new Vector<String>);
 
     // Our API allows us to store all the URLs in the redirect chain, but for
     // now we only have a use for the final URL.

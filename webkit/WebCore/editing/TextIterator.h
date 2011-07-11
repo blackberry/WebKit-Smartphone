@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2004, 2006, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,6 +33,18 @@
 
 namespace WebCore {
 
+class RenderText;
+class RenderTextFragment;
+
+enum TextIteratorBehavior {
+    TextIteratorDefaultBehavior = 0,
+    TextIteratorEmitsCharactersBetweenAllVisiblePositions = 1 << 0,
+    TextIteratorEntersTextControls = 1 << 1,
+    TextIteratorEmitsTextsWithoutTranscoding = 1 << 2,
+    TextIteratorEndsAtEditingBoundary = 1 << 3,
+    TextIteratorIgnoresStyleVisibility = 1 << 4
+};
+    
 // FIXME: Can't really answer this question correctly without knowing the white-space mode.
 // FIXME: Move this somewhere else in the editing directory. It doesn't belong here.
 inline bool isCollapsibleWhitespace(UChar c)
@@ -45,9 +58,9 @@ inline bool isCollapsibleWhitespace(UChar c)
     }
 }
 
-String plainText(const Range*);
-UChar* plainTextToMallocAllocatedBuffer(const Range*, unsigned& bufferLength, bool isDisplayString);
-PassRefPtr<Range> findPlainText(const Range*, const String&, bool forward, bool caseSensitive);
+WTF::String plainText(const Range*, TextIteratorBehavior defaultBehavior = TextIteratorDefaultBehavior);
+UChar* plainTextToMallocAllocatedBuffer(const Range*, unsigned& bufferLength, bool isDisplayString, TextIteratorBehavior defaultBehavior = TextIteratorDefaultBehavior);
+PassRefPtr<Range> findPlainText(const Range*, const WTF::String&, bool forward, bool caseSensitive);
 
 class BitStack {
 public:
@@ -67,13 +80,6 @@ private:
 // Iterates through the DOM range, returning all the text, and 0-length boundaries
 // at points where replaced elements break up the text flow.  The text comes back in
 // chunks so as to optimize for performance of the iteration.
-
-enum TextIteratorBehavior {
-    TextIteratorDefaultBehavior = 0,
-    TextIteratorEmitsCharactersBetweenAllVisiblePositions = 1 << 0,
-    TextIteratorEntersTextControls = 1 << 1,
-    TextIteratorEmitsTextsWithoutTranscoding = 1 << 2,
-};
 
 class TextIterator {
 public:
@@ -102,7 +108,10 @@ private:
     bool handleReplacedElement();
     bool handleNonTextNode();
     void handleTextBox();
+    void handleTextNodeFirstLetter(RenderTextFragment*);
+    bool hasVisibleTextNode(RenderText*);
     void emitCharacter(UChar, Node* textNode, Node* offsetBaseNode, int textStartOffset, int textEndOffset);
+    void emitText(Node* textNode, RenderObject* renderObject, int textStartOffset, int textEndOffset);
     void emitText(Node* textNode, int textStartOffset, int textEndOffset);
     
     // Current position, not necessarily of the text being returned, but position
@@ -128,12 +137,17 @@ private:
     const UChar* m_textCharacters;
     int m_textLength;
     // Hold string m_textCharacters points to so we ensure it won't be deleted.
-    String m_text;
+    WTF::String m_text;
 
     // Used when there is still some pending text from the current node; when these
     // are false and 0, we go back to normal iterating.
     bool m_needsAnotherNewline;
     InlineTextBox* m_textBox;
+    // Used when iteration over :first-letter text to save pointer to
+    // remaining text box.
+    InlineTextBox* m_remainingTextBox;
+    // Used to point to RenderText object for :first-letter.
+    RenderText *m_firstLetterText;
     
     // Used to do the whitespace collapsing logic.
     Node* m_lastTextNode;    
@@ -159,6 +173,10 @@ private:
 
     // Used when we want texts for copying, pasting, and transposing.
     bool m_emitsTextWithoutTranscoding;
+    // Used when deciding text fragment created by :first-letter should be looked into.
+    bool m_handledFirstLetter;
+    // Used when the visibility of the style should not affect text gathering.
+    bool m_ignoresStyleVisibility;
 };
 
 // Iterates through the DOM range, returning all the text, and 0-length boundaries
@@ -167,7 +185,7 @@ private:
 class SimplifiedBackwardsTextIterator {
 public:
     SimplifiedBackwardsTextIterator();
-    explicit SimplifiedBackwardsTextIterator(const Range*);
+    explicit SimplifiedBackwardsTextIterator(const Range*, TextIteratorBehavior = TextIteratorDefaultBehavior);
     
     bool atEnd() const { return !m_positionNode; }
     void advance();
@@ -183,7 +201,11 @@ private:
     bool handleReplacedElement();
     bool handleNonTextNode();
     void emitCharacter(UChar, Node*, int startOffset, int endOffset);
-    
+    bool crossesEditingBoundary(Node*) const;
+    bool setCurrentNode(Node*);
+    void clearCurrentNode();
+
+    TextIteratorBehavior m_behavior;
     // Current position, not necessarily of the text being returned, but position
     // as we walk through the DOM tree.
     Node* m_node;
@@ -231,7 +253,7 @@ public:
     
     int length() const { return m_textIterator.length() - m_runOffset; }
     const UChar* characters() const { return m_textIterator.characters() + m_runOffset; }
-    String string(int numChars);
+    WTF::String string(int numChars);
     
     int characterOffset() const { return m_offset; }
     PassRefPtr<Range> range() const;
@@ -247,7 +269,7 @@ private:
 class BackwardsCharacterIterator {
 public:
     BackwardsCharacterIterator();
-    explicit BackwardsCharacterIterator(const Range*);
+    explicit BackwardsCharacterIterator(const Range*, TextIteratorBehavior = TextIteratorDefaultBehavior);
 
     void advance(int);
 
@@ -256,6 +278,7 @@ public:
     PassRefPtr<Range> range() const;
 
 private:
+    TextIteratorBehavior m_behavior;
     int m_offset;
     int m_runOffset;
     bool m_atBreak;

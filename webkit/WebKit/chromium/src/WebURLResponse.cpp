@@ -32,11 +32,15 @@
 #include "WebURLResponse.h"
 
 #include "ResourceResponse.h"
+#include "ResourceLoadTiming.h"
 
 #include "WebHTTPHeaderVisitor.h"
 #include "WebString.h"
 #include "WebURL.h"
+#include "WebURLLoadTiming.h"
 #include "WebURLResponsePrivate.h"
+
+#include <wtf/RefPtr.h>
 
 using namespace WebCore;
 
@@ -55,6 +59,7 @@ public:
         : m_resourceResponseAllocation(*p->m_resourceResponse)
     {
         m_resourceResponse = &m_resourceResponseAllocation;
+        m_downloadFilePath = p->m_downloadFilePath;
     }
 
     virtual void dispose() { delete this; }
@@ -91,6 +96,37 @@ WebURL WebURLResponse::url() const
 void WebURLResponse::setURL(const WebURL& url)
 {
     m_private->m_resourceResponse->setURL(url);
+}
+
+unsigned WebURLResponse::connectionID() const
+{
+    return m_private->m_resourceResponse->connectionID();
+}
+
+void WebURLResponse::setConnectionID(unsigned connectionID)
+{
+    m_private->m_resourceResponse->setConnectionID(connectionID);
+}
+
+bool WebURLResponse::connectionReused() const
+{
+    return m_private->m_resourceResponse->connectionReused();
+}
+
+void WebURLResponse::setConnectionReused(bool connectionReused)
+{
+    m_private->m_resourceResponse->setConnectionReused(connectionReused);
+}
+
+WebURLLoadTiming WebURLResponse::loadTiming()
+{
+    return WebURLLoadTiming(m_private->m_resourceResponse->resourceLoadTiming());
+}
+
+void WebURLResponse::setLoadTiming(const WebURLLoadTiming& timing)
+{
+    RefPtr<ResourceLoadTiming> loadTiming = PassRefPtr<ResourceLoadTiming>(timing);
+    m_private->m_resourceResponse->setResourceLoadTiming(loadTiming.release());
 }
 
 double WebURLResponse::responseTime() const
@@ -267,6 +303,16 @@ const ResourceResponse& WebURLResponse::toResourceResponse() const
     return *m_private->m_resourceResponse;
 }
 
+bool WebURLResponse::wasCached() const
+{
+    return m_private->m_resourceResponse->wasCached();
+}
+
+void WebURLResponse::setWasCached(bool value)
+{
+    m_private->m_resourceResponse->setWasCached(value);
+}
+
 bool WebURLResponse::wasFetchedViaSPDY() const
 {
     return m_private->m_resourceResponse->wasFetchedViaSPDY();
@@ -287,6 +333,26 @@ void WebURLResponse::setWasNpnNegotiated(bool value)
     m_private->m_resourceResponse->setWasNpnNegotiated(value);
 }
 
+bool WebURLResponse::wasAlternateProtocolAvailable() const
+{
+    return m_private->m_resourceResponse->wasAlternateProtocolAvailable();
+}
+
+void WebURLResponse::setWasAlternateProtocolAvailable(bool value)
+{
+    m_private->m_resourceResponse->setWasAlternateProtocolAvailable(value);
+}
+
+bool WebURLResponse::wasFetchedViaProxy() const
+{
+    return m_private->m_resourceResponse->wasFetchedViaProxy();
+}
+
+void WebURLResponse::setWasFetchedViaProxy(bool value)
+{
+    m_private->m_resourceResponse->setWasFetchedViaProxy(value);
+}
+
 bool WebURLResponse::isMultipartPayload() const
 {
     return m_private->m_resourceResponse->isMultipartPayload();
@@ -295,6 +361,16 @@ bool WebURLResponse::isMultipartPayload() const
 void WebURLResponse::setIsMultipartPayload(bool value)
 {
     m_private->m_resourceResponse->setIsMultipartPayload(value);
+}
+
+WebString WebURLResponse::downloadFilePath() const
+{
+    return m_private->m_downloadFilePath;
+}
+
+void WebURLResponse::setDownloadFilePath(const WebString& downloadFilePath)
+{
+    m_private->m_downloadFilePath = downloadFilePath;
 }
 
 void WebURLResponse::assign(WebURLResponsePrivate* p)

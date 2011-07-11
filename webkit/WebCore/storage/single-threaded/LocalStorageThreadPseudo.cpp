@@ -73,7 +73,7 @@ void LocalStorageThread::timerFired(Timer<LocalStorageThread>*)
 
 void LocalStorageThread::scheduleTask(PassOwnPtr<LocalStorageTask> task)
 {
-    m_queue.append(task.release());
+    m_queue.append(task.leakPtr());
     if (!m_timer.isActive())
         m_timer.startOneShot(0);
 }

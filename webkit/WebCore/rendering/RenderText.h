@@ -24,11 +24,11 @@
 #define RenderText_h
 
 #include "RenderObject.h"
+#include <wtf/Forward.h>
 
 namespace WebCore {
 
 class InlineTextBox;
-class StringImpl;
 
 class RenderText : public RenderObject {
 public:
@@ -83,7 +83,7 @@ public:
                            int& beginMaxW, int& endMaxW,
                            int& minW, int& maxW, bool& stripFrontSpaces);
 
-    IntRect linesBoundingBox() const;
+    virtual IntRect linesBoundingBox() const;
 
     IntPoint firstRunOrigin() const;
     int firstRunX() const;

@@ -26,6 +26,7 @@
 #include "config.h"
 #include "RenderThemeEfl.h"
 
+#include "CSSValueKeywords.h"
 #include "FileSystem.h"
 #include "Frame.h"
 #include "FrameView.h"
@@ -34,8 +35,10 @@
 #include "Page.h"
 #include "RenderBox.h"
 #include "RenderObject.h"
+#include "RenderSlider.h"
 #include <wtf/text/CString.h>
 
+#include <Ecore_Evas.h>
 #include <Edje.h>
 namespace WebCore {
 
@@ -253,9 +256,9 @@ void RenderThemeEfl::applyEdjeStateFromForm(Evas_Object* o, ControlStates states
     }
 }
 
-bool RenderThemeEfl::paintThemePart(RenderObject* o, FormType type, const RenderObject::PaintInfo& i, const IntRect& rect)
+bool RenderThemeEfl::paintThemePart(RenderObject* o, FormType type, const PaintInfo& i, const IntRect& rect)
 {
-    struct ThemePartCacheEntry* ce;
+    ThemePartCacheEntry* ce;
     Eina_List* updates;
     cairo_t* cairo;
 
@@ -271,6 +274,29 @@ bool RenderThemeEfl::paintThemePart(RenderObject* o, FormType type, const Render
 
     cairo = i.context->platformContext();
     ASSERT(cairo);
+
+    // Currently, only sliders needs this message; if other widget ever needs special
+    // treatment, move them to special functions.
+    if (type == SliderVertical || type == SliderHorizontal) {
+        RenderSlider* renderSlider = toRenderSlider(o);
+        Edje_Message_Float_Set* msg;
+        int max, value;
+
+        if (type == SliderVertical) {
+            max = rect.height() - renderSlider->thumbRect().height();
+            value = renderSlider->thumbRect().y();
+        } else {
+            max = rect.width() - renderSlider->thumbRect().width();
+            value = renderSlider->thumbRect().x();
+        }
+
+        msg = static_cast<Edje_Message_Float_Set*>(alloca(sizeof(Edje_Message_Float_Set) + sizeof(float)));
+
+        msg->count = 2;
+        msg->val[0] = static_cast<float>(value) / static_cast<float>(max);
+        msg->val[1] = 0.1;
+        edje_object_message_send(ce->o, EDJE_MESSAGE_FLOAT_SET, 0, msg);
+    }
 
     edje_object_calc_force(ce->o);
     edje_object_message_signal_process(ce->o);
@@ -541,6 +567,8 @@ const char* RenderThemeEfl::edjeGroupFromFormType(FormType type) const
         W("search/results_button"),
         W("search/results_decoration"),
         W("search/cancel_button"),
+        W("slider/vertical"),
+        W("slider/horizontal"),
 #undef W
         0
     };
@@ -603,6 +631,8 @@ void RenderThemeEfl::themeChanged()
     applyEdjeColors();
     applyPartDescriptions();
 }
+
+float RenderThemeEfl::defaultFontSize = 16.0f;
 
 RenderThemeEfl::RenderThemeEfl(Page* page)
     : RenderTheme()
@@ -701,6 +731,8 @@ static bool supportsFocus(ControlPart appearance)
     case MenulistPart:
     case RadioPart:
     case CheckboxPart:
+    case SliderVerticalPart:
+    case SliderHorizontalPart:
         return true;
     default:
         return false;
@@ -729,6 +761,40 @@ int RenderThemeEfl::baselinePosition(const RenderObject* o) const
     return RenderTheme::baselinePosition(o);
 }
 
+bool RenderThemeEfl::paintSliderTrack(RenderObject* o, const PaintInfo& i, const IntRect& rect)
+{
+    if (o->style()->appearance() == SliderHorizontalPart)
+        return paintThemePart(o, SliderHorizontal, i, rect);
+    return paintThemePart(o, SliderVertical, i, rect);
+}
+
+void RenderThemeEfl::adjustSliderTrackStyle(CSSStyleSelector* selector, RenderStyle* style, Element* e) const
+{
+    if (!m_page && e && e->document()->page()) {
+        static_cast<RenderThemeEfl*>(e->document()->page()->theme())->adjustSliderTrackStyle(selector, style, e);
+        return;
+    }
+
+    adjustSizeConstraints(style, SliderHorizontal);
+    style->resetBorder();
+
+    const struct ThemePartDesc *desc = m_partDescs + (size_t)SliderHorizontal;
+    if (style->width().value() < desc->min.width().value())
+        style->setWidth(desc->min.width());
+    if (style->height().value() < desc->min.height().value())
+        style->setHeight(desc->min.height());
+}
+
+void RenderThemeEfl::adjustSliderThumbStyle(CSSStyleSelector* selector, RenderStyle* style, Element* e) const
+{
+    adjustSliderTrackStyle(selector, style, e);
+}
+
+bool RenderThemeEfl::paintSliderThumb(RenderObject* o, const PaintInfo& i, const IntRect& rect)
+{
+    return paintSliderTrack(o, i, rect);
+}
+
 void RenderThemeEfl::adjustCheckboxStyle(CSSStyleSelector* selector, RenderStyle* style, Element* e) const
 {
     if (!m_page && e && e->document()->page()) {
@@ -745,7 +811,7 @@ void RenderThemeEfl::adjustCheckboxStyle(CSSStyleSelector* selector, RenderStyle
         style->setHeight(desc->min.height());
 }
 
-bool RenderThemeEfl::paintCheckbox(RenderObject* o, const RenderObject::PaintInfo& i, const IntRect& rect)
+bool RenderThemeEfl::paintCheckbox(RenderObject* o, const PaintInfo& i, const IntRect& rect)
 {
     return paintThemePart(o, CheckBox, i, rect);
 }
@@ -766,7 +832,7 @@ void RenderThemeEfl::adjustRadioStyle(CSSStyleSelector* selector, RenderStyle* s
         style->setHeight(desc->min.height());
 }
 
-bool RenderThemeEfl::paintRadio(RenderObject* o, const RenderObject::PaintInfo& i, const IntRect& rect)
+bool RenderThemeEfl::paintRadio(RenderObject* o, const PaintInfo& i, const IntRect& rect)
 {
     return paintThemePart(o, RadioButton, i, rect);
 }
@@ -789,7 +855,7 @@ void RenderThemeEfl::adjustButtonStyle(CSSStyleSelector* selector, RenderStyle* 
     }
 }
 
-bool RenderThemeEfl::paintButton(RenderObject* o, const RenderObject::PaintInfo& i, const IntRect& rect)
+bool RenderThemeEfl::paintButton(RenderObject* o, const PaintInfo& i, const IntRect& rect)
 {
     return paintThemePart(o, Button, i, rect);
 }
@@ -807,7 +873,7 @@ void RenderThemeEfl::adjustMenuListStyle(CSSStyleSelector* selector, RenderStyle
     style->setBackgroundColor(m_comboTextBackgroundColor);
 }
 
-bool RenderThemeEfl::paintMenuList(RenderObject* o, const RenderObject::PaintInfo& i, const IntRect& rect)
+bool RenderThemeEfl::paintMenuList(RenderObject* o, const PaintInfo& i, const IntRect& rect)
 {
     return paintThemePart(o, ComboBox, i, rect);
 }
@@ -825,7 +891,7 @@ void RenderThemeEfl::adjustTextFieldStyle(CSSStyleSelector* selector, RenderStyl
     style->setBackgroundColor(m_entryTextBackgroundColor);
 }
 
-bool RenderThemeEfl::paintTextField(RenderObject* o, const RenderObject::PaintInfo& i, const IntRect& rect)
+bool RenderThemeEfl::paintTextField(RenderObject* o, const PaintInfo& i, const IntRect& rect)
 {
     return paintThemePart(o, TextField, i, rect);
 }
@@ -835,7 +901,7 @@ void RenderThemeEfl::adjustTextAreaStyle(CSSStyleSelector* selector, RenderStyle
     adjustTextFieldStyle(selector, style, e);
 }
 
-bool RenderThemeEfl::paintTextArea(RenderObject* o, const RenderObject::PaintInfo& i, const IntRect& r)
+bool RenderThemeEfl::paintTextArea(RenderObject* o, const PaintInfo& i, const IntRect& r)
 {
     return paintTextField(o, i, r);
 }
@@ -851,7 +917,7 @@ void RenderThemeEfl::adjustSearchFieldDecorationStyle(CSSStyleSelector* selector
     style->setWhiteSpace(PRE);
 }
 
-bool RenderThemeEfl::paintSearchFieldDecoration(RenderObject* o, const RenderObject::PaintInfo& i, const IntRect& rect)
+bool RenderThemeEfl::paintSearchFieldDecoration(RenderObject* o, const PaintInfo& i, const IntRect& rect)
 {
     return paintThemePart(o, SearchFieldDecoration, i, rect);
 }
@@ -867,7 +933,7 @@ void RenderThemeEfl::adjustSearchFieldResultsButtonStyle(CSSStyleSelector* selec
     style->setWhiteSpace(PRE);
 }
 
-bool RenderThemeEfl::paintSearchFieldResultsButton(RenderObject* o, const RenderObject::PaintInfo& i, const IntRect& rect)
+bool RenderThemeEfl::paintSearchFieldResultsButton(RenderObject* o, const PaintInfo& i, const IntRect& rect)
 {
     return paintThemePart(o, SearchFieldResultsButton, i, rect);
 }
@@ -883,7 +949,7 @@ void RenderThemeEfl::adjustSearchFieldResultsDecorationStyle(CSSStyleSelector* s
     style->setWhiteSpace(PRE);
 }
 
-bool RenderThemeEfl::paintSearchFieldResultsDecoration(RenderObject* o, const RenderObject::PaintInfo& i, const IntRect& rect)
+bool RenderThemeEfl::paintSearchFieldResultsDecoration(RenderObject* o, const PaintInfo& i, const IntRect& rect)
 {
     return paintThemePart(o, SearchFieldResultsDecoration, i, rect);
 }
@@ -899,7 +965,7 @@ void RenderThemeEfl::adjustSearchFieldCancelButtonStyle(CSSStyleSelector* select
     style->setWhiteSpace(PRE);
 }
 
-bool RenderThemeEfl::paintSearchFieldCancelButton(RenderObject* o, const RenderObject::PaintInfo& i, const IntRect& rect)
+bool RenderThemeEfl::paintSearchFieldCancelButton(RenderObject* o, const PaintInfo& i, const IntRect& rect)
 {
     return paintThemePart(o, SearchFieldCancelButton, i, rect);
 }
@@ -917,15 +983,29 @@ void RenderThemeEfl::adjustSearchFieldStyle(CSSStyleSelector* selector, RenderSt
     style->setBackgroundColor(m_searchTextBackgroundColor);
 }
 
-bool RenderThemeEfl::paintSearchField(RenderObject* o, const RenderObject::PaintInfo& i, const IntRect& rect)
+bool RenderThemeEfl::paintSearchField(RenderObject* o, const PaintInfo& i, const IntRect& rect)
 {
     return paintThemePart(o, SearchField, i, rect);
 }
 
-void RenderThemeEfl::systemFont(int, FontDescription&) const
+void RenderThemeEfl::setDefaultFontSize(int size)
 {
-    // If you remove this notImplemented(), replace it with an comment that explains why.
-    notImplemented();
+    defaultFontSize = size;
+}
+
+void RenderThemeEfl::systemFont(int propId, FontDescription& fontDescription) const
+{
+    // It was called by RenderEmbeddedObject::paintReplaced to render alternative string.
+    // To avoid cairo_error while rendering, fontDescription should be passed.
+    DEFINE_STATIC_LOCAL(String, fontFace, ("Sans"));
+    float fontSize = defaultFontSize;
+
+    fontDescription.firstFamily().setFamily(fontFace);
+    fontDescription.setSpecifiedSize(fontSize);
+    fontDescription.setIsAbsoluteSize(true);
+    fontDescription.setGenericFamily(FontDescription::NoFamily);
+    fontDescription.setWeight(FontWeightNormal);
+    fontDescription.setItalic(false);
 }
 
 }

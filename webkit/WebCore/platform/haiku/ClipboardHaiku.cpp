@@ -31,16 +31,21 @@
 #include "IntPoint.h"
 #include "NotImplemented.h"
 #include "PlatformString.h"
-#include "StringHash.h"
 
 #include <support/Locker.h>
 #include <app/Clipboard.h>
 #include <Message.h>
 #include <String.h>
 #include <wtf/HashTable.h>
+#include <wtf/text/StringHash.h>
 
 
 namespace WebCore {
+
+PassRefPtr<Clipboard> Clipboard::create(ClipboardAccessPolicy policy, DragData*, Frame*)
+{
+    return ClipboardHaiku::create(policy, true);
+}
 
 ClipboardHaiku::ClipboardHaiku(ClipboardAccessPolicy policy, bool forDragging)
     : Clipboard(policy, forDragging)

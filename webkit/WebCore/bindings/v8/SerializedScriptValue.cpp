@@ -34,17 +34,19 @@
 #include "Blob.h"
 #include "ByteArray.h"
 #include "CanvasPixelArray.h"
+#include "ExceptionCode.h"
 #include "File.h"
 #include "FileList.h"
 #include "ImageData.h"
 #include "SharedBuffer.h"
+#include "V8Binding.h"
 #include "V8Blob.h"
 #include "V8File.h"
 #include "V8FileList.h"
 #include "V8ImageData.h"
 #include "V8Proxy.h"
+#include "V8Utilities.h"
 
-#include <v8.h>
 #include <wtf/Assertions.h>
 #include <wtf/RefCounted.h>
 #include <wtf/Vector.h>
@@ -181,16 +183,20 @@ public:
         doWriteNumber(number);
     }
 
-    void writeBlob(const String& path)
+    void writeBlob(const String& url, const String& type, unsigned long long size)
     {
         append(BlobTag);
-        doWriteWebCoreString(path);
+        doWriteWebCoreString(url);
+        doWriteWebCoreString(type);
+        doWriteUint64(size);
     }
 
-    void writeFile(const String& path)
+    void writeFile(const String& path, const String& url, const String& type)
     {
         append(FileTag);
         doWriteWebCoreString(path);
+        doWriteWebCoreString(url);
+        doWriteWebCoreString(type);
     }
 
     void writeFileList(const FileList& fileList)
@@ -198,8 +204,11 @@ public:
         append(FileListTag);
         uint32_t length = fileList.length();
         doWriteUint32(length);
-        for (unsigned i = 0; i < length; ++i)
+        for (unsigned i = 0; i < length; ++i) {
             doWriteWebCoreString(fileList.item(i)->path());
+            doWriteWebCoreString(fileList.item(i)->url().string());
+            doWriteWebCoreString(fileList.item(i)->type());
+        }
     }
 
     void writeImageData(uint32_t width, uint32_t height, const uint8_t* pixelData, uint32_t pixelDataLength)
@@ -249,7 +258,8 @@ private:
         doWriteString(buffer->data(), buffer->size());
     }
 
-    void doWriteUint32(uint32_t value)
+    template<class T>
+    void doWriteUintHelper(T value)
     {
         while (true) {
             uint8_t b = (value & varIntMask);
@@ -260,6 +270,16 @@ private:
             }
             append(b | (1 << varIntShift));
         }
+    }
+
+    void doWriteUint32(uint32_t value)
+    {
+        doWriteUintHelper(value);
+    }
+
+    void doWriteUint64(uint64_t value)
+    {
+        doWriteUintHelper(value);
     }
 
     void doWriteNumber(double number)
@@ -558,7 +578,7 @@ private:
         Blob* blob = V8Blob::toNative(value.As<v8::Object>());
         if (!blob)
             return;
-        m_writer.writeBlob(blob->path());
+        m_writer.writeBlob(blob->url().string(), blob->type(), blob->size());
     }
 
     void writeFile(v8::Handle<v8::Value> value)
@@ -566,7 +586,7 @@ private:
         File* file = V8File::toNative(value.As<v8::Object>());
         if (!file)
             return;
-        m_writer.writeFile(file->path());
+        m_writer.writeFile(file->path(), file->url().string(), file->type());
     }
 
     void writeFileList(v8::Handle<v8::Value> value)
@@ -850,10 +870,16 @@ private:
 
     bool readBlob(v8::Handle<v8::Value>* value)
     {
-        String path;
-        if (!readWebCoreString(&path))
+        String url;
+        String type;
+        uint64_t size;
+        if (!readWebCoreString(&url))
             return false;
-        PassRefPtr<Blob> blob = Blob::create(path);
+        if (!readWebCoreString(&type))
+            return false;
+        if (!doReadUint64(&size))
+            return false;
+        PassRefPtr<Blob> blob = Blob::create(KURL(ParsedURLString, url), type, size);
         *value = toV8(blob);
         return true;
     }
@@ -861,9 +887,15 @@ private:
     bool readFile(v8::Handle<v8::Value>* value)
     {
         String path;
+        String url;
+        String type;
         if (!readWebCoreString(&path))
             return false;
-        PassRefPtr<File> file = File::create(path);
+        if (!readWebCoreString(&url))
+            return false;
+        if (!readWebCoreString(&type))
+            return false;
+        PassRefPtr<File> file = File::create(path, KURL(ParsedURLString, url), type);
         *value = toV8(file);
         return true;
     }
@@ -876,15 +908,22 @@ private:
         PassRefPtr<FileList> fileList = FileList::create();
         for (unsigned i = 0; i < length; ++i) {
             String path;
+            String urlString;
+            String type;
             if (!readWebCoreString(&path))
                 return false;
-            fileList->append(File::create(path));
+            if (!readWebCoreString(&urlString))
+                return false;
+            if (!readWebCoreString(&type))
+                return false;
+            fileList->append(File::create(path, KURL(ParsedURLString, urlString), type));
         }
         *value = toV8(fileList);
         return true;
     }
 
-    bool doReadUint32(uint32_t* value)
+    template<class T>
+    bool doReadUintHelper(T* value)
     {
         *value = 0;
         uint8_t currentByte;
@@ -897,6 +936,16 @@ private:
             shift += varIntShift;
         } while (currentByte & (1 << varIntShift));
         return true;
+    }
+
+    bool doReadUint32(uint32_t* value)
+    {
+        return doReadUintHelper(value);
+    }
+
+    bool doReadUint64(uint64_t* value)
+    {
+        return doReadUintHelper(value);
     }
 
     bool doReadNumber(double* number)
@@ -1011,6 +1060,58 @@ private:
 };
 
 } // namespace
+
+void SerializedScriptValue::deserializeAndSetProperty(v8::Handle<v8::Object> object, const char* propertyName,
+                                                      v8::PropertyAttribute attribute, SerializedScriptValue* value)
+{
+    if (!value)
+        return;
+    v8::Handle<v8::Value> deserialized = value->deserialize();
+    object->ForceSet(v8::String::NewSymbol(propertyName), deserialized, attribute);
+}
+
+PassRefPtr<SerializedScriptValue> SerializedScriptValue::create(v8::Handle<v8::Value> value, bool& didThrow)
+{
+    return adoptRef(new SerializedScriptValue(value, didThrow));
+}
+
+PassRefPtr<SerializedScriptValue> SerializedScriptValue::create(v8::Handle<v8::Value> value)
+{
+    bool didThrow;
+    return adoptRef(new SerializedScriptValue(value, didThrow));
+}
+
+PassRefPtr<SerializedScriptValue> SerializedScriptValue::createFromWire(String data)
+{
+    return adoptRef(new SerializedScriptValue(data, WireData));
+}
+
+PassRefPtr<SerializedScriptValue> SerializedScriptValue::create(String data)
+{
+    return adoptRef(new SerializedScriptValue(data, StringValue));
+}
+
+PassRefPtr<SerializedScriptValue> SerializedScriptValue::create()
+{
+    return adoptRef(new SerializedScriptValue());
+}
+
+SerializedScriptValue* SerializedScriptValue::nullValue() 
+{
+    DEFINE_STATIC_LOCAL(RefPtr<SerializedScriptValue>, nullValue, (SerializedScriptValue::create()));
+    return nullValue.get();
+}
+
+PassRefPtr<SerializedScriptValue> SerializedScriptValue::release()
+{
+    RefPtr<SerializedScriptValue> result = adoptRef(new SerializedScriptValue(m_data, WireData));
+    m_data = String();
+    return result.release();
+}
+
+SerializedScriptValue::SerializedScriptValue()
+{
+}
 
 SerializedScriptValue::SerializedScriptValue(v8::Handle<v8::Value> value, bool& didThrow)
 {

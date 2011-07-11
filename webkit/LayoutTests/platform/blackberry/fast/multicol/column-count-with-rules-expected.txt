@@ -1,0 +1,100 @@
+layer at (0,0) size 1006x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 1006x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x576
+layer at (8,8) size 998x160
+  RenderBlock {P} at (0,0) size 784x160 [border: (10px solid #800000)]
+    RenderText {#text} at (30,31) size 161x19
+      text run at (30,31) width 161: "This is some column text."
+    RenderBR {BR} at (191,46) size 0x0
+    RenderText {#text} at (30,52) size 161x19
+      text run at (30,52) width 161: "This is some column text."
+    RenderBR {BR} at (191,67) size 0x0
+    RenderText {#text} at (30,73) size 161x19
+      text run at (30,73) width 161: "This is some column text."
+    RenderBR {BR} at (191,88) size 0x0
+    RenderText {#text} at (30,94) size 161x19
+      text run at (30,94) width 161: "This is some column text."
+    RenderBR {BR} at (191,109) size 0x0
+    RenderText {#text} at (30,115) size 161x19
+      text run at (30,115) width 161: "This is some column text."
+    RenderBR {BR} at (191,130) size 0x0
+    RenderText {#text} at (30,136) size 161x19
+      text run at (30,136) width 161: "This is some column text."
+    RenderBR {BR} at (191,151) size 0x0
+    RenderText {#text} at (30,157) size 161x19
+      text run at (30,157) width 161: "This is some column text."
+    RenderBR {BR} at (191,172) size 0x0
+    RenderText {#text} at (30,178) size 161x19
+      text run at (30,178) width 161: "This is some column text."
+    RenderBR {BR} at (191,193) size 0x0
+    RenderText {#text} at (30,199) size 161x19
+      text run at (30,199) width 161: "This is some column text."
+    RenderBR {BR} at (191,214) size 0x0
+    RenderText {#text} at (30,220) size 161x19
+      text run at (30,220) width 161: "This is some column text."
+    RenderBR {BR} at (191,235) size 0x0
+    RenderText {#text} at (30,241) size 161x19
+      text run at (30,241) width 161: "This is some column text."
+    RenderBR {BR} at (191,256) size 0x0
+    RenderText {#text} at (30,262) size 161x19
+      text run at (30,262) width 161: "This is some column text."
+    RenderBR {BR} at (191,277) size 0x0
+    RenderText {#text} at (30,283) size 161x19
+      text run at (30,283) width 161: "This is some column text."
+    RenderBR {BR} at (191,298) size 0x0
+layer at (8,184) size 784x160
+  RenderBlock {P} at (0,176) size 784x160 [border: (10px solid #800000)]
+    RenderText {#text} at (99,31) size 161x19
+      text run at (99,31) width 4 RTL: "."
+      text run at (103,31) width 157: "This is some column text"
+    RenderBR {BR} at (99,46) size 0x0
+    RenderText {#text} at (99,52) size 161x19
+      text run at (99,52) width 4 RTL: "."
+      text run at (103,52) width 157: "This is some column text"
+    RenderBR {BR} at (99,67) size 0x0
+    RenderText {#text} at (99,73) size 161x19
+      text run at (99,73) width 4 RTL: "."
+      text run at (103,73) width 157: "This is some column text"
+    RenderBR {BR} at (99,88) size 0x0
+    RenderText {#text} at (99,94) size 161x19
+      text run at (99,94) width 4 RTL: "."
+      text run at (103,94) width 157: "This is some column text"
+    RenderBR {BR} at (99,109) size 0x0
+    RenderText {#text} at (99,115) size 161x19
+      text run at (99,115) width 4 RTL: "."
+      text run at (103,115) width 157: "This is some column text"
+    RenderBR {BR} at (99,130) size 0x0
+    RenderText {#text} at (99,136) size 161x19
+      text run at (99,136) width 4 RTL: "."
+      text run at (103,136) width 157: "This is some column text"
+    RenderBR {BR} at (99,151) size 0x0
+    RenderText {#text} at (99,157) size 161x19
+      text run at (99,157) width 4 RTL: "."
+      text run at (103,157) width 157: "This is some column text"
+    RenderBR {BR} at (99,172) size 0x0
+    RenderText {#text} at (99,178) size 161x19
+      text run at (99,178) width 4 RTL: "."
+      text run at (103,178) width 157: "This is some column text"
+    RenderBR {BR} at (99,193) size 0x0
+    RenderText {#text} at (99,199) size 161x19
+      text run at (99,199) width 4 RTL: "."
+      text run at (103,199) width 157: "This is some column text"
+    RenderBR {BR} at (99,214) size 0x0
+    RenderText {#text} at (99,220) size 161x19
+      text run at (99,220) width 4 RTL: "."
+      text run at (103,220) width 157: "This is some column text"
+    RenderBR {BR} at (99,235) size 0x0
+    RenderText {#text} at (99,241) size 161x19
+      text run at (99,241) width 4 RTL: "."
+      text run at (103,241) width 157: "This is some column text"
+    RenderBR {BR} at (99,256) size 0x0
+    RenderText {#text} at (99,262) size 161x19
+      text run at (99,262) width 4 RTL: "."
+      text run at (103,262) width 157: "This is some column text"
+    RenderBR {BR} at (99,277) size 0x0
+    RenderText {#text} at (99,283) size 161x19
+      text run at (99,283) width 4 RTL: "."
+      text run at (103,283) width 157: "This is some column text"
+    RenderBR {BR} at (99,298) size 0x0

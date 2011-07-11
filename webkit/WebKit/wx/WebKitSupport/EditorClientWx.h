@@ -91,9 +91,7 @@ public:
     virtual bool handleEditingKeyboardEvent(KeyboardEvent*);
     virtual void handleKeyboardEvent(KeyboardEvent*);
     virtual void handleInputMethodKeydown(KeyboardEvent*);
-    // Note: This code is under review for upstreaming.
-    virtual bool focusedElementsAreRichlyEditable();
-
+    
     virtual void textFieldDidBeginEditing(Element*);
     virtual void textFieldDidEndEditing(Element*);
     virtual void textDidChangeInTextField(Element*);
@@ -110,8 +108,9 @@ public:
     virtual void showSpellingUI(bool show);
     virtual bool spellingUIIsShowing();
     virtual void getGuessesForWord(const String&, Vector<String>& guesses);
-    virtual String getAutoCorrectSuggestionForMisspelledWord(const WebCore::String&);
+    virtual String getAutoCorrectSuggestionForMisspelledWord(const WTF::String&);
     
+    virtual void willSetInputMethodState();
     virtual void setInputMethodState(bool enabled);
 
 private:

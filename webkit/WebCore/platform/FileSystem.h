@@ -47,6 +47,7 @@
 
 #include "PlatformString.h"
 #include <time.h>
+#include <wtf/Forward.h>
 #include <wtf/Vector.h>
 
 #if PLATFORM(OLYMPIA)
@@ -63,10 +64,9 @@ typedef struct HINSTANCE__* HINSTANCE;
 typedef HINSTANCE HMODULE;
 #endif
 
-namespace WTF {
-class CString;
-}
-using WTF::CString;
+#if PLATFORM(BREWMP)
+typedef struct _IFile IFile;
+#endif
 
 namespace WebCore {
 
@@ -121,6 +121,11 @@ typedef HANDLE PlatformFileHandle;
 // FIXME: -1 is INVALID_HANDLE_VALUE, defined in <winbase.h>. Chromium tries to
 // avoid using Windows headers in headers.  We'd rather move this into the .cpp.
 const PlatformFileHandle invalidPlatformFileHandle = reinterpret_cast<HANDLE>(-1);
+#elif PLATFORM(BREWMP)
+typedef IFile* PlatformFileHandle;
+const PlatformFileHandle invalidPlatformFileHandle = 0;
+typedef void* PlatformModule;
+typedef unsigned PlatformModuleVersion;
 #else
 #if PLATFORM(OLYMPIA)
 typedef Olympia::Platform::FileHandle PlatformFileHandle;
@@ -143,6 +148,12 @@ enum FileSeekOrigin {
     SeekFromEnd
 };
 
+#if OS(WINDOWS)
+static const char PlatformFilePathSeparator = '\\';
+#else
+static const char PlatformFilePathSeparator = '/';
+#endif
+
 bool fileExists(const String&);
 bool deleteFile(const String&);
 bool deleteEmptyDirectory(const String&);
@@ -156,12 +167,12 @@ String directoryName(const String&);
 
 Vector<String> listDirectory(const String& path, const String& filter = String());
 
-WTF::CString fileSystemRepresentation(const String&);
+CString fileSystemRepresentation(const String&);
 
 inline bool isHandleValid(const PlatformFileHandle& handle) { return handle != invalidPlatformFileHandle; }
 
 // Prefix is what the filename should be prefixed with, not the full path.
-WTF::CString openTemporaryFile(const char* prefix, PlatformFileHandle&);
+CString openTemporaryFile(const char* prefix, PlatformFileHandle&);
 PlatformFileHandle openFile(const String& path, FileOpenMode);
 void closeFile(PlatformFileHandle&);
 // Returns the resulting offset from the beginning of the file if successful, -1 otherwise.
@@ -175,14 +186,15 @@ int readFromFile(PlatformFileHandle, char* data, int length);
 // Methods for dealing with loadable modules
 bool unloadModule(PlatformModule);
 
+// Encode a string for use within a file name.
+String encodeForFileName(const String&);
+
 #if PLATFORM(WIN)
 String localUserSpecificStorageDirectory();
 String roamingUserSpecificStorageDirectory();
 
 bool safeCreateFile(const String&, CFDataRef);
 #endif
-
-char* filenameFromString(const String&);
 
 #if PLATFORM(GTK)
 String filenameToString(const char*);

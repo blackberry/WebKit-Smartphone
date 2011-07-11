@@ -59,6 +59,9 @@
     #include "wx/wx.h"
 #endif
 
+#include "WebDOMNode.h"
+
+#include "WebDOMSelection.h"
 #include "WebFrame.h"
 #include "WebView.h"
 #include "WebFramePrivate.h"
@@ -152,7 +155,7 @@ wxString wxWebFrame::GetPageSource()
     return wxEmptyString;
 }
 
-void wxWebFrame::SetPageSource(const wxString& source, const wxString& baseUrl)
+void wxWebFrame::SetPageSource(const wxString& source, const wxString& baseUrl, const wxString& mimetype)
 {
     if (m_impl->frame && m_impl->frame->loader()) {
         WebCore::KURL url(WebCore::KURL(), baseUrl);
@@ -161,7 +164,7 @@ void wxWebFrame::SetPageSource(const wxString& source, const wxString& baseUrl)
         const char* contents = charBuffer;
 
         WTF::PassRefPtr<WebCore::SharedBuffer> sharedBuffer = WebCore::SharedBuffer::create(contents, strlen(contents));
-        WebCore::SubstituteData substituteData(sharedBuffer, WebCore::String("text/html"), WebCore::String("UTF-8"), WebCore::blankURL(), url);
+        WebCore::SubstituteData substituteData(sharedBuffer, mimetype, WTF::String("UTF-8"), WebCore::blankURL(), url);
 
         m_impl->frame->loader()->stop();
         m_impl->frame->loader()->load(WebCore::ResourceRequest(url), substituteData, false);
@@ -193,6 +196,30 @@ wxString wxWebFrame::GetExternalRepresentation()
     return externalRepresentation(m_impl->frame);
 }
 
+wxString wxWebFrame::GetSelectionAsHTML()
+{
+    if (m_impl->frame)
+        return m_impl->frame->selection()->toNormalizedRange()->toHTML();
+        
+    return wxEmptyString;
+}
+
+wxString wxWebFrame::GetSelectionAsText()
+{
+    if (m_impl->frame)
+        return m_impl->frame->selection()->toNormalizedRange()->text();
+        
+    return wxEmptyString;
+}
+
+wxWebKitSelection wxWebFrame::GetSelection()
+{
+    if (m_impl->frame)
+        return wxWebKitSelection(m_impl->frame->selection());
+        
+    return 0;
+}
+
 wxString wxWebFrame::RunScript(const wxString& javascript)
 {
     wxString returnValue = wxEmptyString;
@@ -206,17 +233,47 @@ wxString wxWebFrame::RunScript(const wxString& javascript)
             if (jsEnabled) {
                 JSC::JSValue result = controller->executeScript(javascript, true).jsValue();
                 if (result)
-                    returnValue = wxString(result.toString(m_impl->frame->script()->globalObject(WebCore::mainThreadNormalWorld())->globalExec()).UTF8String().data(), wxConvUTF8);        
+                    returnValue = wxString(result.toString(m_impl->frame->script()->globalObject(WebCore::mainThreadNormalWorld())->globalExec()).utf8().data(), wxConvUTF8);        
             }
         }
     }
     return returnValue;
 }
 
+bool wxWebFrame::ExecuteEditCommand(const wxString& command, const wxString& parameter)
+{
+    if (m_impl->frame && IsEditable())
+        return m_impl->frame->editor()->command(command).execute(parameter);
+}
+
+EditState wxWebFrame::GetEditCommandState(const wxString& command) const
+{
+    if (m_impl->frame && IsEditable()) { 
+        WebCore::TriState state = m_impl->frame->editor()->command(command).state();
+        if (state == WebCore::TrueTriState)
+            return EditStateTrue;
+        if (state == WebCore::FalseTriState)
+            return EditStateFalse;
+
+        return EditStateMixed;
+    }
+        
+    return EditStateFalse;
+}
+
+wxString wxWebFrame::GetEditCommandValue(const wxString& command) const
+{
+    if (m_impl->frame && IsEditable())
+        return m_impl->frame->editor()->command(command).value();
+        
+    return wxEmptyString;
+}
+
+
 bool wxWebFrame::FindString(const wxString& string, bool forward, bool caseSensitive, bool wrapSelection, bool startInSelection)
 {
     if (m_impl->frame)
-        return m_impl->frame->findString(string, forward, caseSensitive, wrapSelection, startInSelection);
+        return m_impl->frame->editor()->findString(string, forward, caseSensitive, wrapSelection, startInSelection);
 
     return false;
 }
@@ -414,17 +471,17 @@ wxWebViewDOMElementInfo wxWebFrame::HitTest(const wxPoint& pos) const
 bool wxWebFrame::ShouldClose() const
 {
     if (m_impl->frame)
-        return m_impl->frame->shouldClose();
+        return m_impl->frame->loader()->shouldClose();
 
     return true;
 }
 
-wxWebKitParseMode wxWebFrame::GetParseMode() const
+wxWebKitCompatibilityMode wxWebFrame::GetCompatibilityMode() const
 {
     if (m_impl->frame && m_impl->frame->document())
-        return (wxWebKitParseMode)m_impl->frame->document()->parseMode();
+        return (wxWebKitCompatibilityMode)m_impl->frame->document()->compatibilityMode();
 
-    return NoDocument;
+    return QuirksMode;
 }
 
 void wxWebFrame::GrantUniversalAccess()

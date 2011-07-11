@@ -75,21 +75,20 @@
 #include "ChromiumBridge.h"
 #include "ClipboardUtilitiesChromium.h"
 #include "Console.h"
+#include "DOMUtilitiesPrivate.h"
+#include "DOMWindow.h"
 #include "Document.h"
 #include "DocumentFragment.h" // Only needed for ReplaceSelectionCommand.h :(
 #include "DocumentLoader.h"
 #include "DocumentMarker.h"
-#include "DOMUtilitiesPrivate.h"
-#include "DOMWindow.h"
 #include "Editor.h"
 #include "EventHandler.h"
 #include "FormState.h"
-#include "FrameLoader.h"
 #include "FrameLoadRequest.h"
+#include "FrameLoader.h"
 #include "FrameTree.h"
 #include "FrameView.h"
 #include "GraphicsContext.h"
-#include "HistoryItem.h"
 #include "HTMLCollection.h"
 #include "HTMLFormElement.h"
 #include "HTMLFrameOwnerElement.h"
@@ -97,8 +96,8 @@
 #include "HTMLInputElement.h"
 #include "HTMLLinkElement.h"
 #include "HTMLNames.h"
+#include "HistoryItem.h"
 #include "InspectorController.h"
-#include "markup.h"
 #include "Page.h"
 #include "PlatformContextSkia.h"
 #include "PluginDocument.h"
@@ -113,8 +112,8 @@
 #include "ScriptController.h"
 #include "ScriptSourceCode.h"
 #include "ScriptValue.h"
-#include "ScrollbarTheme.h"
 #include "ScrollTypes.h"
+#include "ScrollbarTheme.h"
 #include "SelectionController.h"
 #include "Settings.h"
 #include "SkiaUtils.h"
@@ -131,6 +130,7 @@
 #include "WebHistoryItem.h"
 #include "WebInputElement.h"
 #include "WebPasswordAutocompleteListener.h"
+#include "WebPlugin.h"
 #include "WebPluginContainerImpl.h"
 #include "WebRange.h"
 #include "WebRect.h"
@@ -141,6 +141,7 @@
 #include "WebVector.h"
 #include "WebViewImpl.h"
 #include "XPathResult.h"
+#include "markup.h"
 
 #include <algorithm>
 #include <wtf/CurrentTime.h>
@@ -233,6 +234,15 @@ static void frameContentAsPlainText(size_t maxChars, Frame* frame,
     // Recursively walk the children.
     FrameTree* frameTree = frame->tree();
     for (Frame* curChild = frameTree->firstChild(); curChild; curChild = curChild->tree()->nextSibling()) {
+        // Ignore the text of non-visible frames.
+        RenderView* contentRenderer = curChild->contentRenderer();
+        RenderPart* ownerRenderer = curChild->ownerRenderer();        
+        if (!contentRenderer || !contentRenderer->width() || !contentRenderer->height()
+            || (contentRenderer->x() + contentRenderer->width() <= 0) || (contentRenderer->y() + contentRenderer->height() <= 0)
+            || (ownerRenderer && ownerRenderer->style() && ownerRenderer->style()->visibility() != VISIBLE)) {
+            continue;
+        }
+
         // Make sure the frame separator won't fill up the buffer, and give up if
         // it will. The danger is if the separator will make the buffer longer than
         // maxChars. This will cause the computation above:
@@ -248,9 +258,7 @@ static void frameContentAsPlainText(size_t maxChars, Frame* frame,
     }
 }
 
-// If the frame hosts a PluginDocument, this method returns the WebPluginContainerImpl
-// that hosts the plugin.
-static WebPluginContainerImpl* pluginContainerFromFrame(Frame* frame)
+WebPluginContainerImpl* WebFrameImpl::pluginContainerFromFrame(Frame* frame)
 {
     if (!frame)
         return 0;
@@ -348,7 +356,7 @@ public:
 
     virtual void end()
     {
-        WebPluginContainerImpl* pluginContainer = pluginContainerFromFrame(m_frame);
+        WebPluginContainerImpl* pluginContainer = WebFrameImpl::pluginContainerFromFrame(m_frame);
         if (pluginContainer && pluginContainer->supportsPaginatedPrint())
             pluginContainer->printEnd();
         else
@@ -363,7 +371,7 @@ public:
 
     virtual void computePageRects(const FloatRect& printRect, float headerHeight, float footerHeight, float userScaleFactor, float& outPageHeight)
     {
-        WebPluginContainerImpl* pluginContainer = pluginContainerFromFrame(m_frame);
+        WebPluginContainerImpl* pluginContainer = WebFrameImpl::pluginContainerFromFrame(m_frame);
         if (pluginContainer && pluginContainer->supportsPaginatedPrint())
             m_pageCount = pluginContainer->printBegin(IntRect(printRect), m_printerDPI);
         else
@@ -380,7 +388,7 @@ public:
     // instead.  Returns the scale to be applied.
     virtual float spoolPage(GraphicsContext& ctx, int pageNumber)
     {
-        WebPluginContainerImpl* pluginContainer = pluginContainerFromFrame(m_frame);
+        WebPluginContainerImpl* pluginContainer = WebFrameImpl::pluginContainerFromFrame(m_frame);
         if (pluginContainer && pluginContainer->supportsPaginatedPrint())
             pluginContainer->printPage(pageNumber, &ctx);
         else
@@ -472,9 +480,9 @@ WebString WebFrameImpl::name() const
     return m_frame->tree()->name();
 }
 
-void WebFrameImpl::clearName()
+void WebFrameImpl::setName(const WebString& name)
 {
-    m_frame->tree()->clearName();
+    m_frame->tree()->setName(name);
 }
 
 WebURL WebFrameImpl::url() const
@@ -962,7 +970,7 @@ WebHistoryItem WebFrameImpl::previousHistoryItem() const
 WebHistoryItem WebFrameImpl::currentHistoryItem() const
 {
     // If we are still loading, then we don't want to clobber the current
-    // history item as this could cause us to lose the scroll position and 
+    // history item as this could cause us to lose the scroll position and
     // document state.  However, it is OK for new navigations.
     if (m_frame->loader()->loadType() == FrameLoadTypeStandard
         || !m_frame->loader()->activeDocumentLoader()->isLoadingInAPISense())
@@ -1004,22 +1012,9 @@ void WebFrameImpl::dispatchWillSendRequest(WebURLRequest& request)
         0, 0, request.toMutableResourceRequest(), response);
 }
 
-void WebFrameImpl::commitDocumentData(const char* data, size_t dataLen)
+void WebFrameImpl::commitDocumentData(const char* data, size_t length)
 {
-    DocumentLoader* documentLoader = m_frame->loader()->documentLoader();
-
-    // Set the text encoding.  This calls begin() for us.  It is safe to call
-    // this multiple times (Mac does: page/mac/WebCoreFrameBridge.mm).
-    bool userChosen = true;
-    String encoding = documentLoader->overrideEncoding();
-    if (encoding.isNull()) {
-        userChosen = false;
-        encoding = documentLoader->response().textEncodingName();
-    }
-    m_frame->loader()->writer()->setEncoding(encoding, userChosen);
-
-    // NOTE: mac only does this if there is a document
-    m_frame->loader()->addData(data, dataLen);
+    m_frame->loader()->documentLoader()->commitData(data, length);
 }
 
 unsigned WebFrameImpl::unloadListenerCount() const
@@ -1094,17 +1089,25 @@ bool WebFrameImpl::executeCommand(const WebString& name)
     if (command[command.length() - 1] == UChar(':'))
         command = command.substring(0, command.length() - 1);
 
+    if (command == "Copy") {
+        WebPluginContainerImpl* pluginContainer = pluginContainerFromFrame(frame());
+        if (pluginContainer) {
+            pluginContainer->copy();
+            return true;
+        }
+    }
+
     bool rv = true;
 
     // Specially handling commands that Editor::execCommand does not directly
     // support.
     if (command == "DeleteToEndOfParagraph") {
         Editor* editor = frame()->editor();
-        if (!editor->deleteWithDirection(SelectionController::FORWARD,
+        if (!editor->deleteWithDirection(SelectionController::DirectionForward,
                                          ParagraphBoundary,
                                          true,
                                          false)) {
-            editor->deleteWithDirection(SelectionController::FORWARD,
+            editor->deleteWithDirection(SelectionController::DirectionForward,
                                         CharacterGranularity,
                                         true,
                                         false);
@@ -1164,6 +1167,10 @@ bool WebFrameImpl::isContinuousSpellCheckingEnabled() const
 
 bool WebFrameImpl::hasSelection() const
 {
+    WebPluginContainerImpl* pluginContainer = pluginContainerFromFrame(frame());
+    if (pluginContainer)
+        return pluginContainer->plugin()->hasSelection();
+
     // frame()->selection()->isNone() never returns true.
     return (frame()->selection()->start() != frame()->selection()->end());
 }
@@ -1175,6 +1182,10 @@ WebRange WebFrameImpl::selectionRange() const
 
 WebString WebFrameImpl::selectionAsText() const
 {
+    WebPluginContainerImpl* pluginContainer = pluginContainerFromFrame(frame());
+    if (pluginContainer)
+        return pluginContainer->plugin()->selectionAsText();
+
     RefPtr<Range> range = frame()->selection()->toNormalizedRange();
     if (!range.get())
         return WebString();
@@ -1189,6 +1200,10 @@ WebString WebFrameImpl::selectionAsText() const
 
 WebString WebFrameImpl::selectionAsMarkup() const
 {
+    WebPluginContainerImpl* pluginContainer = pluginContainerFromFrame(frame());
+    if (pluginContainer)
+        return pluginContainer->plugin()->selectionAsMarkup();
+
     RefPtr<Range> range = frame()->selection()->toNormalizedRange();
     if (!range.get())
         return WebString();
@@ -1201,7 +1216,7 @@ void WebFrameImpl::selectWordAroundPosition(Frame* frame, VisiblePosition pos)
     VisibleSelection selection(pos);
     selection.expandUsingGranularity(WordGranularity);
 
-    if (frame->shouldChangeSelection(selection)) {
+    if (frame->selection()->shouldChangeSelection(selection)) {
         TextGranularity granularity = selection.isRange() ? WordGranularity : CharacterGranularity;
         frame->selection()->setSelection(selection, granularity);
     }
@@ -1279,6 +1294,28 @@ void WebFrameImpl::printEnd()
     m_printContext.clear();
 }
 
+bool WebFrameImpl::isPageBoxVisible(int pageIndex)
+{
+    return frame()->document()->isPageBoxVisible(pageIndex);
+}
+
+void WebFrameImpl::pageSizeAndMarginsInPixels(int pageIndex,
+                                              WebSize& pageSize,
+                                              int& marginTop,
+                                              int& marginRight,
+                                              int& marginBottom,
+                                              int& marginLeft)
+{
+    IntSize size(pageSize.width, pageSize.height);
+    frame()->document()->pageSizeAndMarginsInPixels(pageIndex,
+                                                    size,
+                                                    marginTop,
+                                                    marginRight,
+                                                    marginBottom,
+                                                    marginLeft);
+    pageSize = size;
+}
+
 bool WebFrameImpl::find(int identifier,
                         const WebString& searchText,
                         const WebFindOptions& options,
@@ -1290,7 +1327,7 @@ bool WebFrameImpl::find(int identifier,
     if (!options.findNext)
         frame()->page()->unmarkAllTextMatches();
     else
-        setMarkerActive(m_activeMatch.get(), false);  // Active match is changing.
+        setMarkerActive(m_activeMatch.get(), false); // Active match is changing.
 
     // Starts the search from the current selection.
     bool startInSelection = true;
@@ -1306,7 +1343,7 @@ bool WebFrameImpl::find(int identifier,
     }
 
     ASSERT(frame() && frame()->view());
-    bool found = frame()->findString(
+    bool found = frame()->editor()->findString(
         searchText, options.forward, options.matchCase, wrapWithinFrame,
         startInSelection);
     if (found) {
@@ -1330,7 +1367,7 @@ bool WebFrameImpl::find(int identifier,
         else {
             m_activeMatch = newSelection.toNormalizedRange();
             currSelectionRect = m_activeMatch->boundingBox();
-            setMarkerActive(m_activeMatch.get(), true);  // Active.
+            setMarkerActive(m_activeMatch.get(), true); // Active.
             // WebKit draws the highlighting for all matches.
             executeCommand(WebString::fromUTF8("Unselect"));
         }
@@ -1388,8 +1425,8 @@ void WebFrameImpl::stopFinding(bool clearSelection)
     cancelPendingScopingEffort();
 
     // Remove all markers for matches found and turn off the highlighting.
-    frame()->document()->removeMarkers(DocumentMarker::TextMatch);
-    frame()->setMarkedTextMatchesAreHighlighted(false);
+    frame()->document()->markers()->removeMarkers(DocumentMarker::TextMatch);
+    frame()->editor()->setMarkedTextMatchesAreHighlighted(false);
 
     // Let the frame know that we don't want tickmarks or highlighting anymore.
     invalidateArea(InvalidateAll);
@@ -1410,7 +1447,7 @@ void WebFrameImpl::scopeStringMatches(int identifier,
         // Scoping is just about to begin.
         m_scopingComplete = false;
         // Clear highlighting for this frame.
-        if (frame()->markedTextMatchesAreHighlighted())
+        if (frame()->editor()->markedTextMatchesAreHighlighted())
             frame()->page()->unmarkAllTextMatches();
         // Clear the counters from last operation.
         m_lastMatchCount = 0;
@@ -1425,7 +1462,7 @@ void WebFrameImpl::scopeStringMatches(int identifier,
             identifier,
             searchText,
             options,
-            false);  // false=we just reset, so don't do it again.
+            false); // false=we just reset, so don't do it again.
         return;
     }
 
@@ -1439,7 +1476,7 @@ void WebFrameImpl::scopeStringMatches(int identifier,
                               m_resumeScopingFromRange->startOffset(ec2) + 1,
                               ec);
         if (ec || ec2) {
-            if (ec2)  // A non-zero |ec| happens when navigating during search.
+            if (ec2) // A non-zero |ec| happens when navigating during search.
                 ASSERT_NOT_REACHED();
             return;
         }
@@ -1448,7 +1485,7 @@ void WebFrameImpl::scopeStringMatches(int identifier,
     // This timeout controls how long we scope before releasing control.  This
     // value does not prevent us from running for longer than this, but it is
     // periodically checked to see if we have exceeded our allocated time.
-    const double maxScopingDuration = 0.1;  // seconds
+    const double maxScopingDuration = 0.1; // seconds
 
     int matchCount = 0;
     bool timedOut = false;
@@ -1535,7 +1572,7 @@ void WebFrameImpl::scopeStringMatches(int identifier,
     m_lastSearchString = searchText;
 
     if (matchCount > 0) {
-        frame()->setMarkedTextMatchesAreHighlighted(true);
+        frame()->editor()->setMarkedTextMatchesAreHighlighted(true);
 
         m_lastMatchCount += matchCount;
 
@@ -1555,8 +1592,8 @@ void WebFrameImpl::scopeStringMatches(int identifier,
             identifier,
             searchText,
             options,
-            false);  // don't reset.
-        return;  // Done for now, resume work later.
+            false); // don't reset.
+        return; // Done for now, resume work later.
     }
 
     // This frame has no further scoping left, so it is done. Other frames might,
@@ -1640,6 +1677,11 @@ WebString WebFrameImpl::counterValueForElementById(const WebString& id) const
     return counterValueForElement(element);
 }
 
+WebString WebFrameImpl::markerTextForListItem(const WebElement& webElement) const
+{
+    return WebCore::markerTextForListItem(const_cast<Element*>(webElement.constUnwrap<Element>()));
+}
+
 int WebFrameImpl::pageNumberForElementById(const WebString& id,
                                            float pageWidthInPixels,
                                            float pageHeightInPixels) const
@@ -1658,9 +1700,16 @@ int WebFrameImpl::pageNumberForElementById(const WebString& id,
 WebRect WebFrameImpl::selectionBoundsRect() const
 {
     if (hasSelection())
-        return IntRect(frame()->selectionBounds(false));
+        return IntRect(frame()->selection()->bounds(false));
 
     return WebRect();
+}
+
+bool WebFrameImpl::selectionStartHasSpellingMarkerFor(int from, int length) const
+{
+    if (!m_frame)
+        return false;
+    return m_frame->editor()->selectionStartHasSpellingMarkerFor(from, length);
 }
 
 // WebFrameImpl public ---------------------------------------------------------
@@ -1738,7 +1787,7 @@ PassRefPtr<Frame> WebFrameImpl::createChildFrame(
     // it is necessary to check the value after calling init() and
     // return without loading URL.
     // (b:791612)
-    childFrame->init();      // create an empty document
+    childFrame->init(); // create an empty document
     if (!childFrame->tree()->parent())
         return 0;
 
@@ -1761,7 +1810,7 @@ void WebFrameImpl::layout()
     // layout this frame
     FrameView* view = m_frame->view();
     if (view)
-        view->layoutIfNeededRecursive();
+        view->updateLayoutAndStyleIfNeededRecursive();
 }
 
 void WebFrameImpl::paintWithContext(GraphicsContext& gc, const WebRect& rect)
@@ -1938,7 +1987,7 @@ bool WebFrameImpl::registerPasswordListener(
     WebInputElement inputElement,
     WebPasswordAutocompleteListener* listener)
 {
-    RefPtr<HTMLInputElement> element = inputElement.operator PassRefPtr<HTMLInputElement>();
+    RefPtr<HTMLInputElement> element(inputElement.unwrap<HTMLInputElement>());
     if (!m_passwordListeners.add(element, listener).second) {
         delete listener;
         return false;
@@ -1946,10 +1995,21 @@ bool WebFrameImpl::registerPasswordListener(
     return true;
 }
 
-WebPasswordAutocompleteListener* WebFrameImpl::getPasswordListener(
-    HTMLInputElement* inputElement)
+void WebFrameImpl::notifiyPasswordListenerOfAutocomplete(
+    const WebInputElement& inputElement)
 {
-    return m_passwordListeners.get(RefPtr<HTMLInputElement>(inputElement));
+    const HTMLInputElement* element = inputElement.constUnwrap<HTMLInputElement>();
+    WebPasswordAutocompleteListener* listener = getPasswordListener(element);
+    // Password listeners need to autocomplete other fields that depend on the
+    // input element with autofill suggestions.
+    if (listener)
+        listener->performInlineAutocomplete(element->value(), false, false);
+}
+
+WebPasswordAutocompleteListener* WebFrameImpl::getPasswordListener(
+    const HTMLInputElement* inputElement)
+{
+    return m_passwordListeners.get(RefPtr<HTMLInputElement>(const_cast<HTMLInputElement*>(inputElement)));
 }
 
 // WebFrameImpl private --------------------------------------------------------
@@ -2008,14 +2068,14 @@ void WebFrameImpl::addMarker(Range* range, bool activeMatch)
         if (marker.endOffset > marker.startOffset) {
             // Find the node to add a marker to and add it.
             Node* node = textPiece->startContainer(exception);
-            frame()->document()->addMarker(node, marker);
+            frame()->document()->markers()->addMarker(node, marker);
 
             // Rendered rects for markers in WebKit are not populated until each time
             // the markers are painted. However, we need it to happen sooner, because
             // the whole purpose of tickmarks on the scrollbar is to show where
             // matches off-screen are (that haven't been painted yet).
-            Vector<DocumentMarker> markers = frame()->document()->markersForNode(node);
-            frame()->document()->setRenderedRectForMarker(
+            Vector<DocumentMarker> markers = frame()->document()->markers()->markersForNode(node);
+            frame()->document()->markers()->setRenderedRectForMarker(
                 textPiece->startContainer(exception),
                 markers[markers.size() - 1],
                 range->boundingBox());
@@ -2029,7 +2089,7 @@ void WebFrameImpl::setMarkerActive(Range* range, bool active)
     if (!range || range->collapsed(ec))
         return;
 
-    frame()->document()->setMarkersActive(range, active);
+    frame()->document()->markers()->setMarkersActive(range, active);
 }
 
 int WebFrameImpl::ordinalOfFirstMatchForFrame(WebFrameImpl* frame) const
@@ -2049,9 +2109,9 @@ int WebFrameImpl::ordinalOfFirstMatchForFrame(WebFrameImpl* frame) const
 
 bool WebFrameImpl::shouldScopeMatches(const String& searchText)
 {
-    // Don't scope if we can't find a frame or if the frame is not visible.
+    // Don't scope if we can't find a frame or a view or if the frame is not visible.
     // The user may have closed the tab/application, so abort.
-    if (!frame() || !hasVisibleContent())
+    if (!frame() || !frame()->view() || !hasVisibleContent())
         return false;
 
     ASSERT(frame()->document() && frame()->view());
@@ -2065,7 +2125,7 @@ bool WebFrameImpl::shouldScopeMatches(const String& searchText)
             searchText.substring(0, m_lastSearchString.length());
 
         if (previousSearchPrefix == m_lastSearchString)
-            return false;  // Don't search this frame, it will be fruitless.
+            return false; // Don't search this frame, it will be fruitless.
     }
 
     return true;
@@ -2135,14 +2195,8 @@ void WebFrameImpl::loadJavaScriptURL(const KURL& url)
     if (!result.getString(scriptResult))
         return;
 
-    SecurityOrigin* securityOrigin = m_frame->document()->securityOrigin();
-
-    if (!m_frame->redirectScheduler()->locationChangePending()) {
-        m_frame->loader()->stopAllLoaders();
-        m_frame->loader()->writer()->begin(m_frame->loader()->url(), true, securityOrigin);
-        m_frame->loader()->writer()->addData(scriptResult);
-        m_frame->loader()->writer()->end();
-    }
+    if (!m_frame->redirectScheduler()->locationChangePending())
+        m_frame->loader()->writer()->replaceDocument(scriptResult);
 }
 
 } // namespace WebKit

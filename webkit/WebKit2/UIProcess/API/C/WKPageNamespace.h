@@ -32,12 +32,11 @@
 extern "C" {
 #endif
 
+WK_EXPORT WKTypeID WKPageNamespaceGetTypeID();
+
 WK_EXPORT WKPageNamespaceRef WKPageNamespaceCreate(WKContextRef ownerContext);
 
 WK_EXPORT WKContextRef WKPageNamespaceGetContext(WKPageNamespaceRef pageNamespace);
-
-WK_EXPORT WKPageNamespaceRef WKPageNamespaceRetain(WKPageNamespaceRef pageNamespace);
-WK_EXPORT void WKPageNamespaceRelease(WKPageNamespaceRef pageNamespace);
 
 #ifdef __cplusplus
 }

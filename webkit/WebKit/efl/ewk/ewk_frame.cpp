@@ -31,6 +31,7 @@
 #include "FrameTree.h"
 #include "FrameView.h"
 #include "HTMLPlugInElement.h"
+#include "HistoryItem.h"
 #include "HitTestResult.h"
 #include "KURL.h"
 #include "PlatformKeyboardEvent.h"
@@ -45,11 +46,12 @@
 #include "SubstituteData.h"
 #include "WindowsKeyboardCodes.h"
 #include "ewk_private.h"
-#include <wtf/text/CString.h>
 
 #include <Eina.h>
 #include <Evas.h>
+#include <algorithm>
 #include <eina_safety_checks.h>
+#include <wtf/text/CString.h>
 
 static const char EWK_FRAME_TYPE_STR[] = "EWK_Frame";
 
@@ -68,7 +70,7 @@ struct Ewk_Frame_Smart_Data {
     struct {
         Evas_Coord w, h;
     } contents_size;
-    Eina_Bool zoom_text_only:1;
+    Eina_Bool textZoom:1;
     Eina_Bool editable:1;
 };
 
@@ -333,7 +335,7 @@ void ewk_frame_theme_set(Evas_Object* o, const char* path)
     if (!eina_stringshare_replace(&sd->theme, path))
         return;
     if (sd->frame && sd->frame->view()) {
-        sd->frame->view()->setEdjeTheme(WebCore::String(path));
+        sd->frame->view()->setEdjeTheme(WTF::String(path));
         sd->frame->page()->theme()->themeChanged();
     }
 }
@@ -404,8 +406,8 @@ Evas_Object* ewk_frame_child_find(Evas_Object* o, const char* name)
     EWK_FRAME_SD_GET_OR_RETURN(o, sd, 0);
     EINA_SAFETY_ON_NULL_RETURN_VAL(name, 0);
     EINA_SAFETY_ON_NULL_RETURN_VAL(sd->frame, 0);
-    WebCore::String s = WebCore::String::fromUTF8(name);
-    return kit(sd->frame->tree()->find(WebCore::AtomicString(s)));
+    WTF::String s = WTF::String::fromUTF8(name);
+    return kit(sd->frame->tree()->find(WTF::AtomicString(s)));
 }
 
 /**
@@ -417,7 +419,7 @@ Evas_Object* ewk_frame_child_find(Evas_Object* o, const char* name)
 Eina_Bool ewk_frame_uri_set(Evas_Object* o, const char* uri)
 {
     EWK_FRAME_SD_GET_OR_RETURN(o, sd, EINA_FALSE);
-    WebCore::KURL kurl(WebCore::KURL(), WebCore::String::fromUTF8(uri));
+    WebCore::KURL kurl(WebCore::KURL(), WTF::String::fromUTF8(uri));
     WebCore::ResourceRequest req(kurl);
     WebCore::FrameLoader* loader = sd->frame->loader();
     loader->load(req, false);
@@ -472,7 +474,7 @@ const char* ewk_frame_name_get(const Evas_Object* o)
         return 0;
     }
 
-    WebCore::String s = sd->frame->tree()->name();
+    WTF::String s = sd->frame->tree()->name();
     WTF::CString cs = s.utf8();
     sd->name = eina_stringshare_add_length(cs.data(), cs.length());
     return sd->name;
@@ -513,18 +515,18 @@ static Eina_Bool _ewk_frame_contents_set_internal(Ewk_Frame_Smart_Data *sd, cons
     if (!base_uri)
         base_uri = "about:blank";
 
-    WebCore::KURL baseKURL(WebCore::KURL(), WebCore::String::fromUTF8(base_uri));
+    WebCore::KURL baseKURL(WebCore::KURL(), WTF::String::fromUTF8(base_uri));
     WebCore::KURL unreachableKURL;
     if (unreachable_uri)
-        unreachableKURL = WebCore::KURL(WebCore::KURL(), WebCore::String::fromUTF8(unreachable_uri));
+        unreachableKURL = WebCore::KURL(WebCore::KURL(), WTF::String::fromUTF8(unreachable_uri));
     else
         unreachableKURL = WebCore::KURL();
 
     WTF::RefPtr<WebCore::SharedBuffer> buffer = WebCore::SharedBuffer::create(contents, contents_size);
     WebCore::SubstituteData substituteData
         (buffer.release(),
-         WebCore::String::fromUTF8(mime_type),
-         WebCore::String::fromUTF8(encoding),
+         WTF::String::fromUTF8(mime_type),
+         WTF::String::fromUTF8(encoding),
          baseKURL, unreachableKURL);
     WebCore::ResourceRequest request(baseKURL);
 
@@ -599,7 +601,7 @@ Eina_Bool ewk_frame_script_execute(Evas_Object* o, const char* script)
     EWK_FRAME_SD_GET_OR_RETURN(o, sd, EINA_FALSE);
     EINA_SAFETY_ON_FALSE_RETURN_VAL(sd->frame, EINA_FALSE);
     EINA_SAFETY_ON_NULL_RETURN_VAL(script, EINA_FALSE);
-    sd->frame->script()->executeScript(WebCore::String::fromUTF8(script), true);
+    sd->frame->script()->executeScript(WTF::String::fromUTF8(script), true);
     return EINA_TRUE;
 }
 
@@ -633,7 +635,7 @@ Eina_Bool ewk_frame_editable_set(Evas_Object* o, Eina_Bool editable)
     if (sd->editable == editable)
         return EINA_TRUE;
     if (editable)
-        sd->frame->applyEditingStyleToBodyElement();
+        sd->frame->editor()->applyEditingStyleToBodyElement();
     return EINA_TRUE;
 }
 
@@ -648,7 +650,7 @@ char* ewk_frame_selection_get(const Evas_Object* o)
 {
     EWK_FRAME_SD_GET_OR_RETURN(o, sd, 0);
     EINA_SAFETY_ON_NULL_RETURN_VAL(sd->frame, 0);
-    WTF::CString s = sd->frame->selectedText().utf8();
+    WTF::CString s = sd->frame->editor()->selectedText().utf8();
     if (s.isNull())
         return 0;
     return strdup(s.data());
@@ -656,7 +658,7 @@ char* ewk_frame_selection_get(const Evas_Object* o)
 
 static inline Eina_Bool _ewk_frame_editor_command(Ewk_Frame_Smart_Data* sd, const char* command)
 {
-    return sd->frame->editor()->command(WebCore::String::fromUTF8(command)).execute();
+    return sd->frame->editor()->command(WTF::String::fromUTF8(command)).execute();
 }
 
 /**
@@ -748,7 +750,7 @@ Eina_Bool ewk_frame_text_search(const Evas_Object* o, const char* string, Eina_B
     EINA_SAFETY_ON_NULL_RETURN_VAL(sd->frame, EINA_FALSE);
     EINA_SAFETY_ON_NULL_RETURN_VAL(string, EINA_FALSE);
 
-    return sd->frame->findString(WebCore::String::fromUTF8(string), forward, case_sensitive, wrap, true);
+    return sd->frame->editor()->findString(WTF::String::fromUTF8(string), forward, case_sensitive, wrap, true);
 }
 
 /**
@@ -768,8 +770,8 @@ unsigned int ewk_frame_text_matches_mark(Evas_Object* o, const char* string, Ein
     EINA_SAFETY_ON_NULL_RETURN_VAL(sd->frame, EINA_FALSE);
     EINA_SAFETY_ON_NULL_RETURN_VAL(string, 0);
 
-    sd->frame->setMarkedTextMatchesAreHighlighted(highlight);
-    return sd->frame->markAllMatchesForText(WebCore::String::fromUTF8(string), case_sensitive, limit);
+    sd->frame->editor()->setMarkedTextMatchesAreHighlighted(highlight);
+    return sd->frame->editor()->countMatchesForText(WTF::String::fromUTF8(string), case_sensitive, limit, true);
 }
 
 /**
@@ -784,7 +786,7 @@ Eina_Bool ewk_frame_text_matches_unmark_all(Evas_Object* o)
     EWK_FRAME_SD_GET_OR_RETURN(o, sd, EINA_FALSE);
     EINA_SAFETY_ON_NULL_RETURN_VAL(sd->frame, EINA_FALSE);
 
-    sd->frame->document()->removeMarkers(WebCore::DocumentMarker::TextMatch);
+    sd->frame->document()->markers()->removeMarkers(WebCore::DocumentMarker::TextMatch);
     return EINA_TRUE;
 }
 
@@ -800,7 +802,7 @@ Eina_Bool ewk_frame_text_matches_highlight_set(Evas_Object* o, Eina_Bool highlig
 {
     EWK_FRAME_SD_GET_OR_RETURN(o, sd, EINA_FALSE);
     EINA_SAFETY_ON_NULL_RETURN_VAL(sd->frame, EINA_FALSE);
-    sd->frame->setMarkedTextMatchesAreHighlighted(highlight);
+    sd->frame->editor()->setMarkedTextMatchesAreHighlighted(highlight);
     return EINA_TRUE;
 }
 
@@ -815,7 +817,56 @@ Eina_Bool ewk_frame_text_matches_highlight_get(const Evas_Object* o)
 {
     EWK_FRAME_SD_GET_OR_RETURN(o, sd, EINA_FALSE);
     EINA_SAFETY_ON_NULL_RETURN_VAL(sd->frame, EINA_FALSE);
-    return sd->frame->markedTextMatchesAreHighlighted();
+    return sd->frame->editor()->markedTextMatchesAreHighlighted();
+}
+
+/** 
+ * Comparison function used by ewk_frame_text_matches_nth_pos_get
+ */
+static bool _ewk_frame_rect_cmp_less_than(const WebCore::IntRect& i, const WebCore::IntRect& j)
+{
+    return (i.y() < j.y() || (i.y() == j.y() && i.x() < j.x()));
+}   
+    
+/**
+ * Predicate used by ewk_frame_text_matches_nth_pos_get
+ */
+static bool _ewk_frame_rect_is_negative_value(const WebCore::IntRect& i)
+{
+    return (i.x() < 0 || i.y() < 0);
+}
+
+/**
+ * Get x, y position of n-th text match in frame
+ *
+ * @param o frame object where matches are highlighted.
+ * @param n index of element 
+ * @param x where to return x position. May be @c NULL. 
+ * @param y where to return y position. May be @c NULL.
+ *
+ * @return @c EINA_TRUE on success, @c EINA_FALSE for failure - when no matches found or 
+ *         n bigger than search results.
+ */
+Eina_Bool ewk_frame_text_matches_nth_pos_get(Evas_Object* o, int n, int* x, int* y)
+{
+    EWK_FRAME_SD_GET_OR_RETURN(o, sd, EINA_FALSE);
+    EINA_SAFETY_ON_NULL_RETURN_VAL(sd->frame, EINA_FALSE);
+
+    Vector<WebCore::IntRect> intRects = sd->frame->document()->markers()->renderedRectsForMarkers(WebCore::DocumentMarker::TextMatch);
+
+    /* remove useless values */
+    std::remove_if(intRects.begin(), intRects.end(), _ewk_frame_rect_is_negative_value);
+
+    if (intRects.isEmpty() || n > intRects.size())
+      return EINA_FALSE;
+
+    std::sort(intRects.begin(), intRects.end(), _ewk_frame_rect_cmp_less_than);
+
+    if (x)
+      *x = intRects[n - 1].x();
+    if (y)
+      *y = intRects[n - 1].y();
+    return EINA_TRUE;
 }
 
 /**
@@ -972,7 +1023,10 @@ float ewk_frame_zoom_get(const Evas_Object* o)
     WebCore::FrameView* view = sd->frame->view();
     if (!view)
         return -1;
-    return view->zoomFactor();
+
+    if (sd->textZoom)
+        return view->textZoomFactor();
+    return view->pageZoomFactor();
 }
 
 /**
@@ -989,15 +1043,13 @@ Eina_Bool ewk_frame_zoom_set(Evas_Object* o, float zoom)
 {
     EWK_FRAME_SD_GET_OR_RETURN(o, sd, EINA_FALSE);
     EINA_SAFETY_ON_NULL_RETURN_VAL(sd->frame, EINA_FALSE);
-    WebCore::ZoomMode zoomMode;
-    if (sd->zoom_text_only)
-        zoomMode = WebCore::ZoomTextOnly;
-    else
-        zoomMode = WebCore::ZoomPage;
     WebCore::FrameView* view = sd->frame->view();
     if (!view)
         return EINA_FALSE;
-    view->setZoomFactor(zoom, zoomMode);
+    if (sd->textZoom)
+        view->setTextZoomFactor(zoom);
+    else
+        view->setPageZoomFactor(zoom);
     return EINA_TRUE;
 }
 
@@ -1011,7 +1063,7 @@ Eina_Bool ewk_frame_zoom_set(Evas_Object* o, float zoom)
 Eina_Bool ewk_frame_zoom_text_only_get(const Evas_Object* o)
 {
     EWK_FRAME_SD_GET_OR_RETURN(o, sd, EINA_FALSE);
-    return sd->zoom_text_only;
+    return sd->textZoom;
 }
 
 /**
@@ -1026,20 +1078,19 @@ Eina_Bool ewk_frame_zoom_text_only_set(Evas_Object* o, Eina_Bool setting)
 {
     EWK_FRAME_SD_GET_OR_RETURN(o, sd, EINA_FALSE);
     EINA_SAFETY_ON_NULL_RETURN_VAL(sd->frame, EINA_FALSE);
-    setting = !!setting;
-    if (sd->zoom_text_only == setting)
+    if (sd->textZoom == setting)
         return EINA_TRUE;
 
-    sd->zoom_text_only = setting;
-    WebCore::ZoomMode zoomMode;
-    if (sd->zoom_text_only)
-        zoomMode = WebCore::ZoomTextOnly;
-    else
-        zoomMode = WebCore::ZoomPage;
     WebCore::FrameView* view = sd->frame->view();
     if (!view)
         return EINA_FALSE;
-    view->setZoomFactor(view->zoomFactor(), zoomMode);
+
+    float zoom_level = sd->textZoom ? view->textZoomFactor() : view->pageZoomFactor();
+    sd->textZoom = setting;
+    if (sd->textZoom)
+        view->setPageAndTextZoomFactors(1, zoom_level);
+    else
+        view->setPageAndTextZoomFactors(zoom_level, 1);
     return EINA_TRUE;
 }
 
@@ -1568,7 +1619,7 @@ Eina_Bool ewk_frame_init(Evas_Object* o, Evas_Object* view, WebCore::Frame* fram
     return EINA_FALSE;
 }
 
-Evas_Object* ewk_frame_child_add(Evas_Object* o, WTF::PassRefPtr<WebCore::Frame> child, const WebCore::String& name, const WebCore::KURL& url, const WebCore::String& referrer)
+Evas_Object* ewk_frame_child_add(Evas_Object* o, WTF::PassRefPtr<WebCore::Frame> child, const WTF::String& name, const WebCore::KURL& url, const WTF::String& referrer)
 {
     EWK_FRAME_SD_GET_OR_RETURN(o, sd, 0);
     char buf[256];
@@ -1642,6 +1693,64 @@ WebCore::Frame* ewk_frame_core_get(const Evas_Object* o)
 
 /**
  * @internal
+ * Reports a resource will be requested. User may override behavior of webkit by
+ * changing values in @param request.
+ *
+ * @param o Frame.
+ * @param request Request details that user may override. Whenever values on
+ * this struct changes, it must be properly malloc'd as it will be freed
+ * afterwards.
+ *
+ * Emits signal: "resource,request,willsend"
+ */
+void ewk_frame_request_will_send(Evas_Object *o, Ewk_Frame_Resource_Request *request)
+{
+    evas_object_smart_callback_call(o, "resource,request,willsend", request);
+}
+
+/**
+ * @internal
+ * Reports that there's a new resource.
+ *
+ * @param o Frame.
+ * @param request New request details. No changes are allowed to fields.
+ *
+ * Emits signal: "resource,request,new"
+ */
+void ewk_frame_request_assign_identifier(Evas_Object *o, const Ewk_Frame_Resource_Request *request)
+{
+    evas_object_smart_callback_call(o, "resource,request,new", (void *)request);
+}
+
+/**
+ * @internal
+ * Reports that first navigation occurred
+ *
+ * @param o Frame.
+ *
+ * Emits signal: "navigation,first"
+ */
+void ewk_frame_did_perform_first_navigation(Evas_Object *o)
+{
+    evas_object_smart_callback_call(o, "navigation,first", 0);
+}
+
+/**
+ * @internal
+ * Reports frame will be saved to current state
+ *
+ * @param o Frame.
+ * @param item History item to save details to.
+ *
+ * Emits signal: "state,save"
+ */
+void ewk_frame_view_state_save(Evas_Object *o, WebCore::HistoryItem* item)
+{
+    evas_object_smart_callback_call(o, "state,save", 0);
+}
+
+/**
+ * @internal
  * Reports the frame started loading something.
  *
  * Emits signal: "load,started" with no parameters.
@@ -1657,6 +1766,58 @@ void ewk_frame_load_started(Evas_Object* o)
     main_frame = ewk_view_frame_main_get(sd->view);
     if (main_frame == o)
         ewk_view_frame_main_load_started(sd->view);
+}
+
+/**
+ * @internal
+ * Reports the frame started provisional load.
+ *
+ * @param o Frame.
+ *
+ * Emits signal: "load,provisional" with no parameters.
+ */
+void ewk_frame_load_provisional(Evas_Object* o)
+{
+    evas_object_smart_callback_call(o, "load,provisional", 0);
+}
+
+/**
+ * @internal
+ * Reports the frame finished first layout.
+ *
+ * @param o Frame.
+ *
+ * Emits signal: "load,firstlayout,finished" with no parameters.
+ */
+void ewk_frame_load_firstlayout_finished(Evas_Object *o)
+{
+    evas_object_smart_callback_call(o, "load,firstlayout,finished", 0);
+}
+
+/**
+ * @internal
+ * Reports the frame finished first non empty layout.
+ *
+ * @param o Frame.
+ *
+ * Emits signal: "load,nonemptylayout,finished" with no parameters.
+ */
+void ewk_frame_load_firstlayout_nonempty_finished(Evas_Object *o)
+{
+    evas_object_smart_callback_call(o, "load,nonemptylayout,finished", 0);
+}
+
+/**
+ * @internal
+ * Reports the loading of a document has finished on frame.
+ *
+ * @param o Frame.
+ *
+ * Emits signal: "load,document,finished" with no parameters.
+ */
+void ewk_frame_load_document_finished(Evas_Object *o)
+{
+    evas_object_smart_callback_call(o, "load,document,finished", 0);
 }
 
 /**
@@ -1838,7 +1999,7 @@ void ewk_frame_force_layout(Evas_Object* o)
         view->forceLayout(true);
 }
 
-WTF::PassRefPtr<WebCore::Widget> ewk_frame_plugin_create(Evas_Object* o, const WebCore::IntSize& pluginSize, WebCore::HTMLPlugInElement* element, const WebCore::KURL& url, const WTF::Vector<WebCore::String>& paramNames, const WTF::Vector<WebCore::String>& paramValues, const WebCore::String& mimeType, bool loadManually)
+WTF::PassRefPtr<WebCore::Widget> ewk_frame_plugin_create(Evas_Object* o, const WebCore::IntSize& pluginSize, WebCore::HTMLPlugInElement* element, const WebCore::KURL& url, const WTF::Vector<WTF::String>& paramNames, const WTF::Vector<WTF::String>& paramValues, const WTF::String& mimeType, bool loadManually)
 {
     return 0;
 }

@@ -31,7 +31,7 @@
 
 namespace WebCore {
 
-    class DocLoader;
+    class CachedResourceLoader;
     class TextResourceDecoder;
 
     class CachedScript : public CachedResource {
@@ -41,15 +41,12 @@ namespace WebCore {
 
         const String& script();
 
-        virtual void didAddClient(CachedResourceClient*);
         virtual void allClientsRemoved();
 
         virtual void setEncoding(const String&);
         virtual String encoding() const;
         virtual void data(PassRefPtr<SharedBuffer> data, bool allDataReceived);
         virtual void error();
-
-        virtual bool schedule() const { return false; }
 
         void checkNotify();
 

@@ -31,6 +31,7 @@
 #ifndef ScriptController_h
 #define ScriptController_h
 
+#include "ScriptControllerBase.h"
 #include "ScriptInstance.h"
 #include "ScriptValue.h"
 
@@ -38,9 +39,17 @@
 
 #include <v8.h>
 
+#include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/RefCounted.h>
 #include <wtf/Vector.h>
+
+#if PLATFORM(QT)
+#include <qglobal.h>
+QT_BEGIN_NAMESPACE
+class QScriptEngine;
+QT_END_NAMESPACE
+#endif
 
 struct NPObject;
 
@@ -51,20 +60,8 @@ class Event;
 class Frame;
 class HTMLPlugInElement;
 class ScriptSourceCode;
-class String;
 class Widget;
 class XSSAuditor;
-
-enum ReasonForCallingCanExecuteScripts {
-    AboutToExecuteScript,
-    NotAboutToExecuteScript
-};
-
-// Whether to call the XSSAuditor to audit a script before passing it to the JavaScript engine.
-enum ShouldAllowXSS {
-    AllowXSS,
-    DoNotAllowXSS
-};
 
 class ScriptController {
 public:
@@ -126,6 +123,10 @@ public:
 
     static bool canAccessFromCurrentOrigin(Frame*);
 
+#if ENABLE(INSPECTOR)
+    static void setCaptureCallStackForUncaughtExceptions(bool);
+#endif
+
     bool canExecuteScripts(ReasonForCallingCanExecuteScripts);
 
     // FIXME: void* is a compile hack.
@@ -153,12 +154,14 @@ public:
     static void gcUnprotectJSWrapper(void*);
 
     void finishedWithEvent(Event*);
-    void setEventHandlerLineNumber(int lineNumber);
+
+    int eventHandlerLineNumber() const;
+    int eventHandlerColumnNumber() const;
 
     void setProcessingTimerCallback(bool processingTimerCallback) { m_processingTimerCallback = processingTimerCallback; }
     // FIXME: Currently we don't use the parameter world at all.
     // See http://trac.webkit.org/changeset/54182
-    bool processingUserGesture(DOMWrapperWorld* world = 0) const;
+    static bool processingUserGesture();
     bool anyPageIsProcessingUserGesture() const;
 
     void setPaused(bool paused) { m_paused = paused; }
@@ -169,6 +172,9 @@ public:
     void clearWindowShell(bool = false);
     void updateDocument();
 
+    void namedItemAdded(HTMLDocument*, const AtomicString&);
+    void namedItemRemoved(HTMLDocument*, const AtomicString&);
+
     void updateSecurityOrigin();
     void clearScriptObjects();
     void updatePlatformScriptObjects();
@@ -177,6 +183,10 @@ public:
 #if ENABLE(NETSCAPE_PLUGIN_API)
     NPObject* createScriptObjectForPluginElement(HTMLPlugInElement*);
     NPObject* windowScriptNPObject();
+#endif
+
+#if PLATFORM(QT)
+    QScriptEngine* qtScriptEngine();
 #endif
 
     // Dummy method to avoid a bunch of ifdef's in WebCore.
@@ -194,6 +204,9 @@ private:
 
     OwnPtr<V8Proxy> m_proxy;
     typedef HashMap<Widget*, NPObject*> PluginObjectMap;
+#if PLATFORM(QT)
+    OwnPtr<QScriptEngine> m_qtScriptEngine;
+#endif
 
     // A mapping between Widgets and their corresponding script object.
     // This list is used so that when the plugin dies, we can immediately

@@ -1,22 +1,22 @@
 /*
-    Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
-                  2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
-*/
+ * Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
+ * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public License
+ * along with this library; see the file COPYING.LIB.  If not, write to
+ * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
 
 #include "config.h"
 
@@ -26,16 +26,14 @@
 #include "Attribute.h"
 #include "FloatPoint.h"
 #include "RenderPath.h"
+#include "RenderSVGResource.h"
 #include "SVGLength.h"
 #include "SVGNames.h"
 
 namespace WebCore {
 
-SVGLineElement::SVGLineElement(const QualifiedName& tagName, Document* doc)
-    : SVGStyledTransformableElement(tagName, doc)
-    , SVGTests()
-    , SVGLangSpace()
-    , SVGExternalResourcesRequired()
+inline SVGLineElement::SVGLineElement(const QualifiedName& tagName, Document* document)
+    : SVGStyledTransformableElement(tagName, document)
     , m_x1(LengthModeWidth)
     , m_y1(LengthModeHeight)
     , m_x2(LengthModeWidth)
@@ -43,8 +41,9 @@ SVGLineElement::SVGLineElement(const QualifiedName& tagName, Document* doc)
 {
 }
 
-SVGLineElement::~SVGLineElement()
+PassRefPtr<SVGLineElement> SVGLineElement::create(const QualifiedName& tagName, Document* document)
 {
+    return adoptRef(new SVGLineElement(tagName, document));
 }
 
 void SVGLineElement::parseMappedAttribute(Attribute* attr)
@@ -72,29 +71,34 @@ void SVGLineElement::svgAttributeChanged(const QualifiedName& attrName)
 {
     SVGStyledTransformableElement::svgAttributeChanged(attrName);
 
+    bool isLengthAttribute = attrName == SVGNames::x1Attr
+                          || attrName == SVGNames::y1Attr
+                          || attrName == SVGNames::x2Attr
+                          || attrName == SVGNames::y2Attr;
+
+    if (isLengthAttribute)
+        updateRelativeLengthsInformation();
+
     RenderPath* renderer = static_cast<RenderPath*>(this->renderer());
     if (!renderer)
         return;
 
     if (SVGStyledTransformableElement::isKnownAttribute(attrName)) {
         renderer->setNeedsTransformUpdate();
-        renderer->setNeedsLayout(true);
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
         return;
     }
 
-    if (attrName == SVGNames::x1Attr
-        || attrName == SVGNames::y1Attr
-        || attrName == SVGNames::x2Attr
-        || attrName == SVGNames::y2Attr) {
+    if (isLengthAttribute) {
         renderer->setNeedsPathUpdate();
-        renderer->setNeedsLayout(true);
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
         return;
     }
 
     if (SVGTests::isKnownAttribute(attrName)
         || SVGLangSpace::isKnownAttribute(attrName)
         || SVGExternalResourcesRequired::isKnownAttribute(attrName))
-        renderer->setNeedsLayout(true);
+        RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
 }
 
 void SVGLineElement::synchronizeProperty(const QualifiedName& attrName)
@@ -128,10 +132,12 @@ Path SVGLineElement::toPathData() const
                             FloatPoint(x2().value(this), y2().value(this)));
 }
 
-bool SVGLineElement::hasRelativeValues() const
+bool SVGLineElement::selfHasRelativeLengths() const
 {
-    return (x1().isRelative() || y1().isRelative() ||
-            x2().isRelative() || y2().isRelative());
+    return x1().isRelative()
+        || y1().isRelative()
+        || x2().isRelative()
+        || y2().isRelative();
 }
 
 }

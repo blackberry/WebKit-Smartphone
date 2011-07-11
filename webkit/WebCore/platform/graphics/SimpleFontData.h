@@ -1,7 +1,7 @@
 /*
  * This file is part of the internal font implementation.
  *
- * Copyright (C) 2006, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2006, 2008, 2010 Apple Inc. All rights reserved.
  * Copyright (C) 2007-2008 Torch Mobile, Inc.
  *
  * This library is free software; you can redistribute it and/or
@@ -31,13 +31,13 @@
 #include "GlyphPageTreeNode.h"
 #include "TypesettingFeatures.h"
 #include <wtf/OwnPtr.h>
+#include <wtf/PassOwnPtr.h>
 
 #if USE(ATSUI)
 typedef struct OpaqueATSUStyle* ATSUStyle;
 #endif
 
 #if USE(CORE_TEXT)
-#include <ApplicationServices/ApplicationServices.h>
 #include <wtf/RetainPtr.h>
 #endif
 
@@ -61,7 +61,6 @@ typedef struct OpaqueATSUStyle* ATSUStyle;
 namespace WebCore {
 
 class FontDescription;
-class FontPlatformData;
 class SharedBuffer;
 class SVGFontData;
 
@@ -69,10 +68,12 @@ enum Pitch { UnknownPitch, FixedPitch, VariablePitch };
 
 class SimpleFontData : public FontData {
 public:
-    SimpleFontData(const FontPlatformData&, bool customFont = false, bool loading = false, SVGFontData* data = 0);
+    SimpleFontData(const FontPlatformData&, bool isCustomFont = false, bool isLoading = false);
+#if ENABLE(SVG_FONTS)
+    SimpleFontData(PassOwnPtr<SVGFontData>, int size, bool syntheticBold, bool syntheticItalic);
+#endif
     virtual ~SimpleFontData();
 
-public:
     const FontPlatformData& platformData() const { return m_platformData; }
     SimpleFontData* smallCapsFontData(const FontDescription& fontDescription) const;
 
@@ -130,7 +131,6 @@ public:
 #endif
 
 #if USE(CORE_TEXT)
-    CTFontRef getCTFont() const;
     CFDictionaryRef getCFStringAttributes(TypesettingFeatures) const;
 #endif
 
@@ -235,7 +235,6 @@ private:
 #endif
 
 #if USE(CORE_TEXT)
-    mutable RetainPtr<CTFontRef> m_CTFont;
     mutable HashMap<unsigned, RetainPtr<CFDictionaryRef> > m_CFStringAttributes;
 #endif
 
@@ -264,7 +263,7 @@ ALWAYS_INLINE FloatRect SimpleFontData::boundsForGlyph(Glyph glyph) const
 
     bounds = platformBoundsForGlyph(glyph);
     if (!m_glyphToBoundsMap)
-        m_glyphToBoundsMap.set(new GlyphMetricsMap<FloatRect>());
+        m_glyphToBoundsMap = adoptPtr(new GlyphMetricsMap<FloatRect>);
     m_glyphToBoundsMap->setMetricsForGlyph(glyph, bounds);
     return bounds;
 }

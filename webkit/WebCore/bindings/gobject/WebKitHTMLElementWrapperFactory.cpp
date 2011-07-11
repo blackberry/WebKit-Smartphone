@@ -37,6 +37,7 @@
 #include "HTMLAnchorElement.h"
 #include "HTMLAppletElement.h"
 #include "HTMLAreaElement.h"
+#include "HTMLAudioElement.h"
 #include "HTMLBRElement.h"
 #include "HTMLBaseElement.h"
 #include "HTMLBaseFontElement.h"
@@ -151,6 +152,10 @@
 #include "webkit/WebKitDOMHTMLUListElementPrivate.h"
 #include "webkit/webkitdom.h"
 
+#if ENABLE(VIDEO)
+#include "webkit/WebKitDOMHTMLAudioElementPrivate.h"
+#endif
+
 #include <wtf/text/CString.h>
 
 namespace WebKit {
@@ -174,6 +179,13 @@ static gpointer createAreaWrapper(PassRefPtr<HTMLElement> element)
 {
     return wrapHTMLAreaElement(static_cast<HTMLAreaElement*>(element.get()));
 }
+
+#if ENABLE(VIDEO)
+static gpointer createAudioWrapper(PassRefPtr<HTMLElement> element)
+{
+    return wrapHTMLAudioElement(static_cast<HTMLAudioElement*>(element.get()));
+}
+#endif
 
 static gpointer createBaseWrapper(PassRefPtr<HTMLElement> element)
 {
@@ -442,10 +454,13 @@ static gpointer createUListWrapper(PassRefPtr<HTMLElement> element)
 
 gpointer createHTMLElementWrapper(PassRefPtr<WebCore::HTMLElement> element)
 {
-    static HashMap<WebCore::AtomicStringImpl*, CreateHTMLElementWrapperFunction> map;
+    static HashMap<WTF::AtomicStringImpl*, CreateHTMLElementWrapperFunction> map;
     if (map.isEmpty()) {
        map.set(aTag.localName().impl(), createAnchorWrapper);
        map.set(appletTag.localName().impl(), createAppletWrapper);
+#if ENABLE(VIDEO)
+       map.set(audioTag.localName().impl(), createAudioWrapper);
+#endif
        map.set(areaTag.localName().impl(), createAreaWrapper);
        map.set(baseTag.localName().impl(), createBaseWrapper);
        map.set(basefontTag.localName().impl(), createBaseFontWrapper);

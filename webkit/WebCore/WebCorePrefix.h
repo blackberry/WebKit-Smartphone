@@ -59,7 +59,9 @@
 #endif
 
 #else
+#if !defined(BUILDING_BREWMP__)
 #include <pthread.h>
+#endif
 #endif // defined(WIN32) || defined(_WIN32)
 
 #if defined(ANDROID)
@@ -75,8 +77,10 @@
 #include <JavaScriptCore/config.h>
 #endif
 
+#if !defined(BUILDING_BREWMP__)
 #include <sys/types.h>
 #include <fcntl.h>
+#endif
 #if defined(__APPLE__)
 #include <regex.h>
 #endif
@@ -106,11 +110,15 @@
 
 #endif
 
+#if !defined(BUILDING_BREWMP__)
 #include <sys/types.h>
+#endif
 #if defined(__APPLE__)
 #include <sys/param.h>
 #endif
+#if !defined(BUILDING_BREWMP__)
 #include <sys/stat.h>
+#endif
 #if defined(__APPLE__)
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -125,12 +133,20 @@
 #include <windows.h>
 #include <stdio.h>
 #else
-#include <CoreServices/CoreServices.h>
 
 #if defined(WIN32) || defined(_WIN32)
-/* Including CoreServices.h on Windows doesn't include CFNetwork.h, so we do
+// FIXME <rdar://problem/8208868> Remove support for obsolete ColorSync API, CoreServices header in CoreGraphics
+// We can remove this once the new ColorSync APIs are available in an internal Safari SDK.
+#include <ColorSync/ColorSync.h>
+#ifdef __COLORSYNCDEPRECATED__
+#define COREGRAPHICS_INCLUDES_CORESERVICES_HEADER
+#define OBSOLETE_COLORSYNC_API
+#endif
+/* Windows doesn't include CFNetwork.h via CoreServices.h, so we do
    it explicitly here to make Windows more consistent with Mac. */
 #include <CFNetwork/CFNetwork.h>
+#else
+#include <CoreServices/CoreServices.h>
 #endif
 
 #endif

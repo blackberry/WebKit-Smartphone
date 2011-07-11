@@ -10,9 +10,6 @@
  * 2.  Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer in the
  *     documentation and/or other materials provided with the distribution.
- * 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of
- *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -34,23 +31,32 @@
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
 
-namespace WebCore { class IDBDatabase; }
+namespace WebCore { class IDBDatabaseBackendInterface; }
 
 namespace WebKit {
+
+class WebIDBObjectStore;
+class WebIDBTransaction;
 
 // See comment in WebIndexedDatabase for a high level overview these classes.
 class WebIDBDatabaseImpl : public WebIDBDatabase {
 public:
-    WebIDBDatabaseImpl(WTF::PassRefPtr<WebCore::IDBDatabase> idbDatabase);
+    WebIDBDatabaseImpl(WTF::PassRefPtr<WebCore::IDBDatabaseBackendInterface>);
     virtual ~WebIDBDatabaseImpl();
 
-    virtual WebString name();
-    virtual WebString description();
-    virtual WebString version();
-    virtual WebDOMStringList objectStores();
+    virtual WebString name() const;
+    virtual WebString description() const;
+    virtual WebString version() const;
+    virtual WebDOMStringList objectStores() const;
+
+    virtual void createObjectStore(const WebString& name, const WebString& keyPath, bool autoIncrement, WebIDBCallbacks* callbacks);
+    virtual WebIDBObjectStore* objectStore(const WebString& name, unsigned short mode);
+    virtual void removeObjectStore(const WebString& name, WebIDBCallbacks* callbacks);
+    virtual void setVersion(const WebString& version, WebIDBCallbacks* callbacks);
+    virtual WebIDBTransaction* transaction(const WebDOMStringList& names, unsigned short mode, unsigned long timeout);
 
 private:
-    WTF::RefPtr<WebCore::IDBDatabase> m_idbDatabase;
+    WTF::RefPtr<WebCore::IDBDatabaseBackendInterface> m_databaseBackend;
 };
 
 } // namespace WebKit

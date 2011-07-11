@@ -2,7 +2,7 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
-	Name="WebKit2"
+	Name="WebKit"
 	ProjectGUID="{2E51ABE8-76CB-485B-A66C-46AEF4DF8ACD}"
 	RootNamespace="WebKit2"
 	Keyword="Win32Proj"
@@ -18,12 +18,11 @@
 		<Configuration
 			Name="Debug|Win32"
 			ConfigurationType="2"
-			InheritedPropertySheets="$(WebKitLibrariesDir)\tools\vsprops\FeatureDefines.vsprops;$(WebKitLibrariesDir)\tools\vsprops\common.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug.vsprops"
+			InheritedPropertySheets="$(WebKitLibrariesDir)\tools\vsprops\FeatureDefines.vsprops;$(WebKitLibrariesDir)\tools\vsprops\common.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug.vsprops;.\WebKit2Common.vsprops;.\WebKit2DirectX.vsprops;.\WebKit2Apple.vsprops"
 			CharacterSet="1"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="%SystemDrive%\cygwin\bin\which.exe bash&#x0D;&#x0A;if errorlevel 1 set PATH=%SystemDrive%\cygwin\bin;%PATH%&#x0D;&#x0A;cmd /c&#x0D;&#x0A;if exist &quot;$(WebKitOutputDir)\buildfailed&quot; grep XX$(ProjectName)XX &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;if errorlevel 1 exit 1&#x0D;&#x0A;echo XX$(ProjectName)XX &gt; &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;&#x0D;&#x0A;touch &quot;$(WebKitOutputDir)\tmp.cpp&quot;&#x0D;&#x0A;cl /analyze /nologo /c &quot;$(WebKitOutputDir)\tmp.cpp&quot; /Fo&quot;$(IntDir)\tmp.obj&quot; 2&gt;&amp;1 | findstr D9040&#x0D;&#x0A;if ERRORLEVEL 1 (set EnablePREfast=&quot;true&quot;) else (set EnablePREfast=&quot;false&quot;)&#x0D;&#x0A;if ERRORLEVEL 1 (set AnalyzeWithLargeStack=&quot;/analyze:65536&quot;) else (set AnalyzeWithLargeStack=&quot;&quot;)&#x0D;&#x0A;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(WebKitOutputDir)\include\JavaScriptCore&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitLibrariesDir)\include\JavaScriptCore\*&quot; &quot;$(WebKitOutputDir)\include\JavaScriptCore&quot;&#x0D;&#x0A;&#x0D;&#x0A;bash &quot;$(WebKitLibrariesDir)\tools\scripts\auto-version.sh&quot; &quot;$(IntDir)&quot;&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -39,30 +38,18 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="&quot;$(WebKitLibrariesDir)\Include&quot;;&quot;$(WebKitLibrariesDir)\Include\pthreads&quot;;&quot;$(WebKitOutputDir)\Include&quot;;&quot;$(WebKitOutputDir)\Include\private&quot;;&quot;$(WebKitOutputDir)\Include\JavaScriptCore&quot;;&quot;$(WebKitOutputDir)\Include\WebCore\ForwardingHeaders&quot;;&quot;$(ProjectDir)\..\Platform&quot;;&quot;$(ProjectDir)\..\Platform\CoreIPC&quot;;&quot;$(ProjectDir)\..\Shared&quot;;&quot;$(ProjectDir)\..\Shared\win&quot;;&quot;$(ProjectDir)\..\Shared\CoreIPCSupport&quot;;&quot;$(ProjectDir)\..\UIProcess&quot;;&quot;$(ProjectDir)\..\UIProcess\API\C&quot;;&quot;$(ProjectDir)\..\UIProcess\API\win&quot;;&quot;$(ProjectDir)\..\UIProcess\Launcher&quot;;&quot;$(ProjectDir)\..\UIProcess\win&quot;;&quot;$(ProjectDir)\..\WebProcess&quot;;&quot;$(ProjectDir)\..\WebProcess\WebCoreSupport&quot;;&quot;$(ProjectDir)\..\WebProcess\WebPage&quot;;&quot;$(ProjectDir)\..\WebProcess\WebPage\win&quot;;&quot;$(ProjectDir)\..\WebProcess\win&quot;"
-				PreprocessorDefinitions="_USRDLL;FRAMEWORK_NAME=WebKit2;BUILDING_WEBKIT2"
-				UsePrecompiledHeader="2"
-				PrecompiledHeaderThrough="WebKit2Prefix.h"
-				DisableSpecificWarnings="4819"
-				ForcedIncludeFiles="WebKit2Prefix.h"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="$(WebKitOutputDir)\obj\WebKit2\"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
-				CommandLine=""
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="delayimp.lib kernel32.lib user32.lib gdi32.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib usp10.lib comctl32.lib version.lib shlwapi.lib libxml2$(LibraryConfigSuffix).lib libxslt$(LibraryConfigSuffix).lib icuin$(LibraryConfigSuffix).lib icuuc$(LibraryConfigSuffix).lib SQLite3$(LibraryConfigSuffix).lib pthreadVC2$(LibraryConfigSuffix).lib CoreFoundation$(LibraryConfigSuffix).lib JavaScriptCore$(WebKitDLLConfigSuffix).lib CFNetwork$(LibraryConfigSuffix).lib CoreGraphics$(LibraryConfigSuffix).lib WebCore$(WebKitConfigSuffix).lib WebKitSystemInterface$(WebKitConfigSuffix).lib msimg32.lib QTMovieWin$(WebKitConfigSuffix).lib crypt32.lib iphlpapi.lib winmm.lib rpcrt4.lib comsuppw.lib"
-				OutputFile="$(OutDir)\$(ProjectName)$(WebKitDLLConfigSuffix).dll"
-				AdditionalLibraryDirectories="$(DXSDK_DIR)\Lib\x86"
-				DelayLoadDLLs="comdlg32.dll;usp10.dll;comctl32.dll;version.dll;libxslt$(LibraryConfigSuffix).dll;SQLite3$(LibraryConfigSuffix).dll;msimg32.dll;QTMovieWin$(WebKitConfigSuffix).dll;iphlpapi.dll;rpcrt4.dll"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -87,19 +74,17 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="mkdir 2&gt;NUL &quot;$(WebKitOutputDir)\include\WebKit2&quot;&#x0D;&#x0A;&#x0D;&#x0A;REM xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npfunctions.h&quot; &quot;$(WebKitOutputDir)\include\WebKit2&quot;&#x0D;&#x0A;REM xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npapi.h&quot; &quot;$(WebKitOutputDir)\include\WebKit2&quot;&#x0D;&#x0A;REM xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npruntime.h&quot; &quot;$(WebKitOutputDir)\include\WebKit2&quot;&#x0D;&#x0A;REM xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npruntime_internal.h&quot; &quot;$(WebKitOutputDir)\include\WebKit2&quot;&#x0D;&#x0A;&#x0D;&#x0A;REM mkdir 2&gt;NUL &quot;$(OutDir)\WebKit.resources&quot;&#x0D;&#x0A;REM xcopy /y /d &quot;$(ProjectDir)..\$(ProjectName).resources\*&quot; &quot;$(OutDir)\$(ProjectName).resources&quot;&#x0D;&#x0A;REM mkdir 2&gt;NUL &quot;$(OutDir)\WebKit.resources\en.lproj&quot;&#x0D;&#x0A;REM xcopy /y /d &quot;$(ProjectDir)..\..\English.lproj\Localizable.strings&quot; &quot;$(OutDir)\WebKit.resources\en.lproj\&quot;&#x0D;&#x0A;&#x0D;&#x0A;if exist &quot;$(WebKitOutputDir)\buildfailed&quot; del &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;"
 			/>
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
 			ConfigurationType="2"
-			InheritedPropertySheets="$(WebKitLibrariesDir)\tools\vsprops\FeatureDefines.vsprops;$(WebKitLibrariesDir)\tools\vsprops\common.vsprops;$(WebKitLibrariesDir)\tools\vsprops\release.vsprops"
+			InheritedPropertySheets="$(WebKitLibrariesDir)\tools\vsprops\FeatureDefines.vsprops;$(WebKitLibrariesDir)\tools\vsprops\common.vsprops;$(WebKitLibrariesDir)\tools\vsprops\release.vsprops;.\WebKit2Common.vsprops;.\WebKit2DirectX.vsprops;.\WebKit2Apple.vsprops"
 			CharacterSet="1"
 			WholeProgramOptimization="1"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="%SystemDrive%\cygwin\bin\which.exe bash&#x0D;&#x0A;if errorlevel 1 set PATH=%SystemDrive%\cygwin\bin;%PATH%&#x0D;&#x0A;cmd /c&#x0D;&#x0A;if exist &quot;$(WebKitOutputDir)\buildfailed&quot; grep XX$(ProjectName)XX &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;if errorlevel 1 exit 1&#x0D;&#x0A;echo XX$(ProjectName)XX &gt; &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;&#x0D;&#x0A;touch &quot;$(WebKitOutputDir)\tmp.cpp&quot;&#x0D;&#x0A;cl /analyze /nologo /c &quot;$(WebKitOutputDir)\tmp.cpp&quot; /Fo&quot;$(IntDir)\tmp.obj&quot; 2&gt;&amp;1 | findstr D9040&#x0D;&#x0A;if ERRORLEVEL 1 (set EnablePREfast=&quot;true&quot;) else (set EnablePREfast=&quot;false&quot;)&#x0D;&#x0A;if ERRORLEVEL 1 (set AnalyzeWithLargeStack=&quot;/analyze:65536&quot;) else (set AnalyzeWithLargeStack=&quot;&quot;)&#x0D;&#x0A;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(WebKitOutputDir)\include\JavaScriptCore&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitLibrariesDir)\include\JavaScriptCore\*&quot; &quot;$(WebKitOutputDir)\include\JavaScriptCore&quot;&#x0D;&#x0A;&#x0D;&#x0A;bash &quot;$(WebKitLibrariesDir)\tools\scripts\auto-version.sh&quot; &quot;$(IntDir)&quot;&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -115,30 +100,18 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="&quot;$(WebKitLibrariesDir)\Include&quot;;&quot;$(WebKitLibrariesDir)\Include\pthreads&quot;;&quot;$(WebKitOutputDir)\Include&quot;;&quot;$(WebKitOutputDir)\Include\private&quot;;&quot;$(WebKitOutputDir)\Include\JavaScriptCore&quot;;&quot;$(WebKitOutputDir)\Include\WebCore\ForwardingHeaders&quot;;&quot;$(ProjectDir)\..\Platform&quot;;&quot;$(ProjectDir)\..\Platform\CoreIPC&quot;;&quot;$(ProjectDir)\..\Shared&quot;;&quot;$(ProjectDir)\..\Shared\win&quot;;&quot;$(ProjectDir)\..\Shared\CoreIPCSupport&quot;;&quot;$(ProjectDir)\..\UIProcess&quot;;&quot;$(ProjectDir)\..\UIProcess\API\C&quot;;&quot;$(ProjectDir)\..\UIProcess\API\win&quot;;&quot;$(ProjectDir)\..\UIProcess\Launcher&quot;;&quot;$(ProjectDir)\..\UIProcess\win&quot;;&quot;$(ProjectDir)\..\WebProcess&quot;;&quot;$(ProjectDir)\..\WebProcess\WebCoreSupport&quot;;&quot;$(ProjectDir)\..\WebProcess\WebPage&quot;;&quot;$(ProjectDir)\..\WebProcess\WebPage\win&quot;;&quot;$(ProjectDir)\..\WebProcess\win&quot;"
-				PreprocessorDefinitions="_USRDLL;FRAMEWORK_NAME=WebKit2;BUILDING_WEBKIT2"
-				UsePrecompiledHeader="2"
-				PrecompiledHeaderThrough="WebKit2Prefix.h"
-				DisableSpecificWarnings="4819"
-				ForcedIncludeFiles="WebKit2Prefix.h"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="$(WebKitOutputDir)\obj\WebKit2\"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
-				CommandLine=""
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="delayimp.lib kernel32.lib user32.lib gdi32.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib usp10.lib comctl32.lib version.lib shlwapi.lib libxml2$(LibraryConfigSuffix).lib libxslt$(LibraryConfigSuffix).lib icuin$(LibraryConfigSuffix).lib icuuc$(LibraryConfigSuffix).lib SQLite3$(LibraryConfigSuffix).lib pthreadVC2$(LibraryConfigSuffix).lib CoreFoundation$(LibraryConfigSuffix).lib JavaScriptCore$(WebKitDLLConfigSuffix).lib CFNetwork$(LibraryConfigSuffix).lib CoreGraphics$(LibraryConfigSuffix).lib WebCore$(WebKitConfigSuffix).lib WebKitSystemInterface$(WebKitConfigSuffix).lib msimg32.lib QTMovieWin$(WebKitConfigSuffix).lib crypt32.lib iphlpapi.lib winmm.lib rpcrt4.lib comsuppw.lib"
-				OutputFile="$(OutDir)\$(ProjectName)$(WebKitDLLConfigSuffix).dll"
-				AdditionalLibraryDirectories="$(DXSDK_DIR)\Lib\x86"
-				DelayLoadDLLs="comdlg32.dll;usp10.dll;comctl32.dll;version.dll;libxslt$(LibraryConfigSuffix).dll;SQLite3$(LibraryConfigSuffix).dll;msimg32.dll;QTMovieWin$(WebKitConfigSuffix).dll;iphlpapi.dll;rpcrt4.dll"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -163,18 +136,16 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="mkdir 2&gt;NUL &quot;$(WebKitOutputDir)\include\WebKit2&quot;&#x0D;&#x0A;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebLocalizableStrings.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebKitGraphics.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebKitCOMAPI.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebPreferenceKeysPrivate.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npfunctions.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npapi.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npruntime.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npruntime_internal.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(OutDir)\WebKit.resources&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)..\$(ProjectName).resources\*&quot; &quot;$(OutDir)\$(ProjectName).resources&quot;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(OutDir)\WebKit.resources\en.lproj&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)..\..\English.lproj\Localizable.strings&quot; &quot;$(OutDir)\WebKit.resources\en.lproj\&quot;&#x0D;&#x0A;&#x0D;&#x0A;if exist &quot;$(WebKitOutputDir)\buildfailed&quot; del &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;"
 			/>
 		</Configuration>
 		<Configuration
 			Name="Debug_Internal|Win32"
 			ConfigurationType="2"
-			InheritedPropertySheets="$(WebKitLibrariesDir)\tools\vsprops\FeatureDefines.vsprops;$(WebKitLibrariesDir)\tools\vsprops\common.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug_internal.vsprops"
+			InheritedPropertySheets="$(WebKitLibrariesDir)\tools\vsprops\FeatureDefines.vsprops;$(WebKitLibrariesDir)\tools\vsprops\common.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug_internal.vsprops;.\WebKit2Common.vsprops;.\WebKit2DirectX.vsprops;.\WebKit2Apple.vsprops"
 			CharacterSet="1"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="%SystemDrive%\cygwin\bin\which.exe bash&#x0D;&#x0A;if errorlevel 1 set PATH=%SystemDrive%\cygwin\bin;%PATH%&#x0D;&#x0A;cmd /c&#x0D;&#x0A;if exist &quot;$(WebKitOutputDir)\buildfailed&quot; grep XX$(ProjectName)XX &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;if errorlevel 1 exit 1&#x0D;&#x0A;echo XX$(ProjectName)XX &gt; &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;&#x0D;&#x0A;touch &quot;$(WebKitOutputDir)\tmp.cpp&quot;&#x0D;&#x0A;cl /analyze /nologo /c &quot;$(WebKitOutputDir)\tmp.cpp&quot; /Fo&quot;$(IntDir)\tmp.obj&quot; 2&gt;&amp;1 | findstr D9040&#x0D;&#x0A;if ERRORLEVEL 1 (set EnablePREfast=&quot;true&quot;) else (set EnablePREfast=&quot;false&quot;)&#x0D;&#x0A;if ERRORLEVEL 1 (set AnalyzeWithLargeStack=&quot;/analyze:65536&quot;) else (set AnalyzeWithLargeStack=&quot;&quot;)&#x0D;&#x0A;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(WebKitOutputDir)\include\JavaScriptCore&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitLibrariesDir)\include\JavaScriptCore\*&quot; &quot;$(WebKitOutputDir)\include\JavaScriptCore&quot;&#x0D;&#x0A;&#x0D;&#x0A;bash &quot;$(WebKitLibrariesDir)\tools\scripts\auto-version.sh&quot; &quot;$(IntDir)&quot;&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -190,31 +161,18 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="&quot;$(WebKitLibrariesDir)\Include&quot;;&quot;$(WebKitLibrariesDir)\Include\pthreads&quot;;&quot;$(WebKitOutputDir)\Include&quot;;&quot;$(WebKitOutputDir)\Include\private&quot;;&quot;$(WebKitOutputDir)\Include\JavaScriptCore&quot;;&quot;$(WebKitOutputDir)\Include\WebCore\ForwardingHeaders&quot;;&quot;$(ProjectDir)\..\Platform&quot;;&quot;$(ProjectDir)\..\Platform\CoreIPC&quot;;&quot;$(ProjectDir)\..\Shared&quot;;&quot;$(ProjectDir)\..\Shared\win&quot;;&quot;$(ProjectDir)\..\Shared\CoreIPCSupport&quot;;&quot;$(ProjectDir)\..\UIProcess&quot;;&quot;$(ProjectDir)\..\UIProcess\API\C&quot;;&quot;$(ProjectDir)\..\UIProcess\API\win&quot;;&quot;$(ProjectDir)\..\UIProcess\Launcher&quot;;&quot;$(ProjectDir)\..\UIProcess\win&quot;;&quot;$(ProjectDir)\..\WebProcess&quot;;&quot;$(ProjectDir)\..\WebProcess\WebCoreSupport&quot;;&quot;$(ProjectDir)\..\WebProcess\WebPage&quot;;&quot;$(ProjectDir)\..\WebProcess\WebPage\win&quot;;&quot;$(ProjectDir)\..\WebProcess\win&quot;"
-				PreprocessorDefinitions="_USRDLL;WEBKIT_EXPORTS;FRAMEWORK_NAME=WebKit;BUILDING_WEBKIT2"
-				UsePrecompiledHeader="2"
-				PrecompiledHeaderThrough="WebKit2Prefix.h"
-				Detect64BitPortabilityProblems="false"
-				DisableSpecificWarnings="4819"
-				ForcedIncludeFiles="WebKit2Prefix.h"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="$(WebKitOutputDir)\obj\WebKit\"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
-				CommandLine=""
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="delayimp.lib kernel32.lib user32.lib gdi32.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib usp10.lib comctl32.lib version.lib shlwapi.lib libxml2$(LibraryConfigSuffix).lib libxslt$(LibraryConfigSuffix).lib icuin$(LibraryConfigSuffix).lib icuuc$(LibraryConfigSuffix).lib SQLite3$(LibraryConfigSuffix).lib pthreadVC2$(LibraryConfigSuffix).lib CoreFoundation$(LibraryConfigSuffix).lib JavaScriptCore$(WebKitDLLConfigSuffix).lib CFNetwork$(LibraryConfigSuffix).lib CoreGraphics$(LibraryConfigSuffix).lib WebKitGUID$(WebKitConfigSuffix).lib WebCore$(WebKitConfigSuffix).lib WebKitSystemInterface$(WebKitConfigSuffix).lib msimg32.lib QTMovieWin$(WebKitConfigSuffix).lib crypt32.lib iphlpapi.lib winmm.lib rpcrt4.lib comsuppw.lib"
-				OutputFile="$(OutDir)\$(ProjectName)$(WebKitDLLConfigSuffix).dll"
-				AdditionalLibraryDirectories="$(DXSDK_DIR)\Lib\x86"
-				DelayLoadDLLs="comdlg32.dll;usp10.dll;comctl32.dll;version.dll;libxslt$(LibraryConfigSuffix).dll;SQLite3$(LibraryConfigSuffix).dll;msimg32.dll;QTMovieWin$(WebKitConfigSuffix).dll;iphlpapi.dll;rpcrt4.dll"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -239,18 +197,16 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="mkdir 2&gt;NUL &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebLocalizableStrings.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebKitGraphics.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebKitCOMAPI.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebPreferenceKeysPrivate.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npfunctions.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npapi.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npruntime.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npruntime_internal.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(OutDir)\WebKit.resources&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)..\$(ProjectName).resources\*&quot; &quot;$(OutDir)\$(ProjectName).resources&quot;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(OutDir)\WebKit.resources\en.lproj&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)..\..\English.lproj\Localizable.strings&quot; &quot;$(OutDir)\WebKit.resources\en.lproj\&quot;&#x0D;&#x0A;&#x0D;&#x0A;if exist &quot;$(WebKitOutputDir)\buildfailed&quot; del &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;"
 			/>
 		</Configuration>
 		<Configuration
 			Name="Debug_Cairo|Win32"
 			ConfigurationType="2"
-			InheritedPropertySheets="$(WebKitLibrariesDir)\tools\vsprops\FeatureDefinesCairo.vsprops;$(WebKitLibrariesDir)\tools\vsprops\common.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug_wincairo.vsprops;$(WebKitLibrariesDir)\tools\vsprops\WinCairo.vsprops;$(WebKitLibrariesDir)\tools\vsprops\cURL.vsprops"
+			InheritedPropertySheets="$(WebKitLibrariesDir)\tools\vsprops\FeatureDefinesCairo.vsprops;$(WebKitLibrariesDir)\tools\vsprops\common.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug_wincairo.vsprops;$(WebKitLibrariesDir)\tools\vsprops\WinCairo.vsprops;$(WebKitLibrariesDir)\tools\vsprops\cURL.vsprops;.\WebKit2Common.vsprops;.\WebKit2CFLite.vsprops"
 			CharacterSet="1"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="%SystemDrive%\cygwin\bin\which.exe bash&#x0D;&#x0A;if errorlevel 1 set PATH=%SystemDrive%\cygwin\bin;%PATH%&#x0D;&#x0A;cmd /c&#x0D;&#x0A;if exist &quot;$(WebKitOutputDir)\buildfailed&quot; grep XX$(ProjectName)XX &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;if errorlevel 1 exit 1&#x0D;&#x0A;echo XX$(ProjectName)XX &gt; &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;&#x0D;&#x0A;touch &quot;$(WebKitOutputDir)\tmp.cpp&quot;&#x0D;&#x0A;cl /analyze /nologo /c &quot;$(WebKitOutputDir)\tmp.cpp&quot; /Fo&quot;$(IntDir)\tmp.obj&quot; 2&gt;&amp;1 | findstr D9040&#x0D;&#x0A;if ERRORLEVEL 1 (set EnablePREfast=&quot;true&quot;) else (set EnablePREfast=&quot;false&quot;)&#x0D;&#x0A;if ERRORLEVEL 1 (set AnalyzeWithLargeStack=&quot;/analyze:65536&quot;) else (set AnalyzeWithLargeStack=&quot;&quot;)&#x0D;&#x0A;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(WebKitOutputDir)\include\JavaScriptCore&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitLibrariesDir)\include\JavaScriptCore\*&quot; &quot;$(WebKitOutputDir)\include\JavaScriptCore&quot;&#x0D;&#x0A;&#x0D;&#x0A;bash &quot;$(WebKitLibrariesDir)\tools\scripts\auto-version.sh&quot; &quot;$(IntDir)&quot;&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -266,30 +222,18 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="&quot;$(WebKitLibrariesDir)\Include&quot;;&quot;$(WebKitLibrariesDir)\Include\pthreads&quot;;&quot;$(WebKitOutputDir)\Include&quot;;&quot;$(WebKitOutputDir)\Include\private&quot;;&quot;$(WebKitOutputDir)\Include\JavaScriptCore&quot;;&quot;$(WebKitOutputDir)\Include\WebCore\ForwardingHeaders&quot;;&quot;$(ProjectDir)\..\Platform&quot;;&quot;$(ProjectDir)\..\Platform\CoreIPC&quot;;&quot;$(ProjectDir)\..\Shared&quot;;&quot;$(ProjectDir)\..\Shared\win&quot;;&quot;$(ProjectDir)\..\Shared\CoreIPCSupport&quot;;&quot;$(ProjectDir)\..\UIProcess&quot;;&quot;$(ProjectDir)\..\UIProcess\API\C&quot;;&quot;$(ProjectDir)\..\UIProcess\API\win&quot;;&quot;$(ProjectDir)\..\UIProcess\Launcher&quot;;&quot;$(ProjectDir)\..\UIProcess\win&quot;;&quot;$(ProjectDir)\..\WebProcess&quot;;&quot;$(ProjectDir)\..\WebProcess\WebCoreSupport&quot;;&quot;$(ProjectDir)\..\WebProcess\WebPage&quot;;&quot;$(ProjectDir)\..\WebProcess\WebPage\win&quot;;&quot;$(ProjectDir)\..\WebProcess\win&quot;"
-				PreprocessorDefinitions="_USRDLL;WEBKIT_EXPORTS;FRAMEWORK_NAME=WebKit;BUILDING_WEBKIT2"
-				UsePrecompiledHeader="2"
-				PrecompiledHeaderThrough="WebKit2Prefix.h"
-				DisableSpecificWarnings="4819"
-				ForcedIncludeFiles="WebKit2Prefix.h"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="$(WebKitOutputDir)\obj\WebKit\"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
-				CommandLine=""
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="delayimp.lib kernel32.lib user32.lib gdi32.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib usp10.lib comctl32.lib version.lib shlwapi.lib libxml2$(LibraryConfigSuffix).lib libxslt$(LibraryConfigSuffix).lib icuin$(LibraryConfigSuffix).lib icuuc$(LibraryConfigSuffix).lib SQLite3$(LibraryConfigSuffix).lib pthreadVC2$(LibraryConfigSuffix).lib CFLite_Debug.lib JavaScriptCore$(WebKitConfigSuffix).lib WebKitGUID$(WebKitConfigSuffix).lib WebCore$(WebKitConfigSuffix).lib msimg32.lib crypt32.lib iphlpapi.lib winmm.lib rpcrt4.lib comsuppw.lib"
-				OutputFile="$(OutDir)\$(ProjectName)$(WebKitDLLConfigSuffix).dll"
-				AdditionalLibraryDirectories=""
-				DelayLoadDLLs="comdlg32.dll;usp10.dll;comctl32.dll;version.dll;libxslt$(LibraryConfigSuffix).dll;SQLite3$(LibraryConfigSuffix).dll;msimg32.dll;iphlpapi.dll;rpcrt4.dll"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -315,21 +259,18 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="mkdir 2&gt;NUL &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebLocalizableStrings.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebKitGraphics.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebKitCOMAPI.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebPreferenceKeysPrivate.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npfunctions.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npapi.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npruntime.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npruntime_internal.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(OutDir)\WebKit.resources&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)..\$(ProjectName).resources\*&quot; &quot;$(OutDir)\$(ProjectName).resources&quot;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(OutDir)\WebKit.resources\en.lproj&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)..\..\English.lproj\Localizable.strings&quot; &quot;$(OutDir)\WebKit.resources\en.lproj\&quot;&#x0D;&#x0A;&#x0D;&#x0A;if exist &quot;$(WebKitOutputDir)\buildfailed&quot; del &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;"
 			/>
 		</Configuration>
 		<Configuration
 			Name="Release_Cairo|Win32"
 			OutputDirectory="$(WebKitOutputDir)\bin"
-			IntermediateDirectory="$(WebKitOutputDir)\obj\$(ProjectName)\$(ConfigurationName)"
 			ConfigurationType="2"
-			InheritedPropertySheets="$(WebKitLibrariesDir)\tools\vsprops\FeatureDefinesCairo.vsprops;$(WebKitLibrariesDir)\tools\vsprops\common.vsprops;$(WebKitLibrariesDir)\tools\vsprops\release.vsprops;$(WebKitLibrariesDir)\tools\vsprops\WinCairo.vsprops;$(WebKitLibrariesDir)\tools\vsprops\cURL.vsprops"
+			InheritedPropertySheets="$(WebKitLibrariesDir)\tools\vsprops\FeatureDefinesCairo.vsprops;$(WebKitLibrariesDir)\tools\vsprops\common.vsprops;$(WebKitLibrariesDir)\tools\vsprops\release.vsprops;$(WebKitLibrariesDir)\tools\vsprops\WinCairo.vsprops;$(WebKitLibrariesDir)\tools\vsprops\cURL.vsprops;.\WebKit2Common.vsprops;.\WebKit2CFLite.vsprops"
 			CharacterSet="1"
 			WholeProgramOptimization="1"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="%SystemDrive%\cygwin\bin\which.exe bash&#x0D;&#x0A;if errorlevel 1 set PATH=%SystemDrive%\cygwin\bin;%PATH%&#x0D;&#x0A;cmd /c&#x0D;&#x0A;if exist &quot;$(WebKitOutputDir)\buildfailed&quot; grep XX$(ProjectName)XX &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;if errorlevel 1 exit 1&#x0D;&#x0A;echo XX$(ProjectName)XX &gt; &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;&#x0D;&#x0A;touch &quot;$(WebKitOutputDir)\tmp.cpp&quot;&#x0D;&#x0A;cl /analyze /nologo /c &quot;$(WebKitOutputDir)\tmp.cpp&quot; /Fo&quot;$(IntDir)\tmp.obj&quot; 2&gt;&amp;1 | findstr D9040&#x0D;&#x0A;if ERRORLEVEL 1 (set EnablePREfast=&quot;true&quot;) else (set EnablePREfast=&quot;false&quot;)&#x0D;&#x0A;if ERRORLEVEL 1 (set AnalyzeWithLargeStack=&quot;/analyze:65536&quot;) else (set AnalyzeWithLargeStack=&quot;&quot;)&#x0D;&#x0A;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(WebKitOutputDir)\include\JavaScriptCore&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitLibrariesDir)\include\JavaScriptCore\*&quot; &quot;$(WebKitOutputDir)\include\JavaScriptCore&quot;&#x0D;&#x0A;&#x0D;&#x0A;bash &quot;$(WebKitLibrariesDir)\tools\scripts\auto-version.sh&quot; &quot;$(IntDir)&quot;&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -345,30 +286,18 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="&quot;$(WebKitLibrariesDir)\Include&quot;;&quot;$(WebKitLibrariesDir)\Include\pthreads&quot;;&quot;$(WebKitOutputDir)\Include&quot;;&quot;$(WebKitOutputDir)\Include\private&quot;;&quot;$(WebKitOutputDir)\Include\JavaScriptCore&quot;;&quot;$(WebKitOutputDir)\Include\WebCore\ForwardingHeaders&quot;;&quot;$(ProjectDir)\..\Platform&quot;;&quot;$(ProjectDir)\..\Platform\CoreIPC&quot;;&quot;$(ProjectDir)\..\Shared&quot;;&quot;$(ProjectDir)\..\Shared\win&quot;;&quot;$(ProjectDir)\..\Shared\CoreIPCSupport&quot;;&quot;$(ProjectDir)\..\UIProcess&quot;;&quot;$(ProjectDir)\..\UIProcess\API\C&quot;;&quot;$(ProjectDir)\..\UIProcess\API\win&quot;;&quot;$(ProjectDir)\..\UIProcess\Launcher&quot;;&quot;$(ProjectDir)\..\UIProcess\win&quot;;&quot;$(ProjectDir)\..\WebProcess&quot;;&quot;$(ProjectDir)\..\WebProcess\WebCoreSupport&quot;;&quot;$(ProjectDir)\..\WebProcess\WebPage&quot;;&quot;$(ProjectDir)\..\WebProcess\WebPage\win&quot;;&quot;$(ProjectDir)\..\WebProcess\win&quot;"
-				PreprocessorDefinitions="_USRDLL;WEBKIT_EXPORTS;FRAMEWORK_NAME=WebKit;BUILDING_WEBKIT2"
-				UsePrecompiledHeader="2"
-				PrecompiledHeaderThrough="WebKit2Prefix.h"
-				DisableSpecificWarnings="4819"
-				ForcedIncludeFiles="WebKit2Prefix.h"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="$(WebKitOutputDir)\obj\WebKit\"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
-				CommandLine=""
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="delayimp.lib kernel32.lib user32.lib gdi32.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib usp10.lib comctl32.lib version.lib shlwapi.lib libxml2$(LibraryConfigSuffix).lib libxslt$(LibraryConfigSuffix).lib icuin$(LibraryConfigSuffix).lib icuuc$(LibraryConfigSuffix).lib SQLite3$(LibraryConfigSuffix).lib pthreadVC2$(LibraryConfigSuffix).lib CFLite.lib JavaScriptCore$(WebKitDLLConfigSuffix).lib WebKitGUID$(WebKitConfigSuffix).lib WebCore$(WebKitConfigSuffix).lib msimg32.lib crypt32.lib iphlpapi.lib winmm.lib rpcrt4.lib comsuppw.lib"
-				OutputFile="$(OutDir)\$(ProjectName)$(WebKitDLLConfigSuffix).dll"
-				AdditionalLibraryDirectories=""
-				DelayLoadDLLs="comdlg32.dll;usp10.dll;comctl32.dll;version.dll;libxslt$(LibraryConfigSuffix).dll;SQLite3$(LibraryConfigSuffix).dll;msimg32.dll;iphlpapi.dll;rpcrt4.dll"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -393,18 +322,16 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="mkdir 2&gt;NUL &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebLocalizableStrings.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebKitGraphics.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebKitCOMAPI.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebPreferenceKeysPrivate.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npfunctions.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npapi.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npruntime.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npruntime_internal.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(OutDir)\WebKit.resources&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)..\$(ProjectName).resources\*&quot; &quot;$(OutDir)\$(ProjectName).resources&quot;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(OutDir)\WebKit.resources\en.lproj&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)..\..\English.lproj\Localizable.strings&quot; &quot;$(OutDir)\WebKit.resources\en.lproj\&quot;&#x0D;&#x0A;&#x0D;&#x0A;if exist &quot;$(WebKitOutputDir)\buildfailed&quot; del &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;"
 			/>
 		</Configuration>
 		<Configuration
 			Name="Debug_All|Win32"
 			ConfigurationType="2"
-			InheritedPropertySheets="$(WebKitLibrariesDir)\tools\vsprops\FeatureDefines.vsprops;$(WebKitLibrariesDir)\tools\vsprops\common.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug_internal.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug_all.vsprops"
+			InheritedPropertySheets="$(WebKitLibrariesDir)\tools\vsprops\FeatureDefines.vsprops;$(WebKitLibrariesDir)\tools\vsprops\common.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug_internal.vsprops;$(WebKitLibrariesDir)\tools\vsprops\debug_all.vsprops;.\WebKit2Common.vsprops;.\WebKit2DirectX.vsprops;.\WebKit2Apple.vsprops"
 			CharacterSet="1"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="%SystemDrive%\cygwin\bin\which.exe bash&#x0D;&#x0A;if errorlevel 1 set PATH=%SystemDrive%\cygwin\bin;%PATH%&#x0D;&#x0A;cmd /c&#x0D;&#x0A;if exist &quot;$(WebKitOutputDir)\buildfailed&quot; grep XX$(ProjectName)XX &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;if errorlevel 1 exit 1&#x0D;&#x0A;echo XX$(ProjectName)XX &gt; &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;&#x0D;&#x0A;touch &quot;$(WebKitOutputDir)\tmp.cpp&quot;&#x0D;&#x0A;cl /analyze /nologo /c &quot;$(WebKitOutputDir)\tmp.cpp&quot; /Fo&quot;$(IntDir)\tmp.obj&quot; 2&gt;&amp;1 | findstr D9040&#x0D;&#x0A;if ERRORLEVEL 1 (set EnablePREfast=&quot;true&quot;) else (set EnablePREfast=&quot;false&quot;)&#x0D;&#x0A;if ERRORLEVEL 1 (set AnalyzeWithLargeStack=&quot;/analyze:65536&quot;) else (set AnalyzeWithLargeStack=&quot;&quot;)&#x0D;&#x0A;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(WebKitOutputDir)\include\JavaScriptCore&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitLibrariesDir)\include\JavaScriptCore\*&quot; &quot;$(WebKitOutputDir)\include\JavaScriptCore&quot;&#x0D;&#x0A;&#x0D;&#x0A;bash &quot;$(WebKitLibrariesDir)\tools\scripts\auto-version.sh&quot; &quot;$(IntDir)&quot;&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -420,31 +347,18 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="&quot;$(WebKitLibrariesDir)\Include&quot;;&quot;$(WebKitLibrariesDir)\Include\pthreads&quot;;&quot;$(WebKitOutputDir)\Include&quot;;&quot;$(WebKitOutputDir)\Include\private&quot;;&quot;$(WebKitOutputDir)\Include\JavaScriptCore&quot;;&quot;$(WebKitOutputDir)\Include\WebCore\ForwardingHeaders&quot;;&quot;$(ProjectDir)\..\Platform&quot;;&quot;$(ProjectDir)\..\Platform\CoreIPC&quot;;&quot;$(ProjectDir)\..\Shared&quot;;&quot;$(ProjectDir)\..\Shared\win&quot;;&quot;$(ProjectDir)\..\Shared\CoreIPCSupport&quot;;&quot;$(ProjectDir)\..\UIProcess&quot;;&quot;$(ProjectDir)\..\UIProcess\API\C&quot;;&quot;$(ProjectDir)\..\UIProcess\API\win&quot;;&quot;$(ProjectDir)\..\UIProcess\Launcher&quot;;&quot;$(ProjectDir)\..\UIProcess\win&quot;;&quot;$(ProjectDir)\..\WebProcess&quot;;&quot;$(ProjectDir)\..\WebProcess\WebCoreSupport&quot;;&quot;$(ProjectDir)\..\WebProcess\WebPage&quot;;&quot;$(ProjectDir)\..\WebProcess\WebPage\win&quot;;&quot;$(ProjectDir)\..\WebProcess\win&quot;"
-				PreprocessorDefinitions="_USRDLL;WEBKIT_EXPORTS;FRAMEWORK_NAME=WebKit;BUILDING_WEBKIT2"
-				UsePrecompiledHeader="2"
-				PrecompiledHeaderThrough="WebKit2Prefix.h"
-				Detect64BitPortabilityProblems="false"
-				DisableSpecificWarnings="4819"
-				ForcedIncludeFiles="WebKit2Prefix.h"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="$(WebKitOutputDir)\obj\WebKit\"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
-				CommandLine=""
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="delayimp.lib kernel32.lib user32.lib gdi32.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib usp10.lib comctl32.lib version.lib shlwapi.lib libxml2$(LibraryConfigSuffix).lib libxslt$(LibraryConfigSuffix).lib icuin$(LibraryConfigSuffix).lib icuuc$(LibraryConfigSuffix).lib SQLite3$(LibraryConfigSuffix).lib pthreadVC2$(LibraryConfigSuffix).lib CoreFoundation$(LibraryConfigSuffix).lib JavaScriptCore$(WebKitDLLConfigSuffix).lib CFNetwork$(LibraryConfigSuffix).lib CoreGraphics$(LibraryConfigSuffix).lib WebKitGUID$(WebKitConfigSuffix).lib WebCore$(WebKitConfigSuffix).lib WebKitSystemInterface$(WebKitConfigSuffix).lib msimg32.lib QTMovieWin$(WebKitConfigSuffix).lib crypt32.lib iphlpapi.lib winmm.lib rpcrt4.lib comsuppw.lib"
-				OutputFile="$(OutDir)\$(ProjectName)$(WebKitDLLConfigSuffix).dll"
-				AdditionalLibraryDirectories="$(DXSDK_DIR)\Lib\x86"
-				DelayLoadDLLs="comdlg32.dll;usp10.dll;comctl32.dll;version.dll;libxslt$(LibraryConfigSuffix).dll;SQLite3$(LibraryConfigSuffix).dll;msimg32.dll;QTMovieWin$(WebKitConfigSuffix).dll;iphlpapi.dll;rpcrt4.dll"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -469,7 +383,6 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="mkdir 2&gt;NUL &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebLocalizableStrings.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebKitGraphics.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebKitCOMAPI.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)\..\WebPreferenceKeysPrivate.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npfunctions.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npapi.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npruntime.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(WebKitOutputDir)\include\WebCore\npruntime_internal.h&quot; &quot;$(WebKitOutputDir)\include\WebKit&quot;&#x0D;&#x0A;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(OutDir)\WebKit.resources&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)..\$(ProjectName).resources\*&quot; &quot;$(OutDir)\$(ProjectName).resources&quot;&#x0D;&#x0A;mkdir 2&gt;NUL &quot;$(OutDir)\WebKit.resources\en.lproj&quot;&#x0D;&#x0A;xcopy /y /d &quot;$(ProjectDir)..\..\English.lproj\Localizable.strings&quot; &quot;$(OutDir)\WebKit.resources\en.lproj\&quot;&#x0D;&#x0A;&#x0D;&#x0A;if exist &quot;$(WebKitOutputDir)\buildfailed&quot; del &quot;$(WebKitOutputDir)\buildfailed&quot;&#x0D;&#x0A;"
 			/>
 		</Configuration>
 	</Configurations>
@@ -480,7 +393,67 @@
 			Name="Shared"
 			>
 			<File
+				RelativePath="..\Shared\APIObject.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\DrawingAreaBase.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\DrawingAreaBase.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\FontSmoothingLevel.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\ImmutableArray.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\ImmutableArray.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\ImmutableDictionary.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\ImmutableDictionary.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\MutableArray.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\MutableArray.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\MutableDictionary.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\MutableDictionary.h"
+				>
+			</File>
+			<File
 				RelativePath="..\Shared\NotImplemented.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\UserMessageCoders.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\VisitedLinkTable.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\VisitedLinkTable.h"
 				>
 			</File>
 			<File
@@ -504,6 +477,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\Shared\WebNumber.h"
+				>
+			</File>
+			<File
 				RelativePath="..\Shared\WebPreferencesStore.cpp"
 				>
 			</File>
@@ -511,9 +488,49 @@
 				RelativePath="..\Shared\WebPreferencesStore.h"
 				>
 			</File>
+			<File
+				RelativePath="..\Shared\WebSerializedScriptValue.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\WebString.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\WebURL.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\WebURLRequest.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\WebURLRequest.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\WebURLResponse.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\Shared\WebURLResponse.h"
+				>
+			</File>
 			<Filter
 				Name="CoreIPCSupport"
 				>
+				<File
+					RelativePath="..\Shared\CoreIPCSupport\DrawingAreaMessageKinds.h"
+					>
+				</File>
+				<File
+					RelativePath="..\Shared\CoreIPCSupport\DrawingAreaProxyMessageKinds.h"
+					>
+				</File>
+				<File
+					RelativePath="..\Shared\CoreIPCSupport\InjectedBundleMessageKinds.h"
+					>
+				</File>
 				<File
 					RelativePath="..\Shared\CoreIPCSupport\WebPageMessageKinds.h"
 					>
@@ -526,16 +543,28 @@
 					RelativePath="..\Shared\CoreIPCSupport\WebProcessMessageKinds.h"
 					>
 				</File>
+				<File
+					RelativePath="..\Shared\CoreIPCSupport\WebProcessProxyMessageKinds.h"
+					>
+				</File>
 			</Filter>
 			<Filter
 				Name="win"
 				>
+				<File
+					RelativePath="..\Shared\win\CommandLineWin.cpp"
+					>
+				</File>
 				<File
 					RelativePath="..\Shared\win\UpdateChunk.cpp"
 					>
 				</File>
 				<File
 					RelativePath="..\Shared\win\UpdateChunk.h"
+					>
+				</File>
+				<File
+					RelativePath="..\Shared\win\WebCoreArgumentCodersWin.cpp"
 					>
 				</File>
 				<File
@@ -546,11 +575,23 @@
 					RelativePath="..\Shared\win\WebEventFactory.h"
 					>
 				</File>
+				<File
+					RelativePath="..\Shared\win\WebURLRequestWin.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\Shared\win\WebURLResponseWin.cpp"
+					>
+				</File>
 			</Filter>
 		</Filter>
 		<Filter
 			Name="WebProcess"
 			>
+			<File
+				RelativePath="..\WebProcess\WebKitMain.cpp"
+				>
+			</File>
 			<File
 				RelativePath="..\WebProcess\WebProcess.cpp"
 				>
@@ -559,9 +600,21 @@
 				RelativePath="..\WebProcess\WebProcess.h"
 				>
 			</File>
+			<File
+				RelativePath="..\WebProcess\WebProcessMain.h"
+				>
+			</File>
 			<Filter
 				Name="WebCoreSupport"
 				>
+				<File
+					RelativePath="..\WebProcess\WebCoreSupport\WebBackForwardControllerClient.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\WebCoreSupport\WebBackForwardControllerClient.h"
+					>
+				</File>
 				<File
 					RelativePath="..\WebProcess\WebCoreSupport\WebChromeClient.cpp"
 					>
@@ -614,15 +667,43 @@
 					RelativePath="..\WebProcess\WebCoreSupport\WebInspectorClient.h"
 					>
 				</File>
+				<File
+					RelativePath="..\WebProcess\WebCoreSupport\WebPlatformStrategies.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\WebCoreSupport\WebPlatformStrategies.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\WebCoreSupport\WebPopupMenu.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\WebCoreSupport\WebPopupMenu.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\WebCoreSupport\WebSearchPopupMenu.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\WebCoreSupport\WebSearchPopupMenu.h"
+					>
+				</File>
 				<Filter
 					Name="win"
 					>
 					<File
-						RelativePath="..\WebProcess\WebCoreSupport\win\WebCoreLocalizedStrings.cpp"
+						RelativePath="..\WebProcess\WebCoreSupport\win\WebErrorsWin.cpp"
 						>
 					</File>
 					<File
-						RelativePath="..\WebProcess\WebCoreSupport\win\WebErrorsWin.cpp"
+						RelativePath="..\WebProcess\WebCoreSupport\win\WebFrameNetworkingContext.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\WebProcess\WebCoreSupport\win\WebFrameNetworkingContext.h"
 						>
 					</File>
 				</Filter>
@@ -630,6 +711,14 @@
 			<Filter
 				Name="WebPage"
 				>
+				<File
+					RelativePath="..\WebProcess\WebPage\ChunkedUpdateDrawingArea.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\WebPage\ChunkedUpdateDrawingArea.h"
+					>
+				</File>
 				<File
 					RelativePath="..\WebProcess\WebPage\DrawingArea.cpp"
 					>
@@ -639,11 +728,19 @@
 					>
 				</File>
 				<File
-					RelativePath="..\WebProcess\WebPage\DrawingAreaUpdateChunk.cpp"
+					RelativePath="..\WebProcess\WebPage\WebBackForwardListProxy.cpp"
 					>
 				</File>
 				<File
-					RelativePath="..\WebProcess\WebPage\DrawingAreaUpdateChunk.h"
+					RelativePath="..\WebProcess\WebPage\WebBackForwardListProxy.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\WebPage\WebEditCommand.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\WebPage\WebEditCommand.h"
 					>
 				</File>
 				<File
@@ -666,7 +763,7 @@
 					Name="win"
 					>
 					<File
-						RelativePath="..\WebProcess\WebPage\win\DrawingAreaUpdateChunkWin.cpp"
+						RelativePath="..\WebProcess\WebPage\win\ChunkedUpdateDrawingAreaWin.cpp"
 						>
 					</File>
 					<File
@@ -679,44 +776,300 @@
 				Name="win"
 				>
 				<File
-					RelativePath="..\WebProcess\win\DllMain.cpp"
+					RelativePath="..\WebProcess\win\WebProcessMainWin.cpp"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="InjectedBundle"
+				>
+				<File
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundle.cpp"
 					>
 				</File>
 				<File
-					RelativePath="..\WebProcess\win\WebLocalizableStrings.cpp"
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundle.h"
 					>
 				</File>
 				<File
-					RelativePath="..\WebProcess\win\WebLocalizableStrings.h"
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundlePageEditorClient.cpp"
 					>
 				</File>
 				<File
-					RelativePath="..\WebProcess\win\WebProcessMain.cpp"
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundlePageEditorClient.h"
 					>
 				</File>
 				<File
-					RelativePath="..\WebProcess\win\WebProcessMain.h"
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundlePageFormClient.cpp"
 					>
 				</File>
+				<File
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundlePageFormClient.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundlePageLoaderClient.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundlePageLoaderClient.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundlePageUIClient.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundlePageUIClient.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundleScriptWorld.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundleScriptWorld.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\InjectedBundle\InjectedBundleUserMessageCoders.h"
+					>
+				</File>
+				<Filter
+					Name="API"
+					>
+					<Filter
+						Name="c"
+						>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundle.cpp"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundle.h"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleAPICast.h"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleBase.h"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleFrame.cpp"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleFrame.h"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleFramePrivate.h"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleInitialize.h"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleNode.cpp"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleNode.h"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleNodeHandle.cpp"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleNodeHandle.h"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundlePage.cpp"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundlePage.h"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundlePagePrivate.h"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundlePrivate.h"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleRange.cpp"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleRange.h"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleScriptWorld.cpp"
+							>
+						</File>
+						<File
+							RelativePath="..\WebProcess\InjectedBundle\API\c\WKBundleScriptWorld.h"
+							>
+						</File>
+					</Filter>
+				</Filter>
+				<Filter
+					Name="DOM"
+					>
+					<File
+						RelativePath="..\WebProcess\InjectedBundle\DOM\InjectedBundleNodeHandle.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\WebProcess\InjectedBundle\DOM\InjectedBundleNodeHandle.h"
+						>
+					</File>
+				</Filter>
+				<Filter
+					Name="win"
+					>
+					<File
+						RelativePath="..\WebProcess\InjectedBundle\win\InjectedBundleWin.cpp"
+						>
+					</File>
+				</Filter>
+			</Filter>
+			<Filter
+				Name="Plugins"
+				>
+				<File
+					RelativePath="..\WebProcess\Plugins\JSNPMethod.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\JSNPMethod.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\JSNPObject.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\JSNPObject.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\NPJSObject.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\NPJSObject.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\NPRuntimeObjectMap.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\NPRuntimeObjectMap.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\NPRuntimeUtilities.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\NPRuntimeUtilities.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\Plugin.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\Plugin.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\PluginController.h"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\PluginView.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\WebProcess\Plugins\PluginView.h"
+					>
+				</File>
+				<Filter
+					Name="Netscape"
+					>
+					<File
+						RelativePath="..\WebProcess\Plugins\Netscape\NetscapeBrowserFuncs.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\WebProcess\Plugins\Netscape\NetscapeBrowserFuncs.h"
+						>
+					</File>
+					<File
+						RelativePath="..\WebProcess\Plugins\Netscape\NetscapePlugin.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\WebProcess\Plugins\Netscape\NetscapePlugin.h"
+						>
+					</File>
+					<File
+						RelativePath="..\WebProcess\Plugins\Netscape\NetscapePluginModule.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\WebProcess\Plugins\Netscape\NetscapePluginModule.h"
+						>
+					</File>
+					<File
+						RelativePath="..\WebProcess\Plugins\Netscape\NetscapePluginStream.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\WebProcess\Plugins\Netscape\NetscapePluginStream.h"
+						>
+					</File>
+					<Filter
+						Name="win"
+						>
+						<File
+							RelativePath="..\WebProcess\Plugins\Netscape\win\NetscapePluginWin.cpp"
+							>
+						</File>
+					</Filter>
+				</Filter>
 			</Filter>
 		</Filter>
 		<Filter
 			Name="UIProcess"
 			>
 			<File
+				RelativePath="..\UIProcess\ChunkedUpdateDrawingAreaProxy.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\ChunkedUpdateDrawingAreaProxy.h"
+				>
+			</File>
+			<File
 				RelativePath="..\UIProcess\DrawingAreaProxy.cpp"
 				>
 			</File>
 			<File
 				RelativePath="..\UIProcess\DrawingAreaProxy.h"
-				>
-			</File>
-			<File
-				RelativePath="..\UIProcess\DrawingAreaProxyUpdateChunk.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\UIProcess\DrawingAreaProxyUpdateChunk.h"
 				>
 			</File>
 			<File
@@ -740,11 +1093,79 @@
 				>
 			</File>
 			<File
+				RelativePath="..\UIProcess\VisitedLinkProvider.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\VisitedLinkProvider.h"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebBackForwardList.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebBackForwardList.h"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebBackForwardListItem.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebBackForwardListItem.h"
+				>
+			</File>
+			<File
 				RelativePath="..\UIProcess\WebContext.cpp"
 				>
 			</File>
 			<File
 				RelativePath="..\UIProcess\WebContext.h"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebContextInjectedBundleClient.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebContextInjectedBundleClient.h"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebContextUserMessageCoders.h"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebEditCommandProxy.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebEditCommandProxy.h"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebFormClient.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebFormClient.h"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebFormSubmissionListenerProxy.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebFormSubmissionListenerProxy.h"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebFrameListenerProxy.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\UIProcess\WebFrameListenerProxy.h"
 				>
 			</File>
 			<File
@@ -858,6 +1279,30 @@
 						>
 					</File>
 					<File
+						RelativePath="..\UIProcess\API\C\WKArray.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKArray.h"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKBackForwardList.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKBackForwardList.h"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKBackForwardListItem.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKBackForwardListItem.h"
+						>
+					</File>
+					<File
 						RelativePath="..\UIProcess\API\C\WKBase.h"
 						>
 					</File>
@@ -871,6 +1316,46 @@
 					</File>
 					<File
 						RelativePath="..\UIProcess\API\C\WKContextPrivate.h"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\win\WKContextPrivateWin.h"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\win\WKContextWin.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKData.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKData.h"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKDictionary.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKDictionary.h"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKError.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKError.h"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKFormSubmissionListener.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKFormSubmissionListener.h"
 						>
 					</File>
 					<File
@@ -890,11 +1375,35 @@
 						>
 					</File>
 					<File
+						RelativePath="..\UIProcess\API\C\WKMutableArray.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKMutableArray.h"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKMutableDictionary.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKMutableDictionary.h"
+						>
+					</File>
+					<File
 						RelativePath="..\UIProcess\API\C\WKNavigationData.cpp"
 						>
 					</File>
 					<File
 						RelativePath="..\UIProcess\API\C\WKNavigationData.h"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKNumber.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKNumber.h"
 						>
 					</File>
 					<File
@@ -926,6 +1435,22 @@
 						>
 					</File>
 					<File
+						RelativePath="..\UIProcess\API\C\WKPreferencesPrivate.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKPreferencesPrivate.h"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKSerializedScriptValue.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKSerializedScriptValue.h"
+						>
+					</File>
+					<File
 						RelativePath="..\UIProcess\API\C\WKString.cpp"
 						>
 					</File>
@@ -934,11 +1459,35 @@
 						>
 					</File>
 					<File
+						RelativePath="..\UIProcess\API\C\WKType.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKType.h"
+						>
+					</File>
+					<File
 						RelativePath="..\UIProcess\API\C\WKURL.cpp"
 						>
 					</File>
 					<File
 						RelativePath="..\UIProcess\API\C\WKURL.h"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKURLRequest.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKURLRequest.h"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKURLResponse.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\API\C\WKURLResponse.h"
 						>
 					</File>
 					<Filter
@@ -958,6 +1507,54 @@
 						</File>
 						<File
 							RelativePath="..\UIProcess\API\C\cf\WKURLCF.h"
+							>
+						</File>
+						<File
+							RelativePath="..\UIProcess\API\C\cf\WKURLRequestCF.cpp"
+							>
+							<FileConfiguration
+								Name="Debug_Cairo|Win32"
+								ExcludedFromBuild="true"
+								>
+								<Tool
+									Name="VCCLCompilerTool"
+								/>
+							</FileConfiguration>
+							<FileConfiguration
+								Name="Release_Cairo|Win32"
+								ExcludedFromBuild="true"
+								>
+								<Tool
+									Name="VCCLCompilerTool"
+								/>
+							</FileConfiguration>
+						</File>
+						<File
+							RelativePath="..\UIProcess\API\C\cf\WKURLRequestCF.h"
+							>
+						</File>
+						<File
+							RelativePath="..\UIProcess\API\C\cf\WKURLResponseCF.cpp"
+							>
+							<FileConfiguration
+								Name="Debug_Cairo|Win32"
+								ExcludedFromBuild="true"
+								>
+								<Tool
+									Name="VCCLCompilerTool"
+								/>
+							</FileConfiguration>
+							<FileConfiguration
+								Name="Release_Cairo|Win32"
+								ExcludedFromBuild="true"
+								>
+								<Tool
+									Name="VCCLCompilerTool"
+								/>
+							</FileConfiguration>
+						</File>
+						<File
+							RelativePath="..\UIProcess\API\C\cf\WKURLResponseCF.h"
 							>
 						</File>
 					</Filter>
@@ -995,14 +1592,30 @@
 				Name="Launcher"
 				>
 				<File
-					RelativePath="..\UIProcess\Launcher\WebProcessLauncher.h"
+					RelativePath="..\UIProcess\Launcher\ProcessLauncher.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\UIProcess\Launcher\ProcessLauncher.h"
+					>
+				</File>
+				<File
+					RelativePath="..\UIProcess\Launcher\ThreadLauncher.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\UIProcess\Launcher\ThreadLauncher.h"
 					>
 				</File>
 				<Filter
 					Name="win"
 					>
 					<File
-						RelativePath="..\UIProcess\Launcher\win\WebProcessLauncher.cpp"
+						RelativePath="..\UIProcess\Launcher\win\ProcessLauncherWin.cpp"
+						>
+					</File>
+					<File
+						RelativePath="..\UIProcess\Launcher\win\ThreadLauncherWin.cpp"
 						>
 					</File>
 				</Filter>
@@ -1011,7 +1624,11 @@
 				Name="win"
 				>
 				<File
-					RelativePath="..\UIProcess\win\DrawingAreaProxyUpdateChunkWin.cpp"
+					RelativePath="..\UIProcess\win\ChunkedUpdateDrawingAreaProxyWin.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\UIProcess\win\WebContextWin.cpp"
 					>
 				</File>
 				<File
@@ -1023,10 +1640,38 @@
 					>
 				</File>
 			</Filter>
+			<Filter
+				Name="Plugins"
+				>
+				<File
+					RelativePath="..\UIProcess\Plugins\PluginInfoStore.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\UIProcess\Plugins\PluginInfoStore.h"
+					>
+				</File>
+				<Filter
+					Name="win"
+					>
+					<File
+						RelativePath="..\UIProcess\Plugins\win\PluginInfoStoreWin.cpp"
+						>
+					</File>
+				</Filter>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Platform"
 			>
+			<File
+				RelativePath="..\Platform\Module.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\Platform\Module.h"
+				>
+			</File>
 			<File
 				RelativePath="..\Platform\PlatformProcessIdentifier.h"
 				>
@@ -1037,6 +1682,10 @@
 			</File>
 			<File
 				RelativePath="..\Platform\RunLoop.h"
+				>
+			</File>
+			<File
+				RelativePath="..\Platform\SharedMemory.h"
 				>
 			</File>
 			<File
@@ -1055,7 +1704,15 @@
 				Name="win"
 				>
 				<File
+					RelativePath="..\Platform\win\ModuleWin.cpp"
+					>
+				</File>
+				<File
 					RelativePath="..\Platform\win\RunLoopWin.cpp"
+					>
+				</File>
+				<File
+					RelativePath="..\Platform\win\SharedMemoryWin.cpp"
 					>
 				</File>
 				<File
@@ -1119,6 +1776,118 @@
 					</File>
 				</Filter>
 			</Filter>
+		</Filter>
+		<Filter
+			Name="Resources"
+			>
+			<File
+				RelativePath=".\deleteButton.png"
+				>
+			</File>
+			<File
+				RelativePath=".\deleteButtonPressed.png"
+				>
+			</File>
+			<File
+				RelativePath=".\fsVideoAudioVolumeHigh.png"
+				>
+			</File>
+			<File
+				RelativePath=".\fsVideoAudioVolumeLow.png"
+				>
+			</File>
+			<File
+				RelativePath=".\fsVideoExitFullscreen.png"
+				>
+			</File>
+			<File
+				RelativePath=".\fsVideoPause.png"
+				>
+			</File>
+			<File
+				RelativePath=".\fsVideoPlay.png"
+				>
+			</File>
+			<File
+				RelativePath=".\missingImage.png"
+				>
+			</File>
+			<File
+				RelativePath=".\nullplugin.png"
+				>
+			</File>
+			<File
+				RelativePath=".\panEastCursor.png"
+				>
+			</File>
+			<File
+				RelativePath=".\panIcon.png"
+				>
+			</File>
+			<File
+				RelativePath=".\panNorthCursor.png"
+				>
+			</File>
+			<File
+				RelativePath=".\panNorthEastCursor.png"
+				>
+			</File>
+			<File
+				RelativePath=".\panNorthWestCursor.png"
+				>
+			</File>
+			<File
+				RelativePath=".\panSouthCursor.png"
+				>
+			</File>
+			<File
+				RelativePath=".\panSouthEastCursor.png"
+				>
+			</File>
+			<File
+				RelativePath=".\panSouthWestCursor.png"
+				>
+			</File>
+			<File
+				RelativePath=".\panWestCursor.png"
+				>
+			</File>
+			<File
+				RelativePath=".\searchCancel.png"
+				>
+			</File>
+			<File
+				RelativePath=".\searchCancelPressed.png"
+				>
+			</File>
+			<File
+				RelativePath=".\searchMagnifier.png"
+				>
+			</File>
+			<File
+				RelativePath=".\searchMagnifierResults.png"
+				>
+			</File>
+			<File
+				RelativePath=".\textAreaResizeCorner.png"
+				>
+			</File>
+			<File
+				RelativePath=".\verticalTextCursor.png"
+				>
+			</File>
+			<File
+				RelativePath=".\WebKit2.rc"
+				>
+			</File>
+			<File
+				RelativePath=".\zoomInCursor.png"
+				>
+			</File>
+			<File
+				RelativePath=".\zoomOutCursor.png"
+				>
+			</File>
 		</Filter>
 		<File
 			RelativePath="..\WebKit2Prefix.cpp"

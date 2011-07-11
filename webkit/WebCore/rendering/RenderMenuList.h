@@ -24,6 +24,7 @@
 #ifndef RenderMenuList_h
 #define RenderMenuList_h
 
+#include "PopupMenu.h"
 #include "PopupMenuClient.h"
 #include "RenderFlexibleBox.h"
 
@@ -35,7 +36,6 @@
 
 namespace WebCore {
 
-class PopupMenu;
 class RenderText;
 
 #if ENABLE(NO_LISTBOX_RENDERING)
@@ -82,6 +82,8 @@ private:
 
     // PopupMenuClient methods
     virtual String itemText(unsigned listIndex) const;
+    virtual String itemLabel(unsigned listIndex) const;
+    virtual String itemIcon(unsigned listIndex) const;
     virtual String itemToolTip(unsigned listIndex) const;
     virtual String itemAccessibilityText(unsigned listIndex) const;
     virtual bool itemIsEnabled(unsigned listIndex) const;
@@ -101,6 +103,8 @@ private:
     virtual bool valueShouldChangeOnHotTrack() const { return true; }
     virtual bool shouldPopOver() const { return !POPUP_MENU_PULLS_DOWN; }
     virtual void valueChanged(unsigned listIndex, bool fireOnChange = true);
+    virtual void selectionChanged(unsigned, bool) {}
+    virtual void selectionCleared() {}
     virtual FontSelector* fontSelector() const;
     virtual HostWindow* hostWindow() const;
     virtual PassRefPtr<Scrollbar> createScrollbar(ScrollbarClient*, ScrollbarOrientation, ScrollbarControlSize);

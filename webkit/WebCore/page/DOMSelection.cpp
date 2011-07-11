@@ -214,21 +214,33 @@ void DOMSelection::collapse(Node* node, int offset, ExceptionCode& ec)
     m_frame->selection()->moveTo(VisiblePosition(node, offset, DOWNSTREAM));
 }
 
-void DOMSelection::collapseToEnd()
+void DOMSelection::collapseToEnd(ExceptionCode& ec)
 {
     if (!m_frame)
         return;
 
     const VisibleSelection& selection = m_frame->selection()->selection();
+
+    if (selection.isNone()) {
+        ec = INVALID_STATE_ERR;
+        return;
+    }
+
     m_frame->selection()->moveTo(VisiblePosition(selection.end(), DOWNSTREAM));
 }
 
-void DOMSelection::collapseToStart()
+void DOMSelection::collapseToStart(ExceptionCode& ec)
 {
     if (!m_frame)
         return;
 
     const VisibleSelection& selection = m_frame->selection()->selection();
+
+    if (selection.isNone()) {
+        ec = INVALID_STATE_ERR;
+        return;
+    }
+
     m_frame->selection()->moveTo(VisiblePosition(selection.start(), DOWNSTREAM));
 }
 
@@ -280,21 +292,21 @@ void DOMSelection::modify(const String& alterString, const String& directionStri
 
     SelectionController::EAlteration alter;
     if (equalIgnoringCase(alterString, "extend"))
-        alter = SelectionController::EXTEND;
+        alter = SelectionController::AlterationExtend;
     else if (equalIgnoringCase(alterString, "move"))
-        alter = SelectionController::MOVE;
+        alter = SelectionController::AlterationMove;
     else
         return;
 
     SelectionController::EDirection direction;
     if (equalIgnoringCase(directionString, "forward"))
-        direction = SelectionController::FORWARD;
+        direction = SelectionController::DirectionForward;
     else if (equalIgnoringCase(directionString, "backward"))
-        direction = SelectionController::BACKWARD;
+        direction = SelectionController::DirectionBackward;
     else if (equalIgnoringCase(directionString, "left"))
-        direction = SelectionController::LEFT;
+        direction = SelectionController::DirectionLeft;
     else if (equalIgnoringCase(directionString, "right"))
-        direction = SelectionController::RIGHT;
+        direction = SelectionController::DirectionRight;
     else
         return;
 
@@ -424,9 +436,11 @@ void DOMSelection::deleteFromDocument()
         return;
 
     if (isCollapsed())
-        selection->modify(SelectionController::EXTEND, SelectionController::BACKWARD, CharacterGranularity);
+        selection->modify(SelectionController::AlterationExtend, SelectionController::DirectionBackward, CharacterGranularity);
 
     RefPtr<Range> selectedRange = selection->selection().toNormalizedRange();
+    if (!selectedRange)
+        return;
 
     ExceptionCode ec = 0;
     selectedRange->deleteContents(ec);

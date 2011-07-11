@@ -152,6 +152,29 @@ static JSValueRef stringForRangeCallback(JSContextRef context, JSObjectRef funct
     return JSValueMakeString(context, stringDescription.get());    
 }
 
+static JSValueRef attributedStringForRangeCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    unsigned location = UINT_MAX, length = 0;
+    if (argumentCount == 2) {
+        location = JSValueToNumber(context, arguments[0], exception);
+        length = JSValueToNumber(context, arguments[1], exception);
+    }
+    
+    JSRetainPtr<JSStringRef> stringDescription(Adopt, toAXElement(thisObject)->attributedStringForRange(location, length));
+    return JSValueMakeString(context, stringDescription.get());    
+}
+
+static JSValueRef attributedStringRangeIsMisspelledCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    unsigned location = UINT_MAX, length = 0;
+    if (argumentCount == 2) {
+        location = JSValueToNumber(context, arguments[0], exception);
+        length = JSValueToNumber(context, arguments[1], exception);
+    }
+    
+    return JSValueMakeBoolean(context, toAXElement(thisObject)->attributedStringRangeIsMisspelled(location, length));
+}
+
 static JSValueRef indexOfChildCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
 {
     if (argumentCount != 1)
@@ -169,6 +192,15 @@ static JSValueRef childAtIndexCallback(JSContextRef context, JSObjectRef functio
         indexNumber = JSValueToNumber(context, arguments[0], exception);
     
     return AccessibilityUIElement::makeJSAccessibilityUIElement(context, toAXElement(thisObject)->getChildAtIndex(indexNumber));
+}
+
+static JSValueRef linkedUIElementAtIndexCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    int indexNumber = -1;
+    if (argumentCount == 1)
+        indexNumber = JSValueToNumber(context, arguments[0], exception);
+    
+    return AccessibilityUIElement::makeJSAccessibilityUIElement(context, toAXElement(thisObject)->linkedUIElementAtIndex(indexNumber));
 }
 
 static JSValueRef disclosedRowAtIndexCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
@@ -374,6 +406,74 @@ static JSValueRef removeSelectionCallback(JSContextRef context, JSObjectRef func
     return JSValueMakeUndefined(context);
 }
 
+static JSValueRef textMarkerRangeForElementCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    AccessibilityUIElement* uiElement = 0;
+    if (argumentCount == 1)
+        uiElement = toAXElement(JSValueToObject(context, arguments[0], exception));
+    
+    return AccessibilityTextMarkerRange::makeJSAccessibilityTextMarkerRange(context, toAXElement(thisObject)->textMarkerRangeForElement(uiElement));
+}
+
+static JSValueRef textMarkerRangeLengthCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    AccessibilityTextMarkerRange* range = 0;
+    if (argumentCount == 1)
+        range = toTextMarkerRange(JSValueToObject(context, arguments[0], exception));
+    
+    return JSValueMakeNumber(context, (int)toAXElement(thisObject)->textMarkerRangeLength(range));
+}
+
+static JSValueRef textMarkerForPointCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    int x = 0;
+    int y = 0;
+    if (argumentCount == 2) {
+        x = JSValueToNumber(context, arguments[0], exception);
+        y = JSValueToNumber(context, arguments[1], exception);
+    }
+    
+    return AccessibilityTextMarker::makeJSAccessibilityTextMarker(context, toAXElement(thisObject)->textMarkerForPoint(x, y));
+}
+
+static JSValueRef textMarkerRangeForMarkersCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    AccessibilityTextMarker* startMarker = 0;
+    AccessibilityTextMarker* endMarker = 0;
+    if (argumentCount == 2) {
+        startMarker = toTextMarker(JSValueToObject(context, arguments[0], exception));
+        endMarker = toTextMarker(JSValueToObject(context, arguments[1], exception));
+    }
+    
+    return AccessibilityTextMarkerRange::makeJSAccessibilityTextMarkerRange(context, toAXElement(thisObject)->textMarkerRangeForMarkers(startMarker, endMarker));
+}
+
+static JSValueRef startTextMarkerForTextMarkerRangeCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    AccessibilityTextMarkerRange* markerRange = 0;
+    if (argumentCount == 1)
+        markerRange = toTextMarkerRange(JSValueToObject(context, arguments[0], exception));
+    
+    return AccessibilityTextMarker::makeJSAccessibilityTextMarker(context, toAXElement(thisObject)->startTextMarkerForTextMarkerRange(markerRange));
+}
+
+static JSValueRef endTextMarkerForTextMarkerRangeCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    AccessibilityTextMarkerRange* markerRange = 0;
+    if (argumentCount == 1)
+        markerRange = toTextMarkerRange(JSValueToObject(context, arguments[0], exception));
+    
+    return AccessibilityTextMarker::makeJSAccessibilityTextMarker(context, toAXElement(thisObject)->endTextMarkerForTextMarkerRange(markerRange));
+}
+
+static JSValueRef accessibilityElementForTextMarkerCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    AccessibilityTextMarker* marker = 0;
+    if (argumentCount == 1)
+        marker = toTextMarker(JSValueToObject(context, arguments[0], exception));
+    
+    return AccessibilityUIElement::makeJSAccessibilityUIElement(context, toAXElement(thisObject)->accessibilityElementForTextMarker(marker));
+}
 
 // Static Value Getters
 
@@ -574,6 +674,11 @@ static JSValueRef getIsCollapsedCallback(JSContextRef context, JSObjectRef thisO
     return JSValueMakeBoolean(context, toAXElement(thisObject)->isCollapsed());
 }
 
+static JSValueRef isIgnoredCallback(JSContextRef context, JSObjectRef thisObject, JSStringRef, JSValueRef*)
+{
+    return JSValueMakeBoolean(context, toAXElement(thisObject)->isIgnored());
+}
+
 static JSValueRef getHasPopupCallback(JSContextRef context, JSObjectRef thisObject, JSStringRef, JSValueRef*)
 {
     return JSValueMakeBoolean(context, toAXElement(thisObject)->hasPopup());
@@ -629,6 +734,47 @@ static JSValueRef removeNotificationListenerCallback(JSContextRef context, JSObj
     toAXElement(thisObject)->removeNotificationListener();
     return JSValueMakeUndefined(context);
 }
+
+// Implementation
+
+#if !SUPPORTS_AX_TEXTMARKERS
+
+AccessibilityTextMarkerRange AccessibilityUIElement::textMarkerRangeForElement(AccessibilityUIElement*)
+{
+    return 0;
+}
+
+int AccessibilityUIElement::textMarkerRangeLength(AccessibilityTextMarkerRange*)
+{
+    return 0;
+}
+
+AccessibilityTextMarkerRange AccessibilityUIElement::textMarkerRangeForMarkers(AccessibilityTextMarker*, AccessibilityTextMarker*)
+{
+    return 0;
+}
+
+AccessibilityTextMarker AccessibilityUIElement::startTextMarkerForTextMarkerRange(AccessibilityTextMarkerRange*)
+{
+    return 0;
+}
+
+AccessibilityTextMarker AccessibilityUIElement::endTextMarkerForTextMarkerRange(AccessibilityTextMarkerRange*)
+{
+    return 0;   
+}
+
+AccessibilityUIElement AccessibilityUIElement::accessibilityElementForTextMarker(AccessibilityTextMarker*)
+{
+    return 0;
+}
+
+AccessibilityTextMarker AccessibilityUIElement::textMarkerForPoint(int x, int y)
+{
+    return 0;
+}
+
+#endif
 
 // Destruction
 
@@ -690,6 +836,7 @@ JSClassRef AccessibilityUIElement::getJSClass()
         { "orientation", getOrientationCallback, 0, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "ariaIsGrabbed", getARIAIsGrabbedCallback, 0, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "ariaDropEffects", getARIADropEffectsCallback, 0, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "isIgnored", isIgnoredCallback, 0, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { 0, 0, 0, 0 }
     };
 
@@ -702,7 +849,10 @@ JSClassRef AccessibilityUIElement::getJSClass()
         { "lineForIndex", lineForIndexCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "boundsForRange", boundsForRangeCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "stringForRange", stringForRangeCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "attributedStringForRange", attributedStringForRangeCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "attributedStringRangeIsMisspelled", attributedStringRangeIsMisspelledCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "childAtIndex", childAtIndexCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "linkedUIElementAtIndex", linkedUIElementAtIndexCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "indexOfChild", indexOfChildCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "elementAtPoint", elementAtPointCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "attributesOfColumnHeaders", attributesOfColumnHeadersCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
@@ -739,6 +889,13 @@ JSClassRef AccessibilityUIElement::getJSClass()
         { "takeSelection", takeSelectionCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "addSelection", addSelectionCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "removeSelection", removeSelectionCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "textMarkerRangeForElement", textMarkerRangeForElementCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "textMarkerRangeForMarkers", textMarkerRangeForMarkersCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "startTextMarkerForTextMarkerRange", startTextMarkerForTextMarkerRangeCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "endTextMarkerForTextMarkerRange", endTextMarkerForTextMarkerRangeCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "accessibilityElementForTextMarker", accessibilityElementForTextMarkerCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "textMarkerRangeLength", textMarkerRangeLengthCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "textMarkerForPoint", textMarkerForPointCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { 0, 0, 0 }
     };
 

@@ -25,6 +25,8 @@
 
 #include "ArgumentDecoder.h"
 
+#include <stdio.h>
+
 namespace CoreIPC {
 
 ArgumentDecoder::ArgumentDecoder(const uint8_t* buffer, size_t bufferSize)
@@ -67,12 +69,17 @@ bool ArgumentDecoder::alignBufferPosition(unsigned alignment, size_t size)
     uint8_t* buffer = roundUpToAlignment(m_bufferPos, alignment);
     if (buffer + size > m_bufferEnd) {
         // We've walked off the end of this buffer.
-        m_bufferPos = m_bufferEnd;
+        markInvalid();
         return false;
     }
     
     m_bufferPos = buffer;
     return true;
+}
+
+bool ArgumentDecoder::bufferIsLargeEnoughToContain(unsigned alignment, size_t size) const
+{
+    return roundUpToAlignment(m_bufferPos, alignment) + size <= m_bufferEnd;
 }
 
 bool ArgumentDecoder::decodeBytes(Vector<uint8_t>& buffer)
@@ -185,8 +192,7 @@ bool ArgumentDecoder::removeAttachment(Attachment& attachment)
     if (m_attachments.isEmpty())
         return false;
 
-    attachment = m_attachments.first();
-    m_attachments.removeFirst();
+    attachment = m_attachments.takeFirst();
     return true;
 }
 

@@ -41,6 +41,8 @@
 #include <QGraphicsWidget>
 #include <QTime>
 
+class QStateMachine;
+
 class WebViewTraditional : public QWebView {
     Q_OBJECT
 
@@ -71,17 +73,19 @@ class WebViewGraphicsBased : public QGraphicsView {
 
 public:
     WebViewGraphicsBased(QWidget* parent);
-    virtual void resizeEvent(QResizeEvent*);
-    void setPage(QWebPage* page) { m_item->setPage(page); }
+    void setPage(QWebPage* page);
+
     void setItemCacheMode(QGraphicsItem::CacheMode mode) { m_item->setCacheMode(mode); }
     QGraphicsItem::CacheMode itemCacheMode() { return m_item->cacheMode(); }
 
     void setFrameRateMeasurementEnabled(bool enabled);
     bool frameRateMeasurementEnabled() const { return m_measureFps; }
 
+    virtual void resizeEvent(QResizeEvent*);
     virtual void paintEvent(QPaintEvent* event);
 
     void setResizesToContents(bool b);
+    bool resizesToContents() const { return m_resizesToContents; }
 
     void setYRotation(qreal angle)
     {
@@ -105,9 +109,9 @@ public slots:
     void updateFrameRate();
     void animatedFlip();
     void animatedYFlip();
+    void contentsSizeChanged(const QSize&);
 
 signals:
-    void yFlipRequest();
     void currentFPSUpdated(int fps);
 
 private:
@@ -120,6 +124,7 @@ private:
     bool m_measureFps;
     qreal m_yRotation;
     bool m_resizesToContents;
+    QStateMachine* m_machine;
     FpsTimer m_fpsTimer;
 };
 

@@ -31,6 +31,7 @@
 #include "GraphicsLayer.h"
 #include "MediaPlayerPrivate.h"
 #include "Timer.h"
+#include <wtf/Forward.h>
 #include <wtf/OwnPtr.h>
 #include <wtf/RetainPtr.h>
 
@@ -47,9 +48,9 @@ namespace WebCore {
 class GraphicsContext;
 class IntSize;
 class IntRect;
-class String;
 
 #if USE(ACCELERATED_COMPOSITING)
+class WKCACFLayer;
 class WKCAImageQueue;
 #endif
 
@@ -154,17 +155,25 @@ private:
     class LayerClient;
     friend class LayerClient;
     OwnPtr<LayerClient> m_layerClient;
+
+    class LayoutClient;
+    friend class LayoutClient;
+    OwnPtr<LayoutClient> m_layoutClient;
 #endif
 
     class VisualContextClient;
     friend class VisualContextClient;
     OwnPtr<VisualContextClient> m_visualContextClient;
 
+    void retrieveAndResetMovieTransform();
+
     MediaPlayer* m_player;
     RefPtr<QTMovie> m_movie;
 #if USE(ACCELERATED_COMPOSITING)
-    OwnPtr<GraphicsLayer> m_qtVideoLayer;
+    RefPtr<WKCACFLayer> m_qtVideoLayer;
+    OwnPtr<GraphicsLayer> m_transformLayer;
     OwnPtr<WKCAImageQueue> m_imageQueue;
+    CGAffineTransform m_movieTransform; 
 #endif
     RefPtr<QTMovieVisualContext> m_visualContext;
     float m_seekTo;
@@ -185,6 +194,7 @@ private:
     double m_timeStartedPlaying;
     double m_timeStoppedPlaying;
 #endif
+
 };
 
 }

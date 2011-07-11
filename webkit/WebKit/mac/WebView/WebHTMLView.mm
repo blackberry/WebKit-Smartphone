@@ -167,9 +167,11 @@ static bool needsCursorRectsSupportAtPoint(NSWindow* window, NSPoint point)
     if ([view isKindOfClass:[WebHTMLView class]])
         return false;
 
+#if ENABLE(NETSCAPE_PLUGIN_API)
     // Neither do NPAPI plug-ins.
     if ([view isKindOfClass:[WebBaseNetscapePluginView class]])
         return false;
+#endif
 
     // Non-Web content, WebPDFView, and WebKit plug-ins use normal cursor handling.
     return true;
@@ -353,7 +355,6 @@ static CachedResourceClient* promisedDataClient()
 - (DOMDocumentFragment *)_documentFragmentFromPasteboard:(NSPasteboard *)pasteboard inContext:(DOMRange *)context allowPlainText:(BOOL)allowPlainText;
 - (NSString *)_plainTextFromPasteboard:(NSPasteboard *)pasteboard;
 - (void)_pasteWithPasteboard:(NSPasteboard *)pasteboard allowPlainText:(BOOL)allowPlainText;
-- (void)_pasteAsPlainTextWithPasteboard:(NSPasteboard *)pasteboard;
 - (void)_removeMouseMovedObserverUnconditionally;
 - (void)_removeSuperviewObservers;
 - (void)_removeWindowObservers;
@@ -400,7 +401,7 @@ static CachedResourceClient* promisedDataClient()
 #endif
 
 @interface WebHTMLView (WebForwardDeclaration) // FIXME: Put this in a normal category and stop doing the forward declaration trick.
-- (void)_setPrinting:(BOOL)printing minimumPageWidth:(float)minPageWidth maximumPageWidth:(float)maxPageWidth adjustViewSize:(BOOL)adjustViewSize;
+- (void)_setPrinting:(BOOL)printing minimumPageWidth:(float)minPageWidth height:(float)minPageHeight maximumPageWidth:(float)maxPageWidth adjustViewSize:(BOOL)adjustViewSize paginateScreenContent:(BOOL)paginateScreenContent;
 @end
 
 @class NSTextInputContext;
@@ -442,10 +443,10 @@ struct WebHTMLViewInterpretKeyEventsParameters {
 @interface WebHTMLViewPrivate : NSObject {
 @public
     BOOL closed;
-    BOOL needsToApplyStyles;
     BOOL ignoringMouseDraggedEvents;
     BOOL printing;
     BOOL avoidingPrintOrphan;
+    BOOL paginateScreenContent;
     BOOL observingMouseMovedNotifications;
     BOOL observingSuperviewNotifications;
     BOOL observingWindowNotifications;
@@ -850,11 +851,12 @@ static NSURL* uniqueURLWithRelativePart(NSString *relativePart)
     [webView _setInsertionPasteboard:pasteboard];
 
     DOMRange *range = [self _selectedRange];
+    Frame* coreFrame = core([self _frame]);
     
 #if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
     DOMDocumentFragment *fragment = [self _documentFragmentFromPasteboard:pasteboard inContext:range allowPlainText:allowPlainText];
     if (fragment && [self _shouldInsertFragment:fragment replacingDOMRange:range givenAction:WebViewInsertActionPasted])
-        [[self _frame] _replaceSelectionWithFragment:fragment selectReplacement:NO smartReplace:[self _canSmartReplaceWithPasteboard:pasteboard] matchStyle:NO];
+        coreFrame->editor()->pasteAsFragment(core(fragment), [self _canSmartReplaceWithPasteboard:pasteboard], false);
 #else
     // Mail is ignoring the frament passed to the delegate and creates a new one.
     // We want to avoid creating the fragment twice.
@@ -862,27 +864,14 @@ static NSURL* uniqueURLWithRelativePart(NSString *relativePart)
         if ([self _shouldInsertFragment:nil replacingDOMRange:range givenAction:WebViewInsertActionPasted]) {
             DOMDocumentFragment *fragment = [self _documentFragmentFromPasteboard:pasteboard inContext:range allowPlainText:allowPlainText];
             if (fragment)
-                [[self _frame] _replaceSelectionWithFragment:fragment selectReplacement:NO smartReplace:[self _canSmartReplaceWithPasteboard:pasteboard] matchStyle:NO];
+                coreFrame->editor()->pasteAsFragment(core(fragment), [self _canSmartReplaceWithPasteboard:pasteboard], false);
         }        
     } else {
         DOMDocumentFragment *fragment = [self _documentFragmentFromPasteboard:pasteboard inContext:range allowPlainText:allowPlainText];
         if (fragment && [self _shouldInsertFragment:fragment replacingDOMRange:range givenAction:WebViewInsertActionPasted])
-            [[self _frame] _replaceSelectionWithFragment:fragment selectReplacement:NO smartReplace:[self _canSmartReplaceWithPasteboard:pasteboard] matchStyle:NO];
+            coreFrame->editor()->pasteAsFragment(core(fragment), [self _canSmartReplaceWithPasteboard:pasteboard], false);
     }
 #endif
-    [webView _setInsertionPasteboard:nil];
-    [webView release];
-}
-
-- (void)_pasteAsPlainTextWithPasteboard:(NSPasteboard *)pasteboard
-{
-    WebView *webView = [[self _webView] retain];
-    [webView _setInsertionPasteboard:pasteboard];
-
-    NSString *text = [self _plainTextFromPasteboard:pasteboard];
-    if ([self _shouldReplaceSelectionWithText:text givenAction:WebViewInsertActionPasted])
-        [[self _frame] _replaceSelectionWithText:text selectReplacement:NO smartReplace:[self _canSmartReplaceWithPasteboard:pasteboard]];
-
     [webView _setInsertionPasteboard:nil];
     [webView release];
 }
@@ -1054,7 +1043,7 @@ static NSURL* uniqueURLWithRelativePart(NSString *relativePart)
 
 - (void)_web_setPrintingModeRecursive
 {
-    [self _setPrinting:YES minimumPageWidth:0.0f maximumPageWidth:0.0f adjustViewSize:NO];
+    [self _setPrinting:YES minimumPageWidth:0 height:0 maximumPageWidth:0 adjustViewSize:NO paginateScreenContent:[self _isInScreenPaginationMode]];
 
 #ifndef NDEBUG
     _private->enumeratingSubviews = YES;
@@ -1066,7 +1055,7 @@ static NSURL* uniqueURLWithRelativePart(NSString *relativePart)
 
     unsigned count = [descendantWebHTMLViews count];
     for (unsigned i = 0; i < count; ++i)
-        [[descendantWebHTMLViews objectAtIndex:i] _setPrinting:YES minimumPageWidth:0.0f maximumPageWidth:0.0f adjustViewSize:NO];
+        [[descendantWebHTMLViews objectAtIndex:i] _setPrinting:YES minimumPageWidth:0 height:0 maximumPageWidth:0 adjustViewSize:NO paginateScreenContent:[self _isInScreenPaginationMode]];
 
     [descendantWebHTMLViews release];
 
@@ -1077,7 +1066,7 @@ static NSURL* uniqueURLWithRelativePart(NSString *relativePart)
 
 - (void)_web_clearPrintingModeRecursive
 {
-    [self _setPrinting:NO minimumPageWidth:0.0f maximumPageWidth:0.0f adjustViewSize:NO];
+    [self _setPrinting:NO minimumPageWidth:0 height:0 maximumPageWidth:0 adjustViewSize:NO paginateScreenContent:[self _isInScreenPaginationMode]];
 
 #ifndef NDEBUG
     _private->enumeratingSubviews = YES;
@@ -1089,7 +1078,7 @@ static NSURL* uniqueURLWithRelativePart(NSString *relativePart)
 
     unsigned count = [descendantWebHTMLViews count];
     for (unsigned i = 0; i < count; ++i)
-        [[descendantWebHTMLViews objectAtIndex:i] _setPrinting:NO minimumPageWidth:0.0f maximumPageWidth:0.0f adjustViewSize:NO];
+        [[descendantWebHTMLViews objectAtIndex:i] _setPrinting:NO minimumPageWidth:0 height:0 maximumPageWidth:0 adjustViewSize:NO paginateScreenContent:[self _isInScreenPaginationMode]];
 
     [descendantWebHTMLViews release];
 
@@ -1100,7 +1089,7 @@ static NSURL* uniqueURLWithRelativePart(NSString *relativePart)
 
 - (void)_web_setPrintingModeRecursiveAndAdjustViewSize
 {
-    [self _setPrinting:YES minimumPageWidth:0.0f maximumPageWidth:0.0f adjustViewSize:YES];
+    [self _setPrinting:YES minimumPageWidth:0 height:0 maximumPageWidth:0 adjustViewSize:YES paginateScreenContent:[self _isInScreenPaginationMode]];
 
 #ifndef NDEBUG
     _private->enumeratingSubviews = YES;
@@ -1112,7 +1101,7 @@ static NSURL* uniqueURLWithRelativePart(NSString *relativePart)
 
     unsigned count = [descendantWebHTMLViews count];
     for (unsigned i = 0; i < count; ++i)
-        [[descendantWebHTMLViews objectAtIndex:i] _setPrinting:YES minimumPageWidth:0.0f maximumPageWidth:0.0f adjustViewSize:YES];
+        [[descendantWebHTMLViews objectAtIndex:i] _setPrinting:YES minimumPageWidth:0 height:0 maximumPageWidth:0 adjustViewSize:YES paginateScreenContent:[self _isInScreenPaginationMode]];
 
     [descendantWebHTMLViews release];
 
@@ -1215,7 +1204,7 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
 #ifndef BUILDING_ON_TIGER
                 _private->inScrollPositionChanged = YES;
 #endif
-                coreView->scrollPositionChanged();
+                coreView->scrollPositionChangedViaPlatformWidget();
 #ifndef BUILDING_ON_TIGER
                 _private->inScrollPositionChanged = NO;
 #endif
@@ -1300,7 +1289,7 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
 - (void)_propagateDirtyRectsToOpaqueAncestors
 {
     if (![[self _webView] drawsBackground])
-        [self _web_layoutIfNeededRecursive];
+        [self _web_updateLayoutAndStyleIfNeededRecursive];
     [super _propagateDirtyRectsToOpaqueAncestors];
 }
 
@@ -1312,7 +1301,7 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
     // So check if the dataSource is nil before calling [self _isTopHTMLView], this can be removed
     // once the FIXME in _isTopHTMLView is fixed.
     if (_private->dataSource && [self _isTopHTMLView])
-        [self _web_layoutIfNeededRecursive];
+        [self _web_updateLayoutAndStyleIfNeededRecursive];
     [super viewWillDraw];
 }
 
@@ -1330,7 +1319,7 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
             [self _web_setPrintingModeRecursive];
 #ifndef BUILDING_ON_TIGER
         else
-            [self _web_layoutIfNeededRecursive];
+            [self _web_updateLayoutAndStyleIfNeededRecursive];
 #endif
     } else if (wasInPrintingMode)
         [self _web_clearPrintingModeRecursive];
@@ -1346,12 +1335,12 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
         [self getRectsBeingDrawn:0 count:&rectCount];
         if (rectCount) {
             LOG_ERROR("View needs layout. Either -viewWillDraw wasn't called or layout was invalidated during the display operation. Performing layout now.");
-            [self _web_layoutIfNeededRecursive];
+            [self _web_updateLayoutAndStyleIfNeededRecursive];
         }
     }
 #else
     // Because Tiger does not have viewWillDraw we need to do layout here.
-    [self _web_layoutIfNeededRecursive];
+    [self _web_updateLayoutAndStyleIfNeededRecursive];
     [_subviews makeObjectsPerformSelector:@selector(_propagateDirtyRectsToOpaqueAncestors)];
 #endif
 
@@ -1383,7 +1372,7 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
                 [self _web_setPrintingModeRecursive];
 #ifndef BUILDING_ON_TIGER
             else
-                [self _web_layoutIfNeededRecursive];
+                [self _web_updateLayoutAndStyleIfNeededRecursive];
 #endif
         } else if (wasInPrintingMode)
             [self _web_clearPrintingModeRecursive];
@@ -1393,7 +1382,7 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
         // Because Tiger does not have viewWillDraw we need to do layout here.
         NSRect boundsBeforeLayout = [self bounds];
         if (!NSIsEmptyRect(visRect))
-            [self _web_layoutIfNeededRecursive];
+            [self _web_updateLayoutAndStyleIfNeededRecursive];
 
         // If layout changes the view's bounds, then we need to recompute the visRect.
         // That's because the visRect passed to us was based on the bounds at the time
@@ -1426,7 +1415,7 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
 {
 #ifdef BUILDING_ON_TIGER 
     // Because Tiger does not have viewWillDraw we need to do layout here.
-    [self _web_layoutIfNeededRecursive];
+    [self _web_updateLayoutAndStyleIfNeededRecursive];
 #endif
 
     [self _setAsideSubviews];
@@ -1925,12 +1914,11 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
 
 - (NSImage *)_selectionDraggingImage
 {
-    if ([self _hasSelection]) {
-        NSImage *dragImage = core([self _frame])->selectionImage();
-        [dragImage _web_dissolveToFraction:WebDragImageAlpha];
-        return dragImage;
-    }
-    return nil;
+    if (![self _hasSelection])
+        return nil;
+    NSImage *dragImage = core([self _frame])->selectionImage();
+    [dragImage _web_dissolveToFraction:WebDragImageAlpha];
+    return dragImage;
 }
 
 - (NSRect)_selectionDraggingRect
@@ -2244,29 +2232,63 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
     return _private->printing;
 }
 
-- (BOOL)_beginPrintModeWithPageWidth:(float)pageWidth shrinkToFit:(BOOL)shrinkToFit
+- (BOOL)_beginPrintModeWithPageWidth:(float)pageWidth height:(float)pageHeight shrinkToFit:(BOOL)shrinkToFit
 {
     Frame* frame = core([self _frame]);
     if (!frame)
         return NO;
 
     float minLayoutWidth = 0;
+    float minLayoutHeight = 0;
     float maxLayoutWidth = 0;
 
     // If we are a frameset just print with the layout we have onscreen, otherwise relayout
     // according to the page width.
     if (!frame->document() || !frame->document()->isFrameSet()) {
         minLayoutWidth = shrinkToFit ? pageWidth * _WebHTMLViewPrintingMinimumShrinkFactor : pageWidth;
+        minLayoutHeight = shrinkToFit ? pageHeight * _WebHTMLViewPrintingMinimumShrinkFactor : pageHeight;
         maxLayoutWidth = shrinkToFit ? pageWidth * _WebHTMLViewPrintingMaximumShrinkFactor : pageWidth;
     }
-    [self _setPrinting:YES minimumPageWidth:minLayoutWidth maximumPageWidth:maxLayoutWidth adjustViewSize:YES];
+    [self _setPrinting:YES minimumPageWidth:minLayoutWidth height:minLayoutHeight maximumPageWidth:maxLayoutWidth adjustViewSize:YES paginateScreenContent:[self _isInScreenPaginationMode]];
 
     return YES;
 }
 
 - (void)_endPrintMode
 {
-    [self _setPrinting:NO minimumPageWidth:0 maximumPageWidth:0 adjustViewSize:YES];
+    [self _setPrinting:NO minimumPageWidth:0 height:0 maximumPageWidth:0 adjustViewSize:YES paginateScreenContent:[self _isInScreenPaginationMode]];
+}
+
+- (BOOL)_isInScreenPaginationMode
+{
+    return _private->paginateScreenContent;
+}
+
+- (BOOL)_beginScreenPaginationModeWithPageSize:(CGSize)pageSize shrinkToFit:(BOOL)shrinkToFit
+{
+    Frame* frame = core([self _frame]);
+    if (!frame)
+        return NO;
+
+    CGFloat minLayoutWidth = 0;
+    CGFloat minLayoutHeight = 0;
+    CGFloat maxLayoutWidth = 0;
+
+    // If we are a frameset just print with the layout we have on the screen. Otherwise do a relayout
+    // according to the page width.
+    if (!frame->document() || !frame->document()->isFrameSet()) {
+        minLayoutWidth = shrinkToFit ? pageSize.width * _WebHTMLViewPrintingMinimumShrinkFactor : pageSize.width;
+        minLayoutHeight = shrinkToFit ? pageSize.height * _WebHTMLViewPrintingMinimumShrinkFactor : pageSize.height;
+        maxLayoutWidth = shrinkToFit ? pageSize.width * _WebHTMLViewPrintingMaximumShrinkFactor : pageSize.width;
+    }
+    [self _setPrinting:[self _isInPrintMode] minimumPageWidth:minLayoutWidth height:minLayoutHeight maximumPageWidth:maxLayoutWidth adjustViewSize:YES paginateScreenContent:YES];
+
+    return YES;
+}
+
+- (void)_endScreenPaginationMode
+{
+    [self _setPrinting:[self _isInPrintMode] minimumPageWidth:0 height:0 maximumPageWidth:0 adjustViewSize:YES paginateScreenContent:NO];
 }
 
 - (CGFloat)_adjustedBottomOfPageWithTop:(CGFloat)top bottom:(CGFloat)bottom limit:(CGFloat)bottomLimit
@@ -2506,6 +2528,7 @@ WEBCORE_COMMAND(alignLeft)
 WEBCORE_COMMAND(alignRight)
 WEBCORE_COMMAND(copy)
 WEBCORE_COMMAND(cut)
+WEBCORE_COMMAND(paste)
 WEBCORE_COMMAND(delete)
 WEBCORE_COMMAND(deleteBackward)
 WEBCORE_COMMAND(deleteBackwardByDecomposingPreviousCharacter)
@@ -2576,6 +2599,7 @@ WEBCORE_COMMAND(pageDown)
 WEBCORE_COMMAND(pageDownAndModifySelection)
 WEBCORE_COMMAND(pageUp)
 WEBCORE_COMMAND(pageUpAndModifySelection)
+WEBCORE_COMMAND(pasteAsPlainText)
 WEBCORE_COMMAND(selectAll)
 WEBCORE_COMMAND(selectLine)
 WEBCORE_COMMAND(selectParagraph)
@@ -2615,18 +2639,6 @@ WEBCORE_COMMAND(yankAndSelect)
     return YES;
 }
 
-- (BOOL)readSelectionFromPasteboard:(NSPasteboard *)pasteboard
-{
-    Frame* coreFrame = core([self _frame]);
-    if (!coreFrame)
-        return NO;
-    if (coreFrame->selection()->isContentRichlyEditable())
-        [self _pasteWithPasteboard:pasteboard allowPlainText:YES];
-    else
-        [self _pasteAsPlainTextWithPasteboard:pasteboard];
-    return YES;
-}
-
 - (id)validRequestorForSendType:(NSString *)sendType returnType:(NSString *)returnType
 {
     BOOL isSendTypeOK = !sendType || ([[self pasteboardTypesForSelection] containsObject:sendType] && [self _hasSelection]);
@@ -2652,7 +2664,7 @@ WEBCORE_COMMAND(yankAndSelect)
     COMMAND_PROLOGUE
 
     if (Frame* coreFrame = core([self _frame]))
-        coreFrame->revealSelection(ScrollAlignment::alignCenterAlways);
+        coreFrame->selection()->revealSelection(ScrollAlignment::alignCenterAlways);
 }
 
 - (NSCellStateValue)selectionHasStyle:(CSSStyleDeclaration*)style
@@ -3056,6 +3068,15 @@ WEBCORE_COMMAND(yankAndSelect)
         [[self _pluginController] startAllPlugins];
 
         _private->lastScrollPosition = NSZeroPoint;
+        
+#if USE(ACCELERATED_COMPOSITING) && !defined(BUILDING_ON_LEOPARD)
+        // We may have created the layer hosting view while outside the window. Update the scale factor
+        // now that we have a window to get it from.
+        if (_private->layerHostingView) {
+            CGFloat scaleFactor = [[self window] userSpaceScaleFactor];
+            [[_private->layerHostingView layer] setTransform:CATransform3DMakeScale(scaleFactor, scaleFactor, 1)];
+        }
+#endif
     }
 }
 
@@ -3095,35 +3116,23 @@ WEBCORE_COMMAND(yankAndSelect)
 
 - (void)reapplyStyles
 {
-    if (!_private->needsToApplyStyles)
-        return;
-    
 #ifdef LOG_TIMES
     double start = CFAbsoluteTimeGetCurrent();
 #endif
 
-    if (Frame* coreFrame = core([self _frame])) {
-        if (FrameView* coreView = coreFrame->view())
-            coreView->setMediaType(_private->printing ? "print" : "screen");
-        if (Document* document = coreFrame->document())
-            document->setPrinting(_private->printing);
-        coreFrame->reapplyStyles();
-    }
+    if (Frame* coreFrame = core([self _frame]))
+        coreFrame->document()->styleSelectorChanged(RecalcStyleImmediately);
     
 #ifdef LOG_TIMES        
     double thisTime = CFAbsoluteTimeGetCurrent() - start;
     LOG(Timing, "%s apply style seconds = %f", [self URL], thisTime);
 #endif
-
-    _private->needsToApplyStyles = NO;
 }
 
 // Do a layout, but set up a new fixed width for the purposes of doing printing layout.
 // minPageWidth==0 implies a non-printing layout
-- (void)layoutToMinimumPageWidth:(float)minPageWidth maximumPageWidth:(float)maxPageWidth adjustingViewSize:(BOOL)adjustViewSize
-{
-    [self reapplyStyles];
-    
+- (void)layoutToMinimumPageWidth:(float)minPageWidth height:(float)minPageHeight maximumPageWidth:(float)maxPageWidth adjustingViewSize:(BOOL)adjustViewSize
+{    
     if (![self _needsLayout])
         return;
 
@@ -3139,7 +3148,7 @@ WEBCORE_COMMAND(yankAndSelect)
 
     if (FrameView* coreView = coreFrame->view()) {
         if (minPageWidth > 0.0)
-            coreView->forceLayoutWithPageWidthRange(minPageWidth, maxPageWidth, adjustViewSize);
+            coreView->forceLayoutForPagination(FloatSize(minPageWidth, minPageHeight), maxPageWidth / minPageWidth, adjustViewSize ? Frame::AdjustViewSize : Frame::DoNotAdjustViewSize);
         else {
             coreView->forceLayout(!adjustViewSize);
             if (adjustViewSize)
@@ -3155,7 +3164,7 @@ WEBCORE_COMMAND(yankAndSelect)
 
 - (void)layout
 {
-    [self layoutToMinimumPageWidth:0.0f maximumPageWidth:0.0f adjustingViewSize:NO];
+    [self layoutToMinimumPageWidth:0 height:0 maximumPageWidth:0 adjustingViewSize:NO];
 }
 
 // Deliver mouseup events to the DOM for button 2.
@@ -3284,7 +3293,13 @@ WEBCORE_COMMAND(yankAndSelect)
 - (void)setNeedsToApplyStyles: (BOOL)flag
 {
     LOG(View, "%@ setNeedsToApplyStyles:%@", self, flag ? @"YES" : @"NO");
-    _private->needsToApplyStyles = flag;
+    if (!flag)
+        return; // There's no way to say you don't need a style recalc.
+    if (Frame* frame = core([self _frame])) {
+        if (frame->document() && frame->document()->inPageCache())
+            return;
+        frame->document()->scheduleForcedStyleRecalc();
+    }
 }
 
 - (void)drawSingleRect:(NSRect)rect
@@ -3836,8 +3851,11 @@ static BOOL isInPasswordField(Frame* coreFrame)
 
 // Does setNeedsDisplay:NO as a side effect when printing is ending.
 // pageWidth != 0 implies we will relayout to a new width
-- (void)_setPrinting:(BOOL)printing minimumPageWidth:(float)minPageWidth maximumPageWidth:(float)maxPageWidth adjustViewSize:(BOOL)adjustViewSize
+- (void)_setPrinting:(BOOL)printing minimumPageWidth:(float)minPageWidth height:(float)minPageHeight maximumPageWidth:(float)maxPageWidth adjustViewSize:(BOOL)adjustViewSize paginateScreenContent:(BOOL)paginateScreenContent
 {
+    if (printing == _private->printing && paginateScreenContent == _private->paginateScreenContent)
+        return;
+
     WebFrame *frame = [self _frame];
     NSArray *subframes = [frame childFrames];
     unsigned n = [subframes count];
@@ -3846,23 +3864,33 @@ static BOOL isInPasswordField(Frame* coreFrame)
         WebFrame *subframe = [subframes objectAtIndex:i];
         WebFrameView *frameView = [subframe frameView];
         if ([[subframe _dataSource] _isDocumentHTML]) {
-            [(WebHTMLView *)[frameView documentView] _setPrinting:printing minimumPageWidth:0.0f maximumPageWidth:0.0f adjustViewSize:adjustViewSize];
+            [(WebHTMLView *)[frameView documentView] _setPrinting:printing minimumPageWidth:0 height:0 maximumPageWidth:0 adjustViewSize:adjustViewSize paginateScreenContent:paginateScreenContent];
         }
     }
 
-    if (printing || _private->printing) {
-        [_private->pageRects release];
-        _private->pageRects = nil;
-        _private->printing = printing;
-        if (!printing)
-            _private->avoidingPrintOrphan = NO;
-        [self setNeedsToApplyStyles:YES];
-        [self setNeedsLayout:YES];
-        [self layoutToMinimumPageWidth:minPageWidth maximumPageWidth:maxPageWidth adjustingViewSize:adjustViewSize];
-        if (!printing) {
-            // Can't do this when starting printing or nested printing won't work, see 3491427.
-            [self setNeedsDisplay:NO];
+    [_private->pageRects release];
+    _private->pageRects = nil;
+    _private->printing = printing;
+    _private->paginateScreenContent = paginateScreenContent;
+    if (!printing && !paginateScreenContent)
+        _private->avoidingPrintOrphan = NO;
+    
+    Frame* coreFrame = core([self _frame]);
+    if (coreFrame) {
+        if (FrameView* coreView = coreFrame->view())
+            coreView->setMediaType(_private->printing ? "print" : "screen");
+        if (Document* document = coreFrame->document()) {
+            document->setPaginatedForScreen(_private->paginateScreenContent);
+            document->setPrinting(_private->printing);
+            document->styleSelectorChanged(RecalcStyleImmediately);
         }
+    }
+
+    [self setNeedsLayout:YES];
+    [self layoutToMinimumPageWidth:minPageWidth height:minPageHeight maximumPageWidth:maxPageWidth adjustingViewSize:adjustViewSize];
+    if (!printing) {
+        // Can't do this when starting printing or nested printing won't work, see 3491427.
+        [self setNeedsDisplay:NO];
     }
 }
 
@@ -3879,7 +3907,7 @@ static BOOL isInPasswordField(Frame* coreFrame)
     // If the WebHTMLView itself is what we're printing, then we will never have to do this.
     BOOL wasInPrintingMode = _private->printing;
     if (!wasInPrintingMode)
-        [self _setPrinting:YES minimumPageWidth:0.0f maximumPageWidth:0.0f adjustViewSize:NO];
+        [self _setPrinting:YES minimumPageWidth:0 height:0 maximumPageWidth:0 adjustViewSize:NO paginateScreenContent:[self _isInScreenPaginationMode]];
 
     *newBottom = [self _adjustedBottomOfPageWithTop:oldTop bottom:oldBottom limit:bottomLimit];
 
@@ -3890,7 +3918,7 @@ static BOOL isInPasswordField(Frame* coreFrame)
             [self performSelector:@selector(_delayedEndPrintMode:) withObject:currenPrintOperation afterDelay:0];
         else
             // not sure if this is actually ever invoked, it probably shouldn't be
-            [self _setPrinting:NO minimumPageWidth:0.0f maximumPageWidth:0.0f adjustViewSize:NO];
+            [self _setPrinting:NO minimumPageWidth:0 height:0 maximumPageWidth:0 adjustViewSize:NO paginateScreenContent:[self _isInScreenPaginationMode]];
     }
 }
 
@@ -3920,8 +3948,8 @@ static BOOL isInPasswordField(Frame* coreFrame)
 // This is used for Carbon printing. At some point we might want to make this public API.
 - (void)setPageWidthForPrinting:(float)pageWidth
 {
-    [self _setPrinting:NO minimumPageWidth:0.0f maximumPageWidth:0.0f adjustViewSize:NO];
-    [self _setPrinting:YES minimumPageWidth:pageWidth maximumPageWidth:pageWidth adjustViewSize:YES];
+    [self _setPrinting:NO minimumPageWidth:0 height:0 maximumPageWidth:0 adjustViewSize:NO paginateScreenContent:[self _isInScreenPaginationMode]];
+    [self _setPrinting:YES minimumPageWidth:pageWidth height:0 maximumPageWidth:pageWidth adjustViewSize:YES paginateScreenContent:[self _isInScreenPaginationMode]];
 }
 
 - (void)_endPrintModeAndRestoreWindowAutodisplay
@@ -3964,8 +3992,9 @@ static BOOL isInPasswordField(Frame* coreFrame)
     [self displayIfNeeded];
     [[self window] setAutodisplay:NO];    
 
+    [[self _webView] _adjustPrintingMarginsForHeaderAndFooter];
     NSPrintOperation *printOperation = [NSPrintOperation currentOperation];
-    if (![self _beginPrintModeWithPageWidth:[printOperation _web_availablePaperWidth] shrinkToFit:YES])
+    if (![self _beginPrintModeWithPageWidth:[printOperation _web_availablePaperWidth] height:[printOperation _web_availablePaperHeight] shrinkToFit:YES])
         return NO;
 
     // Certain types of errors, including invalid page ranges, can cause beginDocument and
@@ -3975,7 +4004,6 @@ static BOOL isInPasswordField(Frame* coreFrame)
     // If not cancelled, this delayed call will be invoked in the next pass through the main event loop,
     // which is after beginDocument and endDocument would be called.
     [self performSelector:@selector(_delayedEndPrintMode:) withObject:printOperation afterDelay:0];
-    [[self _webView] _adjustPrintingMarginsForHeaderAndFooter];
     
     // There is a theoretical chance that someone could do some drawing between here and endDocument,
     // if something caused setNeedsDisplay after this point. If so, it's not a big tragedy, because
@@ -4169,14 +4197,14 @@ static BOOL isInPasswordField(Frame* coreFrame)
     COMMAND_PROLOGUE
 
     if (Frame* coreFrame = core([self _frame]))
-        coreFrame->revealSelection(ScrollAlignment::alignCenterAlways);
+        coreFrame->selection()->revealSelection(ScrollAlignment::alignCenterAlways);
 }
 
 - (NSData *)_selectionStartFontAttributesAsRTF
 {
     Frame* coreFrame = core([self _frame]);
     NSAttributedString *string = [[NSAttributedString alloc] initWithString:@"x"
-        attributes:coreFrame ? coreFrame->fontAttributesForSelectionStart() : nil];
+        attributes:coreFrame ? coreFrame->editor()->fontAttributesForSelectionStart() : nil];
     NSData *data = [string RTFFromRange:NSMakeRange(0, [string length]) documentAttributes:nil];
     [string release];
     return data;
@@ -4803,7 +4831,7 @@ NSStrokeColorAttributeName        /* NSColor, default nil: same as foreground co
         return;
 
     WritingDirection direction = RightToLeftWritingDirection;
-    switch (coreFrame->baseWritingDirectionForSelectionStart()) {
+    switch (coreFrame->editor()->baseWritingDirectionForSelectionStart()) {
         case NSWritingDirectionLeftToRight:
             break;
         case NSWritingDirectionRightToLeft:
@@ -5117,7 +5145,7 @@ static BOOL writingDirectionKeyBindingsEnabled()
     if (![[self _webView] smartInsertDeleteEnabled])
         return NO;
     Frame* coreFrame = core([self _frame]);
-    return coreFrame && coreFrame->selectionGranularity() == WordGranularity;
+    return coreFrame && coreFrame->selection()->granularity() == WordGranularity;
 }
 
 - (NSEvent *)_mouseDownEvent
@@ -5133,33 +5161,6 @@ static BOOL writingDirectionKeyBindingsEnabled()
 - (WebFrame *)_frame
 {
     return [_private->dataSource webFrame];
-}
-
-- (void)paste:(id)sender
-{
-    COMMAND_PROLOGUE
-
-    RetainPtr<WebHTMLView> selfProtector = self;
-    RefPtr<Frame> coreFrame = core([self _frame]);
-    if (!coreFrame)
-        return;
-    if (coreFrame->editor()->tryDHTMLPaste())
-        return; // DHTML did the whole operation
-    if (!coreFrame->editor()->canPaste())
-        return;
-    if (coreFrame->selection()->isContentRichlyEditable())
-        [self _pasteWithPasteboard:[NSPasteboard generalPasteboard] allowPlainText:YES];
-    else
-        coreFrame->editor()->pasteAsPlainText();
-}
-
-- (void)pasteAsPlainText:(id)sender
-{
-    COMMAND_PROLOGUE
-
-    if (![self _canEdit])
-        return;
-    [self _pasteAsPlainTextWithPasteboard:[NSPasteboard generalPasteboard]];
 }
 
 - (void)closeIfNotCurrentView
@@ -5341,7 +5342,7 @@ static CGPoint coreGraphicsScreenPointForAppKitScreenPoint(NSPoint point)
     if (!coreFrame)
         return;
 
-    NSRect rect = coreFrame->selectionBounds();
+    NSRect rect = coreFrame->selection()->bounds();
 
 #ifndef BUILDING_ON_TIGER
     NSDictionary *attributes = [attrString fontAttributesInRange:NSMakeRange(0,1)];
@@ -5490,31 +5491,16 @@ static CGPoint coreGraphicsScreenPointForAppKitScreenPoint(NSPoint point)
 {
     ASSERT(!_private->subviewsSetAside);
 
-    if (_private->needsToApplyStyles || [self _needsLayout])
+    if ([self _needsLayout])
         [self layout];
 }
 
-- (void)_web_layoutIfNeededRecursive
+- (void)_web_updateLayoutAndStyleIfNeededRecursive
 {
-    [self _layoutIfNeeded];
-
-#ifndef NDEBUG
-    _private->enumeratingSubviews = YES;
-#endif
-
-    NSMutableArray *descendantWebHTMLViews = [[NSMutableArray alloc] init];
-
-    [self _web_addDescendantWebHTMLViewsToArray:descendantWebHTMLViews];
-
-    unsigned count = [descendantWebHTMLViews count];
-    for (unsigned i = 0; i < count; ++i)
-        [[descendantWebHTMLViews objectAtIndex:i] _layoutIfNeeded];
-
-    [descendantWebHTMLViews release];
-
-#ifndef NDEBUG
-    _private->enumeratingSubviews = NO;
-#endif
+    WebFrame *webFrame = [self _frame];
+    Frame* coreFrame = core(webFrame);
+    if (coreFrame && coreFrame->view())
+        coreFrame->view()->updateLayoutAndStyleIfNeededRecursive();
 }
 
 - (void) _destroyAllWebPlugins
@@ -5559,6 +5545,13 @@ static CGPoint coreGraphicsScreenPointForAppKitScreenPoint(NSPoint point)
                              nullValue, @"transform",
                              nil];
     [viewLayer setStyle:[NSDictionary dictionaryWithObject:actions forKey:@"actions"]];
+#endif
+
+#if !defined(BUILDING_ON_LEOPARD)
+    // If we aren't in the window yet, we'll use the screen's scale factor now, and reset the scale 
+    // via -viewDidMoveToWindow.
+    CGFloat scaleFactor = [self window] ? [[self window] userSpaceScaleFactor] : [[NSScreen mainScreen] userSpaceScaleFactor];
+    [viewLayer setTransform:CATransform3DMakeScale(scaleFactor, scaleFactor, 1)];
 #endif
 
     [_private->layerHostingView setLayer:viewLayer];
@@ -6026,25 +6019,27 @@ static void extractUnderlines(NSAttributedString *string, Vector<CompositionUnde
 
 - (NSRect)selectionRect
 {
-    if ([self _hasSelection])
-        return core([self _frame])->selectionBounds();
-    return NSZeroRect;
+    if (![self _hasSelection])
+        return NSZeroRect;
+    return core([self _frame])->selection()->bounds();
 }
 
 - (NSArray *)selectionTextRects
 {
     if (![self _hasSelection])
         return nil;
-    
+
     Vector<FloatRect> list;
     if (Frame* coreFrame = core([self _frame]))
-        coreFrame->selectionTextRects(list, Frame::RespectTransforms);
+        coreFrame->selection()->getClippedVisibleTextRectangles(list);
 
-    unsigned size = list.size();
-    NSMutableArray *result = [[[NSMutableArray alloc] initWithCapacity:size] autorelease];
-    for (unsigned i = 0; i < size; ++i)
+    size_t size = list.size();
+
+    NSMutableArray *result = [NSMutableArray arrayWithCapacity:size];
+
+    for (size_t i = 0; i < size; ++i)
         [result addObject:[NSValue valueWithRect:list[i]]];
-    
+
     return result;
 }
 
@@ -6055,16 +6050,16 @@ static void extractUnderlines(NSAttributedString *string, Vector<CompositionUnde
 
 - (NSImage *)selectionImageForcingBlackText:(BOOL)forceBlackText
 {
-    if ([self _hasSelection])
-        return core([self _frame])->selectionImage(forceBlackText);
-    return nil;
+    if (![self _hasSelection])
+        return nil;
+    return core([self _frame])->selectionImage(forceBlackText);
 }
 
 - (NSRect)selectionImageRect
 {
-    if ([self _hasSelection])
-        return core([self _frame])->selectionBounds();
-    return NSZeroRect;
+    if (![self _hasSelection])
+        return NSZeroRect;
+    return core([self _frame])->selection()->bounds();
 }
 
 - (NSArray *)pasteboardTypesForSelection
@@ -6156,7 +6151,7 @@ static void extractUnderlines(NSAttributedString *string, Vector<CompositionUnde
     if (![string length])
         return NO;
     Frame* coreFrame = core([self _frame]);
-    return coreFrame && coreFrame->findString(string, forward, caseFlag, wrapFlag, startInSelection);
+    return coreFrame && coreFrame->editor()->findString(string, forward, caseFlag, wrapFlag, startInSelection);
 }
 
 @end
@@ -6178,10 +6173,15 @@ static void extractUnderlines(NSAttributedString *string, Vector<CompositionUnde
 
 - (NSUInteger)markAllMatchesForText:(NSString *)string caseSensitive:(BOOL)caseFlag limit:(NSUInteger)limit
 {
+    return [self countMatchesForText:string caseSensitive:caseFlag limit:limit markMatches:YES];
+}
+
+- (NSUInteger)countMatchesForText:(NSString *)string caseSensitive:(BOOL)caseFlag limit:(NSUInteger)limit markMatches:(BOOL)markMatches
+{
     Frame* coreFrame = core([self _frame]);
     if (!coreFrame)
         return 0;
-    return coreFrame->markAllMatchesForText(string, caseFlag, limit);
+    return coreFrame->editor()->countMatchesForText(string, caseFlag, limit, markMatches);
 }
 
 - (void)setMarkedTextMatchesAreHighlighted:(BOOL)newValue
@@ -6189,13 +6189,13 @@ static void extractUnderlines(NSAttributedString *string, Vector<CompositionUnde
     Frame* coreFrame = core([self _frame]);
     if (!coreFrame)
         return;
-    coreFrame->setMarkedTextMatchesAreHighlighted(newValue);
+    coreFrame->editor()->setMarkedTextMatchesAreHighlighted(newValue);
 }
 
 - (BOOL)markedTextMatchesAreHighlighted
 {
     Frame* coreFrame = core([self _frame]);
-    return coreFrame && coreFrame->markedTextMatchesAreHighlighted();
+    return coreFrame && coreFrame->editor()->markedTextMatchesAreHighlighted();
 }
 
 - (void)unmarkAllTextMatches
@@ -6206,7 +6206,7 @@ static void extractUnderlines(NSAttributedString *string, Vector<CompositionUnde
     Document* document = coreFrame->document();
     if (!document)
         return;
-    document->removeMarkers(DocumentMarker::TextMatch);
+    document->markers()->removeMarkers(DocumentMarker::TextMatch);
 }
 
 - (NSArray *)rectsForTextMatches
@@ -6218,7 +6218,7 @@ static void extractUnderlines(NSAttributedString *string, Vector<CompositionUnde
     if (!document)
         return [NSArray array];
 
-    Vector<IntRect> rects = document->renderedRectsForMarkers(DocumentMarker::TextMatch);
+    Vector<IntRect> rects = document->markers()->renderedRectsForMarkers(DocumentMarker::TextMatch);
     unsigned count = rects.size();
     NSMutableArray *result = [NSMutableArray arrayWithCapacity:count];
     for (unsigned index = 0; index < count; ++index)

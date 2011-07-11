@@ -26,37 +26,56 @@
 #ifndef WebGLProgram_h
 #define WebGLProgram_h
 
-#include "CanvasObject.h"
+#include "WebGLObject.h"
+
+#include "WebGLShader.h"
 
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
 #include <wtf/Vector.h>
 
 namespace WebCore {
-    
-    class WebGLProgram : public CanvasObject {
-    public:
-        virtual ~WebGLProgram() { deleteObject(); }
-        
-        static PassRefPtr<WebGLProgram> create(WebGLRenderingContext*);
 
-        // cacheActiveAttribLocation() is only called once after linkProgram()
-        // succeeds.
-        bool cacheActiveAttribLocations();
-        int numActiveAttribLocations();
-        int getActiveAttribLocation(int index);
+class WebGLProgram : public WebGLObject {
+public:
+    virtual ~WebGLProgram() { deleteObject(); }
 
-    protected:
-        WebGLProgram(WebGLRenderingContext*);
-        
-        virtual void _deleteObject(Platform3DObject);
+    static PassRefPtr<WebGLProgram> create(WebGLRenderingContext*);
 
-    private:
-        virtual bool isProgram() const { return true; }
+    // cacheActiveAttribLocation() is only called once after linkProgram()
+    // succeeds.
+    bool cacheActiveAttribLocations();
+    int numActiveAttribLocations() const;
+    int getActiveAttribLocation(int index) const;
 
-        Vector<int> m_activeAttribLocations;
-    };
-    
+    bool isUsingVertexAttrib0() const;
+
+    // Return true means getProgramParameter(LINK_STATUS) should return
+    // false; return false means we should actually call
+    // getProgramParameter(LINK_STATUS) to find out.
+    bool isLinkFailureFlagSet() const { return m_linkFailure; }
+    void setLinkFailureFlag(bool failed) { m_linkFailure = failed; }
+
+    WebGLShader* getAttachedShader(GraphicsContext3D::WebGLEnumType);
+    bool attachShader(WebGLShader*);
+    bool detachShader(WebGLShader*);
+
+protected:
+    WebGLProgram(WebGLRenderingContext*);
+
+    virtual void deleteObjectImpl(Platform3DObject);
+
+private:
+    virtual bool isProgram() const { return true; }
+
+    Vector<int> m_activeAttribLocations;
+
+    bool m_linkFailure;
+
+    RefPtr<WebGLShader> m_vertexShader;
+    RefPtr<WebGLShader> m_fragmentShader;
+};
+
 } // namespace WebCore
 
 #endif // WebGLProgram_h

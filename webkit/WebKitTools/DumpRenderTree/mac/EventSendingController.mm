@@ -122,7 +122,7 @@ BOOL replayingSavedEvents;
 {
     if (aSelector == @selector(beginDragWithFiles:)
             || aSelector == @selector(clearKillRing)
-            || aSelector == @selector(contextClick:)
+            || aSelector == @selector(contextClick)
             || aSelector == @selector(enableDOMUIEventLogging:)
             || aSelector == @selector(fireKeyboardEventsToElement:)
             || aSelector == @selector(keyDown:withModifiers:withLocation:)
@@ -152,7 +152,7 @@ BOOL replayingSavedEvents;
 {
     if (aSelector == @selector(beginDragWithFiles:))
         return @"beginDragWithFiles";
-    if (aSelector == @selector(contextClick:))
+    if (aSelector == @selector(contextClick))
         return @"contextClick";
     if (aSelector == @selector(enableDOMUIEventLogging:))
         return @"enableDOMUIEventLogging";
@@ -449,13 +449,13 @@ static int buildModifierFlags(const WebScriptObject* modifiers)
     NSView *subView = [[mainFrame webView] hitTest:[event locationInWindow]];
     if (subView) {
         if (leftMouseButtonDown) {
-            [subView mouseDragged:event];
             if (draggingInfo) {
                 // Per NSDragging.h: draggingSources may not implement draggedImage:movedTo:
                 if ([[draggingInfo draggingSource] respondsToSelector:@selector(draggedImage:movedTo:)])
                     [[draggingInfo draggingSource] draggedImage:[draggingInfo draggedImage] movedTo:lastMousePosition];
                 [[mainFrame webView] draggingUpdated:draggingInfo];
-            }
+            } else
+                [subView mouseDragged:event];
         } else
             [subView mouseMoved:event];
     }
@@ -494,7 +494,7 @@ static int buildModifierFlags(const WebScriptObject* modifiers)
     [self mouseScrollByX:x andY:y continuously:NO];
 }
 
-- (void)contextClick:(BOOL)shouldPrintMenuItems
+- (NSArray *)contextClick
 {
     [[[mainFrame frameView] documentView] layout];
     [self updateClickCountForButton:RightMouseButton];
@@ -510,21 +510,24 @@ static int buildModifierFlags(const WebScriptObject* modifiers)
                                         pressure:0.0];
 
     NSView *subView = [[mainFrame webView] hitTest:[event locationInWindow]];
+    NSMutableArray *menuItemStrings = [NSMutableArray array];
+    
     if (subView) {
         NSMenu* menu = [subView menuForEvent:event];
-        if (shouldPrintMenuItems) {
-            printf("ContextMenuItems: ");
-            for (int i = 0; i < [menu numberOfItems]; ++i) {
-                NSMenuItem* menuItem = [menu itemAtIndex:i];
-                if (!strcmp("Inspect Element", [[menuItem title] UTF8String]))
-                    continue;
-                if (i > 0)
-                    printf(", ");
-                fputs([menuItem isSeparatorItem] ? "<separator>" : [[menuItem title] UTF8String], stdout);
-            }
-            printf("\n");
+
+        for (int i = 0; i < [menu numberOfItems]; ++i) {
+            NSMenuItem* menuItem = [menu itemAtIndex:i];
+            if (!strcmp("Inspect Element", [[menuItem title] UTF8String]))
+                continue;
+
+            if ([menuItem isSeparatorItem])
+                [menuItemStrings addObject:@"<separator>"];
+            else
+                [menuItemStrings addObject:[menuItem title]];
         }
     }
+    
+    return menuItemStrings;
 }
 
 - (void)scheduleAsynchronousClick
@@ -594,10 +597,18 @@ static int buildModifierFlags(const WebScriptObject* modifiers)
         const unichar ch = NSEndFunctionKey;
         eventCharacter = [NSString stringWithCharacters:&ch length:1];
         keyCode = 0x77;
+    } else if ([character isEqualToString:@"insert"]) {
+        const unichar ch = NSInsertFunctionKey;
+        eventCharacter = [NSString stringWithCharacters:&ch length:1];
+        keyCode = 0x72;
     } else if ([character isEqualToString:@"delete"]) {
-        const unichar ch = 0x7f;
+        const unichar ch = NSDeleteFunctionKey;
         eventCharacter = [NSString stringWithCharacters:&ch length:1];
         keyCode = 0x75;
+    } else if ([character isEqualToString:@"printScreen"]) {
+        const unichar ch = NSPrintScreenFunctionKey;
+        eventCharacter = [NSString stringWithCharacters:&ch length:1];
+        keyCode = 0x0; // There is no known virtual key code for PrintScreen.
     }
 
     // Compare the input string with the function-key names defined by the DOM spec (i.e. "F1",...,"F24").

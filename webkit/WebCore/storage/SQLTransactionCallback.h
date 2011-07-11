@@ -31,17 +31,16 @@
 
 #if ENABLE(DATABASE)
 
-#include <wtf/Threading.h>
+#include <wtf/ThreadSafeShared.h>
 
 namespace WebCore {
 
-class ScriptExecutionContext;
 class SQLTransaction;
 
 class SQLTransactionCallback : public ThreadSafeShared<SQLTransactionCallback> {
 public:
     virtual ~SQLTransactionCallback() { }
-    virtual bool handleEvent(ScriptExecutionContext*, SQLTransaction*) = 0;
+    virtual bool handleEvent(SQLTransaction*) = 0;
 };
 
 }

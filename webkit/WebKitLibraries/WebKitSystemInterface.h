@@ -1,6 +1,6 @@
 /*      
     WebKitSystemInterface.h
-    Copyright (C) 2005, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
+    Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
 
     Public header file.
 */
@@ -29,9 +29,9 @@ NSString *WKGetPreferredExtensionForMIMEType(NSString *type);
 NSArray *WKGetExtensionsForMIMEType(NSString *type);
 NSString *WKGetMIMETypeForExtension(NSString *extension);
 
-NSDate *WKGetNSURLResponseLastModifiedDate(NSURLResponse *);
-NSTimeInterval WKGetNSURLResponseFreshnessLifetime(NSURLResponse *);
-NSString *WKCopyNSURLResponseStatusLine(NSURLResponse *);
+NSDate *WKGetNSURLResponseLastModifiedDate(NSURLResponse *response);
+NSTimeInterval WKGetNSURLResponseFreshnessLifetime(NSURLResponse *response);
+NSString *WKCopyNSURLResponseStatusLine(NSURLResponse *response);
 
 CFStringEncoding WKGetWebDefaultCFStringEncoding(void);
 
@@ -177,7 +177,7 @@ BOOL WKSupportsMultipartXMixedReplace(NSMutableURLRequest *request);
 
 BOOL WKCGContextIsBitmapContext(CGContextRef context);
 
-void WKGetWheelEventDeltas(NSEvent *, float *deltaX, float *deltaY, float *wheelTicksX, float *wheelTicksY, BOOL *continuous);
+void WKGetWheelEventDeltas(NSEvent *, float *deltaX, float *deltaY, BOOL *continuous);
 
 BOOL WKAppVersionCheckLessThan(NSString *, int, double);
 
@@ -201,8 +201,11 @@ float WKQTMovieMaxTimeLoaded(QTMovie* movie);
 float WKQTMovieMaxTimeSeekable(QTMovie* movie);
 NSString *WKQTMovieMaxTimeLoadedChangeNotification(void);
 void WKQTMovieViewSetDrawSynchronously(QTMovieView* view, BOOL sync);
+void WKQTMovieDisableComponent(uint32_t[5]);
 
 CFStringRef WKCopyFoundationCacheDirectory(void);
+
+void WKSetVisibleApplicationName(CFStringRef);
 
 typedef enum {
     WKMediaUIPartFullscreenButton   = 0,
@@ -210,8 +213,8 @@ typedef enum {
     WKMediaUIPartPlayButton,
     WKMediaUIPartSeekBackButton,
     WKMediaUIPartSeekForwardButton,
-    WKMediaUIPartSlider,
-    WKMediaUIPartSliderThumb,
+    WKMediaUIPartTimelineSlider,
+    WKMediaUIPartTimelineSliderThumb,
     WKMediaUIPartRewindButton,
     WKMediaUIPartSeekToRealtimeButton,
     WKMediaUIPartShowClosedCaptionsButton,
@@ -220,7 +223,12 @@ typedef enum {
     WKMediaUIPartPauseButton,
     WKMediaUIPartBackground,
     WKMediaUIPartCurrentTimeDisplay,
-    WKMediaUIPartTimeRemainingDisplay
+    WKMediaUIPartTimeRemainingDisplay,
+    WKMediaUIPartStatusDisplay,
+    WKMediaUIPartControlsPanel,
+    WKMediaUIPartVolumeSliderContainer,
+    WKMediaUIPartVolumeSlider,
+    WKMediaUIPartVolumeSliderThumb
 } WKMediaUIPart;
 
 typedef enum {
@@ -251,12 +259,11 @@ typedef enum {
     WKMediaUIControlFastForwardButton,
     WKMediaUIControlVolumeUpButton,
     WKMediaUIControlVolumeDownButton
-
 } WKMediaUIControlType;
     
 NSControl *WKCreateMediaUIControl(int controlType);
 
-#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && defined(__x86_64__)
+#if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
 mach_port_t WKInitializeRenderServer(void);
     
 @class CALayer;
@@ -269,6 +276,15 @@ WKSoftwareCARendererRef WKSoftwareCARendererCreate(uint32_t contextID);
 void WKSoftwareCARendererDestroy(WKSoftwareCARendererRef);
 void WKSoftwareCARendererRender(WKSoftwareCARendererRef, CGContextRef, CGRect);
 
+typedef struct __WKCARemoteLayerClientRef *WKCARemoteLayerClientRef;
+
+WKCARemoteLayerClientRef WKCARemoteLayerClientMakeWithServerPort(mach_port_t port);
+void WKCARemoteLayerClientInvalidate(WKCARemoteLayerClientRef);
+uint32_t WKCARemoteLayerClientGetClientId(WKCARemoteLayerClientRef);
+void WKCARemoteLayerClientSetLayer(WKCARemoteLayerClientRef, CALayer *);
+CALayer *WKCARemoteLayerClientGetLayer(WKCARemoteLayerClientRef);
+
+#if defined(__x86_64__)
 #import <mach/mig.h>
 
 CFRunLoopSourceRef WKCreateMIGServerSource(mig_subsystem_t subsystem, mach_port_t serverPort);
@@ -276,8 +292,8 @@ CFRunLoopSourceRef WKCreateMIGServerSource(mig_subsystem_t subsystem, mach_port_
 NSUInteger WKGetInputPanelWindowStyle(void);
  
 UInt8 WKGetNSEventKeyChar(NSEvent *);
-    
-#endif
+#endif // defined(__x86_64__)
+#endif // !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
 
 @class CAPropertyAnimation;
 void WKSetCAAnimationValueFunction(CAPropertyAnimation*, NSString* function);
@@ -298,6 +314,10 @@ void WKWindowSetScaledFrame(NSWindow *window, NSRect scaleFrame, NSRect nonScale
 #if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD)
 NSMutableArray *WKNoteOpenPanelFiles(NSArray *paths);
 void WKSyncSurfaceToView(NSView *view);
+#endif
+
+#if defined(BUILDING_ON_TIGER) || defined(BUILDING_ON_LEOPARD) || defined(BUILDING_ON_SNOW_LEOPARD)
+CFIndex WKGetHyphenationLocationBeforeIndex(CFStringRef string, CFIndex index);
 #endif
 
 #ifdef __cplusplus

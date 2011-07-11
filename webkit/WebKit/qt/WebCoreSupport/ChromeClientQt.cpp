@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2006 Zack Rusin <zack@kde.org>
  * Copyright (C) 2006 Apple Computer, Inc.  All rights reserved.
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  * All rights reserved.
  *
@@ -29,42 +30,47 @@
 #include "config.h"
 #include "ChromeClientQt.h"
 
+#include "DatabaseTracker.h"
 #include "FileChooser.h"
 #include "Frame.h"
 #include "FrameLoadRequest.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClientQt.h"
 #include "FrameView.h"
+#include "Geolocation.h"
+#if USE(ACCELERATED_COMPOSITING)
+#include "GraphicsLayerQt.h"
+#endif
+#include "GeolocationPermissionClientQt.h"
 #include "HitTestResult.h"
 #include "Icon.h"
-#include "NotificationPresenterClientQt.h"
 #include "NotImplemented.h"
-#include "ScrollbarTheme.h"
-#include "WindowFeatures.h"
-#include "DatabaseTracker.h"
+#include "NotificationPresenterClientQt.h"
+#include "PageClientQt.h"
+#include "PopupMenuQt.h"
 #if defined(Q_WS_MAEMO_5)
 #include "QtMaemoWebPopup.h"
 #else
 #include "QtFallbackWebPopup.h"
 #endif
 #include "QWebPageClient.h"
+#include "ScrollbarTheme.h"
+#include "SearchPopupMenuQt.h"
 #include "SecurityOrigin.h"
+#include "ViewportArguments.h"
+#include "WindowFeatures.h"
 
+#include "qgraphicswebview.h"
+#include "qwebframe_p.h"
+#include "qwebpage.h"
+#include "qwebpage_p.h"
+#include "qwebsecurityorigin.h"
+#include "qwebsecurityorigin_p.h"
+#include "qwebview.h"
 #include <qdebug.h>
 #include <qeventloop.h>
 #include <qtextdocument.h>
 #include <qtooltip.h>
-
-#include "qwebpage.h"
-#include "qwebpage_p.h"
-#include "qwebframe_p.h"
-#include "qwebsecurityorigin.h"
-#include "qwebsecurityorigin_p.h"
-#include "qwebview.h"
-
-#if USE(ACCELERATED_COMPOSITING)
-#include "GraphicsLayerQt.h"
-#endif
 
 namespace WebCore {
 
@@ -89,24 +95,23 @@ void ChromeClientQt::setWindowRect(const FloatRect& rect)
                             qRound(rect.width()), qRound(rect.height())));
 }
 
-
+/*!
+    windowRect represents the rect of the Window, including all interface elements
+    like toolbars/scrollbars etc. It is used by the viewport meta tag as well as
+    by the DOM Window object: outerHeight(), outerWidth(), screenX(), screenY().
+*/
 FloatRect ChromeClientQt::windowRect()
 {
-    if (!m_webPage)
+    if (!platformPageClient())
         return FloatRect();
-
-    QWidget* view = m_webPage->view();
-    if (!view)
-        return FloatRect();
-    return IntRect(view->window()->geometry());
+    return platformPageClient()->windowRect();
 }
-
 
 FloatRect ChromeClientQt::pageRect()
 {
     if (!m_webPage)
         return FloatRect();
-    return FloatRect(QRectF(QPointF(0,0), m_webPage->viewportSize()));
+    return FloatRect(QRectF(QPointF(0, 0), m_webPage->viewportSize()));
 }
 
 
@@ -163,7 +168,7 @@ void ChromeClientQt::focusedNodeChanged(WebCore::Node*)
 
 Page* ChromeClientQt::createWindow(Frame*, const FrameLoadRequest& request, const WindowFeatures& features)
 {
-    QWebPage *newPage = m_webPage->createWindow(features.dialog ? QWebPage::WebModalDialog : QWebPage::WebBrowserWindow);
+    QWebPage* newPage = m_webPage->createWindow(features.dialog ? QWebPage::WebModalDialog : QWebPage::WebBrowserWindow);
     if (!newPage)
         return 0;
 
@@ -225,7 +230,6 @@ void ChromeClientQt::setStatusbarVisible(bool visible)
 bool ChromeClientQt::statusbarVisible()
 {
     return statusBarVisible;
-    return false;
 }
 
 
@@ -290,21 +294,21 @@ void ChromeClientQt::closeWindowSoon()
 void ChromeClientQt::runJavaScriptAlert(Frame* f, const String& msg)
 {
     QString x = msg;
-    FrameLoaderClientQt *fl = static_cast<FrameLoaderClientQt*>(f->loader()->client());
+    FrameLoaderClientQt* fl = static_cast<FrameLoaderClientQt*>(f->loader()->client());
     m_webPage->javaScriptAlert(fl->webFrame(), x);
 }
 
 bool ChromeClientQt::runJavaScriptConfirm(Frame* f, const String& msg)
 {
     QString x = msg;
-    FrameLoaderClientQt *fl = static_cast<FrameLoaderClientQt*>(f->loader()->client());
+    FrameLoaderClientQt* fl = static_cast<FrameLoaderClientQt*>(f->loader()->client());
     return m_webPage->javaScriptConfirm(fl->webFrame(), x);
 }
 
 bool ChromeClientQt::runJavaScriptPrompt(Frame* f, const String& message, const String& defaultValue, String& result)
 {
     QString x = result;
-    FrameLoaderClientQt *fl = static_cast<FrameLoaderClientQt*>(f->loader()->client());
+    FrameLoaderClientQt* fl = static_cast<FrameLoaderClientQt*>(f->loader()->client());
     bool rc = m_webPage->javaScriptPrompt(fl->webFrame(), (QString)message, (QString)defaultValue, &x);
 
     // Fix up a quirk in the QInputDialog class. If no input happened the string should be empty
@@ -406,14 +410,31 @@ void ChromeClientQt::scroll(const IntSize& delta, const IntRect& scrollViewRect,
 
 IntRect ChromeClientQt::windowToScreen(const IntRect& rect) const
 {
-    notImplemented();
-    return rect;
+    QWebPageClient* pageClient = platformPageClient();
+    if (!pageClient)
+        return rect;
+
+    QWidget* ownerWidget = pageClient->ownerWidget();
+    if (!ownerWidget)
+       return rect;
+
+    QRect screenRect(rect);
+    screenRect.translate(ownerWidget->mapToGlobal(QPoint(0, 0)));
+
+    return screenRect;
 }
 
 IntPoint ChromeClientQt::screenToWindow(const IntPoint& point) const
 {
-    notImplemented();
-    return point;
+    QWebPageClient* pageClient = platformPageClient();
+    if (!pageClient)
+        return point;
+
+    QWidget* ownerWidget = pageClient->ownerWidget();
+    if (!ownerWidget)
+        return point;
+
+    return ownerWidget->mapFromGlobal(point);
 }
 
 PlatformPageClient ChromeClientQt::platformPageClient() const
@@ -459,7 +480,7 @@ void ChromeClientQt::setToolTip(const String &tip, TextDirection)
 #endif
 }
 
-void ChromeClientQt::print(Frame *frame)
+void ChromeClientQt::print(Frame* frame)
 {
     emit m_webPage->printRequested(QWebFramePrivate::kit(frame));
 }
@@ -482,12 +503,17 @@ void ChromeClientQt::reachedMaxAppCacheSize(int64_t)
     // FIXME: Free some space.
     notImplemented();
 }
+
+void ChromeClientQt::reachedApplicationCacheOriginQuota(SecurityOrigin*)
+{
+    notImplemented();
+}
 #endif
 
 #if ENABLE(NOTIFICATIONS)
 NotificationPresenter* ChromeClientQt::notificationPresenter() const
 {
-    return m_webPage->d->notificationPresenterClient;
+    return NotificationPresenterClientQt::notificationPresenter();
 }
 #endif
 
@@ -528,21 +554,37 @@ void ChromeClientQt::chooseIconForFiles(const Vector<String>& filenames, FileCho
     chooser->iconLoaded(Icon::createIconForFiles(filenames));
 }
 
-bool ChromeClientQt::setCursor(PlatformCursorHandle)
+void ChromeClientQt::setCursor(const Cursor& cursor)
 {
-    notImplemented();
-    return false;
+#ifndef QT_NO_CURSOR
+    QWebPageClient* pageClient = platformPageClient();
+    if (!pageClient)
+        return;
+    pageClient->setCursor(*cursor.platformCursor());
+#else
+    UNUSED_PARAM(cursor)
+#endif
 }
 
-void ChromeClientQt::requestGeolocationPermissionForFrame(Frame*, Geolocation*)
+void ChromeClientQt::requestGeolocationPermissionForFrame(Frame* frame, Geolocation* geolocation)
 {
-    // See the comment in WebCore/page/ChromeClient.h
-    notImplemented();
+#if ENABLE(GEOLOCATION)
+    QWebFrame* webFrame = QWebFramePrivate::kit(frame);
+    GeolocationPermissionClientQt::geolocationPermissionClient()->requestGeolocationPermissionForFrame(webFrame, geolocation);
+#endif
+}
+
+void ChromeClientQt::cancelGeolocationPermissionRequestForFrame(Frame* frame, Geolocation* geolocation)
+{
+#if ENABLE(GEOLOCATION)
+    QWebFrame* webFrame = QWebFramePrivate::kit(frame);
+    GeolocationPermissionClientQt::geolocationPermissionClient()->cancelGeolocationPermissionRequestForFrame(webFrame, geolocation);
+#endif
 }
 
 #if USE(ACCELERATED_COMPOSITING)
 void ChromeClientQt::attachRootGraphicsLayer(Frame* frame, GraphicsLayer* graphicsLayer)
-{    
+{
     if (platformPageClient())
         platformPageClient()->setRootGraphicsLayer(graphicsLayer ? graphicsLayer->nativeLayer() : 0);
 }
@@ -567,10 +609,10 @@ bool ChromeClientQt::allowsAcceleratedCompositing() const
 }
 
 #endif
-    
+
 #if ENABLE(TILED_BACKING_STORE)
 IntRect ChromeClientQt::visibleRectForTiledBackingStore() const
-{ 
+{
     if (!platformPageClient() || !m_webPage)
         return IntRect();
 
@@ -581,46 +623,41 @@ IntRect ChromeClientQt::visibleRectForTiledBackingStore() const
 }
 #endif
 
-QtAbstractWebPopup* ChromeClientQt::createSelectPopup()
+QWebSelectMethod* ChromeClientQt::createSelectPopup() const
 {
-    QtAbstractWebPopup* result = m_platformPlugin.createSelectInputMethod();
+    QWebSelectMethod* result = m_platformPlugin.createSelectInputMethod();
     if (result)
         return result;
 
 #if defined(Q_WS_MAEMO_5)
     return new QtMaemoWebPopup;
 #elif !defined(QT_NO_COMBOBOX)
-    return new QtFallbackWebPopup;
+    return new QtFallbackWebPopup(this);
 #else
-    return result;
+    return 0;
 #endif
 }
 
-#if ENABLE(WIDGETS_10_SUPPORT)
-bool ChromeClientQt::isWindowed()
+void ChromeClientQt::didReceiveViewportArguments(Frame* frame, const ViewportArguments& arguments) const
 {
-    return m_webPage->d->viewMode == "windowed";
+    m_webPage->mainFrame()->d->viewportArguments = arguments;
+
+    emit m_webPage->viewportChangeRequested();
 }
 
-bool ChromeClientQt::isFloating()
+bool ChromeClientQt::selectItemWritingDirectionIsNatural()
 {
-    return m_webPage->d->viewMode == "floating";
+    return false;
 }
 
-bool ChromeClientQt::isFullscreen()
+PassRefPtr<PopupMenu> ChromeClientQt::createPopupMenu(PopupMenuClient* client) const
 {
-    return m_webPage->d->viewMode == "fullscreen";
+    return adoptRef(new PopupMenuQt(client, this));
 }
 
-bool ChromeClientQt::isMaximized()
+PassRefPtr<SearchPopupMenu> ChromeClientQt::createSearchPopupMenu(PopupMenuClient* client) const
 {
-    return m_webPage->d->viewMode == "maximized";
+    return adoptRef(new SearchPopupMenuQt(createPopupMenu(client)));
 }
 
-bool ChromeClientQt::isMinimized()
-{
-    return m_webPage->d->viewMode == "minimized";
-}
-#endif
-
-}
+} // namespace WebCore

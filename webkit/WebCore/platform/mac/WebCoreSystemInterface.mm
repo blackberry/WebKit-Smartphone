@@ -1,5 +1,5 @@
 /*
- * Copyright 2006, 2007, 2008, 2010 Apple Computer, Inc. All rights reserved.
+ * Copyright 2006, 2007, 2008, 2009, 2010 Apple Computer, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -52,10 +52,11 @@ NSString* (*wkGetMIMETypeForExtension)(NSString*);
 NSTimeInterval (*wkGetNSURLResponseCalculatedExpiration)(NSURLResponse *response);
 NSDate *(*wkGetNSURLResponseLastModifiedDate)(NSURLResponse *response);
 BOOL (*wkGetNSURLResponseMustRevalidate)(NSURLResponse *response);
-void (*wkGetWheelEventDeltas)(NSEvent*, float* deltaX, float* deltaY, float* wheelTicksX, float* wheelTicksY, BOOL* continuous);
+void (*wkGetWheelEventDeltas)(NSEvent*, float* deltaX, float* deltaY, BOOL* continuous);
 void (*wkPopupMenu)(NSMenu*, NSPoint location, float width, NSView*, int selectedItem, NSFont*);
 unsigned (*wkQTIncludeOnlyModernMediaFileTypes)(void);
 int (*wkQTMovieDataRate)(QTMovie*);
+void (*wkQTMovieDisableComponent)(uint32_t[5]);
 float (*wkQTMovieMaxTimeLoaded)(QTMovie*);
 NSString *(*wkQTMovieMaxTimeLoadedChangeNotification)(void);
 float (*wkQTMovieMaxTimeSeekable)(QTMovie*);
@@ -112,6 +113,8 @@ BOOL (*wkSupportsMultipartXMixedReplace)(NSMutableURLRequest *);
 
 #if !defined(BUILDING_ON_TIGER) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
 NSMutableArray *(*wkNoteOpenPanelFiles)(NSArray *);
+void* wkGetHyphenationLocationBeforeIndex;
 #else
 void* wkNoteOpenPanelFiles;
+CFIndex (*wkGetHyphenationLocationBeforeIndex)(CFStringRef string, CFIndex index);
 #endif

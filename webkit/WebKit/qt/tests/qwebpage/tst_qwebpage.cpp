@@ -77,6 +77,7 @@ private slots:
 
     void acceptNavigationRequest();
     void infiniteLoopJS();
+    void geolocationRequestJS();
     void loadFinished();
     void acceptNavigationRequestWithNewWindow();
     void userStyleSheet();
@@ -122,7 +123,9 @@ private slots:
     void originatingObjectInNetworkRequests();
     void testJSPrompt();
     void showModalDialog();
-
+    void testStopScheduledPageRefresh();
+    void findText();
+    
 private:
     QWebView* m_view;
     QWebPage* m_page;
@@ -212,16 +215,58 @@ public:
 
 public slots:
     bool shouldInterruptJavaScript() {
-        return true; 
+        return true;
     }
+    void requestPermission(QWebFrame* frame, QWebPage::PermissionDomain domain)
+    {
+        if (m_allowGeolocation)
+            setUserPermission(frame, domain, PermissionGranted);
+        else 
+            setUserPermission(frame, domain, PermissionDenied);
+    }
+
+public:
+    void setGeolocationPermission(bool allow) 
+    {
+        m_allowGeolocation = allow;
+    }
+
+private: 
+    bool m_allowGeolocation;
 };
 
 void tst_QWebPage::infiniteLoopJS()
 {
     JSTestPage* newPage = new JSTestPage(m_view);
     m_view->setPage(newPage);
-    m_view->setHtml(QString("<html><bodytest</body></html>"), QUrl());
+    m_view->setHtml(QString("<html><body>test</body></html>"), QUrl());
     m_view->page()->mainFrame()->evaluateJavaScript("var run = true;var a = 1;while(run){a++;}");
+    delete newPage;
+}
+
+void tst_QWebPage::geolocationRequestJS()
+{
+    JSTestPage* newPage = new JSTestPage(m_view);
+    connect(newPage, SIGNAL(requestPermissionFromUser(QWebFrame*, QWebPage::PermissionDomain)), 
+            newPage, SLOT(requestPermission(QWebFrame*, QWebPage::PermissionDomain)));
+
+    newPage->setGeolocationPermission(false);
+    m_view->setPage(newPage);
+    m_view->setHtml(QString("<html><body>test</body></html>"), QUrl());
+    m_view->page()->mainFrame()->evaluateJavaScript("var errorCode = 0; function error(err) { errorCode = err.code; } function success(pos) { } navigator.geolocation.getCurrentPosition(success, error)");
+    QTest::qWait(2000);
+    QVariant empty = m_view->page()->mainFrame()->evaluateJavaScript("errorCode");
+
+    QVERIFY(empty.type() == QVariant::Double && empty.toInt() != 0);
+
+    newPage->setGeolocationPermission(true);
+    m_view->page()->mainFrame()->evaluateJavaScript("errorCode = 0; navigator.geolocation.getCurrentPosition(success, error);");
+    empty = m_view->page()->mainFrame()->evaluateJavaScript("errorCode");
+
+    //http://dev.w3.org/geo/api/spec-source.html#position
+    //PositionError: const unsigned short PERMISSION_DENIED = 1;
+    QVERIFY(empty.type() == QVariant::Double && empty.toInt() != 1);
+    delete newPage;
 }
 
 void tst_QWebPage::loadFinished()
@@ -820,7 +865,7 @@ public:
 void tst_QWebPage::cursorMovements()
 {
     CursorTrackedPage* page = new CursorTrackedPage;
-    QString content("<html><body<p id=one>The quick brown fox</p><p id=two>jumps over the lazy dog</p><p>May the source<br/>be with you!</p></body></html>");
+    QString content("<html><body><p id=one>The quick brown fox</p><p id=two>jumps over the lazy dog</p><p>May the source<br/>be with you!</p></body></html>");
     page->mainFrame()->setHtml(content);
 
     // this will select the first paragraph
@@ -1012,7 +1057,7 @@ void tst_QWebPage::cursorMovements()
 void tst_QWebPage::textSelection()
 {
     CursorTrackedPage* page = new CursorTrackedPage;
-    QString content("<html><body<p id=one>The quick brown fox</p>" \
+    QString content("<html><body><p id=one>The quick brown fox</p>" \
         "<p id=two>jumps over the lazy dog</p>" \
         "<p>May the source<br/>be with you!</p></body></html>");
     page->mainFrame()->setHtml(content);
@@ -1100,7 +1145,7 @@ void tst_QWebPage::textSelection()
 void tst_QWebPage::textEditing()
 {
     CursorTrackedPage* page = new CursorTrackedPage;
-    QString content("<html><body<p id=one>The quick brown fox</p>" \
+    QString content("<html><body><p id=one>The quick brown fox</p>" \
         "<p id=two>jumps over the lazy dog</p>" \
         "<p>May the source<br/>be with you!</p></body></html>");
     page->mainFrame()->setHtml(content);
@@ -1616,6 +1661,22 @@ void tst_QWebPage::inputMethods()
     QVERIFY(!viewEventSpy.contains(QEvent::RequestSoftwareInputPanel));
 #endif
 
+#if QT_VERSION >= 0x040600
+    //START - Test for sending empty QInputMethodEvent
+    page->mainFrame()->setHtml("<html><body>" \
+                                            "<input type='text' id='input3' value='QtWebKit2'/>" \
+                                            "</body></html>");
+    page->mainFrame()->evaluateJavaScript("var inputEle = document.getElementById('input3'); inputEle.focus(); inputEle.select();");
+
+    //Send empty QInputMethodEvent
+    QInputMethodEvent emptyEvent;
+    page->event(&emptyEvent);
+
+    QString inputValue = page->mainFrame()->evaluateJavaScript("document.getElementById('input3').value").toString();
+    QCOMPARE(inputValue, QString("QtWebKit2"));
+    //END - Test for sending empty QInputMethodEvent
+#endif
+
     delete container;
 }
 
@@ -1986,7 +2047,7 @@ void tst_QWebPage::originatingObjectInNetworkRequests()
     m_page->setNetworkAccessManager(networkManager);
     networkManager->requests.clear();
 
-    m_view->setHtml(QString("data:text/html,<frameset cols=\"25%,75%\"><frame src=\"data:text/html,"
+    m_view->setHtml(QString("<frameset cols=\"25%,75%\"><frame src=\"data:text/html,"
                             "<head><meta http-equiv='refresh' content='1'></head>foo \">"
                             "<frame src=\"data:text/html,bar\"></frameset>"), QUrl());
     QVERIFY(::waitForSignal(m_view, SIGNAL(loadFinished(bool))));
@@ -2088,6 +2149,47 @@ void tst_QWebPage::showModalDialog()
     page.mainFrame()->setHtml(QString("<html></html>"));
     QString res = page.mainFrame()->evaluateJavaScript("window.showModalDialog('javascript:window.returnValue=dialogArguments; window.close();', 'This is a test');").toString();
     QCOMPARE(res, QString("This is a test"));
+}
+
+void tst_QWebPage::testStopScheduledPageRefresh()
+{    
+    // Without QWebPage::StopScheduledPageRefresh
+    QWebPage page1;
+    page1.setNetworkAccessManager(new TestNetworkManager(&page1));
+    page1.mainFrame()->setHtml("<html><head>"
+                                "<meta http-equiv=\"refresh\"content=\"0;URL=http://qt.nokia.com/favicon.ico\">"
+                                "</head><body><h1>Page redirects immediately...</h1>"
+                                "</body></html>");
+    QVERIFY(::waitForSignal(&page1, SIGNAL(loadFinished(bool))));
+    QTest::qWait(500);
+    QCOMPARE(page1.mainFrame()->url().toString(), QString("http://qt.nokia.com/favicon.ico"));
+    
+    // With QWebPage::StopScheduledPageRefresh
+    QWebPage page2;
+    page2.setNetworkAccessManager(new TestNetworkManager(&page2));
+    page2.mainFrame()->setHtml("<html><head>"
+                               "<meta http-equiv=\"refresh\"content=\"1;URL=http://qt.nokia.com/favicon.ico\">"
+                               "</head><body><h1>Page redirect test with 1 sec timeout...</h1>"
+                               "</body></html>");
+    page2.triggerAction(QWebPage::StopScheduledPageRefresh);
+    QTest::qWait(1500);
+    QCOMPARE(page2.mainFrame()->url().toString(), QString("about:blank"));
+}
+
+void tst_QWebPage::findText()
+{
+    m_view->setHtml(QString("<html><head></head><body><div>foo bar</div></body></html>"));
+    m_page->triggerAction(QWebPage::SelectAll);
+    QVERIFY(!m_page->selectedText().isEmpty());
+    m_page->findText("");
+    QVERIFY(m_page->selectedText().isEmpty());
+    QStringList words = (QStringList() << "foo" << "bar");
+    foreach (QString subString, words) {
+        m_page->findText(subString, QWebPage::FindWrapsAroundDocument);
+        QCOMPARE(m_page->selectedText(), subString);
+        m_page->findText("");
+        QVERIFY(m_page->selectedText().isEmpty());
+    }
 }
 
 QTEST_MAIN(tst_QWebPage)

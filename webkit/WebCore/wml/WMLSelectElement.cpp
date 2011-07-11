@@ -44,6 +44,11 @@ WMLSelectElement::WMLSelectElement(const QualifiedName& tagName, Document* docum
 {
 }
 
+PassRefPtr<WMLSelectElement> WMLSelectElement::create(const QualifiedName& tagName, Document* document)
+{
+    return adoptRef(new WMLSelectElement(tagName, document));
+}
+
 WMLSelectElement::~WMLSelectElement()
 {
 }
@@ -109,8 +114,9 @@ void WMLSelectElement::setSelectedIndex(int optionIndex, bool deselect)
     SelectElement::setSelectedIndex(m_data, this, optionIndex, deselect, false, false);
 }
 
-void WMLSelectElement::setSelectedIndexByUser(int optionIndex, bool deselect, bool fireOnChangeNow)
+void WMLSelectElement::setSelectedIndexByUser(int optionIndex, bool deselect, bool fireOnChangeNow, bool allowMultipleSelection)
 {
+    UNUSED_PARAM(allowMultipleSelection);
     SelectElement::setSelectedIndex(m_data, this, optionIndex, deselect, fireOnChangeNow, true);
 }
 
@@ -167,7 +173,7 @@ void WMLSelectElement::reset()
 
 void WMLSelectElement::defaultEventHandler(Event* event)
 {
-    SelectElement::defaultEventHandler(m_data, this, event);
+    SelectElement::defaultEventHandler(m_data, this, event, 0);
 
     // FIXME: There must be a better place to update the page variable state. Investigate.
     updateVariables();

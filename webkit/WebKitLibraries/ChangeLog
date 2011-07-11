@@ -1,3 +1,252 @@
+2010-09-09  Jer Noble  <jer.noble@apple.com>
+
+        Reviewed by Eric Carlson.
+
+        Adopt shared control drawing for <video> controls on Windows
+        https://bugs.webkit.org/show_bug.cgi?id=45490
+
+        * win/lib/WebKitSystemInterface.lib:
+        * win/lib/WebKitSystemInterface_debug.lib:
+
+2010-09-10  Anders Carlsson  <andersca@apple.com>
+
+        WebKitSystemInterface part of:
+        Set the visible name for the web process
+        https://bugs.webkit.org/show_bug.cgi?id=45564
+        <rdar://problem/8416970>
+
+        * WebKitSystemInterface.h:
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+
+2010-08-05  Jian Li  <jianli@chromium.org>
+
+        Reviewed by David Levin.
+
+        Unify blob related feature defines to ENABLE(BLOB).
+        https://bugs.webkit.org/show_bug.cgi?id=43081
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+        * win/tools/vsprops/FeatureDefinesCairo.vsprops:
+
+2010-08-04  Dan Bernstein  <mitz@apple.com>
+
+        Reviewed by Darin Adler.
+
+        WebKitSystemInterface part of: Allow the language for hyphenation to be specified
+        https://bugs.webkit.org/show_bug.cgi?id=43467
+
+        * WebKitSystemInterface.h:
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+        * libWebKitSystemInterfaceTiger.a:
+
+2010-08-03  Beth Dakin  <bdakin@apple.com>
+
+        Reviewed by Alice Liu.
+
+        Enable MathML on Windows.
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+
+2010-07-30  Adam Roben  <aroben@apple.com>
+
+        Roll our r64361 and r64363
+
+        We can't make these changes until QuartzCore.lib is included in
+        WebKitSupportLibrary.
+
+2010-07-30  Adam Roben  <aroben@apple.com>
+
+        Add WKCACFContext and related functions
+
+        Also added some functions used by WKCAImageQueue.
+
+        Fixes <http://webkit.org/b/43244>.
+
+        Reviewed by Sam Weinig.
+
+        * win/include/WebKitSystemInterface/WebKitSystemInterface.h:
+        * win/lib/WebKitSystemInterface.lib:
+        * win/lib/WebKitSystemInterface_debug.lib:
+
+2010-07-27  Kinuko Yasuda  <kinuko@chromium.org>
+
+        Reviewed by Ojan Vafai.
+
+        Add FILE_SYSTEM build flag for FileSystem API
+        https://bugs.webkit.org/show_bug.cgi?id=42915
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+        * win/tools/vsprops/FeatureDefinesCairo.vsprops:
+
+2010-07-12  Mark Rowe  <mrowe@apple.com>
+
+        Rubber-stamped by Sam Weinig.
+
+        Update WebKitSystemInterface.
+
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+        * libWebKitSystemInterfaceTiger.a:
+
+2010-07-12  Adam Roben  <aroben@apple.com>
+
+        Stop generating stripped symbols for Release builds
+
+        It turns out we can strip the symbols after-the-fact using PDBCopy.
+
+        Fixes <http://webkit.org/b/42085>.
+
+        Reviewed by Steve Falkenburg.
+
+        * win/tools/vsprops/release.vsprops: Removed the StripPrivateSymbols
+        attribute, which caused link.exe to generate a stripped PDB file for
+        each project.
+
+2010-07-08  Eric Carlson  <eric.carlson@apple.com>
+
+        Reviewed by Dan Bernstein.
+
+        Update WebKitSystemInterface.
+
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+        * libWebKitSystemInterfaceTiger.a:
+
+2010-07-07  Dumitru Daniliuc  <dumi@chromium.org>
+
+        Reviewed by Adam Roben.
+
+        Disable MSVC warning 4288.
+        https://bugs.webkit.org/show_bug.cgi?id=41804
+
+        MSVC has a non-standard extension that allows variables declared
+        in for-loops to remain visible in the same scope even after
+        exiting the for-loop
+        (http://msdn.microsoft.com/en-us/library/bk5hc10s.aspx). The /Ze
+        option (turned on by default) enables all MSVC extensions, and
+        /Zc:forScope- tells the compiler to issue a C4288 warning when the
+        same variable is declared in the for-loop and re-declared later in
+        the same scope.
+
+        There seems to be a bug in VS2005 that erroneously enables
+        /Zc:forScope- even when that option is not specified
+        (http://connect.microsoft.com/VisualStudio/feedback/details/338010/bogus-compiler-warning-c4288). Looks
+        like our build got hit by that bug, so we need to disable warning
+        4288 to fix it.
+
+        * win/tools/vsprops/common.vsprops:
+
+2010-07-01  Simon Fraser  <simon.fraser@apple.com>
+
+        Reviewed by Sam Weinig.
+
+        <rdar://problem/8154047>
+        
+        Update WebKitSystemInterface, making some functions used by
+        WebKit2 available in 32-bit (for reals this time).
+
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+        * libWebKitSystemInterfaceTiger.a:
+
+2010-07-01  Simon Fraser  <simon.fraser@apple.com>
+
+        Reviewed by Sam Weinig.
+
+        <rdar://problem/8154047>
+        
+        Update WebKitSystemInterface, making some functions used by
+        WebKit2 available in 32-bit.
+
+        * WebKitSystemInterface.h:
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+        * libWebKitSystemInterfaceTiger.a:
+
+2010-06-23  John Gregg  <johnnyg@google.com>
+
+        Reviewed by Kent Tamura.
+
+        add ENABLE_DIRECTORY_UPLOAD build support
+        https://bugs.webkit.org/show_bug.cgi?id=41100
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+        * win/tools/vsprops/FeatureDefinesCairo.vsprops:
+
+2010-06-27  Steve Falkenburg  <sfalken@apple.com>
+
+        Windows (Cairo) build fix.
+        Add missing ENABLE_WEB_TIMING feature define.
+
+        * win/tools/vsprops/FeatureDefinesCairo.vsprops:
+
+2010-06-27  Steve Falkenburg  <sfalken@apple.com>
+
+        Windows build fix.
+        Disable ENABLE_WEB_TIMING on Windows.
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+
+2010-06-26  Tony Gentilcore  <tonyg@chromium.org>
+
+        Reviewed by Dimitri Glazkov.
+
+        Add a VS macro for enabling Web Timing support.
+        https://bugs.webkit.org/show_bug.cgi?id=38924
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+
+2010-06-21  Sam Weinig  <sam@webkit.org>
+
+        Reviewed by Anders Carlsson.
+
+        Update WebKitSystemInterface.
+
+        * WebKitSystemInterface.h:
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+        * libWebKitSystemInterfaceTiger.a:
+
+2010-06-21  Dan Bernstein  <mitz@apple.com>
+
+        Speculative build fix.
+
+        * WebKitSystemInterface.h:
+
+2010-06-21  Dan Bernstein  <mitz@apple.com>
+
+        Reviewed by Darin Adler.
+
+        WebKitSystemInterface part of CSS3: Implement the 'hyphens' and 'hyphenate-character' properties
+        https://bugs.webkit.org/show_bug.cgi?id=10228
+
+        * WebKitSystemInterface.h: Added WKGetHyphenationLocationBeforeIndex().
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+        * libWebKitSystemInterfaceTiger.a:
+
+2010-06-21  Satish Sampath  <satish@chromium.org>
+
+        Reviewed by Steve Block.
+
+        Speech Input Patch 0: Added compilation argument to conditionally compile pending patches.
+        https://bugs.webkit.org/show_bug.cgi?id=40878
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+        * win/tools/vsprops/FeatureDefinesCairo.vsprops:
+
+2010-06-02  Sterling Swigart  <sswigart@google.com>
+
+        Reviewed by David Levin.
+
+        Image Resizer Patch 0: Added compilation argument to conditionally compile pending patches.
+        https://bugs.webkit.org/show_bug.cgi?id=39906
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+        * win/tools/vsprops/FeatureDefinesCairo.vsprops:
+
 2010-05-24  Jer Noble  <jer.noble@apple.com>
 
         No review; build fix only.

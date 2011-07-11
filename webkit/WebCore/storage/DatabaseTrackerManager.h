@@ -20,6 +20,10 @@ class DatabaseTrackerManager : public Noncopyable {
 public:
     void initializeTracker(const String& groupName, const String& databasePath);
     DatabaseTracker& tracker(const String& groupName);
+#if OS(OLYMPIA)
+    static void reopenAllTrackerDatabases();
+    static void closeAllTrackerDatabases();
+#endif // OS(OLYMPIA)
 
 private:
     DatabaseTrackerManager();

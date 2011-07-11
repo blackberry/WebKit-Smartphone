@@ -25,7 +25,6 @@
 
 #include "config.h"
 #include "CanvasRenderingContext.h"
-
 #include "HTMLCanvasElement.h"
 
 namespace WebCore {

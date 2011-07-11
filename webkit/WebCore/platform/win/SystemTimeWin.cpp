@@ -28,7 +28,7 @@
 
 #include <windows.h>
 
-#if COMPILER(MINGW) || (PLATFORM(QT) && COMPILER(MSVC))
+#if COMPILER(MINGW) || ((PLATFORM(QT) || PLATFORM(OLYMPIA)) && COMPILER(MSVC))
 #include <float.h>
 #define FLOAT_MAX FLT_MAX
 #endif

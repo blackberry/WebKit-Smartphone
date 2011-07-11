@@ -18,25 +18,31 @@
 */
 
 #include "config.h"
-#include "PlatformWheelEvent.h"
+#include "WheelEvent.h"
 
 #include "PlatformMouseEvent.h"
+#include "PlatformWheelEvent.h"
 #include "Scrollbar.h"
 
-#include <qapplication.h>
-#include <QWheelEvent>
 #include <QGraphicsSceneWheelEvent>
+#include <QWheelEvent>
+#include <qapplication.h>
 
 namespace WebCore {
 
 void PlatformWheelEvent::applyDelta(int delta, Qt::Orientation orientation)
 {
+    // A delta that is not mod 120 indicates a device that is sending
+    // fine-resolution scroll events, so use the delta as number of wheel ticks
+    // and number of pixels to scroll.See also webkit.org/b/29601
+    bool fullTick = !(delta % 120);
+
     if (orientation == Qt::Horizontal) {
-        m_deltaX = (delta / 120.0f);
+        m_deltaX = (fullTick) ? delta / 120.0f : delta;
         m_deltaY = 0;
     } else {
         m_deltaX = 0;
-        m_deltaY = (delta / 120.0f);
+        m_deltaY = (fullTick) ? delta / 120.0f : delta;
     }
 
     m_wheelTicksX = m_deltaX;
@@ -46,17 +52,13 @@ void PlatformWheelEvent::applyDelta(int delta, Qt::Orientation orientation)
     // (in QTextEditPrivate::init [h,v]bar->setSingleStep)
     static const float cDefaultQtScrollStep = 20.f;
 #ifndef QT_NO_WHEELEVENT
-    m_deltaX *= QApplication::wheelScrollLines() * cDefaultQtScrollStep;
-    m_deltaY *= QApplication::wheelScrollLines() * cDefaultQtScrollStep;
+    m_deltaX *= (fullTick) ? QApplication::wheelScrollLines() * cDefaultQtScrollStep : 1;
+    m_deltaY *= (fullTick) ? QApplication::wheelScrollLines() * cDefaultQtScrollStep : 1;
 #endif
 }
 
 PlatformWheelEvent::PlatformWheelEvent(QGraphicsSceneWheelEvent* e)
-#ifdef QT_NO_WHEELEVENT
-{
-    Q_UNUSED(e);
-}
-#else
+#ifndef QT_NO_WHEELEVENT
     : m_position(e->pos().toPoint())
     , m_globalPosition(e->screenPos())
     , m_granularity(ScrollByPixelWheelEvent)
@@ -65,17 +67,17 @@ PlatformWheelEvent::PlatformWheelEvent(QGraphicsSceneWheelEvent* e)
     , m_ctrlKey(e->modifiers() & Qt::ControlModifier)
     , m_altKey(e->modifiers() & Qt::AltModifier)
     , m_metaKey(e->modifiers() & Qt::MetaModifier)
+#endif
 {
+#ifndef QT_NO_WHEELEVENT
     applyDelta(e->delta(), e->orientation());
+#else
+    Q_UNUSED(e);
+#endif
 }
-#endif // QT_NO_WHEELEVENT
 
 PlatformWheelEvent::PlatformWheelEvent(QWheelEvent* e)
-#ifdef QT_NO_WHEELEVENT
-{
-    Q_UNUSED(e);
-}
-#else
+#ifndef QT_NO_WHEELEVENT
     : m_position(e->pos())
     , m_globalPosition(e->globalPos())
     , m_granularity(ScrollByPixelWheelEvent)
@@ -84,9 +86,13 @@ PlatformWheelEvent::PlatformWheelEvent(QWheelEvent* e)
     , m_ctrlKey(e->modifiers() & Qt::ControlModifier)
     , m_altKey(e->modifiers() & Qt::AltModifier)
     , m_metaKey(e->modifiers() & Qt::MetaModifier)
+#endif
 {
+#ifndef QT_NO_WHEELEVENT
     applyDelta(e->delta(), e->orientation());
+#else
+    Q_UNUSED(e);
+#endif
 }
-#endif // QT_NO_WHEELEVENT
 
 } // namespace WebCore

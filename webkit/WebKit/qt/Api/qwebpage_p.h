@@ -44,7 +44,6 @@ namespace WebCore {
     class EditorClientQt;
     class Element;
     class InspectorController;
-    class NotificationPresenterClientQt;
     class Node;
     class Page;
     class Frame;
@@ -59,12 +58,21 @@ QT_END_NAMESPACE
 class QWebInspector;
 class QWebPageClient;
 
+class QtViewportConfigurationPrivate : public QSharedData {
+public:
+    QtViewportConfigurationPrivate(QWebPage::ViewportConfiguration* qq)
+        : q(qq)
+    { }
+
+    QWebPage::ViewportConfiguration* q;
+};
+
 class QWebPagePrivate {
 public:
     QWebPagePrivate(QWebPage*);
     ~QWebPagePrivate();
 
-    static WebCore::Page* core(QWebPage*);
+    static WebCore::Page* core(const QWebPage*);
     static QWebPagePrivate* priv(QWebPage*);
 
     void createMainFrame();
@@ -113,7 +121,9 @@ public:
 
     void inputMethodEvent(QInputMethodEvent*);
 
+#ifndef QT_NO_PROPERTIES
     void dynamicPropertyChangeEvent(QDynamicPropertyChangeEvent*);
+#endif
 
     void shortcutOverrideEvent(QKeyEvent*);
     void leaveEvent(QEvent*);
@@ -122,7 +132,8 @@ public:
     bool handleScrolling(QKeyEvent*, WebCore::Frame*);
 
 #if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
-    void touchEvent(QTouchEvent*);
+    // Returns whether the default action was cancelled in the JS event handler
+    bool touchEvent(QTouchEvent*);
 #endif
 
     void setInspector(QWebInspector*);
@@ -190,10 +201,6 @@ public:
     QWebInspector* inspector;
     bool inspectorIsInternalOnly; // True if created through the Inspect context menu action
     Qt::DropAction m_lastDropAction;
-    
-    WebCore::NotificationPresenterClientQt* notificationPresenterClient;
-
-    QString viewMode;
 
     static bool drtRun;
 };

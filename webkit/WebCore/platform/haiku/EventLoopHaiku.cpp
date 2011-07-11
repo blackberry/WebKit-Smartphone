@@ -28,8 +28,11 @@
 
 #include <app/Application.h>
 
-
 namespace WebCore {
+
+void EventLoop::platformInit()
+{
+}
 
 void EventLoop::cycle()
 {

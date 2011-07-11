@@ -45,7 +45,7 @@ class InjectedScript;
 class InspectorDOMAgent;
 class InspectorFrontend;
 class Node;
-class SerializedScriptValue;
+class ScriptObject;
 class Storage;
 
 class InjectedScriptHost : public RefCounted<InjectedScriptHost>
@@ -58,6 +58,7 @@ public:
 
     ~InjectedScriptHost();
 
+    String injectedScriptSource() { return m_injectedScriptSource; }
     void setInjectedScriptSource(const String& source) { m_injectedScriptSource = source; }
 
     InspectorController* inspectorController() { return m_inspectorController; }
@@ -68,9 +69,7 @@ public:
     void copyText(const String& text);
     Node* nodeForId(long nodeId);
     long pushNodePathToFrontend(Node* node, bool withChildren, bool selectInUI);
-
-    void addNodesToSearchResult(const String& nodeIds);
-    long pushNodeByPathToFrontend(const String& path);
+    long inspectedNode(unsigned long num);
 
 #if ENABLE(DATABASE)
     Database* databaseForId(long databaseId);
@@ -84,7 +83,6 @@ public:
     void didCreateWorker(long id, const String& url, bool isSharedWorker);
     void didDestroyWorker(long id);
 #endif
-    void reportDidDispatchOnInjectedScript(long callId, SerializedScriptValue* result, bool isException);
 
     pair<long, ScriptObject> injectScript(const String& source, ScriptState*);
     InjectedScript injectedScriptFor(ScriptState*);
@@ -97,8 +95,9 @@ public:
 private:
     InjectedScriptHost(InspectorController* inspectorController);
     InspectorDOMAgent* inspectorDOMAgent();
-    InspectorFrontend* inspectorFrontend();
+    InspectorFrontend* frontend();
     ScriptObject createInjectedScript(const String& source, ScriptState* scriptState, long id);
+    void discardInjectedScript(ScriptState*);
 
     InspectorController* m_inspectorController;
     String m_injectedScriptSource;

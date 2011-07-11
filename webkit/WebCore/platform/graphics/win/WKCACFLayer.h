@@ -28,8 +28,6 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
-#include "StringHash.h"
-
 #include <wtf/RefCounted.h>
 
 #include <QuartzCore/CACFLayer.h>
@@ -37,6 +35,7 @@
 #include <wtf/PassRefPtr.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/Vector.h>
+#include <wtf/text/StringHash.h>
 
 #include "GraphicsContext.h"
 #include "PlatformString.h"
@@ -56,12 +55,16 @@ protected:
 class WKCACFLayer : public RefCounted<WKCACFLayer> {
 public:
     enum LayerType { Layer, TransformLayer };
-    enum FilterType { Linear, Nearest, Trilinear, Lanczos };
+    enum FilterType { Linear, Nearest, Trilinear };
     enum ContentsGravityType { Center, Top, Bottom, Left, Right, TopLeft, TopRight, 
                                BottomLeft, BottomRight, Resize, ResizeAspect, ResizeAspectFill };
 
     static PassRefPtr<WKCACFLayer> create(LayerType);
-    static WKCACFLayer* layer(CACFLayerRef layer) { return static_cast<WKCACFLayer*>(CACFLayerGetUserData(layer)); }
+    static WKCACFLayer* layer(CACFLayerRef layer)
+    {
+        ASSERT(CACFLayerGetUserData(layer) != reinterpret_cast<void*>(0xDEADBEEF));
+        return static_cast<WKCACFLayer*>(CACFLayerGetUserData(layer));
+    }
 
     virtual ~WKCACFLayer();
 
@@ -134,7 +137,11 @@ public:
     void adoptSublayers(WKCACFLayer* source);
 
     void removeAllSublayers() { internalRemoveAllSublayers(); }
-    void setSublayers(const Vector<RefPtr<WKCACFLayer> >& sublayers) { internalSetSublayers(sublayers); }
+    void setSublayers(const Vector<RefPtr<WKCACFLayer> >& sublayers)
+    {
+        internalSetSublayers(sublayers);
+        checkLayerConsistency();
+    }
 
     void insertSublayer(PassRefPtr<WKCACFLayer> layer, size_t index) { internalInsertSublayer(layer, index); }
 
@@ -162,9 +169,6 @@ public:
     virtual void setBounds(const CGRect&);
     CGRect bounds() const { return CACFLayerGetBounds(layer()); }
 
-    void setClearsContext(bool clears) { CACFLayerSetClearsContext(layer(), clears); setNeedsCommit(); }
-    bool clearsContext() const { return CACFLayerGetClearsContext(layer()); }
-
     void setContents(CFTypeRef contents) { CACFLayerSetContents(layer(), contents); setNeedsCommit(); }
     CFTypeRef contents() const { return CACFLayerGetContents(layer()); }
 
@@ -179,9 +183,6 @@ public:
 
     void setEdgeAntialiasingMask(uint32_t mask) { CACFLayerSetEdgeAntialiasingMask(layer(), mask); setNeedsCommit(); }
     uint32_t edgeAntialiasingMask() const { return CACFLayerGetEdgeAntialiasingMask(layer()); }
-
-    void setFilters(CFArrayRef filters) { CACFLayerSetFilters(layer(), filters); setNeedsCommit(); }
-    CFArrayRef filters() const { return CACFLayerGetFilters(layer()); }
 
     virtual void setFrame(const CGRect&);
     CGRect frame() const { return CACFLayerGetFrame(layer()); }
@@ -226,9 +227,6 @@ public:
 
     WKCACFLayer* rootLayer() const;
 
-    void setSortsSublayers(bool sorts) { CACFLayerSetSortsSublayers(layer(), sorts); setNeedsCommit(); }
-    bool sortsSublayers() const { return CACFLayerGetSortsSublayers(layer()); }
-
     void setSublayerTransform(const CATransform3D& transform) { CACFLayerSetSublayerTransform(layer(), transform); setNeedsCommit(); }
     CATransform3D sublayerTransform() const { return CACFLayerGetSublayerTransform(layer()); }
 
@@ -254,6 +252,13 @@ protected:
     // This should only be called from removeFromSuperlayer.
     void removeSublayer(const WKCACFLayer*);
 
+    void checkLayerConsistency()
+    {
+#ifndef NDEBUG
+        internalCheckLayerConsistency();
+#endif
+    }
+
     // Methods to be overridden for sublayer and rendering management
     virtual WKCACFLayer* internalSublayerAtIndex(int) const;
 
@@ -267,6 +272,10 @@ protected:
     virtual void internalSetSublayers(const Vector<RefPtr<WKCACFLayer> >&);
 
     virtual void internalSetNeedsDisplay(const CGRect* dirtyRect);
+
+#ifndef NDEBUG
+    virtual void internalCheckLayerConsistency();
+#endif
 
 #ifndef NDEBUG
     // Print this layer and its children to the console

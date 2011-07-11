@@ -21,6 +21,7 @@
  */
 
 #include "config.h"
+
 #if ENABLE(SVG)
 #include "RenderSVGResourceMarker.h"
 
@@ -43,52 +44,34 @@ RenderSVGResourceMarker::RenderSVGResourceMarker(SVGMarkerElement* node)
 
 RenderSVGResourceMarker::~RenderSVGResourceMarker()
 {
-    m_marker.clear();
 }
 
 void RenderSVGResourceMarker::layout()
 {
+    // Invalidate all resources if our layout changed.
+    if (m_everHadLayout && selfNeedsLayout())
+        removeAllClientsFromCache();
+
     // RenderSVGHiddenContainer overwrites layout(). We need the
     // layouting of RenderSVGContainer for calculating  local
     // transformations and repaint.
     RenderSVGContainer::layout();
 }
 
-void RenderSVGResourceMarker::addClient(const RenderObject* object)
+void RenderSVGResourceMarker::removeAllClientsFromCache(bool markForInvalidation)
 {
-    m_marker.add(object);
+    markAllClientsForInvalidation(markForInvalidation ? LayoutAndBoundariesInvalidation : ParentOnlyInvalidation);
 }
 
-void RenderSVGResourceMarker::invalidateClients()
+void RenderSVGResourceMarker::removeClientFromCache(RenderObject* client, bool markForInvalidation)
 {
-    const HashSet<const RenderObject*>::const_iterator end = m_marker.end();
-    for (HashSet<const RenderObject*>::const_iterator it = m_marker.begin(); it != end; ++it) {
-        RenderObject* renderer = const_cast<RenderObject*>(*it);
-        renderer->setNeedsBoundariesUpdate();
-        renderer->setNeedsLayout(true);
-    }
-
-    m_marker.clear();
-}
-
-void RenderSVGResourceMarker::invalidateClient(RenderObject* object)
-{
-    ASSERT(object);
-
-    // FIXME: The HashSet should always contain the object on calling invalidateClient. A race condition
-    // during the parsing can causes a call of invalidateClient right before the call of applyResource.
-    // We return earlier for the moment. This bug should be fixed in:
-    // https://bugs.webkit.org/show_bug.cgi?id=35181
-    if (!m_marker.contains(object))
-        return;
-
-    m_marker.remove(object);
-    markForLayoutAndResourceInvalidation(object);
+    ASSERT(client);
+    markClientForInvalidation(client, markForInvalidation ? BoundariesInvalidation : ParentOnlyInvalidation);
 }
 
 void RenderSVGResourceMarker::applyViewportClip(PaintInfo& paintInfo)
 {
-    if (SVGRenderBase::isOverflowHidden(this))
+    if (SVGRenderSupport::isOverflowHidden(this))
         paintInfo.context->clip(m_viewport);
 }
 
@@ -146,22 +129,13 @@ AffineTransform RenderSVGResourceMarker::markerTransformation(const FloatPoint& 
     return transform;
 }
 
-void RenderSVGResourceMarker::draw(RenderObject::PaintInfo& paintInfo, const AffineTransform& transform)
+void RenderSVGResourceMarker::draw(PaintInfo& paintInfo, const AffineTransform& transform)
 {
-    DEFINE_STATIC_LOCAL(HashSet<RenderSVGResourceMarker*>, currentlyDrawingMarkers, ());
-
-    // avoid drawing circular marker references
-    if (currentlyDrawingMarkers.contains(this))
-        return;
-
-    currentlyDrawingMarkers.add(this);
-    RenderObject::PaintInfo info(paintInfo);
+    PaintInfo info(paintInfo);
     info.context->save();
-    applyTransformToPaintInfo(info, transform);
+    info.applyTransform(transform);
     RenderSVGContainer::paint(info, 0, 0);
     info.context->restore();
-
-    currentlyDrawingMarkers.remove(this);
 }
 
 AffineTransform RenderSVGResourceMarker::markerContentTransformation(const AffineTransform& contentTransformation, const FloatPoint& origin, float strokeWidth) const

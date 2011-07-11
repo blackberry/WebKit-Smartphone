@@ -26,6 +26,7 @@
 #define Animation_h
 
 #include "PlatformString.h"
+#include "RenderStyleConstants.h"
 #include "TimingFunction.h"
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
@@ -39,7 +40,8 @@ class Animation : public RefCounted<Animation> {
 public:
     ~Animation();
 
-    static PassRefPtr<Animation> create() { return adoptRef(new Animation); };
+    static PassRefPtr<Animation> create() { return adoptRef(new Animation); }
+    static PassRefPtr<Animation> create(const Animation* o) { return adoptRef(new Animation(*o)); }
     
     bool isDelaySet() const { return m_delaySet; }
     bool isDirectionSet() const { return m_directionSet; }
@@ -93,7 +95,7 @@ public:
     const String& name() const { return m_name; }
     unsigned playState() const { return m_playState; }
     int property() const { return m_property; }
-    const TimingFunction& timingFunction() const { return m_timingFunction; }
+    const PassRefPtr<TimingFunction> timingFunction() const { return m_timingFunction; }
 
     void setDelay(double c) { m_delay = c; m_delaySet = true; }
     void setDirection(AnimationDirection d) { m_direction = d; m_directionSet = true; }
@@ -103,7 +105,7 @@ public:
     void setName(const String& n) { m_name = n; m_nameSet = true; }
     void setPlayState(unsigned d) { m_playState = d; m_playStateSet = true; }
     void setProperty(int t) { m_property = t; m_propertySet = true; }
-    void setTimingFunction(const TimingFunction& f) { m_timingFunction = f; m_timingFunctionSet = true; }
+    void setTimingFunction(PassRefPtr<TimingFunction> f) { m_timingFunction = f; m_timingFunctionSet = true; }
 
     void setIsNoneAnimation(bool n) { m_isNone = n; }
 
@@ -128,7 +130,7 @@ private:
     int m_iterationCount;
     double m_delay;
     double m_duration;
-    TimingFunction m_timingFunction;
+    RefPtr<TimingFunction> m_timingFunction;
     AnimationDirection m_direction : 1;
     unsigned m_fillMode : 2;
 
@@ -155,7 +157,7 @@ public:
     static String initialAnimationName() { return String("none"); }
     static unsigned initialAnimationPlayState() { return AnimPlayStatePlaying; }
     static int initialAnimationProperty() { return cAnimateAll; }
-    static TimingFunction initialAnimationTimingFunction() { return TimingFunction(); }
+    static PassRefPtr<TimingFunction> initialAnimationTimingFunction() { return CubicBezierTimingFunction::create(); }
 };
 
 } // namespace WebCore
